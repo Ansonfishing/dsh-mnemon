@@ -299,9 +299,9 @@ export function MnemonView({ connection }: MnemonViewProps): JSX.Element {
               </dl>
             </article>
             <article className={css.configCard}>
-              <span className={css.cardKicker}>PROFILE</span><h2>DSH 配置示例</h2>
-              <pre>{`- id: mnemon\n  config:\n    cliPath: /opt/homebrew/bin/mnemon\n    dataDir: ~/.mnemon\n    store: default\n    routingGuidance: true\n    tabEnabled: true\n    writeEnabled: true\n    timeoutMs: 10000\n    defaultRecallLimit: 10`}</pre>
-              <p>未填写 <code>dataDir</code> / <code>store</code> 时，保留 Mnemon 自身的环境变量与 active store 解析规则。</p>
+              <span className={css.cardKicker}>SETTINGS</span><h2>用户配置</h2>
+              <pre>{`# ~/.dsh/settings.yaml\nmnemon:\n  cliPath: /opt/homebrew/bin/mnemon\n  dataDir: ~/.mnemon\n  store: default\n  routingGuidance: true\n  tabEnabled: true\n  writeEnabled: true\n  timeoutMs: 10000\n  defaultRecallLimit: 10`}</pre>
+              <p>推荐从“设置 → 插件配置 → Mnemon 外置记忆”修改。用户设置覆盖 profile base，并在重启 DSH 后生效。</p>
             </article>
             <article className={css.configCard}>
               <span className={css.cardKicker}>PRINCIPLE</span><h2>工作方式</h2>

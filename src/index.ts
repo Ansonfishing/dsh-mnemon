@@ -4,23 +4,28 @@ import { registerGuidance } from './guidance.ts'
 import { registerRpc } from './rpc.ts'
 import { createRunner } from './runner.ts'
 import { MnemonService } from './service.ts'
+import { registerSettingsRpc } from './settings.ts'
 import { registerTools } from './tools.ts'
 
 export const name = 'dsh-mnemon'
-export const inject = ['tools']
+export const inject = ['tools', 'settings']
 export { Config, resolveConfig, MnemonService, createRunner }
 export type { MnemonConfig }
 
 /** Mount native model tools on every DSH surface and UI RPC only when Web connection exists. */
 export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   const ctx = rawContext as unknown as HostContextShape
-  const resolved = resolveConfig(config)
+  const settings = ctx.settings.register<Config>('mnemon', Config, {
+    base: config,
+    applies: 'restart',
+    validate: value => { resolveConfig(value) },
+  })
+  const resolved = resolveConfig(settings.get())
   const service = new MnemonService(createRunner(resolved), resolved)
   registerTools(ctx, service)
   if (resolved.routingGuidance) registerGuidance(ctx)
-  if (resolved.tabEnabled) {
-    ctx.inject(['connection'], (webContext) => {
-      registerRpc(webContext.connection, service)
-    })
-  }
+  ctx.inject(['connection'], (webContext) => {
+    if (resolved.tabEnabled) registerRpc(webContext.connection, service)
+    registerSettingsRpc(webContext.connection, ctx.settings)
+  })
 }

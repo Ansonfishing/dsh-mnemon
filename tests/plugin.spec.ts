@@ -15,15 +15,22 @@ function context() {
       handle: vi.fn((...args: unknown[]) => { channels.push(args) }),
     },
   }
+  const registrations: unknown[] = []
   const ctx = {
     tools: { register: vi.fn((tool: unknown) => { tools.push(tool) }) },
+    settings: {
+      register: vi.fn((...args: unknown[]) => {
+        registrations.push(args)
+        return { get: () => (args[2] as { base?: object } | undefined)?.base ?? {} }
+      }),
+    },
     connection,
     get: vi.fn((name: string) => name === 'systemPrompt'
       ? { section: (section: unknown) => { sections.push(section) } }
       : undefined),
     inject: vi.fn((_services: string[], callback: (value: unknown) => void) => { callback(ctx) }),
   }
-  return { ctx, tools, sections, channels }
+  return { ctx, tools, sections, channels, registrations }
 }
 
 describe('dsh-mnemon plugin composition', () => {
@@ -32,6 +39,7 @@ describe('dsh-mnemon plugin composition', () => {
       inject: [
         '@deepseek-ai/dsh-client-connection',
         '@deepseek-ai/dsh-client-ui-conversation',
+        '@deepseek-ai/dsh-client-ui-plugin-config',
       ],
       platform: 'web',
     })
@@ -53,7 +61,10 @@ describe('dsh-mnemon plugin composition', () => {
     ]))
     expect(fixture.tools.every(tool => (tool as { output: { schema: { type: string } } }).output.schema.type !== 'json')).toBe(true)
     expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:routing' })])
-    expect(fixture.channels).toHaveLength(2)
+    expect(fixture.channels).toHaveLength(3)
+    expect(fixture.registrations).toEqual([
+      expect.arrayContaining(['mnemon', expect.anything(), expect.objectContaining({ applies: 'restart' })]),
+    ])
   })
 
   it('keeps recall/status available while hiding all mutation surfaces in read-only mode', () => {
@@ -64,13 +75,13 @@ describe('dsh-mnemon plugin composition', () => {
       'mnemon_related',
       'mnemon_status',
     ])
-    expect(fixture.channels).toHaveLength(1)
+    expect(fixture.channels).toHaveLength(2)
   })
 
   it('can disable both guidance and the Web tab independently', () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', routingGuidance: false, tabEnabled: false })
     expect(fixture.sections).toHaveLength(0)
-    expect(fixture.channels).toHaveLength(0)
+    expect(fixture.channels).toHaveLength(1)
   })
 })

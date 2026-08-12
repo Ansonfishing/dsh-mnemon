@@ -27,6 +27,35 @@ export interface HostConnectionHandle {
         }): unknown;
     };
 }
+export interface HostSettingsScope<T> {
+    get(): T;
+}
+export interface HostSettingsService {
+    readonly writable: boolean;
+    register<T>(namespace: string, schema: unknown, options: {
+        base?: Partial<T>;
+        applies: 'live' | 'restart';
+        validate?: (value: T) => void;
+    }): HostSettingsScope<T>;
+    describe(options?: {
+        redactSecrets?: boolean;
+    }): Array<{
+        ns: string;
+        value: unknown;
+        base?: unknown;
+        user?: unknown;
+        revision: number;
+        applies: 'live' | 'restart';
+    }>;
+    mutate(namespace: string, ops: Array<{
+        op: 'set';
+        path: string[];
+        value: unknown;
+    } | {
+        op: 'unset';
+        path: string[];
+    }>, expectedRevision?: number): Promise<void>;
+}
 export interface ToolExecution {
     signal: AbortSignal;
 }
@@ -49,6 +78,7 @@ export interface HostContextShape {
     tools: {
         register(definition: ToolDefinition): unknown;
     };
+    settings: HostSettingsService;
     connection: HostConnectionHandle;
     get(name: string): unknown;
     inject(services: string[], callback: (ctx: HostContextShape) => void): unknown;
@@ -62,6 +92,21 @@ export interface SlotsService {
         label?: string;
         inject?: () => Record<string, unknown>;
     }, component: (props: never) => unknown): unknown;
+}
+export interface ClientSettingsSnapshot<T> {
+    status: 'loading' | 'ready' | 'unavailable';
+    value?: T;
+    base?: unknown;
+    user?: unknown;
+    revision?: number;
+    writable: boolean;
+    mode: 'host' | 'memory';
+}
+export interface ClientSettingsScope<T> {
+    getSnapshot(): ClientSettingsSnapshot<T>;
+    subscribe(listener: () => void): () => void;
+    set(field: string, value: unknown): Promise<void>;
+    unset(field: string): Promise<void>;
 }
 export interface ClientContextShape {
     slots: SlotsService;

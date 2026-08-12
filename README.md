@@ -59,6 +59,23 @@ dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 
 ## 配置
 
+推荐在 DSH Web 的 **设置 → 插件配置 → Mnemon 外置记忆** 中修改。设置会写入 `$DSH_HOME/settings.yaml` 的 `mnemon` namespace，并在重启 DSH 后生效；profile 的插件配置作为 base，`settings.yaml` 中的用户值拥有更高优先级。
+
+```yaml
+# ~/.dsh/settings.yaml
+mnemon:
+  cliPath: /opt/homebrew/bin/mnemon
+  dataDir: ~/.mnemon
+  store: project-alpha
+  timeoutMs: 10000
+  defaultRecallLimit: 10
+  routingGuidance: true
+  tabEnabled: true
+  writeEnabled: true
+```
+
+也可以在 profile patch 中提供部署级默认值：
+
 包内默认层：
 
 ```yaml

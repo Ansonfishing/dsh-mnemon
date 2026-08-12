@@ -1,6 +1,5 @@
 import z from 'schemastery';
-export declare const DEFAULT_TIMEOUT_MS = 10000;
-export declare const DEFAULT_RECALL_LIMIT = 10;
+export { DEFAULT_RECALL_LIMIT, DEFAULT_TIMEOUT_MS } from './config-values.ts';
 /** User-facing configuration mounted from the DSH profile patch. */
 export interface Config {
     /** Explicit `mnemon` executable. Omit to resolve MNEMON_CLI_PATH, PATH, then common install locations. */
