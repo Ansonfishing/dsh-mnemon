@@ -327,7 +327,7 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
   const [layoutMode, setLayoutMode] = useState<GraphLayoutMode>('natural')
   const positionsRef = useRef(positions)
   const animationRef = useRef<number | null>(null)
-  const dragRef = useRef<{ nodeId: string; pointerId: number; moved: boolean } | null>(null)
+  const dragRef = useRef<{ nodeId: string; pointerId: number; startX: number; startY: number; moved: boolean } | null>(null)
   const suppressClickRef = useRef(false)
 
   const commitPositions = useCallback((next: GraphPositions) => {
@@ -367,13 +367,14 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
   const beginDrag = (event: ReactPointerEvent<SVGGElement>, nodeId: string) => {
     event.preventDefault()
     cancelAnimation()
-    dragRef.current = { nodeId, pointerId: event.pointerId, moved: false }
+    dragRef.current = { nodeId, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false }
     event.currentTarget.setPointerCapture?.(event.pointerId)
   }
   const moveDrag = (event: ReactPointerEvent<SVGGElement>) => {
     const drag = dragRef.current
     const svg = event.currentTarget.ownerSVGElement
     if (drag === null || svg === null || drag.pointerId !== event.pointerId) return
+    if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 4) return
     drag.moved = true
     const point = graphPoint(svg, event.clientX, event.clientY)
     const next = new Map(positionsRef.current)
