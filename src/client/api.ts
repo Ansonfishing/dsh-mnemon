@@ -18,8 +18,8 @@ export class MnemonClient {
     return response.value as T
   }
 
-  status(): Promise<StatusView> {
-    return this.call(MNEMON_READ_CHANNEL, 'status', {})
+  status(sessionId?: string): Promise<StatusView> {
+    return this.call(MNEMON_READ_CHANNEL, 'status', sessionId === undefined ? {} : { sessionId })
   }
 
   graph(): Promise<MemoryGraphSnapshot> {
@@ -47,6 +47,10 @@ export class MnemonClient {
 
   remember(request: RememberRequest): Promise<Record<string, unknown>> {
     return this.call(MNEMON_WRITE_CHANNEL, 'remember', request)
+  }
+
+  supervise(sessionId: string, content: string): Promise<{ queued: true; sessionId: string; messageId: string; agentStatus: 'idle' | 'running' }> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'supervise', { sessionId, content })
   }
 
   forget(id: string): Promise<Record<string, unknown>> {

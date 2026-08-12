@@ -51,6 +51,7 @@ describe('MnemonView', () => {
         },
       }
       if (endpoint === 'related') return { ok: true, value: [] }
+      if (endpoint === 'supervise') return { ok: true, value: { queued: true, sessionId: 'session-1', messageId: 'message-1', agentStatus: 'idle' } }
       if (endpoint === 'remember') return { ok: true, value: { action: 'added' } }
       if (endpoint === 'forget') return { ok: true, value: { action: 'forgotten' } }
       return { ok: false, error: { code: 'unexpected', message: endpoint } }
@@ -60,7 +61,7 @@ describe('MnemonView', () => {
 
   it('shows the live graph and all six Mnemon workspaces', async () => {
     const { connection } = createConnection()
-    render(<MnemonView connection={connection} settingsScope={settingsScope} />)
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
     await waitFor(() => expect(screen.getByText('已连接 · project')).toBeTruthy())
     expect(screen.getByText('12')).toBeTruthy()
     expect(screen.getByText('LLM-supervised 4-graph persistent memory for AI agents.')).toBeTruthy()
@@ -73,9 +74,10 @@ describe('MnemonView', () => {
     fireEvent.click(screen.getByRole('button', { name: /实体 关系与上下文/ }))
     expect(screen.getByRole('heading', { name: '实体查阅' })).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: /沉淀 审慎写回/ }))
+    fireEvent.click(screen.getByRole('button', { name: /沉淀 LLM 监督写回/ }))
     expect(screen.getByRole('heading', { name: '沉淀记忆' })).toBeTruthy()
-    expect(screen.getByText('写入前快速判断')).toBeTruthy()
+    expect(screen.getByText('模型会完成什么')).toBeTruthy()
+    expect(screen.getByText('人工高级写入')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: /记忆库 浏览与维护/ }))
     expect(screen.getByRole('heading', { name: '记忆库' })).toBeTruthy()
@@ -88,7 +90,7 @@ describe('MnemonView', () => {
 
   it('requires inline confirmation before forgetting a recalled memory', async () => {
     const { connection, call } = createConnection()
-    render(<MnemonView connection={connection} settingsScope={settingsScope} />)
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
     await waitFor(() => expect(screen.getByText('已连接 · project')).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: /检索 意图增强召回/ }))
@@ -103,5 +105,22 @@ describe('MnemonView', () => {
     fireEvent.click(screen.getByRole('button', { name: '确认忘记' }))
     await waitFor(() => expect(screen.queryByText('项目选择 SQLite，因为需要单文件部署。')).toBeNull())
     expect(call).toHaveBeenCalledWith(expect.anything(), 'forget', { id: 'memory-12345678' })
+  })
+
+  it('queues the default writeback path through the live DSH model', async () => {
+    const { connection, call } = createConnection()
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    await waitFor(() => expect(screen.getByText('已连接 · project')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: /沉淀 LLM 监督写回/ }))
+    fireEvent.change(screen.getByRole('textbox', { name: '待沉淀内容' }), { target: { value: '项目发布前必须通过真实 WebUI 验证。' } })
+    fireEvent.click(screen.getByRole('button', { name: '交给当前 LLM 判断并沉淀' }))
+
+    await waitFor(() => expect(screen.getByText(/已交给当前对话的 LLM/)).toBeTruthy())
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'supervise', {
+      sessionId: 'session-1',
+      content: '项目发布前必须通过真实 WebUI 验证。',
+    })
+    expect(call).not.toHaveBeenCalledWith(expect.anything(), 'remember', expect.anything())
   })
 })

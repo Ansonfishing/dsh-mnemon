@@ -28,7 +28,7 @@ const PAGE_NAV: Array<{ id: Page; label: string; detail: string; glyph: string }
   { id: 'overview', label: '总览', detail: '实时记忆图谱', glyph: '◇' },
   { id: 'explore', label: '检索', detail: '意图增强召回', glyph: '⌕' },
   { id: 'entities', label: '实体', detail: '关系与上下文', glyph: '◎' },
-  { id: 'remember', label: '沉淀', detail: '审慎写回', glyph: '+' },
+  { id: 'remember', label: '沉淀', detail: 'LLM 监督写回', glyph: '+' },
   { id: 'list', label: '记忆库', detail: '浏览与维护', glyph: '≡' },
   { id: 'status', label: '状态', detail: '配置与诊断', glyph: '⌘' },
 ]
@@ -365,17 +365,31 @@ function EntitiesPage(props: { client: MnemonClient; revision: number; writeEnab
   )
 }
 
-function RememberPage(props: { client: MnemonClient; writeEnabled: boolean; seed: string; onMutate: () => void }): JSX.Element {
+function RememberPage(props: { client: MnemonClient; sessionId: string | undefined; writeEnabled: boolean; seed: string; onMutate: () => void }): JSX.Element {
   const [content, setContent] = useState(props.seed)
   const [category, setCategory] = useState<Category>('general')
   const [importance, setImportance] = useState(3)
   const [tags, setTags] = useState('')
   const [entities, setEntities] = useState('')
+  const [supervising, setSupervising] = useState(false)
   const [saving, setSaving] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   useEffect(() => { if (props.seed !== '') setContent(props.seed) }, [props.seed])
 
-  const save = async (event: FormEvent) => {
+  const supervise = async (event: FormEvent) => {
+    event.preventDefault()
+    if (content.trim() === '' || props.sessionId === undefined) return
+    setSupervising(true); setResult(null)
+    try {
+      const response = await props.client.supervise(props.sessionId, content)
+      setResult(response.agentStatus === 'running'
+        ? '已排入当前对话的下一轮，将由正在运行的 LLM 判断并调用 Mnemon。'
+        : '已交给当前对话的 LLM；它会判断是否值得沉淀，并完成查重、分类和写入。')
+      setContent('')
+    } catch (reason) { setResult(`调度失败：${message(reason)}`) } finally { setSupervising(false) }
+  }
+
+  const manualSave = async (event: FormEvent) => {
     event.preventDefault(); if (content.trim() === '') return
     setSaving(true); setResult(null)
     try {
@@ -388,15 +402,25 @@ function RememberPage(props: { client: MnemonClient; writeEnabled: boolean; seed
 
   return (
     <div className={css.page}>
-      <PageHeader kicker="SUPERVISED WRITEBACK" title="沉淀记忆" description="保存稳定、可复用，并且未来确实值得再次检索的信息。" meta={props.writeEnabled ? 'WRITE ENABLED' : 'READ ONLY'} />
+      <PageHeader kicker="LLM-SUPERVISED WRITEBACK" title="沉淀记忆" description="把候选内容交给当前 DSH 模型判断；模型负责查重、提炼、分类，再决定是否写入 Mnemon。" meta={props.writeEnabled ? 'AGENT SUPERVISED' : 'READ ONLY'} />
       {!props.writeEnabled ? <EmptyState glyph="⊘" title="当前为只读模式">请在本 Tab 的“状态”页面启用写入，保存 settings.yaml 并重启 DSH。</EmptyState> : (
         <div className={css.writebackLayout}>
-          <aside className={css.writeGuide}><span className={css.cardKicker}>DURABILITY GATE</span><h3>写入前快速判断</h3><ol><li><strong>稳定</strong><span>不是临时进度或一次性输出</span></li><li><strong>可复用</strong><span>能影响未来的选择或执行</span></li><li><strong>自包含</strong><span>包含原因、范围和必要约束</span></li></ol><p>当前指令与仓库事实始终高于历史记忆。</p></aside>
-          <form className={css.rememberForm} onSubmit={event => void save(event)}>
-            <label className={css.fieldWide}>记忆内容<textarea value={content} onChange={event => setContent(event.target.value)} maxLength={8000} rows={8} placeholder="示例：项目选择 SQLite，因为需要单文件部署和本地优先；若并发写入成为瓶颈再评估 PostgreSQL。" /></label>
-            <div className={css.formGrid}><label>分类<select value={category} onChange={event => setCategory(event.target.value as Category)}>{CATEGORIES.map(value => <option key={value} value={value}>{CATEGORY_LABELS[value]}</option>)}</select></label><label>重要性<select value={importance} onChange={event => setImportance(Number(event.target.value))}>{[1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value} / 5</option>)}</select></label><label className={css.fieldWide}>实体（逗号分隔）<input value={entities} onChange={event => setEntities(event.target.value)} placeholder="SQLite, DSH" /></label><label className={css.fieldWide}>标签（逗号分隔）<input value={tags} onChange={event => setTags(event.target.value)} placeholder="architecture, local-first" /></label></div>
-            <div className={css.formActions}><button type="submit" className={css.primaryButton} disabled={saving || content.trim() === ''}>{saving ? '保存中…' : '写入 Mnemon'}</button>{result !== null && <span role="status">{result}</span>}</div>
-          </form>
+          <aside className={css.writeGuide}><span className={css.cardKicker}>SUPERVISION FLOW</span><h3>模型会完成什么</h3><ol><li><strong>判断价值</strong><span>过滤临时进度、转录与可恢复事实</span></li><li><strong>检索查重</strong><span>识别重复、补充或冲突的旧记忆</span></li><li><strong>结构化写入</strong><span>选择分类、重要性、实体与必要关系</span></li></ol><p>请求会作为独立 DSH turn 排入当前会话，全程保留在会话日志中。</p></aside>
+          <section className={css.supervisedComposer}>
+            <form className={css.supervisedForm} onSubmit={event => void supervise(event)}>
+              <div className={css.supervisedHeading}><div><span className={css.cardKicker}>CURRENT DSH AGENT</span><h3>交给 LLM 判断</h3></div><span className={props.sessionId === undefined ? css.sessionMissing : css.sessionReady}>{props.sessionId === undefined ? 'NO SESSION' : 'LIVE SESSION'}</span></div>
+              <label className={css.fieldWide}>候选内容<textarea aria-label="待沉淀内容" value={content} onChange={event => setContent(event.target.value)} maxLength={8000} rows={8} placeholder="输入希望跨任务保留的背景、偏好、决策或洞察。模型会先判断它是否真的值得沉淀。" /></label>
+              {props.sessionId === undefined && <p className={css.sessionHint}>当前视图没有绑定 live session，无法调度模型；仍可使用下方人工高级写入。</p>}
+              <div className={css.formActions}><button type="submit" className={css.primaryButton} disabled={supervising || content.trim() === '' || props.sessionId === undefined}>{supervising ? '正在排入对话…' : '交给当前 LLM 判断并沉淀'}</button>{result !== null && <span role="status">{result}</span>}</div>
+            </form>
+            <details className={css.advancedWrite}>
+              <summary><span><strong>人工高级写入</strong><small>跳过 LLM 判断，按指定元数据直接调用 mnemon remember</small></span><span>展开</span></summary>
+              <form className={css.manualForm} onSubmit={event => void manualSave(event)}>
+                <div className={css.formGrid}><label>分类<select value={category} onChange={event => setCategory(event.target.value as Category)}>{CATEGORIES.map(value => <option key={value} value={value}>{CATEGORY_LABELS[value]}</option>)}</select></label><label>重要性<select value={importance} onChange={event => setImportance(Number(event.target.value))}>{[1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value} / 5</option>)}</select></label><label className={css.fieldWide}>实体（逗号分隔）<input value={entities} onChange={event => setEntities(event.target.value)} placeholder="SQLite, DSH" /></label><label className={css.fieldWide}>标签（逗号分隔）<input value={tags} onChange={event => setTags(event.target.value)} placeholder="architecture, local-first" /></label></div>
+                <div className={css.manualActions}><p>人工写入不会请求模型评估，仅使用 Mnemon 自带的重复与冲突处理。</p><button type="submit" className={css.secondaryButton} disabled={saving || content.trim() === ''}>{saving ? '写入中…' : '按高级选项直接写入'}</button></div>
+              </form>
+            </details>
+          </section>
         </div>
       )}
     </div>
@@ -445,7 +469,7 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
   )
 }
 
-export function MnemonView({ connection, settingsScope }: MnemonViewProps): JSX.Element {
+export function MnemonView({ connection, settingsScope, sessionId }: MnemonViewProps): JSX.Element {
   const client = useMemo(() => new MnemonClient(connection), [connection])
   const [page, setPage] = useState<Page>('overview')
   const [status, setStatus] = useState<StatusView | null>(null)
@@ -457,8 +481,8 @@ export function MnemonView({ connection, settingsScope }: MnemonViewProps): JSX.
 
   const loadStatus = useCallback(async () => {
     setStatusLoading(true); setStatusError(null)
-    try { setStatus(await client.status()) } catch (reason) { setStatusError(message(reason)) } finally { setStatusLoading(false) }
-  }, [client])
+    try { setStatus(await client.status(sessionId)) } catch (reason) { setStatusError(message(reason)) } finally { setStatusLoading(false) }
+  }, [client, sessionId])
   useEffect(() => { void loadStatus() }, [loadStatus])
 
   const mutate = useCallback(() => { setRevision(value => value + 1); void loadStatus() }, [loadStatus])
@@ -483,7 +507,7 @@ export function MnemonView({ connection, settingsScope }: MnemonViewProps): JSX.
           {page === 'overview' && <OverviewPage client={client} revision={revision} onExplore={explore} />}
           {page === 'explore' && <ExplorePage client={client} status={status} seed={searchSeed} writeEnabled={writeEnabled} onForget={forget} />}
           {page === 'entities' && <EntitiesPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onExplore={explore} />}
-          {page === 'remember' && <RememberPage client={client} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} />}
+          {page === 'remember' && <RememberPage client={client} sessionId={sessionId} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} />}
           {page === 'list' && <ListPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onClone={clone} onExplore={explore} />}
           {page === 'status' && <StatusPage status={status} loading={statusLoading} onRefresh={() => void loadStatus()} settingsScope={settingsScope} />}
         </section>

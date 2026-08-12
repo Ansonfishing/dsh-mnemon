@@ -166,7 +166,7 @@
 .searchControls { display: flex; align-items: flex-end; justify-content: flex-end; gap: 10px; padding-top: 10px; }
 .searchControls label, .formGrid label, .fieldWide { display: grid; gap: 5px; color: var(--mn-muted); font-size: 11px; }
 .searchControls select, .formGrid select, .formGrid input, .listToolbar input, .listToolbar select, .entitySearch input { min-width: 140px; height: 34px; border: 1px solid var(--mn-line); border-radius: 8px; outline: 0; padding: 0 9px; background: var(--mn-input); }
-.searchControls select:focus, .formGrid select:focus, .formGrid input:focus, .listToolbar input:focus, .listToolbar select:focus, .entitySearch input:focus, .rememberForm textarea:focus { border-color: var(--mn-accent); }
+.searchControls select:focus, .formGrid select:focus, .formGrid input:focus, .listToolbar input:focus, .listToolbar select:focus, .entitySearch input:focus, .supervisedForm textarea:focus { border-color: var(--mn-accent); }
 .singleColumn { max-width: 830px; }
 .resultLayout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr); gap: 14px; align-items: start; }
 .results, .relatedPane, .entityResults { min-width: 0; }
@@ -203,7 +203,7 @@
 .entityResults > .emptyState { min-height: 360px; }
 
 .writebackLayout { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); gap: 15px; align-items: start; }
-.writeGuide, .rememberForm { border: 1px solid var(--mn-line); border-radius: 12px; background: var(--mn-layer-1); }
+.writeGuide, .supervisedComposer { border: 1px solid var(--mn-line); border-radius: 12px; background: var(--mn-layer-1); }
 .writeGuide { padding: 17px; }
 .writeGuide h3 { margin: 5px 0 15px; font-size: 15px; }
 .writeGuide ol { display: grid; gap: 13px; margin: 0; padding: 0; list-style: none; counter-reset: gate; }
@@ -212,13 +212,33 @@
 .writeGuide li strong { font-size: 12px; }
 .writeGuide li span, .writeGuide p { color: var(--mn-faint); font-size: 10px; }
 .writeGuide p { margin: 17px 0 0; padding-top: 13px; border-top: 1px solid var(--mn-line); }
-.rememberForm { padding: 17px; }
-.rememberForm textarea { width: 100%; resize: vertical; border: 1px solid var(--mn-line); border-radius: 9px; outline: 0; padding: 10px; color: var(--mn-text); background: var(--mn-input); line-height: 1.6; }
+.supervisedComposer { overflow: hidden; }
+.supervisedForm { padding: 18px; }
+.supervisedHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.supervisedHeading h3 { margin: 4px 0 0; font-size: 17px; }
+.sessionReady, .sessionMissing { padding: 4px 8px; border-radius: 999px; font: 650 9px var(--mn-code); }
+.sessionReady { color: var(--mn-success); background: color-mix(in srgb, var(--mn-success) 10%, transparent); }
+.sessionMissing { color: var(--mn-danger); background: color-mix(in srgb, var(--mn-danger) 10%, transparent); }
+.supervisedForm textarea { width: 100%; resize: vertical; border: 1px solid var(--mn-line); border-radius: 9px; outline: 0; padding: 12px; color: var(--mn-text); background: var(--mn-input); line-height: 1.65; }
+.sessionHint { margin: 9px 0 0; color: var(--mn-danger); font-size: 11px; }
 .formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 13px; }
 .fieldWide { grid-column: 1 / -1; }
 .formGrid select, .formGrid input { width: 100%; min-width: 0; }
 .formActions { display: flex; align-items: center; gap: 12px; margin-top: 15px; }
 .formActions span { color: var(--mn-muted); font-size: 11px; }
+.advancedWrite { border-top: 1px solid var(--mn-line); background: color-mix(in srgb, var(--mn-layer-2) 45%, var(--mn-layer-1)); }
+.advancedWrite summary { display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 18px; cursor: pointer; list-style: none; }
+.advancedWrite summary::-webkit-details-marker { display: none; }
+.advancedWrite summary > span:first-child { display: grid; gap: 2px; }
+.advancedWrite summary strong { font-size: 12px; }
+.advancedWrite summary small { color: var(--mn-faint); font-size: 10px; }
+.advancedWrite summary > span:last-child { color: var(--mn-accent); font: 10px var(--mn-code); }
+.advancedWrite[open] summary { border-bottom: 1px solid var(--mn-line); }
+.advancedWrite[open] summary > span:last-child { font-size: 0; }
+.advancedWrite[open] summary > span:last-child::after { content: "收起"; font-size: 10px; }
+.manualForm { padding: 3px 18px 18px; }
+.manualActions { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 15px; }
+.manualActions p { max-width: 520px; margin: 0; color: var(--mn-faint); font-size: 10px; }
 
 .listToolbar { display: grid; grid-template-columns: minmax(0, 1fr) 170px auto; gap: 9px; padding: 12px; border: 1px solid var(--mn-line); border-radius: 11px; background: var(--mn-layer-1); }
 .listToolbar input, .listToolbar select { width: 100%; min-width: 0; }
@@ -271,6 +291,7 @@
   .pageHeader { display: grid; gap: 10px; }
   .pageHeaderMeta { justify-content: space-between; }
   .entityLayout, .writebackLayout, .statusGrid { grid-template-columns: 1fr; }
+  .manualActions { align-items: stretch; flex-direction: column; }
   .entityRail { position: static; }
   .searchControls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .searchControls .primaryButton { grid-column: 1 / -1; }
