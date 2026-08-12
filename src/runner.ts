@@ -73,6 +73,10 @@ export interface MnemonRunner {
 export function createRunner(config: ResolvedConfig, processRunner: ProcessRunner = runProcess): MnemonRunner {
   const found = findMnemonCommand(config)
   const command = found ?? config.cliPath ?? 'mnemon'
+  // Mnemon 0.1.2 runs store migrations while opening the database. Serializing
+  // CLI processes prevents parallel status/viz calls during WebUI mount from
+  // racing that migration and surfacing a transient SQLITE_BUSY error.
+  let processQueue: Promise<void> = Promise.resolve()
 
   const globalArgs = (): string[] => {
     const args: string[] = []
@@ -80,10 +84,11 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
     if (config.store !== undefined) args.push('--store', config.store)
     return args
   }
-  const execute = async (
+  const launch = async (
     args: readonly string[],
     options: { signal?: AbortSignal; globalFlags?: boolean } = {},
   ): Promise<string> => {
+    if (options.signal?.aborted === true) throw new MnemonCliError(`mnemon command aborted: ${String(options.signal.reason ?? 'cancelled')}`)
     const argv = options.globalFlags === false ? [...args] : [...globalArgs(), ...args]
     const processOptions: ProcessOptions = {
       timeoutMs: config.timeoutMs,
@@ -103,6 +108,15 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
       throw new MnemonCliError(`mnemon ${args.join(' ')} exited ${String(result.exitCode)}: ${detail}`, result.exitCode, result.stderr)
     }
     return result.stdout
+  }
+
+  const execute = (
+    args: readonly string[],
+    options: { signal?: AbortSignal; globalFlags?: boolean } = {},
+  ): Promise<string> => {
+    const result = processQueue.then(() => launch(args, options))
+    processQueue = result.then(() => undefined, () => undefined)
+    return result
   }
 
   return {
