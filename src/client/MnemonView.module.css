@@ -188,8 +188,8 @@
 .graphNode[data-kind="entity"] { --node: #2b9db9; }
 .nodeHalo { fill: color-mix(in srgb, var(--node) 18%, var(--mn-layer-1)); stroke: color-mix(in srgb, var(--node) 60%, var(--mn-layer-1)); stroke-width: 1.5; transition: r .16s; }
 .nodeCore { fill: var(--node); }
-.nodeLabel { fill: var(--mn-muted); font: 10px var(--mn-code); pointer-events: none; }
-.nodeBodyLabel { fill: var(--mn-faint); font: 650 8px var(--mn-code); letter-spacing: .04em; pointer-events: none; }
+.nodeLabel { fill: var(--mn-muted); font: 10px var(--mn-code); pointer-events: auto; }
+.nodeBodyLabel { fill: var(--mn-faint); font: 650 8px var(--mn-code); letter-spacing: .04em; pointer-events: auto; }
 .graphSvg[data-density="sparse"] .nodeLabel { font-size: 12px; }
 .graphNode:hover .nodeHalo, .graphNode:focus .nodeHalo, .graphNode[data-selected] .nodeHalo { fill: color-mix(in srgb, var(--node) 28%, var(--mn-layer-1)); stroke: var(--node); }
 .graphNode[data-selected] .nodeLabel { fill: var(--mn-text); font-weight: 650; }
