@@ -86,9 +86,9 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
 }
 
 describe('Mnemon DSH lifecycle integration', () => {
-  it('awaits Prime in pre-step and adds one bounded recall decision cue', async () => {
+  it('automatically recalls for an ordinary business question with no memory instruction', async () => {
     const value = fixture()
-    const prompt = userMessage()
+    const prompt = userMessage('Aster 发布前需要检查哪些事项？')
     const decision = await value.preStep([prompt], 1)
 
     expect(decision).toMatchObject({ kind: 'enter' })
@@ -98,6 +98,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(decision.messages[1]?.content[0]?.text).toContain('[MNEMON PRIME]')
     expect(decision.messages[1]?.content[0]?.text).toContain('isolated memory subagents')
     expect(value.coordinator.recall).toHaveBeenCalledTimes(1)
+    expect(value.coordinator.recall).toHaveBeenCalledWith(value.agent, { query: 'Aster 发布前需要检查哪些事项？' }, expect.any(AbortSignal))
     expect(value.service.status).toHaveBeenCalledTimes(1)
 
     const second = await value.preStep([userMessage('Second turn')], 2)
@@ -107,9 +108,9 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.lifecycle.snapshot('session-1').counters).toMatchObject({ primes: 1, recallCues: 2 })
   })
 
-  it('runs exactly one isolated writeback subagent before a user turn closes', async () => {
+  it('automatically evaluates an ordinary durable project statement before its turn closes', async () => {
     const value = fixture()
-    const prompt = userMessage()
+    const prompt = userMessage('从本周起，Aster 发布前必须完成备份恢复演练。这是长期稳定流程。')
     value.events.push(
       { type: 'turn/start', data: { turn: 1 } },
       { type: 'user/message', data: prompt as unknown as Record<string, unknown> },
@@ -121,7 +122,10 @@ describe('Mnemon DSH lifecycle integration', () => {
 
     expect(value.steer).not.toHaveBeenCalled()
     expect(value.coordinator.write).toHaveBeenCalledTimes(1)
-    expect(value.coordinator.write).toHaveBeenCalledWith(value.agent, 'turn-writeback', expect.objectContaining({ turn: 1 }), expect.any(AbortSignal))
+    expect(value.coordinator.write).toHaveBeenCalledWith(value.agent, 'turn-writeback', expect.objectContaining({
+      turn: 1,
+      events: expect.arrayContaining([expect.objectContaining({ type: 'user/message' })]),
+    }), expect.any(AbortSignal))
     expect(value.lifecycle.snapshot('session-1').counters.writebackChecks).toBe(1)
   })
 
