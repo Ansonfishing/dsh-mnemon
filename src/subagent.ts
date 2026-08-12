@@ -45,6 +45,25 @@ const WRITE_SCHEMA = {
   required: ['summary', 'action', 'memoryBodyIds'],
 } as const
 
+const DSH_OUTPUT_SCHEMA_KEYS = new Set([
+  'type', 'oneOf', 'properties', 'required', 'additionalProperties', 'items', 'enum', 'const',
+  'title', 'description', 'default', 'examples', 'deprecated', 'readOnly', 'writeOnly', '$comment',
+])
+
+/** Rejects schema keywords that DSH structured-output tools cannot compile. */
+export function assertDshOutputSchema(schema: unknown, path = 'schema'): void {
+  if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) throw new Error(`${path} must be an object`)
+  const value = schema as Record<string, unknown>
+  for (const key of Object.keys(value)) {
+    if (!DSH_OUTPUT_SCHEMA_KEYS.has(key)) throw new Error(`unsupported DSH output schema keyword: ${path}.${key}`)
+  }
+  if (typeof value.properties === 'object' && value.properties !== null && !Array.isArray(value.properties)) {
+    for (const [name, child] of Object.entries(value.properties)) assertDshOutputSchema(child, `${path}.properties.${name}`)
+  }
+  if (value.items !== undefined) assertDshOutputSchema(value.items, `${path}.items`)
+  if (Array.isArray(value.oneOf)) value.oneOf.forEach((child, index) => assertDshOutputSchema(child, `${path}.oneOf[${index}]`))
+}
+
 export interface SubagentCounters {
   recalls: number
   writes: number
@@ -156,6 +175,7 @@ export class MnemonSubagentCoordinator {
     signal: AbortSignal,
   ): Promise<{ provider: string; runId: string; result: HostSubagentResult }> {
     const provider = this.provider()
+    assertDshOutputSchema(outputSchema)
     let run
     let failure: unknown
     try {

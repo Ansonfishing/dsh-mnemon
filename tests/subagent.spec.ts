@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { HostAgent, HostContextShape, HostSubagentsService, ToolDefinition } from '../src/contracts.ts'
 import type { MnemonService } from '../src/service.ts'
-import { MnemonSubagentCoordinator } from '../src/subagent.ts'
+import { assertDshOutputSchema, MnemonSubagentCoordinator } from '../src/subagent.ts'
 import { registerTools } from '../src/tools.ts'
 
 const capabilities = { outputSchema: true, depthLimit: true, toolFilter: true, persona: true }
@@ -48,6 +48,19 @@ function subagents(structured: unknown, stopReason = 'completed') {
 }
 
 describe('Mnemon memory subagent coordinator', () => {
+  it('rejects structured-output keywords outside the DSH schema subset', () => {
+    expect(() => assertDshOutputSchema({
+      type: 'object',
+      properties: { results: { type: 'array', items: { type: 'string' }, maxItems: 12 } },
+      required: ['results'],
+    })).toThrow('schema.properties.results.maxItems')
+    expect(() => assertDshOutputSchema({
+      type: 'object',
+      properties: { results: { type: 'array', items: { type: 'string' } } },
+      required: ['results'],
+    })).not.toThrow()
+  })
+
   it('selects memory bodies in a fresh tool-scoped child and returns only structured recall evidence', async () => {
     const host = subagents({
       summary: 'Project memory matched.',

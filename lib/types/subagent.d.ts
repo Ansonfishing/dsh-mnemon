@@ -1,5 +1,7 @@
 import type { HostAgent, HostSubagentsService } from './contracts.ts';
 import type { Insight, MnemonService, RememberRequest, SearchRequest } from './service.ts';
+/** Rejects schema keywords that DSH structured-output tools cannot compile. */
+export declare function assertDshOutputSchema(schema: unknown, path?: string): void;
 export interface SubagentCounters {
     recalls: number;
     writes: number;
