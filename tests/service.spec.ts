@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveConfig } from '../src/config.ts'
 import type { ProcessRunner } from '../src/process.ts'
 import { createRunner } from '../src/runner.ts'
-import { MnemonService } from '../src/service.ts'
+import { MnemonService, parseMemoryGraph } from '../src/service.ts'
+
+const VIZ_HTML = `<script>
+var nodes = new vis.DataSet([{id:"m2",label:"m2: [fact] Four graph memory",title:"Four graph memory",color:"#3498db",font:{color:"white"}},
+{id:"m1",label:"m1: [decision] Use SQLite",title:"Use SQLite for local-first storage.",color:"#e74c3c",font:{color:"white"}}]);
+var edges = new vis.DataSet([{from:"m1",to:"m2",label:"backbone",color:{color:"#aaaaaa"},arrows:"to",font:{color:"#aaaaaa",size:10}}]);
+</script>`
 
 function fixture(): { service: MnemonService; process: ReturnType<typeof vi.fn<ProcessRunner>> } {
   const process = vi.fn<ProcessRunner>(async (_command, args) => {
@@ -26,6 +32,7 @@ function fixture(): { service: MnemonService; process: ReturnType<typeof vi.fn<P
       stderr: '',
       exitCode: 0,
     }
+    if (args.includes('viz')) return { stdout: VIZ_HTML, stderr: '', exitCode: 0 }
     if (args.includes('remember')) return { stdout: JSON.stringify({ id: 'm2', action: 'added' }), stderr: '', exitCode: 0 }
     if (args.includes('related')) return { stdout: JSON.stringify([{ id: 'm3', content: 'Single-file deployment', depth: 1 }]), stderr: '', exitCode: 0 }
     return { stdout: '{}', stderr: '', exitCode: 0 }
@@ -65,6 +72,37 @@ describe('MnemonService', () => {
       ['--data-dir', '/tmp/mnemon', '--store', 'work', 'recall', 'database choice', '--limit', '7'],
       expect.anything(),
     )
+  })
+
+  it('parses the official Mnemon visualization into a safe graph snapshot', async () => {
+    const { service, process } = fixture()
+    const graph = await service.graph()
+    expect(graph.nodes).toEqual([
+      expect.objectContaining({ id: 'm2', category: 'fact', content: 'Four graph memory' }),
+      expect.objectContaining({ id: 'm1', category: 'decision' }),
+    ])
+    expect(graph.edges).toEqual([expect.objectContaining({ sourceId: 'm1', targetId: 'm2', type: 'temporal', label: 'backbone' })])
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['viz', '--format', 'html']), expect.anything())
+  })
+
+  it('lists active memories without issuing a recall and filters locally', async () => {
+    const { service, process } = fixture()
+    await expect(service.list({ query: 'sqlite', category: 'decision' })).resolves.toMatchObject({
+      total: 1,
+      items: [{ id: 'm1', content: 'Use SQLite for local-first storage.', category: 'decision', color: '#e74c3c' }],
+    })
+    expect(process.mock.calls.some(([, args]) => args.includes('recall'))).toBe(false)
+  })
+
+  it('exposes top entities and recalls one entity on demand', async () => {
+    const { service, process } = fixture()
+    await expect(service.entities()).resolves.toMatchObject({ items: [{ entity: 'SQLite', count: 2 }], insights: [] })
+    await expect(service.entities('SQLite', 5)).resolves.toMatchObject({ selected: 'SQLite', insights: [{ id: 'm1' }] })
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--intent', 'ENTITY', '--limit', '5']), expect.anything())
+  })
+
+  it('rejects malformed visualization output', () => {
+    expect(() => parseMemoryGraph('<html />')).toThrow('unexpected HTML')
   })
 
   it('normalizes the nested recall rows returned by Mnemon 0.1.2', async () => {

@@ -1,6 +1,6 @@
 import type { ClientConnectionHandle } from '../contracts.ts'
 import { MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from '../rpc.ts'
-import type { Insight, RememberRequest, SearchRequest, StatusView } from '../service.ts'
+import type { EntityView, Insight, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts'
 
 export interface SearchResponse {
   query: string
@@ -20,6 +20,21 @@ export class MnemonClient {
 
   status(): Promise<StatusView> {
     return this.call(MNEMON_READ_CHANNEL, 'status', {})
+  }
+
+  graph(): Promise<MemoryGraphSnapshot> {
+    return this.call(MNEMON_READ_CHANNEL, 'graph', {})
+  }
+
+  list(request: MemoryListRequest = {}): Promise<MemoryListView> {
+    return this.call(MNEMON_READ_CHANNEL, 'list', request)
+  }
+
+  entities(entity?: string, limit?: number): Promise<EntityView> {
+    return this.call(MNEMON_READ_CHANNEL, 'entities', {
+      ...(entity === undefined ? {} : { entity }),
+      ...(limit === undefined ? {} : { limit }),
+    })
   }
 
   search(request: SearchRequest): Promise<SearchResponse> {

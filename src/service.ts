@@ -69,6 +69,42 @@ export interface StatusView {
   }
 }
 
+export interface MemoryGraphNode extends Insight {
+  color: string
+}
+
+export interface MemoryGraphEdge {
+  sourceId: string
+  targetId: string
+  label: string
+  color: string
+  type?: EdgeType
+}
+
+export interface MemoryGraphSnapshot {
+  nodes: MemoryGraphNode[]
+  edges: MemoryGraphEdge[]
+  generatedAt: string
+}
+
+export interface MemoryListRequest {
+  query?: string
+  category?: Category
+  limit?: number
+}
+
+export interface MemoryListView {
+  items: MemoryGraphNode[]
+  total: number
+  generatedAt: string
+}
+
+export interface EntityView {
+  items: Array<{ entity: string; count: number }>
+  insights: Insight[]
+  selected?: string
+}
+
 function record(value: JsonValue | undefined): Record<string, JsonValue> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, JsonValue>
@@ -121,6 +157,49 @@ function normalizeInsight(value: JsonValue): Insight | undefined {
   if (tags !== undefined) insight.tags = tags
   if (entities !== undefined) insight.entities = entities
   return insight
+}
+
+const JS_STRING = '"(?:\\\\.|[^"\\\\])*"'
+const VIZ_NODE_PATTERN = new RegExp(`\\{id:(${JS_STRING}),label:(${JS_STRING}),title:(${JS_STRING}),color:(${JS_STRING}),font:\\{color:"white"\\}\\}`, 'g')
+const VIZ_EDGE_PATTERN = new RegExp(`\\{from:(${JS_STRING}),to:(${JS_STRING}),label:(${JS_STRING}),color:\\{color:(${JS_STRING})\\},arrows:"to"`, 'g')
+const EDGE_COLORS: Record<string, EdgeType> = {
+  '#aaaaaa': 'temporal',
+  '#3498db': 'semantic',
+  '#e74c3c': 'causal',
+  '#2ecc71': 'entity',
+}
+
+function decodeJsString(value: string): string {
+  const decoded = JSON.parse(value) as unknown
+  if (typeof decoded !== 'string') throw new Error('Mnemon viz contained an invalid string')
+  return decoded
+}
+
+/** Parse the official Mnemon vis.js export without executing its HTML or loading its CDN script. */
+export function parseMemoryGraph(html: string, now = new Date()): MemoryGraphSnapshot {
+  const nodes: MemoryGraphNode[] = []
+  const edges: MemoryGraphEdge[] = []
+  for (const match of html.matchAll(VIZ_NODE_PATTERN)) {
+    const id = decodeJsString(match[1]!)
+    const label = decodeJsString(match[2]!)
+    const content = decodeJsString(match[3]!).replaceAll('\\n', '\n')
+    const color = decodeJsString(match[4]!)
+    const category = /\[([a-z_]+)\]/i.exec(label)?.[1] ?? 'general'
+    nodes.push({ id, content, category, color })
+  }
+  for (const match of html.matchAll(VIZ_EDGE_PATTERN)) {
+    const color = decodeJsString(match[4]!)
+    const type = EDGE_COLORS[color.toLowerCase()]
+    edges.push({
+      sourceId: decodeJsString(match[1]!),
+      targetId: decodeJsString(match[2]!),
+      label: decodeJsString(match[3]!),
+      color,
+      ...(type === undefined ? {} : { type }),
+    })
+  }
+  if (!html.includes('var nodes = new vis.DataSet([')) throw new Error('Mnemon viz returned an unexpected HTML payload')
+  return { nodes, edges, generatedAt: now.toISOString() }
 }
 
 function boundedInteger(value: number | undefined, fallback: number, min: number, max: number): number {
@@ -228,6 +307,34 @@ export class MnemonService {
     const results = values.map(normalizeInsight).filter((entry): entry is Insight => entry !== undefined)
     const hint = text(wrapper?.hint)
     return { query, mode, results, ...(hint === undefined ? {} : { hint }) }
+  }
+
+  async graph(signal?: AbortSignal): Promise<MemoryGraphSnapshot> {
+    const html = await this.runner.runText(['viz', '--format', 'html', '--output', '-'], signal === undefined ? {} : { signal })
+    return parseMemoryGraph(html)
+  }
+
+  async list(request: MemoryListRequest = {}, signal?: AbortSignal): Promise<MemoryListView> {
+    const query = request.query?.trim().toLocaleLowerCase() ?? ''
+    if (query.length > 500) throw new Error('query is too long (max 500 characters)')
+    const category = allowed(request.category, CATEGORIES, 'category')
+    const limit = boundedInteger(request.limit, 200, 1, 1000)
+    const graph = await this.graph(signal)
+    const matches = graph.nodes.filter(node =>
+      (category === undefined || node.category === category)
+      && (query === '' || node.content.toLocaleLowerCase().includes(query) || node.id.toLocaleLowerCase().includes(query)),
+    )
+    return { items: matches.slice(0, limit), total: matches.length, generatedAt: graph.generatedAt }
+  }
+
+  async entities(entity?: string, limit?: number, signal?: AbortSignal): Promise<EntityView> {
+    const status = await this.status(signal)
+    const items = status.stats?.topEntities ?? []
+    const selected = entity?.trim() ?? ''
+    if (selected === '') return { items, insights: [] }
+    if (selected.length > 200) throw new Error('entity is too long (max 200 characters)')
+    const response = await this.search({ query: selected, intent: 'ENTITY', limit: boundedInteger(limit, 20, 1, 50) }, signal)
+    return { items, selected, insights: response.results }
   }
 
   async remember(request: RememberRequest, signal?: AbortSignal): Promise<JsonValue> {

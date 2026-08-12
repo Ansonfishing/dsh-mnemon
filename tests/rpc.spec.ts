@@ -8,6 +8,9 @@ function fakeService(writeEnabled = true): MnemonService {
   return {
     config: resolveConfig({ writeEnabled }),
     status: vi.fn(async () => ({ healthy: true })),
+    graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
+    list: vi.fn(async () => ({ items: [], total: 0, generatedAt: 'now' })),
+    entities: vi.fn(async () => ({ items: [], insights: [] })),
     search: vi.fn(async request => ({ query: request.query, mode: 'smart', results: [] })),
     related: vi.fn(async () => []),
     remember: vi.fn(async () => ({ action: 'added' })),
@@ -20,6 +23,9 @@ describe('Mnemon RPC', () => {
   it('dispatches read operations and rejects unknown endpoints', async () => {
     const service = fakeService()
     await expect(createReadHandler(service)('search', { query: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { query: 'SQLite' } })
+    await expect(createReadHandler(service)('graph', {})).resolves.toMatchObject({ ok: true, value: { nodes: [] } })
+    await expect(createReadHandler(service)('list', { category: 'decision' })).resolves.toMatchObject({ ok: true, value: { total: 0 } })
+    await expect(createReadHandler(service)('entities', { entity: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { insights: [] } })
     await expect(createReadHandler(service)('nope', {})).resolves.toMatchObject({ ok: false, error: { code: 'not-found' } })
   })
 

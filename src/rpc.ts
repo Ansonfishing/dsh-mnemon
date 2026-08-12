@@ -30,6 +30,19 @@ export function createReadHandler(service: MnemonService): HostRpcHandler {
       switch (endpoint) {
         case 'status':
           return success(await service.status())
+        case 'graph':
+          return success(await service.graph())
+        case 'list':
+          return success(await service.list({
+            ...(payload.query === undefined ? {} : { query: String(payload.query) }),
+            ...(payload.category === undefined ? {} : { category: payload.category as Category }),
+            ...(payload.limit === undefined ? {} : { limit: Number(payload.limit) }),
+          }))
+        case 'entities':
+          return success(await service.entities(
+            payload.entity === undefined ? undefined : String(payload.entity),
+            payload.limit === undefined ? undefined : Number(payload.limit),
+          ))
         case 'search':
           return success(await service.search({
             query: String(payload.query ?? ''),
