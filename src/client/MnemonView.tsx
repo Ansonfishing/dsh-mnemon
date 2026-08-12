@@ -365,7 +365,6 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
   useEffect(() => () => cancelAnimation(), [cancelAnimation])
 
   const beginDrag = (event: ReactPointerEvent<SVGGElement>, nodeId: string) => {
-    event.preventDefault()
     cancelAnimation()
     dragRef.current = { nodeId, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false }
     event.currentTarget.setPointerCapture?.(event.pointerId)
