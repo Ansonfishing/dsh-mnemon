@@ -1,6 +1,8 @@
 # dsh-mnemon
 
-**DeepSeek Harness（DSH）的 LLM-supervised 持久记忆插件。** 它把 [Mnemon](https://github.com/mnemon-dev/mnemon) 接入 DSH：Agent 通过原生工具按需召回和沉淀跨会话知识，用户通过 `/mnemon` 命令、插件设置和会话「记忆」Tab 管理本地记忆图谱。
+> **LLM-supervised 4-graph persistent memory for AI agents.**
+
+DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https://github.com/mnemon-dev/mnemon) 接入 DSH：Agent 通过原生工具按需召回和沉淀跨会话知识，用户通过 `/mnemon` 命令和会话「记忆」Tab 管理本地记忆图谱。
 
 Mnemon 采用 **LLM-supervised** 模式：宿主 LLM 判断何时召回、什么值得记住以及何时遗忘；本地单一二进制负责存储、四图索引、检索、衰减和去重。`dsh-mnemon` 将这一分工映射到 DSH 原生扩展点，不引入第二个 LLM、不要求额外 API Key，也不会在每轮机械召回或把整库塞入上下文。
 
@@ -11,7 +13,7 @@ Mnemon 采用 **LLM-supervised** 模式：宿主 LLM 判断何时召回、什么
 | DSH Agent | 根据任务与路由指引决定是否 `recall / remember / link / forget` |
 | `dsh-mnemon` | 注册工具、命令、设置、WebUI，校验输入并控制权限与超时 |
 | Mnemon CLI | 执行确定性的 SQLite 存储、四图索引、意图感知召回、衰减与去重 |
-| DSH 用户 | 在「记忆」Tab 检索和审阅，在插件设置中选择 Store 与读写策略 |
+| DSH 用户 | 在「记忆」Tab 总览、检索、审阅与维护，并在「状态」页选择 Store 与读写策略 |
 
 当前用户指令与仓库事实始终高于可能过时的历史记忆。记忆是可复核的辅助证据，不是自动覆盖当前事实的真相源。
 
@@ -27,10 +29,14 @@ Mnemon 采用 **LLM-supervised** 模式：宿主 LLM 判断何时召回、什么
 - **轻量系统指引**：任务开始先判断是否值得 recall，任务结束再判断是否有 durable writeback；不做机械调用。
 - **DSH 原生命令**：`/mnemon status`、`recall`、`related`、`remember`、`forget` 直接通过命令面板执行，不经过模型。
 - **会话「记忆」Tab**
-  - 「检索记忆」：三种检索模式、分类过滤、结果卡片、关联图检查器、复制 ID、卡片内软删除确认；
-  - 「沉淀记忆」：耐久性判断提示，以及内容、分类、重要性和标签表单；
-  - 「运行状态」：CLI 版本、命名 Store、数据目录、库统计、访问模式和原生命令入口。
-- **DSH 插件配置**：在「设置 → 插件配置 → Mnemon 外置记忆」编辑配置，写入 `.dsh/settings.yaml` 并在重启后生效。
+  - 「总览」：每 15 秒从 Mnemon active graph 同步一次实时节点和 temporal / semantic / causal / entity 关系，支持节点检查；
+  - 「检索」：三种检索模式、分类过滤、结果卡片、关联图检查器、复制 ID、卡片内软删除确认；
+  - 「实体」：列出高频实体，并通过 ENTITY intent 聚合其跨图上下文；
+  - 「沉淀」：耐久性判断提示，以及内容、分类、重要性、实体和标签表单；
+  - 「记忆库」：无副作用枚举 active memory，支持筛选、查阅、复制、基于旧内容新建和软删除；
+  - 「状态」：CLI 与数据库诊断、原生命令入口，以及连接、Store、召回和读写配置。
+- **Tab 内原生配置**：在「记忆 → 状态」编辑配置，写入 `.dsh/settings.yaml` 并在重启后生效；无需前往 DSH 的「设置 → 插件配置」。
+- **全局主题联动**：界面只使用 DSH design token，跟随 DSH 全局明暗模式，不维护插件私有主题开关。
 - **命名 store 与数据隔离**：支持 Mnemon 的 `--store` / `MNEMON_STORE` / active store 优先级。
 - **安全边界**：所有 CLI 调用使用参数数组并禁用 shell；远程可信 Web 页面可读，本地记忆写入 RPC 仅允许 loopback 页面；`writeEnabled: false` 可整体切成只读。
 - **版本兼容**：同时解析 Mnemon 0.1.2 的嵌套 recall 结果和当前上游的紧凑结果。
@@ -41,7 +47,7 @@ Mnemon 采用 **LLM-supervised** 模式：宿主 LLM 判断何时召回、什么
 DSH Agent ── native tools ─────┐
 DSH Chat  ── /mnemon command ──┼── dsh-mnemon host ── mnemon CLI ── ~/.mnemon/data/<store>/
 DSH Web   ── 「记忆」Tab ──────┤                  remember / link / recall / forget
-DSH 设置  ── settings.yaml ────┘
+             状态与配置 ───────┘                  ~/.dsh/settings.yaml
 ```
 
 浏览器不直接启动进程、不接触数据库，也不保存任何密钥或特殊权限。Host 半区统一解析配置、校验输入、设置超时并调用本地 `mnemon` 可执行文件。
@@ -75,7 +81,7 @@ Mnemon 是 local-first 单二进制持久记忆图谱，核心协议是 `remembe
 dsh plugin --profile web add "github:dsh-external/dsh-mnemon"
 ```
 
-安装后重启 `dsh web`，再刷新浏览器。包内的 `cordis.patch.yml` 会自动挂载插件、注册 Agent 工具与 `/mnemon` 命令，并启用「记忆」Tab 和插件配置卡片。
+安装后重启 `dsh web`，再刷新浏览器。包内的 `cordis.patch.yml` 会自动挂载插件、注册 Agent 工具与 `/mnemon` 命令，并启用「记忆」Tab。
 
 本地开发检出可使用：
 
@@ -85,7 +91,7 @@ dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 
 ## 配置
 
-推荐在 DSH Web 的 **设置 → 插件配置 → Mnemon 外置记忆** 中修改。设置会写入 `$DSH_HOME/settings.yaml` 的 `mnemon` 命名空间，并在重启 DSH 后生效；profile 的插件配置作为 base，`settings.yaml` 中的用户值拥有更高优先级。
+推荐在 DSH Web 的 **记忆 → 状态 → 连接与行为** 中修改。设置会写入 `$DSH_HOME/settings.yaml` 的 `mnemon` 命名空间，并在重启 DSH 后生效；profile 的插件配置作为 base，`settings.yaml` 中的用户值拥有更高优先级。
 
 ```yaml
 # ~/.dsh/settings.yaml
@@ -187,7 +193,11 @@ pnpm run verify
 - `lib/client.js`：自包含浏览器 bundle，仅 external `react` / `react/jsx-runtime`；
 - `lib/types/`：Host 与 Client 类型声明和中间 ESM。
 
-测试覆盖配置解析、CLI 参数/超时边界、0.1.2 与当前 recall 数据形态、只读模式、RPC 权限划分、插件设置和 Tab 交互。另使用真实 Mnemon 与独立端口 DSH 验证了配置重启、`status → remember → recall → related → forget → status`、只读拒绝和 WebUI 全链路。
+测试覆盖配置解析、CLI 参数/超时边界、0.1.2 与当前 recall 数据形态、图谱安全解析、无副作用 List、实体查阅、只读模式、RPC 权限划分、Tab 内设置和六区工作台交互。另使用真实 Mnemon 与独立端口 DSH 验证配置重启、全局明暗主题、Overview / recall / entity / remember / list / forget 和 WebUI 全链路。
+
+## 品牌资源
+
+WebUI 内嵌的 Mnemon 标志来自 [mnemon-dev/mnemon 的官方 logo.svg](https://github.com/mnemon-dev/mnemon/blob/main/docs/logo/logo.svg)，上游项目采用 Apache-2.0 License。标志仅用于准确说明本插件集成的上游产品。
 
 ## License
 
