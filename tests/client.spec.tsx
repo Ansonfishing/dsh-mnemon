@@ -28,6 +28,24 @@ describe('MnemonView', () => {
       timeoutMs: 10000,
       defaultRecallLimit: 10,
       stats: { totalInsights: 12, deletedInsights: 0, edgeCount: 9, oplogCount: 20, dbSizeBytes: 4096, byCategory: {}, topEntities: [] },
+      lifecycle: {
+        enabled: true,
+        recallMode: 'guided',
+        writebackMode: 'guided',
+        activeAgents: 1,
+        sessionAvailable: true,
+        counters: { primes: 1, recallCues: 2, writebackChecks: 1, supervisedRequests: 1, failures: 0 },
+        current: {
+          sessionId: 'session-1',
+          status: 'idle',
+          startSource: 'startup',
+          primePending: false,
+          checkedTurns: 1,
+          memoryToolCalls: 2,
+          lastPhase: 'writeback',
+          lastAt: '2026-08-13T03:00:00.000Z',
+        },
+      },
     }
     const memory = { id: 'memory-12345678', content: '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], color: '#e74c3c' }
     const call = vi.fn(async (_channel: string, endpoint: string) => {
@@ -84,8 +102,12 @@ describe('MnemonView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /状态 配置与诊断/ }))
     expect(screen.getByRole('heading', { name: '状态与配置' })).toBeTruthy()
+    expect(screen.getByText('生命周期编排已启用')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '记忆生命周期' })).toBeTruthy()
+    expect(screen.getByText('Recall Gate')).toBeTruthy()
+    expect(screen.getByText('当前会话已绑定')).toBeTruthy()
     expect(screen.getByText('/mnemon status')).toBeTruthy()
-    expect(screen.getByText(/\.dsh\/settings.yaml/)).toBeTruthy()
+    expect(screen.getAllByText(/\.dsh\/settings.yaml/)).toHaveLength(2)
   })
 
   it('requires inline confirmation before forgetting a recalled memory', async () => {

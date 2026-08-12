@@ -247,22 +247,59 @@
 .memoryList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; align-items: start; }
 .memoryList .insightCard { height: 100%; margin: 0; }
 
-.statusGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; align-items: start; }
-.runtimeCard, .infoCard { border: 1px solid var(--mn-line); border-radius: 12px; padding: 16px; background: var(--mn-layer-1); }
-.cardTitleRow { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.runtimeCard h3, .infoCard h3 { margin: 4px 0 13px; font-size: 15px; }
+.healthStrip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 13px; overflow: hidden; border: 1px solid var(--mn-line); border-radius: 12px; background: var(--mn-layer-1); }
+.healthStrip article { display: flex; min-width: 0; gap: 10px; padding: 14px 15px; border-right: 1px solid var(--mn-line); }
+.healthStrip article:last-child { border-right: 0; }
+.healthStrip small { display: block; margin-bottom: 4px; color: var(--mn-faint); font: 650 9px var(--mn-code); letter-spacing: .08em; }
+.healthStrip strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.healthStrip p { margin: 3px 0 0; overflow: hidden; color: var(--mn-muted); text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.healthIndicator { width: 7px; height: 7px; flex: 0 0 auto; margin-top: 3px; border-radius: 50%; box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 9%, transparent); }
+.healthGood { color: var(--mn-success); background: currentColor; }
+.healthBad { color: var(--mn-danger); background: currentColor; }
+.healthMuted { color: var(--mn-faint); background: currentColor; }
+.statusLayout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 13px; align-items: start; }
+.lifecyclePanel, .diagnosticsPanel, .runtimeDetails, .configDisclosure { border: 1px solid var(--mn-line); border-radius: 12px; background: var(--mn-layer-1); }
+.lifecyclePanel, .diagnosticsPanel, .runtimeDetails { padding: 16px; }
+.statusSectionHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.statusSectionHeader h3 { margin: 4px 0 0; font-size: 15px; }
+.statusSectionHeader p { max-width: 590px; margin: 5px 0 0; color: var(--mn-muted); font-size: 10px; }
+.phaseBadge { padding: 4px 8px; border: 1px solid color-mix(in srgb, var(--mn-accent) 25%, var(--mn-line)); border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 7%, transparent); font: 650 9px var(--mn-code); }
+.lifecycleFlow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 15px; overflow: hidden; border: 1px solid var(--mn-line); border-radius: 9px; background: color-mix(in srgb, var(--mn-layer-2) 52%, transparent); }
+.lifecycleFlow article { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 12px; border-right: 1px solid var(--mn-line); }
+.lifecycleFlow article:last-child { border-right: 0; }
+.lifecycleFlow article[data-disabled] { opacity: .48; }
+.lifecycleFlow article > span { color: var(--mn-accent); font: 650 9px var(--mn-code); }
+.lifecycleFlow strong { display: block; font-size: 11px; }
+.lifecycleFlow p { margin: 4px 0 0; color: var(--mn-faint); font-size: 9px; line-height: 1.45; }
+.lifecycleFlow code { color: var(--mn-muted); font-size: 10px; }
+.lifecycleFoot { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--mn-line); color: var(--mn-faint); font-size: 9px; }
+.lifecycleFoot strong { margin-left: 3px; color: var(--mn-text); font-weight: 600; }
+.diagnosticList { display: grid; gap: 9px; margin: 15px 0 0; padding: 0; list-style: none; color: var(--mn-muted); font-size: 10px; }
+.diagnosticList li { display: flex; align-items: center; gap: 8px; }
+.diagnosticList li > span { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--mn-danger); }
+.diagnosticList li[data-ok] > span { background: var(--mn-success); }
+.nativeAccess { display: grid; gap: 6px; margin-top: 15px; padding-top: 13px; border-top: 1px solid var(--mn-line); }
+.nativeAccess code { padding: 6px 8px; border-radius: 6px; color: var(--mn-accent); background: var(--mn-layer-2); font-size: 9px; }
+.nativeAccess p { margin: 2px 0 0; color: var(--mn-faint); font-size: 9px; line-height: 1.5; }
+.runtimeDetails { margin-top: 13px; }
+.runtimeDetails dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 14px 0 0; border-top: 1px solid var(--mn-line); border-left: 1px solid var(--mn-line); }
+.runtimeDetails dl > div { min-width: 0; padding: 9px 10px; border-right: 1px solid var(--mn-line); border-bottom: 1px solid var(--mn-line); }
+.runtimeDetails dt { margin-bottom: 4px; color: var(--mn-faint); font-size: 9px; }
+.runtimeDetails dd { margin: 0; overflow-wrap: anywhere; font-size: 10px; }
 .runtimeBadge { padding: 3px 7px; border-radius: 999px; font: 650 9px var(--mn-code); }
 .runtimeOnline { color: var(--mn-success); background: color-mix(in srgb, var(--mn-success) 10%, transparent); }
 .runtimeOffline { color: var(--mn-danger); background: color-mix(in srgb, var(--mn-danger) 10%, transparent); }
-.runtimeCard dl { margin: 0; }
-.runtimeCard dl > div { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-top: 1px solid var(--mn-line); }
-.runtimeCard dt { color: var(--mn-faint); font-size: 10px; }
-.runtimeCard dd { margin: 0; overflow-wrap: anywhere; text-align: right; font-size: 11px; }
-.infoCard ul { display: grid; gap: 8px; margin: 0; padding-left: 18px; color: var(--mn-muted); font-size: 11px; }
-.infoCard p { margin: 12px 0 0; color: var(--mn-faint); font-size: 11px; }
-.commandList { display: grid; gap: 6px; }
-.commandList code { padding: 7px 9px; border-radius: 7px; color: var(--mn-accent); background: var(--mn-layer-2); font-size: 10px; }
-.settingsPanel { grid-column: 1 / -1; }
+.configDisclosure { margin-top: 13px; overflow: hidden; }
+.configDisclosure summary { display: flex; min-height: 65px; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 16px; cursor: pointer; list-style: none; }
+.configDisclosure summary::-webkit-details-marker { display: none; }
+.configDisclosure summary > span:first-child { display: grid; gap: 2px; }
+.configDisclosure summary strong { font-size: 12px; }
+.configDisclosure summary small { color: var(--mn-faint); font-size: 9px; }
+.configDisclosure summary > span:last-child { color: var(--mn-accent); font: 10px var(--mn-code); }
+.configDisclosure[open] summary { border-bottom: 1px solid var(--mn-line); }
+.configDisclosure[open] summary > span:last-child { font-size: 0; }
+.configDisclosure[open] summary > span:last-child::after { content: "收起配置"; font-size: 10px; }
+.settingsPanel { padding: 14px; }
 
 @media (max-width: 1000px) {
   .graphLayout { grid-template-columns: 1fr; }
@@ -270,6 +307,7 @@
   .inspectorEmpty { min-height: 180px; }
   .resultLayout { grid-template-columns: 1fr; }
   .memoryList { grid-template-columns: 1fr; }
+  .statusLayout { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 760px) {
@@ -290,7 +328,7 @@
   .page { padding: 18px 13px 26px; }
   .pageHeader { display: grid; gap: 10px; }
   .pageHeaderMeta { justify-content: space-between; }
-  .entityLayout, .writebackLayout, .statusGrid { grid-template-columns: 1fr; }
+  .entityLayout, .writebackLayout { grid-template-columns: 1fr; }
   .manualActions { align-items: stretch; flex-direction: column; }
   .entityRail { position: static; }
   .searchControls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -298,5 +336,7 @@
   .searchControls select { width: 100%; min-width: 0; }
   .listToolbar { grid-template-columns: 1fr; }
   .graphViewport, .graphSvg { min-height: 390px; }
-  .settingsPanel { grid-column: auto; }
+  .healthStrip, .lifecycleFlow, .runtimeDetails dl { grid-template-columns: 1fr; }
+  .healthStrip article, .lifecycleFlow article { border-right: 0; border-bottom: 1px solid var(--mn-line); }
+  .healthStrip article:last-child, .lifecycleFlow article:last-child { border-bottom: 0; }
 }

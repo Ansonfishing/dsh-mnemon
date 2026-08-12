@@ -456,15 +456,53 @@ function ListPage(props: { client: MnemonClient; revision: number; writeEnabled:
 
 function StatusPage(props: { status: StatusView | null; loading: boolean; onRefresh: () => void; settingsScope: ClientSettingsScope<Config> }): JSX.Element {
   const status = props.status
+  const lifecycle = status?.lifecycle
+  const current = lifecycle?.current
+  const latest = current?.lastAt === undefined ? '尚无运行记录' : new Date(current.lastAt).toLocaleString()
+  const phase = current?.lastPhase === undefined ? 'idle' : ({ idle: '待命', prime: 'Prime', recall: 'Recall', writeback: 'Writeback', supervised: '受监督请求', error: '异常' } as const)[current.lastPhase]
   return (
     <div className={css.page}>
-      <PageHeader kicker="RUNTIME & CONFIG" title="状态与配置" description="诊断当前运行时，并在 Mnemon 工作台内维护插件配置。" meta={status?.healthy === true ? 'SYSTEM NOMINAL' : 'CHECK REQUIRED'} action={<button type="button" className={css.secondaryButton} onClick={props.onRefresh}>{props.loading ? '检查中…' : '重新检查'}</button>} />
-      <div className={css.statusGrid}>
-        <article className={css.runtimeCard}><div className={css.cardTitleRow}><div><span className={css.cardKicker}>CONNECTION</span><h3>Mnemon Runtime</h3></div><span className={`${css.runtimeBadge} ${status?.healthy === true ? css.runtimeOnline : css.runtimeOffline}`}>{status?.healthy === true ? 'ONLINE' : 'OFFLINE'}</span></div><dl><div><dt>CLI</dt><dd><code>{status?.cliPath ?? 'mnemon'}</code></dd></div><div><dt>版本</dt><dd>{status?.version ?? '—'}</dd></div><div><dt>Store</dt><dd><code>{status?.store ?? 'default'}</code></dd></div><div><dt>数据目录</dt><dd><code>{status?.dataDir ?? '~/.mnemon'}</code></dd></div><div><dt>超时</dt><dd>{status?.timeoutMs ?? '—'} ms</dd></div><div><dt>默认召回</dt><dd>{status?.defaultRecallLimit ?? '—'} 条</dd></div><div><dt>访问模式</dt><dd>{status?.writeEnabled === true ? '读取与写入' : '只读'}</dd></div></dl></article>
-        <article className={css.infoCard}><span className={css.cardKicker}>OPERATING PRINCIPLE</span><h3>记忆边界</h3><ul><li>只在记忆可能改变结果时召回。</li><li>当前用户指令和仓库事实高于旧记忆。</li><li>只沉淀稳定、可复用的洞察。</li><li>不会把整个记忆库自动注入上下文。</li></ul></article>
-        <article className={css.infoCard}><span className={css.cardKicker}>NATIVE COMMAND</span><h3>对话内接入</h3><div className={css.commandList}><code>/mnemon status</code><code>/mnemon recall &lt;query&gt;</code><code>/mnemon remember &lt;content&gt;</code></div><p>查询状态、召回、写入、关联和软删除均可使用原生命令。</p></article>
-        <div className={css.settingsPanel}><MnemonSettingsCard scope={props.settingsScope} /></div>
+      <PageHeader kicker="RUNTIME OBSERVABILITY" title="状态与配置" description="先看记忆引擎、生命周期与当前会话是否连通；需要时再展开诊断和配置。" meta={status?.healthy === true && lifecycle?.sessionAvailable === true ? 'SYSTEM NOMINAL' : 'CHECK REQUIRED'} action={<button type="button" className={css.secondaryButton} onClick={props.onRefresh}>{props.loading ? '检查中…' : '重新检查'}</button>} />
+
+      <section className={css.healthStrip} aria-label="Mnemon 运行状态">
+        <article><span className={`${css.healthIndicator} ${status?.healthy === true ? css.healthGood : css.healthBad}`} /><div><small>MEMORY ENGINE</small><strong>{status?.healthy === true ? 'Mnemon 已连接' : 'Mnemon 不可用'}</strong><p>{status?.version === undefined ? '等待版本信息' : `CLI ${status.version}`}</p></div></article>
+        <article><span className={`${css.healthIndicator} ${lifecycle?.enabled === true ? css.healthGood : css.healthMuted}`} /><div><small>LIFECYCLE</small><strong>{lifecycle?.enabled === true ? '生命周期编排已启用' : '生命周期编排未启用'}</strong><p>{lifecycle === undefined ? '等待 DSH 状态' : `${lifecycle.activeAgents} 个根 Agent`}</p></div></article>
+        <article><span className={`${css.healthIndicator} ${lifecycle?.sessionAvailable === true ? css.healthGood : css.healthBad}`} /><div><small>CURRENT SESSION</small><strong>{lifecycle?.sessionAvailable === true ? '当前会话已绑定' : '当前会话未绑定'}</strong><p>{current === undefined ? '无法调度受监督沉淀' : `${current.status === 'running' ? '运行中' : '空闲'} · ${short(current.sessionId, 18)}`}</p></div></article>
+      </section>
+
+      <div className={css.statusLayout}>
+        <section className={css.lifecyclePanel}>
+          <div className={css.statusSectionHeader}><div><span className={css.cardKicker}>AGENT LIFECYCLE</span><h3>记忆生命周期</h3><p>Hook 只保证模型在正确边界作出判断，最终读写仍由当前 DSH LLM 决定。</p></div><span className={css.phaseBadge}>{phase}</span></div>
+          <div className={css.lifecycleFlow}>
+            <article><span>01</span><div><strong>Prime</strong><p>首次模型请求前读取 Store 状态</p></div><code>{lifecycle?.counters.primes ?? 0}</code></article>
+            <article data-disabled={lifecycle?.recallMode === 'off' || undefined}><span>02</span><div><strong>Recall Gate</strong><p>{lifecycle?.recallMode === 'guided' ? '每轮首步由模型判断是否召回' : '已关闭，仅保留手动召回'}</p></div><code>{lifecycle?.counters.recallCues ?? 0}</code></article>
+            <article data-disabled={lifecycle?.writebackMode === 'off' || undefined}><span>03</span><div><strong>Writeback Gate</strong><p>{lifecycle?.writebackMode === 'guided' ? 'turn 关闭前至多检查一次' : '已关闭，仅保留主动沉淀'}</p></div><code>{lifecycle?.counters.writebackChecks ?? 0}</code></article>
+          </div>
+          <div className={css.lifecycleFoot}><span>最近阶段 <strong>{phase}</strong></span><span>最近活动 <strong>{latest}</strong></span><span>受监督请求 <strong>{lifecycle?.counters.supervisedRequests ?? 0}</strong></span><span>记忆工具调用 <strong>{current?.memoryToolCalls ?? 0}</strong></span></div>
+          {current?.lastError !== undefined && <div className={css.inlineError} role="alert">Lifecycle：{current.lastError}</div>}
+        </section>
+
+        <aside className={css.diagnosticsPanel}>
+          <div className={css.statusSectionHeader}><div><span className={css.cardKicker}>QUICK DIAGNOSTICS</span><h3>快速诊断</h3></div></div>
+          <ul className={css.diagnosticList}>
+            <li data-ok={status?.commandFound || undefined}><span />Mnemon CLI {status?.commandFound ? '可执行' : '未找到'}</li>
+            <li data-ok={status?.writeEnabled || undefined}><span />{status?.writeEnabled ? '允许读取与写入' : '当前为只读模式'}</li>
+            <li data-ok={lifecycle?.sessionAvailable || undefined}><span />{lifecycle?.sessionAvailable ? 'WebUI 可调度当前 Agent' : '缺少 live session'}</li>
+            <li data-ok={(lifecycle?.counters.failures ?? 0) === 0 || undefined}><span />Lifecycle 失败 {lifecycle?.counters.failures ?? 0} 次</li>
+          </ul>
+          <div className={css.nativeAccess}><span className={css.cardKicker}>NATIVE ACCESS</span><code>/mnemon status</code><code>/mnemon recall &lt;query&gt;</code><p>模型侧使用原生 <code>mnemon_*</code> 工具；人工命令不会绕入模型。</p></div>
+        </aside>
       </div>
+
+      <section className={css.runtimeDetails}>
+        <div className={css.statusSectionHeader}><div><span className={css.cardKicker}>RUNTIME DETAILS</span><h3>引擎与存储</h3></div><span className={`${css.runtimeBadge} ${status?.healthy === true ? css.runtimeOnline : css.runtimeOffline}`}>{status?.healthy === true ? 'ONLINE' : 'OFFLINE'}</span></div>
+        <dl><div><dt>CLI</dt><dd><code>{status?.cliPath ?? 'mnemon'}</code></dd></div><div><dt>Store</dt><dd><code>{status?.store ?? 'default'}</code></dd></div><div><dt>数据目录</dt><dd><code>{status?.dataDir ?? '~/.mnemon'}</code></dd></div><div><dt>数据库</dt><dd>{status?.stats === undefined ? '—' : humanBytes(status.stats.dbSizeBytes)}</dd></div><div><dt>超时</dt><dd>{status?.timeoutMs ?? '—'} ms</dd></div><div><dt>默认召回</dt><dd>{status?.defaultRecallLimit ?? '—'} 条</dd></div><div><dt>有效记忆</dt><dd>{status?.stats?.totalInsights ?? '—'}</dd></div><div><dt>图谱连接</dt><dd>{status?.stats?.edgeCount ?? '—'}</dd></div></dl>
+      </section>
+
+      <details className={css.configDisclosure}>
+        <summary><span><span className={css.cardKicker}>PLUGIN CONFIG</span><strong>连接与行为配置</strong><small>保存到 .dsh/settings.yaml，重启 DSH 后生效</small></span><span>展开配置</span></summary>
+        <div className={css.settingsPanel}><MnemonSettingsCard scope={props.settingsScope} /></div>
+      </details>
     </div>
   )
 }
