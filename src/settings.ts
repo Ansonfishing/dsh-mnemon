@@ -11,10 +11,15 @@ function failure(error: unknown): RpcResult<unknown> {
   return {
     ok: false,
     error: {
-      code: 'mnemon-settings-error',
+      code: 'settings-rejected',
       message: error instanceof Error ? error.message : String(error),
+      details: { ns: MNEMON_SETTINGS_NAMESPACE },
     },
   }
+}
+
+function badRequest(message: string): RpcResult<unknown> {
+  return { ok: false, error: { code: 'bad-request', message, details: { issues: [] } } }
 }
 
 function descriptor(settings: HostSettingsService) {
@@ -41,7 +46,7 @@ export function createSettingsHandler(settings: HostSettingsService): HostRpcHan
   return async (endpoint, rawPayload) => {
     try {
       if (endpoint === 'get') return success(descriptor(settings))
-      if (endpoint !== 'mutate') return { ok: false, error: { code: 'not-found', message: `unknown settings endpoint: ${endpoint}` } }
+      if (endpoint !== 'mutate') return badRequest(`unknown settings endpoint: ${endpoint}`)
       if (!settings.writable) throw new Error('DSH settings are read-only')
       const payload = object(rawPayload)
       if (!Array.isArray(payload.ops) || payload.ops.length === 0 || payload.ops.length > 16) throw new Error('ops must contain 1..16 settings edits')

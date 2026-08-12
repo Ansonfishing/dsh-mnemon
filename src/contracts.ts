@@ -1,11 +1,11 @@
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue }
 
-export interface RpcError {
-  code: string
-  message: string
-  details?: Record<string, JsonValue>
-}
+/** Plugin RPC failures use only error branches accepted by DSH's closed wire schema. */
+export type RpcError =
+  | { code: 'bad-request'; message: string; details: { issues: JsonValue[] } }
+  | { code: 'settings-rejected'; message: string; details: { ns: string } }
+  | { code: 'internal'; message: string; details: Record<string, never> }
 
 export type RpcResult<T = JsonValue> =
   | { ok: true; value: T }

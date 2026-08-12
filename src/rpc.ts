@@ -19,10 +19,15 @@ function failure(error: unknown): RpcResult<unknown> {
   return {
     ok: false,
     error: {
-      code: 'mnemon-error',
+      code: 'internal',
       message: error instanceof Error ? error.message : String(error),
+      details: {},
     },
   }
+}
+
+function badRequest(message: string): RpcResult<unknown> {
+  return { ok: false, error: { code: 'bad-request', message, details: { issues: [] } } }
 }
 
 export function createReadHandler(service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController): HostRpcHandler {
@@ -89,7 +94,7 @@ export function createReadHandler(service: MnemonService, lifecycle?: MnemonLife
         case 'related':
           return success(await service.related(String(payload.id ?? ''), payload.depth === undefined ? 2 : Number(payload.depth), payload.edge as EdgeType | undefined, undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId)))
         default:
-          return { ok: false, error: { code: 'not-found', message: `unknown read endpoint: ${endpoint}` } }
+          return badRequest(`unknown read endpoint: ${endpoint}`)
       }
     } catch (error) {
       return failure(error)
@@ -155,7 +160,7 @@ export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLif
             ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
           }))
         default:
-          return { ok: false, error: { code: 'not-found', message: `unknown write endpoint: ${endpoint}` } }
+          return badRequest(`unknown write endpoint: ${endpoint}`)
       }
     } catch (error) {
       return failure(error)

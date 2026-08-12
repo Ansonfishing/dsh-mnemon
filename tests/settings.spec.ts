@@ -44,7 +44,10 @@ describe('Mnemon settings bridge', () => {
       describe: () => [{ ns: 'mnemon', value: {}, revision: 0, applies: 'restart' as const }],
     } as unknown as HostSettingsService
     const response = await createSettingsHandler(settings)('mutate', { ops: [{ op: 'set', path: ['other'], value: true }] })
-    expect(response).toEqual(expect.objectContaining({ ok: false, error: expect.objectContaining({ code: 'mnemon-settings-error' }) }))
+    expect(response).toEqual(expect.objectContaining({
+      ok: false,
+      error: expect.objectContaining({ code: 'settings-rejected', details: { ns: 'mnemon' } }),
+    }))
     expect(settings.mutate).not.toHaveBeenCalled()
   })
 })

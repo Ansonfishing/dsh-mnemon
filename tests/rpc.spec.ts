@@ -46,7 +46,10 @@ describe('Mnemon RPC', () => {
     await expect(createReadHandler(service)('bodies', {})).resolves.toMatchObject({ ok: true, value: { items: [], total: 0 } })
     await expect(createReadHandler(service)('list', { category: 'decision' })).resolves.toMatchObject({ ok: true, value: { total: 0 } })
     await expect(createReadHandler(service)('entities', { entity: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { insights: [] } })
-    await expect(createReadHandler(service)('nope', {})).resolves.toMatchObject({ ok: false, error: { code: 'not-found' } })
+    await expect(createReadHandler(service)('nope', {})).resolves.toEqual({
+      ok: false,
+      error: { code: 'bad-request', message: 'unknown read endpoint: nope', details: { issues: [] } },
+    })
   })
 
   it('rejects malformed enum values at the service boundary', async () => {
@@ -58,7 +61,7 @@ describe('Mnemon RPC', () => {
     })
     await expect(createReadHandler(service)('search', { query: 'x', mode: 'anything' })).resolves.toMatchObject({
       ok: false,
-      error: { code: 'mnemon-error' },
+      error: { code: 'internal', details: {} },
     })
   })
 
