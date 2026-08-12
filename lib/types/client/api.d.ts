@@ -7,6 +7,14 @@ export interface SearchResponse {
     results: Insight[];
     hint?: string;
 }
+export interface AgentSearchResponse extends SearchResponse {
+    answer: string;
+    citations: string[];
+    delegation: {
+        runId: string;
+        provider: string;
+    };
+}
 export declare class MnemonClient {
     private readonly connection;
     private readonly sessionId?;
@@ -18,6 +26,7 @@ export declare class MnemonClient {
     list(request?: MemoryListRequest): Promise<MemoryListView>;
     entities(entity?: string, limit?: number): Promise<EntityView>;
     search(request: SearchRequest): Promise<SearchResponse>;
+    agentSearch(request: SearchRequest): Promise<AgentSearchResponse>;
     related(id: string, memoryBodyId?: string): Promise<Insight[]>;
     remember(request: RememberRequest): Promise<Record<string, unknown>>;
     supervise(content: string): Promise<{

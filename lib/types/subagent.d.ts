@@ -5,6 +5,7 @@ export declare function assertDshOutputSchema(schema: unknown, path?: string): v
 export interface SubagentCounters {
     recalls: number;
     writes: number;
+    answers: number;
     failures: number;
     lastRunId?: string;
     lastOperation?: 'recall' | 'write';
@@ -30,6 +31,14 @@ export interface DelegatedWriteResult {
     action: string;
     memoryBodyIds: string[];
 }
+export interface DelegatedAnswerResult {
+    answer: string;
+    citations: string[];
+    delegation: {
+        runId: string;
+        provider: string;
+    };
+}
 export declare function isSubagent(agent: HostAgent | undefined): boolean;
 /** Delegates memory judgment and execution to a fresh, tool-scoped DSH child. */
 export declare class MnemonSubagentCoordinator {
@@ -41,6 +50,7 @@ export declare class MnemonSubagentCoordinator {
     recall(parent: HostAgent, request: SearchRequest, signal: AbortSignal): Promise<DelegatedRecallResult>;
     related(parent: HostAgent, id: string, memoryBodyId: string | undefined, signal: AbortSignal): Promise<DelegatedRecallResult>;
     remember(parent: HostAgent, request: RememberRequest, signal: AbortSignal): Promise<DelegatedWriteResult>;
+    answer(parent: HostAgent, query: string, evidence: Insight[], signal: AbortSignal): Promise<DelegatedAnswerResult>;
     write(parent: HostAgent, operation: string, request: unknown, signal: AbortSignal): Promise<DelegatedWriteResult>;
     private recallResult;
     private delegate;

@@ -129,6 +129,10 @@ export declare const zh: {
     'search.modeBasic': string;
     'search.searching': string;
     'search.action': string;
+    'search.agentAction': string;
+    'search.agentSearching': string;
+    'search.agentAnswer': string;
+    'search.agentAnswerHint': string;
     'search.startTitle': string;
     'search.startText': string;
     'search.emptyTitle': string;
@@ -386,6 +390,10 @@ export declare const en: {
     'search.modeBasic': string;
     'search.searching': string;
     'search.action': string;
+    'search.agentAction': string;
+    'search.agentSearching': string;
+    'search.agentAnswer': string;
+    'search.agentAnswerHint': string;
     'search.startTitle': string;
     'search.startText': string;
     'search.emptyTitle': string;

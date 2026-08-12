@@ -96,6 +96,14 @@ describe('MnemonView', () => {
           results: [memory],
         },
       }
+      if (endpoint === 'agent-search') return {
+        ok: true,
+        value: {
+          query: 'SQLite', mode: 'smart', results: [memory],
+          answer: '项目选择 SQLite，以满足单文件部署。', citations: ['project/memory-12345678'],
+          delegation: { runId: 'answer-child-1', provider: 'spawn' },
+        },
+      }
       if (endpoint === 'related') return { ok: true, value: [] }
       if (endpoint === 'supervise') return { ok: true, value: { delegated: true, sessionId: 'session-1', runId: 'child-1', provider: 'spawn', summary: '已提炼并写入项目交付约束。', action: 'stored', memoryBodyIds: ['project'] } }
       if (endpoint === 'remember') return { ok: true, value: { delegated: true, runId: 'child-2', provider: 'spawn', summary: '已按高级约束写入。', action: 'stored', memoryBodyIds: ['project'] } }
@@ -178,7 +186,7 @@ describe('MnemonView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /检索 意图增强召回/ }))
     fireEvent.change(screen.getByRole('textbox', { name: '记忆查询' }), { target: { value: 'SQLite' } })
-    fireEvent.click(screen.getByRole('button', { name: '开始召回' }))
+    fireEvent.click(screen.getByRole('button', { name: '直接检索' }))
     await waitFor(() => expect(screen.getByText('项目选择 SQLite，因为需要单文件部署。')).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: '忘记' }))
@@ -188,6 +196,23 @@ describe('MnemonView', () => {
     fireEvent.click(screen.getByRole('button', { name: '确认忘记' }))
     await waitFor(() => expect(screen.queryByText('项目选择 SQLite，因为需要单文件部署。')).toBeNull())
     expect(call).toHaveBeenCalledWith(expect.anything(), 'forget', { id: 'memory-12345678', memoryBodyId: 'project', sessionId: 'session-1' })
+  })
+
+  it('shows an Agent answer above the raw direct-recall evidence', async () => {
+    const { connection, call } = createConnection()
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: /检索 意图增强召回/ }))
+    fireEvent.change(screen.getByRole('textbox', { name: '记忆查询' }), { target: { value: 'SQLite' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Agent 查询' }))
+
+    await waitFor(() => expect(screen.getByRole('region', { name: 'Agent 查询结果' })).toBeTruthy())
+    expect(screen.getByText('项目选择 SQLite，以满足单文件部署。')).toBeTruthy()
+    expect(screen.getByText('project/memory-12345678')).toBeTruthy()
+    expect(screen.getByText('原始召回内容')).toBeTruthy()
+    expect(screen.getByText('项目选择 SQLite，因为需要单文件部署。')).toBeTruthy()
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'agent-search', expect.objectContaining({ query: 'SQLite', sessionId: 'session-1' }))
   })
 
   it('dispatches the default writeback path to an isolated memory subagent', async () => {

@@ -63,19 +63,39 @@ describe('Mnemon RPC', () => {
     expect(service.remember).not.toHaveBeenCalled()
   })
 
-  it('delegates semantic reads and writes when a live lifecycle is available', async () => {
+  it('keeps Tab reads deterministic while delegating semantic writes', async () => {
     const service = fakeService()
     const lifecycle = {
-      recall: vi.fn(async (_sessionId, request) => ({ query: request.query, mode: 'smart', results: [], delegation: { runId: 'recall-1', provider: 'spawn', summary: '', selectedMemoryBodyIds: [] } })),
+      recall: vi.fn(),
+      related: vi.fn(),
       remember: vi.fn(async () => ({ delegated: true, runId: 'write-1', provider: 'spawn', summary: 'stored', action: 'stored', memoryBodyIds: ['project'] })),
     } as unknown as MnemonLifecycle
 
-    await expect(createReadHandler(service, lifecycle)('search', { sessionId: 'session-1', query: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { delegation: { runId: 'recall-1' } } })
+    await expect(createReadHandler(service, lifecycle)('search', { sessionId: 'session-1', query: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { query: 'SQLite', results: [] } })
+    await expect(createReadHandler(service, lifecycle)('entities', { sessionId: 'session-1', entity: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { insights: [] } })
+    await expect(createReadHandler(service, lifecycle)('related', { sessionId: 'session-1', id: 'm1', memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: [] })
     await expect(createWriteHandler(service, lifecycle)('remember', { sessionId: 'session-1', content: 'Use SQLite', memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { runId: 'write-1' } })
-    expect(lifecycle.recall).toHaveBeenCalledWith('session-1', expect.objectContaining({ query: 'SQLite' }))
+    expect(service.search).toHaveBeenCalledWith(expect.objectContaining({ query: 'SQLite' }))
+    expect(service.entities).toHaveBeenCalledWith('SQLite', undefined)
+    expect(service.related).toHaveBeenCalledWith('m1', 2, undefined, undefined, 'project')
+    expect(lifecycle.recall).not.toHaveBeenCalled()
+    expect(lifecycle.related).not.toHaveBeenCalled()
     expect(lifecycle.remember).toHaveBeenCalledWith('session-1', expect.objectContaining({ content: 'Use SQLite', memoryBodyId: 'project', source: 'user' }))
-    expect(service.search).not.toHaveBeenCalled()
     expect(service.remember).not.toHaveBeenCalled()
+  })
+
+  it('performs Agent query synthesis only after a deterministic direct search', async () => {
+    const service = fakeService()
+    const lifecycle = {
+      answer: vi.fn(async () => ({ answer: 'SQLite.', citations: [], delegation: { runId: 'answer-1', provider: 'spawn' } })),
+    } as unknown as MnemonLifecycle
+
+    await expect(createReadHandler(service, lifecycle)('agent-search', { sessionId: 'session-1', query: 'database' })).resolves.toMatchObject({
+      ok: true,
+      value: { query: 'database', answer: 'SQLite.', delegation: { runId: 'answer-1' }, results: [] },
+    })
+    expect(service.search).toHaveBeenCalledWith(expect.objectContaining({ query: 'database' }))
+    expect(lifecycle.answer).toHaveBeenCalledWith('session-1', 'database', [])
   })
 
   it('adds lifecycle diagnostics to status without changing Mnemon runtime status', async () => {

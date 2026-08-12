@@ -328,6 +328,10 @@ export class MnemonLifecycle {
     return this.coordinator.related(this.liveAgent(sessionId), id, memoryBodyId, signal)
   }
 
+  answer(sessionId: string, query: string, evidence: Awaited<ReturnType<MnemonService['search']>>['results'], signal = new AbortController().signal) {
+    return this.coordinator.answer(this.liveAgent(sessionId), query, evidence, signal)
+  }
+
   remember(sessionId: string, request: RememberRequest, signal = new AbortController().signal) {
     return this.coordinator.remember(this.liveAgent(sessionId), request, signal)
   }

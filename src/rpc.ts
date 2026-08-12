@@ -51,10 +51,7 @@ export function createReadHandler(service: MnemonService, lifecycle?: MnemonLife
           {
             const entity = payload.entity === undefined ? '' : String(payload.entity).trim()
             const limit = payload.limit === undefined ? undefined : Number(payload.limit)
-            if (entity === '' || lifecycle === undefined) return success(await service.entities(entity || undefined, limit))
-            const base = await service.entities()
-            const recalled = await lifecycle.recall(String(payload.sessionId ?? ''), { query: entity, intent: 'ENTITY', ...(limit === undefined ? {} : { limit }) })
-            return success({ items: base.items, selected: entity, insights: recalled.results })
+            return success(await service.entities(entity || undefined, limit))
           }
         case 'search':
           {
@@ -67,14 +64,26 @@ export function createReadHandler(service: MnemonService, lifecycle?: MnemonLife
             ...(payload.intent === undefined ? {} : { intent: payload.intent as Intent }),
             ...(Array.isArray(payload.memoryBodyIds) ? { memoryBodyIds: payload.memoryBodyIds.map(String) } : {}),
             }
-            return success(lifecycle === undefined
-              ? await service.search(request)
-              : await lifecycle.recall(String(payload.sessionId ?? ''), request))
+            return success(await service.search(request))
+          }
+        case 'agent-search':
+          {
+            if (lifecycle === undefined) throw new Error('Mnemon Agent query is unavailable without lifecycle integration')
+            const request = {
+              query: String(payload.query ?? ''),
+              ...(payload.mode === undefined ? {} : { mode: payload.mode as NonNullable<SearchRequest['mode']> }),
+              ...(payload.limit === undefined ? {} : { limit: Number(payload.limit) }),
+              ...(payload.category === undefined ? {} : { category: payload.category as Category }),
+              ...(payload.source === undefined ? {} : { source: payload.source as Source }),
+              ...(payload.intent === undefined ? {} : { intent: payload.intent as Intent }),
+              ...(Array.isArray(payload.memoryBodyIds) ? { memoryBodyIds: payload.memoryBodyIds.map(String) } : {}),
+            }
+            const recalled = await service.search(request)
+            const answer = await lifecycle.answer(String(payload.sessionId ?? ''), request.query, recalled.results)
+            return success({ ...recalled, ...answer })
           }
         case 'related':
-          return success(lifecycle === undefined
-            ? await service.related(String(payload.id ?? ''), payload.depth === undefined ? 2 : Number(payload.depth), payload.edge as EdgeType | undefined, undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
-            : (await lifecycle.related(String(payload.sessionId ?? ''), String(payload.id ?? ''), payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))).results)
+          return success(await service.related(String(payload.id ?? ''), payload.depth === undefined ? 2 : Number(payload.depth), payload.edge as EdgeType | undefined, undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId)))
         default:
           return { ok: false, error: { code: 'not-found', message: `unknown read endpoint: ${endpoint}` } }
       }

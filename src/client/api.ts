@@ -10,6 +10,12 @@ export interface SearchResponse {
   hint?: string
 }
 
+export interface AgentSearchResponse extends SearchResponse {
+  answer: string
+  citations: string[]
+  delegation: { runId: string; provider: string }
+}
+
 export class MnemonClient {
   constructor(private readonly connection: ClientConnectionHandle, private readonly sessionId?: string) {}
 
@@ -45,6 +51,10 @@ export class MnemonClient {
 
   search(request: SearchRequest): Promise<SearchResponse> {
     return this.call(MNEMON_READ_CHANNEL, 'search', { ...request, sessionId: this.sessionId })
+  }
+
+  agentSearch(request: SearchRequest): Promise<AgentSearchResponse> {
+    return this.call(MNEMON_READ_CHANNEL, 'agent-search', { ...request, sessionId: this.sessionId })
   }
 
   related(id: string, memoryBodyId?: string): Promise<Insight[]> {

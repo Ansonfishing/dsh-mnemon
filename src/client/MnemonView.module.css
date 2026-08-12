@@ -211,6 +211,15 @@
 .queryField input { width: 100%; height: 42px; border: 0; outline: 0; background: transparent; }
 .queryField kbd { color: var(--mn-faint); font: 11px var(--mn-code); }
 .searchControls { display: flex; align-items: flex-end; justify-content: flex-end; gap: 10px; padding-top: 10px; }
+.searchActions { display: flex; align-items: center; gap: 7px; }
+.agentAnswer { margin-bottom: 16px; padding: 16px 18px; border: 1px solid color-mix(in srgb, var(--mn-accent) 30%, var(--mn-line)); border-radius: 11px; background: linear-gradient(135deg, color-mix(in srgb, var(--mn-accent) 7%, var(--mn-layer-1)), var(--mn-layer-1) 60%); }
+.agentAnswerHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.agentAnswerHeading span { color: var(--mn-accent); font: 650 9px/1.2 var(--mn-code); letter-spacing: .08em; }
+.agentAnswerHeading h3 { margin: 4px 0 0; font-size: 15px; }
+.agentAnswerHeading > code { color: var(--mn-faint); font-size: 9px; }
+.agentAnswer > p { margin: 12px 0; white-space: pre-wrap; color: var(--mn-text); font-size: 13px; line-height: 1.7; }
+.agentCitations { display: flex; flex-wrap: wrap; gap: 5px; padding-top: 10px; border-top: 1px solid var(--mn-line); }
+.agentCitations code { padding: 3px 6px; border-radius: 5px; color: var(--mn-muted); background: var(--mn-layer-2); font-size: 9px; }
 .searchControls label, .formGrid label, .fieldWide { display: grid; gap: 5px; color: var(--mn-muted); font-size: 11px; }
 .searchControls select, .formGrid select, .formGrid input, .listToolbar input, .listToolbar select, .entitySearch input { min-width: 140px; height: 34px; border: 1px solid var(--mn-line); border-radius: 8px; outline: 0; padding: 0 9px; background: var(--mn-input); }
 .searchControls select:focus, .formGrid select:focus, .formGrid input:focus, .listToolbar input:focus, .listToolbar select:focus, .entitySearch input:focus, .supervisedForm textarea:focus { border-color: var(--mn-accent); }
@@ -377,7 +386,8 @@
   .manualActions { align-items: stretch; flex-direction: column; }
   .entityRail { position: static; }
   .searchControls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .searchControls .primaryButton { grid-column: 1 / -1; }
+  .searchActions { grid-column: 1 / -1; }
+  .searchActions > button { flex: 1; }
   .searchControls select { width: 100%; min-width: 0; }
   .listToolbar { grid-template-columns: 1fr; }
   .bodyDirectoryHeader { display: grid; }

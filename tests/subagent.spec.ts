@@ -98,6 +98,18 @@ describe('Mnemon memory subagent coordinator', () => {
     }))
   })
 
+  it('answers from pre-recalled evidence without granting any Mnemon retrieval tools', async () => {
+    const host = subagents({ answer: '项目使用 SQLite。', citations: ['project/m1', 'project/missing'] })
+    const coordinator = new MnemonSubagentCoordinator(host.value, service())
+    await expect(coordinator.answer(parent(), '数据库是什么？', [{ id: 'm1', content: 'Use SQLite.', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }], new AbortController().signal)).resolves.toMatchObject({
+      answer: '项目使用 SQLite。',
+      citations: ['project/m1'],
+      delegation: { runId: 'child-run-1', provider: 'spawn' },
+    })
+    expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({ toolFilter: { allow: [] } }))
+    expect(coordinator.snapshot().answers).toBe(1)
+  })
+
   it('disposes failed child runs and reports a hard error instead of falling back to direct memory access', async () => {
     const host = subagents(undefined, 'error')
     const coordinator = new MnemonSubagentCoordinator(host.value, service())

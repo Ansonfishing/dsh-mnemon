@@ -600,7 +600,8 @@ function ExplorePage(props: { client: MnemonClient; status: StatusView | null; s
   const [mode, setMode] = useState<'smart' | 'keyword' | 'basic'>('smart')
   const [category, setCategory] = useState<Category | ''>('')
   const [results, setResults] = useState<Insight[]>([])
-  const [searching, setSearching] = useState(false)
+  const [searchKind, setSearchKind] = useState<'direct' | 'agent' | null>(null)
+  const [agentAnswer, setAgentAnswer] = useState<{ answer: string; citations: string[]; runId: string } | null>(null)
   const [searched, setSearched] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [relatedTo, setRelatedTo] = useState<Insight | null>(null)
@@ -609,19 +610,27 @@ function ExplorePage(props: { client: MnemonClient; status: StatusView | null; s
 
   useEffect(() => { if (props.seed !== '') setQuery(props.seed) }, [props.seed])
 
-  const search = async (event: FormEvent) => {
-    event.preventDefault()
+  const runSearch = async (withAgent: boolean) => {
     if (query.trim() === '') return
-    setSearching(true); setSearched(true); setError(null); setRelatedTo(null)
+    setSearchKind(withAgent ? 'agent' : 'direct'); setSearched(true); setError(null); setRelatedTo(null); setAgentAnswer(null)
     try {
-      const response = await props.client.search({ query, mode, ...(category === '' ? {} : { category }), limit: props.status?.defaultRecallLimit ?? 10 })
-      setResults(response.results)
+      const request = { query, mode, ...(category === '' ? {} : { category }), limit: props.status?.defaultRecallLimit ?? 10 }
+      if (withAgent) {
+        const response = await props.client.agentSearch(request)
+        setResults(response.results)
+        setAgentAnswer({ answer: response.answer, citations: response.citations, runId: response.delegation.runId })
+      } else {
+        setResults((await props.client.search(request)).results)
+      }
     } catch (reason) {
-      setError(message(reason)); setResults([])
+      setError(message(reason)); setResults([]); setAgentAnswer(null)
     } finally {
-      setSearching(false)
+      setSearchKind(null)
     }
   }
+
+  const search = (event: FormEvent) => { event.preventDefault(); void runSearch(false) }
+  const searching = searchKind !== null
 
   const showRelated = async (insight: Insight) => {
     setRelatedTo(insight); setRelated([]); setRelatedLoading(true); setError(null)
@@ -643,9 +652,10 @@ function ExplorePage(props: { client: MnemonClient; status: StatusView | null; s
         <div className={css.searchControls}>
           <label>{t('common.category')}<select value={category} onChange={event => setCategory(event.target.value as Category | '')} aria-label={t('search.categoryAria')}><option value="">{t('common.allCategories')}</option>{CATEGORIES.map(value => <option key={value} value={value}>{categoryLabel(t, value)}</option>)}</select></label>
           <label>{t('search.strategy')}<select value={mode} onChange={event => setMode(event.target.value as 'smart' | 'keyword' | 'basic')} aria-label={t('search.modeAria')}><option value="smart">{t('search.modeSmart')}</option><option value="keyword">{t('search.modeKeyword')}</option><option value="basic">{t('search.modeBasic')}</option></select></label>
-          <button type="submit" className={css.primaryButton} disabled={searching || query.trim() === ''}>{searching ? t('search.searching') : t('search.action')}</button>
+          <div className={css.searchActions}><button type="submit" className={css.secondaryButton} disabled={searching || query.trim() === ''}>{searchKind === 'direct' ? t('search.searching') : t('search.action')}</button><button type="button" className={css.primaryButton} disabled={searching || query.trim() === '' || props.status?.lifecycle?.sessionAvailable !== true} onClick={() => void runSearch(true)}>{searchKind === 'agent' ? t('search.agentSearching') : t('search.agentAction')}</button></div>
         </div>
       </form>
+      {agentAnswer !== null && <section className={css.agentAnswer} aria-label={t('search.agentAnswer')}><div className={css.agentAnswerHeading}><div><span>{t('search.agentAnswerHint')}</span><h3>{t('search.agentAnswer')}</h3></div><code>{agentAnswer.runId.slice(0, 8)}</code></div><p>{agentAnswer.answer}</p>{agentAnswer.citations.length > 0 && <div className={css.agentCitations}>{agentAnswer.citations.map(citation => <code key={citation}>{citation}</code>)}</div>}</section>}
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
       {!searched && <EmptyState glyph="⌕" title={t('search.startTitle')}>{t('search.startText')}</EmptyState>}
       {searched && !searching && results.length === 0 && error === null && <EmptyState glyph="0" title={t('search.emptyTitle')}>{t('search.emptyText')}</EmptyState>}
@@ -808,7 +818,7 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
       <section className={css.healthStrip} aria-label={t('status.aria')}>
         <article><span className={`${css.healthIndicator} ${status?.healthy === true ? css.healthGood : css.healthBad}`} /><div><small>{t('status.engine')}</small><strong>{status?.healthy === true ? t('status.engineConnected') : t('status.engineUnavailable')}</strong><p>{status?.version === undefined ? t('status.versionWaiting') : `CLI ${status.version}`}</p></div></article>
         <article><span className={`${css.healthIndicator} ${activeBodies > 0 ? css.healthGood : css.healthMuted}`} /><div><small>{t('status.spaces')}</small><strong>{catalogKnown ? t('status.activeRatio', { active: activeBodies, total: memoryBodies.length }) : t('status.directoryUnsynced')}</strong><p>{t('status.activeMemories', { count: status?.stats?.totalInsights ?? 0 })}</p></div></article>
-        <article><span className={`${css.healthIndicator} ${lifecycle?.sessionAvailable === true ? css.healthGood : css.healthBad}`} /><div><small>{t('status.router')}</small><strong>{lifecycle?.sessionAvailable === true ? t('status.routerReady') : t('status.sessionMissing')}</strong><p>{workers === undefined ? t('status.orchestrationWaiting') : t('status.workerCounts', { recalls: workers.recalls, writes: workers.writes })}</p></div></article>
+        <article><span className={`${css.healthIndicator} ${lifecycle?.sessionAvailable === true ? css.healthGood : css.healthBad}`} /><div><small>{t('status.router')}</small><strong>{lifecycle?.sessionAvailable === true ? t('status.routerReady') : t('status.sessionMissing')}</strong><p>{workers === undefined ? t('status.orchestrationWaiting') : t('status.workerCounts', { recalls: workers.recalls, answers: workers.answers ?? 0, writes: workers.writes })}</p></div></article>
       </section>
 
       <div className={css.statusLayout}>

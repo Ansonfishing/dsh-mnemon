@@ -48,6 +48,7 @@ export declare class MnemonLifecycle {
     snapshot(sessionId?: string): LifecycleSnapshot;
     recall(sessionId: string, request: SearchRequest, signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedRecallResult>;
     related(sessionId: string, id: string, memoryBodyId?: string, signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedRecallResult>;
+    answer(sessionId: string, query: string, evidence: Awaited<ReturnType<MnemonService['search']>>['results'], signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedAnswerResult>;
     remember(sessionId: string, request: RememberRequest, signal?: AbortSignal): Promise<DelegatedWriteResult>;
     mutate(sessionId: string, operation: string, request: unknown, signal?: AbortSignal): Promise<DelegatedWriteResult>;
     supervise(sessionId: string, content: string, signal?: AbortSignal): Promise<SupervisedWritebackResult>;
