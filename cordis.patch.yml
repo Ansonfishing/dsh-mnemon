@@ -1,0 +1,11 @@
+# Mount the Mnemon bridge into a DSH profile. The profile's own final patch
+# may replace this config row to select a named store or an explicit binary.
+- insert:
+    - id: mnemon
+      name: dsh-mnemon
+      config:
+        routingGuidance: true
+        tabEnabled: true
+        writeEnabled: true
+        timeoutMs: 10000
+        defaultRecallLimit: 10

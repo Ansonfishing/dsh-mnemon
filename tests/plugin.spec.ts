@@ -1,0 +1,76 @@
+import { readFileSync } from 'node:fs'
+import { describe, expect, it, vi } from 'vitest'
+import { apply } from '../src/index.ts'
+
+const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+  dsh: { client: { inject: string[]; platform: string } }
+}
+
+function context() {
+  const tools: unknown[] = []
+  const sections: unknown[] = []
+  const channels: unknown[] = []
+  const connection = {
+    rpc: {
+      handle: vi.fn((...args: unknown[]) => { channels.push(args) }),
+    },
+  }
+  const ctx = {
+    tools: { register: vi.fn((tool: unknown) => { tools.push(tool) }) },
+    connection,
+    get: vi.fn((name: string) => name === 'systemPrompt'
+      ? { section: (section: unknown) => { sections.push(section) } }
+      : undefined),
+    inject: vi.fn((_services: string[], callback: (value: unknown) => void) => { callback(ctx) }),
+  }
+  return { ctx, tools, sections, channels }
+}
+
+describe('dsh-mnemon plugin composition', () => {
+  it('exports a DSH Web client with its ordering dependencies', () => {
+    expect(manifest.dsh.client).toEqual({
+      inject: [
+        '@deepseek-ai/dsh-client-connection',
+        '@deepseek-ai/dsh-client-ui-conversation',
+      ],
+      platform: 'web',
+    })
+  })
+
+  it('registers the full tool surface, guidance, and split RPC channels', () => {
+    const fixture = context()
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon' })
+    expect(fixture.tools.map(tool => (tool as { name: string }).name)).toEqual([
+      'mnemon_recall',
+      'mnemon_related',
+      'mnemon_status',
+      'mnemon_remember',
+      'mnemon_link',
+      'mnemon_forget',
+    ])
+    expect(fixture.tools).toEqual(expect.arrayContaining([
+      expect.objectContaining({ output: expect.objectContaining({ schema: { type: 'object', additionalProperties: true } }) }),
+    ]))
+    expect(fixture.tools.every(tool => (tool as { output: { schema: { type: string } } }).output.schema.type !== 'json')).toBe(true)
+    expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:routing' })])
+    expect(fixture.channels).toHaveLength(2)
+  })
+
+  it('keeps recall/status available while hiding all mutation surfaces in read-only mode', () => {
+    const fixture = context()
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', writeEnabled: false })
+    expect(fixture.tools.map(tool => (tool as { name: string }).name)).toEqual([
+      'mnemon_recall',
+      'mnemon_related',
+      'mnemon_status',
+    ])
+    expect(fixture.channels).toHaveLength(1)
+  })
+
+  it('can disable both guidance and the Web tab independently', () => {
+    const fixture = context()
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', routingGuidance: false, tabEnabled: false })
+    expect(fixture.sections).toHaveLength(0)
+    expect(fixture.channels).toHaveLength(0)
+  })
+})
