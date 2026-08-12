@@ -26,7 +26,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   const resolved = resolveConfig(settings.get())
   const service = new MnemonService(createRunner(resolved), resolved)
   const coordinator = new MnemonSubagentCoordinator(ctx.subagents, service)
-  const lifecycle = new MnemonLifecycle(ctx, service, coordinator, resolved)
+  const lifecycle = new MnemonLifecycle(ctx, coordinator, resolved)
   ctx.effect(() => lifecycle.start(), 'dsh-mnemon.lifecycle-root()')
   registerTools(ctx, service, coordinator)
   registerCommands(ctx.commands, service, coordinator)

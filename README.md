@@ -33,14 +33,14 @@ DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https:/
 
 | 阶段 | DSH 扩展点 | 记忆子 Agent 的职责 | 主 Agent 得到什么 |
 |---|---|---|---|
-| 任务开始 | `agent/pre-step` | 读取激活目录、选择记忆体、调用 recall/related、去重压缩 | 当前 step 可用的少量带来源证据 |
+| 每轮开始 | `agent/pre-step` | 只注入一句按需召回提醒，不读取目录、不执行 recall | 主模型自行判断是否调用 `mnemon_recall` |
 | 显式工具/命令 | `ctx.subagents.start('spawn', …)` | 在受限 Mnemon 工具集合内完成一次语义操作 | 结构化召回结果或写入回执 |
 | 任务结束 | `agent/turn-stopping` | 检查当前 turn 的有界事件窗口，判断是否值得沉淀并完成副作用 | 不追加长解释，不强制主 Agent 再跑一步 |
 | WebUI 沉淀 | 写 RPC → `spawn` | 选择记忆体、查重、提炼、写入，必要时创建或合并 | 可审计的 action、目标记忆体和摘要 |
 
 `spawn` 子 Agent 使用全新的隔离上下文，并通过 persona、工具白名单、结构化输出和 `maxDepth: 1` 限制职责。根 Agent 调用 `mnemon_recall` / `mnemon_remember` 等工具时会先进入子 Agent；同名工具在记忆子 Agent 内才直接访问 MnemonService，因此不会递归委派。
 
-Prime 只向主上下文注入记忆体数量和聚合计数。当前用户指令与仓库事实始终高于历史记忆；召回内容是可复核的辅助证据，不是自动覆盖当前事实的真相源。
+Prime 只初始化路由状态；pre-step 提示保持为一句短语，不注入目录、计数或记忆内容。主模型决定需要持久上下文时才调用 `mnemon_recall`，随后根工具用隔离子 Agent 选择记忆体并返回可复核证据。当前用户指令与仓库事实始终高于历史记忆。
 
 ## 能力
 
@@ -62,8 +62,8 @@ Prime 只向主上下文注入记忆体数量和聚合计数。当前用户指�
 - 中文界面使用“记忆体”，英文界面使用更贴近独立持久上下文边界的 **Memory Space**；Tab 和所有功能文案跟随 DSH 全局语言设置即时切换。Mnemon 品牌名与官方 slogan 保持原文。
 - 总览、检索、实体、沉淀、内容和状态采用上边缘二级导航，给实时图谱与内容列表保留完整横向空间。
 - **总览**：管理全局记忆体目录和激活开关；每 15 秒聚合所有激活记忆体的四图快照；支持流畅力导向动画、节点拖拽、键盘微调、自然铺开、均匀重置和节点检查。
-- **检索**：三种召回模式、分类过滤、跨记忆体来源标记、关联图查阅、复制 ID 和软删除确认。
-- **实体**：列出高频实体，并用隔离 Recall Worker 聚合实体的跨图上下文。
+- **检索**：三种直连召回模式、分类过滤、跨记忆体来源标记、关联图查阅、复制 ID 和软删除确认；可选 Agent 查询先确定性召回，再由无 Mnemon 工具权限的隔离 Agent 只基于命中证据生成顶部答案。
+- **实体**：列出高频实体，并由 MnemonService 直连聚合实体的跨图上下文，不启动 Recall Worker。
 - **沉淀**：默认直接调度记忆子 Agent；人工高级选项可约束目标记忆体、分类、重要性、实体和标签，但不会绕过查重与监督。
 - **内容**：无副作用浏览已激活记忆体，支持筛选、复制、基于旧内容新建和软删除。
 - **状态**：只展示 Mnemon 引擎、记忆体目录、Recall/Write Worker、会话绑定、阶段计数和快速诊断，不在页面混入部署配置。
@@ -138,8 +138,8 @@ mnemon:
 | `timeoutMs` | `10000` | 单次 CLI 调用硬超时，范围 100–120000 ms |
 | `defaultRecallLimit` | `10` | 工具和 Tab 的默认召回条数，范围 1–50 |
 | `routingGuidance` | `true` | 向主 Agent 提供精简的记忆监督边界说明 |
-| `lifecycleEnabled` | `true` | 启用 Prime、pre-step Recall Worker 和 turn-stopping Write Worker |
-| `recallMode` | `guided` | `guided` 自动运行有界召回子 Agent；`off` 仅保留显式调用 |
+| `lifecycleEnabled` | `true` | 启用 Prime 状态、pre-step 短提醒和 turn-stopping Write Worker |
+| `recallMode` | `guided` | `guided` 注入按需召回短提醒；`off` 不注入提醒，仍保留显式工具调用 |
 | `writebackMode` | `guided` | `guided` 在 turn 关闭前运行有界写回子 Agent；`off` 仅保留显式或 Tab 沉淀 |
 | `tabEnabled` | `true` | 注册 Web `conversation.view`「记忆体」Tab 和 RPC |
 | `writeEnabled` | `true` | 允许记忆、关系、忘记、记忆体维护与写 RPC |
@@ -184,7 +184,7 @@ pnpm run verify
 - `lib/client.js`：自包含浏览器 bundle，仅 external `react` / `react/jsx-runtime`；
 - `lib/types/`：Host 与 Client 类型声明及中间 ESM。
 
-测试覆盖记忆体目录迁移、独立 Store 路由、激活读边界、写后激活、非破坏性合并、子 Agent 工具隔离、pre-step / turn-stopping hook、RPC 权限、只读模式、多记忆体图谱和六区工作台。发布前还应使用隔离 `MNEMON_DATA_DIR` 和独立端口 DSH，通过真实 WebUI 对话验证跨记忆体召回、写回副作用、沉淀回执、状态计数和最终 CLI recall。
+测试覆盖记忆体目录迁移、独立 Store 路由、激活读边界、写后激活、非破坏性合并、子 Agent 工具隔离、pre-step 仅提醒 / turn-stopping 写回、WebUI 直连检索、证据限定 Agent 问答、RPC 权限、只读模式、多记忆体图谱和六区工作台。发布前还应使用隔离 `MNEMON_DATA_DIR` 和独立端口 DSH，通过真实 WebUI 对话验证模型自主决定召回、跨记忆体读取、写回副作用、简单显式边、沉淀回执、状态计数和最终 CLI recall。
 
 ## 品牌资源
 

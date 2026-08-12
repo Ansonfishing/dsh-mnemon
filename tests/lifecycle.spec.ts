@@ -68,7 +68,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
       return () => rootListeners.delete(name)
     }),
   } as unknown as HostContextShape
-  const lifecycle = new MnemonLifecycle(ctx, service, coordinator, config)
+  const lifecycle = new MnemonLifecycle(ctx, coordinator, config)
   const stop = lifecycle.start()
 
   const preStep = async (messages: HostUserMessage[], turn: number, step = 1): Promise<HostPreStepDecision> => {
@@ -86,7 +86,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
 }
 
 describe('Mnemon DSH lifecycle integration', () => {
-  it('automatically recalls for an ordinary business question with no memory instruction', async () => {
+  it('adds a short optional reminder without forcing recall for an ordinary turn', async () => {
     const value = fixture()
     const prompt = userMessage('Aster 发布前需要检查哪些事项？')
     const decision = await value.preStep([prompt], 1)
@@ -94,17 +94,15 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(decision).toMatchObject({ kind: 'enter' })
     if (decision.kind !== 'enter') throw new Error('unexpected rejection')
     expect(decision.messages).toHaveLength(2)
-    expect(decision.messages[1]?.source).toMatchObject({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'recall' })
-    expect(decision.messages[1]?.content[0]?.text).toContain('[MNEMON PRIME]')
-    expect(decision.messages[1]?.content[0]?.text).toContain('isolated memory subagents')
-    expect(value.coordinator.recall).toHaveBeenCalledTimes(1)
-    expect(value.coordinator.recall).toHaveBeenCalledWith(value.agent, { query: 'Aster 发布前需要检查哪些事项？' }, expect.any(AbortSignal))
-    expect(value.service.status).toHaveBeenCalledTimes(1)
+    expect(decision.messages[1]?.source).toMatchObject({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'instructions' })
+    expect(decision.messages[1]?.content[0]?.text).toBe('[MNEMON] Decide whether this turn needs durable context. If yes, call mnemon_recall with a focused query; otherwise continue.')
+    expect(value.coordinator.recall).not.toHaveBeenCalled()
+    expect(value.service.status).not.toHaveBeenCalled()
 
     const second = await value.preStep([userMessage('Second turn')], 2)
     if (second.kind !== 'enter') throw new Error('unexpected rejection')
-    expect(second.messages).toHaveLength(1)
-    expect(value.service.status).toHaveBeenCalledTimes(1)
+    expect(second.messages).toHaveLength(2)
+    expect(value.coordinator.recall).not.toHaveBeenCalled()
     expect(value.lifecycle.snapshot('session-1').counters).toMatchObject({ primes: 1, recallCues: 2 })
   })
 

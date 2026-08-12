@@ -1,6 +1,6 @@
 import type { ResolvedConfig } from './config.ts';
 import type { HostContextShape } from './contracts.ts';
-import type { MnemonService, RememberRequest, SearchRequest } from './service.ts';
+import type { Insight, RememberRequest, SearchRequest } from './service.ts';
 import { MnemonSubagentCoordinator, type DelegatedWriteResult, type SubagentCounters } from './subagent.ts';
 export declare const MNEMON_PLUGIN_SOURCE = "dsh-mnemon";
 export type LifecyclePhase = 'idle' | 'prime' | 'recall' | 'writeback' | 'supervised' | 'error';
@@ -38,17 +38,16 @@ export interface SupervisedWritebackResult extends DelegatedWriteResult {
 /** DSH-native owner for per-agent Mnemon lifecycle hooks and UI-triggered LLM work. */
 export declare class MnemonLifecycle {
     private readonly ctx;
-    private readonly service;
     private readonly coordinator;
     private readonly config;
     private readonly owners;
     private readonly counters;
-    constructor(ctx: HostContextShape, service: MnemonService, coordinator: MnemonSubagentCoordinator, config: ResolvedConfig);
+    constructor(ctx: HostContextShape, coordinator: MnemonSubagentCoordinator, config: ResolvedConfig);
     start(): () => void;
     snapshot(sessionId?: string): LifecycleSnapshot;
     recall(sessionId: string, request: SearchRequest, signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedRecallResult>;
     related(sessionId: string, id: string, memoryBodyId?: string, signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedRecallResult>;
-    answer(sessionId: string, query: string, evidence: Awaited<ReturnType<MnemonService['search']>>['results'], signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedAnswerResult>;
+    answer(sessionId: string, query: string, evidence: Insight[], signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedAnswerResult>;
     remember(sessionId: string, request: RememberRequest, signal?: AbortSignal): Promise<DelegatedWriteResult>;
     mutate(sessionId: string, operation: string, request: unknown, signal?: AbortSignal): Promise<DelegatedWriteResult>;
     supervise(sessionId: string, content: string, signal?: AbortSignal): Promise<SupervisedWritebackResult>;

@@ -76,6 +76,10 @@ describe('dsh-mnemon plugin composition', () => {
     ]))
     expect(fixture.tools.every(tool => (tool as { output: { schema: { type: string } } }).output.schema.type !== 'json')).toBe(true)
     expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:routing' })])
+    const guidance = (fixture.sections[0] as { text: string }).text
+    expect(guidance).toContain('call mnemon_recall')
+    expect(guidance.length).toBeLessThan(320)
+    expect(guidance).not.toContain('RECALL RESULT')
     expect(fixture.commands).toEqual([expect.objectContaining({ name: 'mnemon' })])
     expect(fixture.channels).toHaveLength(3)
     expect(fixture.registrations).toEqual([
