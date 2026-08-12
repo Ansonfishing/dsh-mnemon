@@ -913,7 +913,9 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
   const memoryBodies = useMemo(() => status?.memoryBodies ?? [], [status])
   const activeBodies = memoryBodies.filter(body => body.active).length
   const latest = current?.lastAt === undefined ? t('status.noActivity') : new Date(current.lastAt).toLocaleString()
-  const phase = current?.lastPhase === undefined || current.lastPhase === 'idle' ? t('status.phaseIdle') : current.lastPhase === 'supervised' ? t('status.phaseSupervised') : current.lastPhase === 'error' ? t('status.phaseError') : current.lastPhase === 'prime' ? t('status.prime') : current.lastPhase === 'recall' ? t('status.recallWorker') : t('status.writeWorker')
+  const phase = current?.lastPhase === undefined || current.lastPhase === 'idle' ? t('status.phaseIdle') : current.lastPhase === 'supervised' ? t('status.phaseSupervised') : current.lastPhase === 'error' ? t('status.phaseError') : current.lastPhase === 'prime' ? t('status.prime') : current.lastPhase === 'recall' ? t('status.recallWorker') : current.lastPhase === 'review' ? t('status.phaseReview') : t('status.writeWorker')
+  const reviewState = current?.reviewRunning === true ? t('status.reviewRunning') : current?.idleReviewPending === true ? t('status.reviewPending') : t('status.reviewIdle')
+  const lastReview = current?.lastReviewAt === undefined ? t('status.noReview') : t('status.reviewAt', { time: new Date(current.lastReviewAt).toLocaleTimeString(), action: current.lastReviewAction ?? '—' })
   return (
     <div className={css.page}>
       <PageHeader title={t('status.title')} description={t('status.description')} meta={status?.healthy === true && lifecycle?.sessionAvailable === true ? t('status.nominal') : t('status.checkRequired')} action={<button type="button" className={css.secondaryButton} onClick={props.onRefresh}>{props.loading ? t('status.rechecking') : t('status.recheck')}</button>} />
@@ -921,7 +923,7 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
       <section className={css.healthStrip} aria-label={t('status.aria')}>
         <article><span className={`${css.healthIndicator} ${status?.healthy === true ? css.healthGood : css.healthBad}`} /><div><small>{t('status.engine')}</small><strong>{status?.healthy === true ? t('status.engineConnected') : t('status.engineUnavailable')}</strong><p>{status?.version === undefined ? t('status.versionWaiting') : `CLI ${status.version}`}</p></div></article>
         <article><span className={`${css.healthIndicator} ${activeBodies > 0 ? css.healthGood : css.healthMuted}`} /><div><small>{t('status.spaces')}</small><strong>{catalogKnown ? t('status.activeRatio', { active: activeBodies, total: memoryBodies.length }) : t('status.directoryUnsynced')}</strong><p>{t('status.activeMemories', { count: status?.stats?.totalInsights ?? 0 })}</p></div></article>
-        <article><span className={`${css.healthIndicator} ${lifecycle?.sessionAvailable === true ? css.healthGood : css.healthBad}`} /><div><small>{t('status.router')}</small><strong>{lifecycle?.sessionAvailable === true ? t('status.routerReady') : t('status.sessionMissing')}</strong><p>{workers === undefined ? t('status.orchestrationWaiting') : t('status.workerCounts', { recalls: workers.recalls, answers: workers.answers ?? 0, writes: workers.writes })}</p></div></article>
+        <article><span className={`${css.healthIndicator} ${lifecycle?.sessionAvailable === true ? css.healthGood : css.healthBad}`} /><div><small>{t('status.router')}</small><strong>{lifecycle?.sessionAvailable === true ? t('status.routerReady') : t('status.sessionMissing')}</strong><p>{workers === undefined ? t('status.orchestrationWaiting') : t('status.workerCounts', { recalls: workers.recalls, answers: workers.answers ?? 0, reviews: workers.reviews ?? 0, writes: workers.writes })}</p></div></article>
       </section>
 
       <div className={css.statusLayout}>
@@ -930,9 +932,9 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
           <div className={css.lifecycleFlow}>
             <article><span>01</span><div><strong>{t('status.prime')}</strong><p>{t('status.primeText')}</p></div><code>{lifecycle?.counters.primes ?? 0}</code></article>
             <article data-disabled={lifecycle?.recallMode === 'off' || undefined}><span>02</span><div><strong>{t('status.recallWorker')}</strong><p>{lifecycle?.recallMode === 'guided' ? t('status.recallText') : t('status.recallOff')}</p></div><code>{workers?.recalls ?? 0}</code></article>
-            <article data-disabled={lifecycle?.writebackMode === 'off' || undefined}><span>03</span><div><strong>{t('status.writeWorker')}</strong><p>{lifecycle?.writebackMode === 'guided' ? t('status.writeText') : t('status.writeOff')}</p></div><code>{workers?.writes ?? 0}</code></article>
+            <article data-disabled={lifecycle?.writebackMode === 'off' || undefined}><span>03</span><div><strong>{t('status.writeWorker')}</strong><p>{lifecycle?.writebackMode === 'guided' ? t('status.writeText', { seconds: Math.round((lifecycle.idleReviewMs ?? 0) / 1000) }) : t('status.writeOff')}</p></div><code>{workers?.reviews ?? 0}</code></article>
           </div>
-          <div className={css.lifecycleFoot}><span>{t('status.latestPhase')} <strong>{phase}</strong></span><span>{t('status.latestActivity')} <strong>{latest}</strong></span><span>{t('status.supervisedRequests')} <strong>{lifecycle?.counters.supervisedRequests ?? 0}</strong></span><span>{t('status.workerFailures')} <strong>{workers?.failures ?? 0}</strong></span></div>
+          <div className={css.lifecycleFoot}><span>{t('status.latestPhase')} <strong>{phase}</strong></span><span>{t('status.reviewState')} <strong>{reviewState}</strong></span><span>{t('status.lastReview')} <strong>{lastReview}</strong></span><span>{t('status.workerFailures')} <strong>{workers?.failures ?? 0}</strong></span></div>
           {current?.lastError !== undefined && <div className={css.inlineError} role="alert">Lifecycle：{current.lastError}</div>}
         </section>
 

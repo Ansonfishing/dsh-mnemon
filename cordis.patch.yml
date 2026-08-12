@@ -8,6 +8,7 @@
         lifecycleEnabled: true
         recallMode: guided
         writebackMode: guided
+        idleReviewMs: 30000
         tabEnabled: true
         writeEnabled: true
         timeoutMs: 10000
