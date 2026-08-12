@@ -66,6 +66,41 @@ export interface StatusView {
         }>;
     };
 }
+export interface MemoryGraphNode extends Insight {
+    color: string;
+}
+export interface MemoryGraphEdge {
+    sourceId: string;
+    targetId: string;
+    label: string;
+    color: string;
+    type?: EdgeType;
+}
+export interface MemoryGraphSnapshot {
+    nodes: MemoryGraphNode[];
+    edges: MemoryGraphEdge[];
+    generatedAt: string;
+}
+export interface MemoryListRequest {
+    query?: string;
+    category?: Category;
+    limit?: number;
+}
+export interface MemoryListView {
+    items: MemoryGraphNode[];
+    total: number;
+    generatedAt: string;
+}
+export interface EntityView {
+    items: Array<{
+        entity: string;
+        count: number;
+    }>;
+    insights: Insight[];
+    selected?: string;
+}
+/** Parse the official Mnemon vis.js export without executing its HTML or loading its CDN script. */
+export declare function parseMemoryGraph(html: string, now?: Date): MemoryGraphSnapshot;
 export declare class MnemonService {
     readonly runner: MnemonRunner;
     readonly config: ResolvedConfig;
@@ -77,6 +112,9 @@ export declare class MnemonService {
         results: Insight[];
         hint?: string;
     }>;
+    graph(signal?: AbortSignal): Promise<MemoryGraphSnapshot>;
+    list(request?: MemoryListRequest, signal?: AbortSignal): Promise<MemoryListView>;
+    entities(entity?: string, limit?: number, signal?: AbortSignal): Promise<EntityView>;
     remember(request: RememberRequest, signal?: AbortSignal): Promise<JsonValue>;
     related(id: string, depth?: number, edge?: EdgeType, signal?: AbortSignal): Promise<Insight[]>;
     link(sourceId: string, targetId: string, type?: EdgeType, weight?: number, reason?: string, signal?: AbortSignal): Promise<JsonValue>;
