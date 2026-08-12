@@ -328,7 +328,6 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
   const positionsRef = useRef(positions)
   const animationRef = useRef<number | null>(null)
   const dragRef = useRef<{ nodeId: string; pointerId: number; startX: number; startY: number; moved: boolean } | null>(null)
-  const suppressClickRef = useRef(false)
 
   const commitPositions = useCallback((next: GraphPositions) => {
     positionsRef.current = next
@@ -390,9 +389,12 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
       next.set(drag.nodeId, graphPoint(svg, event.clientX, event.clientY))
       commitPositions(next)
     }
-    suppressClickRef.current = drag.moved
     dragRef.current = null
     event.currentTarget.releasePointerCapture?.(event.pointerId)
+    if (!drag.moved) {
+      const node = visibleNodes.find(candidate => graphNodeKey(candidate) === drag.nodeId)
+      if (node !== undefined) props.onSelect(node)
+    }
   }
   const cancelDrag = (event: ReactPointerEvent<SVGGElement>) => {
     if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null
@@ -442,7 +444,7 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
             transform={`translate(${position.x} ${position.y})`} role="button" tabIndex={0} aria-label={`${categoryLabel(t, node.category ?? 'general')}: ${short(node.content, 80)}`}
             data-dragging={dragRef.current?.nodeId === nodeKey || undefined}
             onPointerDown={event => beginDrag(event, nodeKey)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag}
-            onClick={() => { if (suppressClickRef.current) { suppressClickRef.current = false; return }; props.onSelect(node) }}
+            onClick={() => props.onSelect(node)}
             onKeyDown={event => {
               if (event.key === 'Enter' || event.key === ' ') props.onSelect(node)
               else if (event.key === 'ArrowLeft') { event.preventDefault(); nudge(nodeKey, -12, 0) }
