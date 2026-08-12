@@ -5,6 +5,9 @@
       name: dsh-mnemon
       config:
         routingGuidance: true
+        lifecycleEnabled: true
+        recallMode: guided
+        writebackMode: guided
         tabEnabled: true
         writeEnabled: true
         timeoutMs: 10000
