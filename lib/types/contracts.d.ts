@@ -58,6 +58,7 @@ export interface HostSettingsService {
 }
 export interface ToolExecution {
     signal: AbortSignal;
+    agent?: HostAgent;
 }
 export type CommandResult = {
     kind: 'success';
@@ -67,6 +68,7 @@ export type CommandResult = {
     text: string;
 };
 export interface CommandInvocation {
+    agent: HostAgent;
     rawInput: string;
     signal: AbortSignal;
 }
@@ -130,7 +132,16 @@ export interface HostAgentContext {
 export interface HostAgent {
     id: string;
     status: 'idle' | 'running';
+    options?: {
+        provider?: string;
+        model?: string;
+        maxTokens?: number;
+    };
     session: {
+        header?: {
+            origin?: 'subagent';
+            delegationDepth?: number;
+        };
         events: readonly HostSessionEvent[];
     };
     ctx: HostAgentContext;
@@ -142,6 +153,48 @@ export interface HostAgentsService {
     get(id: string): HostAgent | undefined;
     roots(): HostAgent[];
 }
+export interface HostSubagentResult {
+    output: Array<{
+        type: string;
+        text?: string;
+        [key: string]: unknown;
+    }>;
+    structured?: unknown;
+    stopReason: string;
+}
+export interface HostSubagentRun {
+    id: string;
+    result: Promise<HostSubagentResult>;
+    dispose(): Promise<void>;
+}
+export interface HostSubagentProvider {
+    capabilities: {
+        outputSchema: boolean;
+        depthLimit: boolean;
+        toolFilter: boolean;
+        persona: boolean;
+    };
+}
+export interface HostSubagentsService {
+    list(): string[];
+    getProvider(name: string): HostSubagentProvider | undefined;
+    start(name: string, request: {
+        label?: string;
+        prompt: Array<{
+            type: 'text';
+            text: string;
+        }>;
+        parent: HostAgent;
+        signal: AbortSignal;
+        outputSchema?: Record<string, unknown>;
+        maxDepth?: number;
+        toolFilter?: {
+            allow?: string[];
+            deny?: string[];
+        };
+        persona?: string;
+    }): Promise<HostSubagentRun>;
+}
 export interface HostContextShape {
     tools: {
         register(definition: ToolDefinition): unknown;
@@ -150,6 +203,7 @@ export interface HostContextShape {
     settings: HostSettingsService;
     connection: HostConnectionHandle;
     agents: HostAgentsService;
+    subagents: HostSubagentsService;
     get(name: string): unknown;
     inject(services: string[], callback: (ctx: HostContextShape) => void): unknown;
     on(name: string, listener: (...args: never[]) => unknown): () => unknown;

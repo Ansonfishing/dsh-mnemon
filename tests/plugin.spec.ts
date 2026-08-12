@@ -29,6 +29,11 @@ function context() {
     },
     connection,
     agents: { get: vi.fn(), roots: vi.fn(() => []) },
+    subagents: {
+      list: vi.fn(() => ['spawn']),
+      getProvider: vi.fn(() => ({ capabilities: { outputSchema: true, depthLimit: true, toolFilter: true, persona: true } })),
+      start: vi.fn(),
+    },
     get: vi.fn((name: string) => name === 'systemPrompt'
       ? { section: (section: unknown) => { sections.push(section) } }
       : undefined),
@@ -54,12 +59,16 @@ describe('dsh-mnemon plugin composition', () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon' })
     expect(fixture.tools.map(tool => (tool as { name: string }).name)).toEqual([
+      'mnemon_memory_bodies',
       'mnemon_recall',
       'mnemon_related',
       'mnemon_status',
       'mnemon_remember',
       'mnemon_link',
       'mnemon_forget',
+      'mnemon_memory_body_create',
+      'mnemon_memory_body_update',
+      'mnemon_memory_body_merge',
     ])
     expect(fixture.tools).toEqual(expect.arrayContaining([
       expect.objectContaining({ output: expect.objectContaining({ schema: { type: 'object', additionalProperties: true } }) }),
@@ -77,6 +86,7 @@ describe('dsh-mnemon plugin composition', () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', writeEnabled: false })
     expect(fixture.tools.map(tool => (tool as { name: string }).name)).toEqual([
+      'mnemon_memory_bodies',
       'mnemon_recall',
       'mnemon_related',
       'mnemon_status',

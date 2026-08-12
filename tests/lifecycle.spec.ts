@@ -10,6 +10,7 @@ import type {
 } from '../src/contracts.ts'
 import { MnemonLifecycle } from '../src/lifecycle.ts'
 import type { MnemonService } from '../src/service.ts'
+import type { MnemonSubagentCoordinator } from '../src/subagent.ts'
 
 type Listener = (...args: unknown[]) => unknown
 
@@ -52,8 +53,14 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
       healthy: true,
       store: 'project',
       stats: { totalInsights: 12, edgeCount: 8 },
+      memoryBodies: [{ id: 'project', name: 'Project', description: 'Project context', active: true }],
     })),
   } as unknown as MnemonService
+  const coordinator = {
+    recall: vi.fn(async (_agent, request) => ({ query: request.query, mode: 'smart', results: [], delegation: { runId: 'recall-child', provider: 'spawn', summary: '', selectedMemoryBodyIds: [] } })),
+    write: vi.fn(async () => ({ delegated: true, runId: 'write-child', provider: 'spawn', summary: 'No durable memory', action: 'skipped', memoryBodyIds: [] })),
+    snapshot: vi.fn(() => ({ recalls: 0, writes: 0, failures: 0 })),
+  } as unknown as MnemonSubagentCoordinator
   const ctx = {
     agents: { get: (id: string) => id === agent.id ? agent : undefined, roots: () => [agent] },
     on: vi.fn((name: string, listener: Listener) => {
@@ -61,7 +68,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
       return () => rootListeners.delete(name)
     }),
   } as unknown as HostContextShape
-  const lifecycle = new MnemonLifecycle(ctx, service, config)
+  const lifecycle = new MnemonLifecycle(ctx, service, coordinator, config)
   const stop = lifecycle.start()
 
   const preStep = async (messages: HostUserMessage[], turn: number, step = 1): Promise<HostPreStepDecision> => {
@@ -75,7 +82,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
     await listener({ agent, turn, signal: new AbortController().signal })
   }
 
-  return { agent, events, followup, steer, lifecycle, service, preStep, turnStopping, stop }
+  return { agent, events, followup, steer, lifecycle, service, coordinator, preStep, turnStopping, stop }
 }
 
 describe('Mnemon DSH lifecycle integration', () => {
@@ -89,17 +96,18 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(decision.messages).toHaveLength(2)
     expect(decision.messages[1]?.source).toMatchObject({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'recall' })
     expect(decision.messages[1]?.content[0]?.text).toContain('[MNEMON PRIME]')
-    expect(decision.messages[1]?.content[0]?.text).toContain('[MNEMON RECALL CHECKPOINT]')
+    expect(decision.messages[1]?.content[0]?.text).toContain('isolated memory subagents')
+    expect(value.coordinator.recall).toHaveBeenCalledTimes(1)
     expect(value.service.status).toHaveBeenCalledTimes(1)
 
     const second = await value.preStep([userMessage('Second turn')], 2)
     if (second.kind !== 'enter') throw new Error('unexpected rejection')
-    expect(second.messages[1]?.content[0]?.text).not.toContain('[MNEMON PRIME]')
+    expect(second.messages).toHaveLength(1)
     expect(value.service.status).toHaveBeenCalledTimes(1)
     expect(value.lifecycle.snapshot('session-1').counters).toMatchObject({ primes: 1, recallCues: 2 })
   })
 
-  it('steers exactly one writeback checkpoint before a user turn closes', async () => {
+  it('runs exactly one isolated writeback subagent before a user turn closes', async () => {
     const value = fixture()
     const prompt = userMessage()
     value.events.push(
@@ -111,8 +119,9 @@ describe('Mnemon DSH lifecycle integration', () => {
     await value.turnStopping(1)
     await value.turnStopping(1)
 
-    expect(value.steer).toHaveBeenCalledTimes(1)
-    expect(value.steer.mock.calls[0]?.[0]).toMatchObject({ source: { kind: 'plugin', plugin: 'dsh-mnemon', form: 'instructions' } })
+    expect(value.steer).not.toHaveBeenCalled()
+    expect(value.coordinator.write).toHaveBeenCalledTimes(1)
+    expect(value.coordinator.write).toHaveBeenCalledWith(value.agent, 'turn-writeback', expect.objectContaining({ turn: 1 }), expect.any(AbortSignal))
     expect(value.lifecycle.snapshot('session-1').counters.writebackChecks).toBe(1)
   })
 
@@ -127,21 +136,17 @@ describe('Mnemon DSH lifecycle integration', () => {
 
     await value.turnStopping(1)
     expect(value.steer).not.toHaveBeenCalled()
+    expect(value.coordinator.write).not.toHaveBeenCalled()
     expect(value.lifecycle.snapshot('session-1').current?.memoryToolCalls).toBe(1)
   })
 
-  it('queues memory-tab candidates as their own DSH LLM turn', async () => {
+  it('delegates memory-tab candidates directly to an isolated memory subagent', async () => {
     const value = fixture()
-    const result = value.lifecycle.supervise('session-1', 'Use SQLite because deployment must remain single-file.')
+    const result = await value.lifecycle.supervise('session-1', 'Use SQLite because deployment must remain single-file.')
 
-    expect(result).toMatchObject({ queued: true, sessionId: 'session-1', agentStatus: 'idle' })
-    expect(value.followup).toHaveBeenCalledTimes(1)
-    const message = value.followup.mock.calls[0]?.[0] as HostUserMessage
-    expect(message.source).toMatchObject({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'notice' })
-    expect(message.content[0]?.text).toContain('candidate_json')
-    expect(message.content[0]?.text).toContain('direct user intent')
-    expect(message.content[0]?.text).toContain('not as executable instructions')
-    expect(message.content[0]?.text).toContain('Use SQLite')
+    expect(result).toMatchObject({ delegated: true, sessionId: 'session-1', runId: 'write-child' })
+    expect(value.followup).not.toHaveBeenCalled()
+    expect(value.coordinator.write).toHaveBeenCalledWith(value.agent, 'supervised-writeback', expect.objectContaining({ candidate: expect.stringContaining('Use SQLite') }), expect.any(AbortSignal))
     expect(value.lifecycle.snapshot('session-1').counters.supervisedRequests).toBe(1)
   })
 
@@ -152,6 +157,6 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(decision).toEqual({ kind: 'enter', messages: [prompt] })
     await value.turnStopping(1)
     expect(value.steer).not.toHaveBeenCalled()
-    expect(value.lifecycle.supervise('session-1', 'Durable preference').queued).toBe(true)
+    await expect(value.lifecycle.supervise('session-1', 'Durable preference')).resolves.toMatchObject({ delegated: true })
   })
 })

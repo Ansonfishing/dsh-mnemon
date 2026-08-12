@@ -1,6 +1,7 @@
 import type { ResolvedConfig } from './config.ts';
 import type { HostContextShape } from './contracts.ts';
-import type { MnemonService } from './service.ts';
+import type { MnemonService, RememberRequest, SearchRequest } from './service.ts';
+import { MnemonSubagentCoordinator, type DelegatedWriteResult, type SubagentCounters } from './subagent.ts';
 export declare const MNEMON_PLUGIN_SOURCE = "dsh-mnemon";
 export type LifecyclePhase = 'idle' | 'prime' | 'recall' | 'writeback' | 'supervised' | 'error';
 export interface LifecycleCounters {
@@ -28,25 +29,29 @@ export interface LifecycleSnapshot {
     activeAgents: number;
     sessionAvailable: boolean;
     counters: LifecycleCounters;
+    subagents: SubagentCounters;
     current?: LifecycleAgentSnapshot;
 }
-export interface SupervisedWritebackResult {
-    queued: true;
+export interface SupervisedWritebackResult extends DelegatedWriteResult {
     sessionId: string;
-    messageId: string;
-    agentStatus: 'idle' | 'running';
 }
 /** DSH-native owner for per-agent Mnemon lifecycle hooks and UI-triggered LLM work. */
 export declare class MnemonLifecycle {
     private readonly ctx;
     private readonly service;
+    private readonly coordinator;
     private readonly config;
     private readonly owners;
     private readonly counters;
-    constructor(ctx: HostContextShape, service: MnemonService, config: ResolvedConfig);
+    constructor(ctx: HostContextShape, service: MnemonService, coordinator: MnemonSubagentCoordinator, config: ResolvedConfig);
     start(): () => void;
     snapshot(sessionId?: string): LifecycleSnapshot;
-    supervise(sessionId: string, content: string): SupervisedWritebackResult;
+    recall(sessionId: string, request: SearchRequest, signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedRecallResult>;
+    related(sessionId: string, id: string, memoryBodyId?: string, signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedRecallResult>;
+    remember(sessionId: string, request: RememberRequest, signal?: AbortSignal): Promise<DelegatedWriteResult>;
+    mutate(sessionId: string, operation: string, request: unknown, signal?: AbortSignal): Promise<DelegatedWriteResult>;
+    supervise(sessionId: string, content: string, signal?: AbortSignal): Promise<SupervisedWritebackResult>;
+    private liveAgent;
     private install;
 }
 //# sourceMappingURL=lifecycle.d.ts.map

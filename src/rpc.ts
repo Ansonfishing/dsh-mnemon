@@ -37,12 +37,15 @@ export function createReadHandler(service: MnemonService, lifecycle?: MnemonLife
             }),
           })
         case 'graph':
-          return success(await service.graph())
+          return success(await service.graph(undefined, Array.isArray(payload.memoryBodyIds) ? payload.memoryBodyIds.map(String) : undefined))
+        case 'bodies':
+          return success(await service.bodies())
         case 'list':
           return success(await service.list({
             ...(payload.query === undefined ? {} : { query: String(payload.query) }),
             ...(payload.category === undefined ? {} : { category: payload.category as Category }),
             ...(payload.limit === undefined ? {} : { limit: Number(payload.limit) }),
+            ...(Array.isArray(payload.memoryBodyIds) ? { memoryBodyIds: payload.memoryBodyIds.map(String) } : {}),
           }))
         case 'entities':
           return success(await service.entities(
@@ -50,20 +53,24 @@ export function createReadHandler(service: MnemonService, lifecycle?: MnemonLife
             payload.limit === undefined ? undefined : Number(payload.limit),
           ))
         case 'search':
-          return success(await service.search({
+          {
+            const request = {
             query: String(payload.query ?? ''),
             ...(payload.mode === undefined ? {} : { mode: payload.mode as NonNullable<SearchRequest['mode']> }),
             ...(payload.limit === undefined ? {} : { limit: Number(payload.limit) }),
             ...(payload.category === undefined ? {} : { category: payload.category as Category }),
             ...(payload.source === undefined ? {} : { source: payload.source as Source }),
             ...(payload.intent === undefined ? {} : { intent: payload.intent as Intent }),
-          }))
+            ...(Array.isArray(payload.memoryBodyIds) ? { memoryBodyIds: payload.memoryBodyIds.map(String) } : {}),
+            }
+            return success(lifecycle === undefined
+              ? await service.search(request)
+              : await lifecycle.recall(String(payload.sessionId ?? ''), request))
+          }
         case 'related':
-          return success(await service.related(
-            String(payload.id ?? ''),
-            payload.depth === undefined ? 2 : Number(payload.depth),
-            payload.edge as EdgeType | undefined,
-          ))
+          return success(lifecycle === undefined
+            ? await service.related(String(payload.id ?? ''), payload.depth === undefined ? 2 : Number(payload.depth), payload.edge as EdgeType | undefined, undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
+            : (await lifecycle.related(String(payload.sessionId ?? ''), String(payload.id ?? ''), payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))).results)
         default:
           return { ok: false, error: { code: 'not-found', message: `unknown read endpoint: ${endpoint}` } }
       }
@@ -80,26 +87,43 @@ export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLif
       switch (endpoint) {
         case 'supervise':
           if (lifecycle === undefined) throw new Error('Mnemon lifecycle integration is unavailable')
-          return success(lifecycle.supervise(String(payload.sessionId ?? ''), String(payload.content ?? '')))
+          return success(await lifecycle.supervise(String(payload.sessionId ?? ''), String(payload.content ?? '')))
         case 'remember':
-          return success(await service.remember({
+          {
+            const request = {
             content: String(payload.content ?? ''),
             ...(payload.category === undefined ? {} : { category: payload.category as Category }),
             ...(payload.importance === undefined ? {} : { importance: Number(payload.importance) }),
             ...(Array.isArray(payload.tags) ? { tags: payload.tags.map(String) } : {}),
             ...(Array.isArray(payload.entities) ? { entities: payload.entities.map(String) } : {}),
+            ...(payload.memoryBodyId === undefined ? {} : { memoryBodyId: String(payload.memoryBodyId) }),
             source: 'user',
-          }))
+            } as const
+            return success(lifecycle === undefined
+              ? await service.remember(request)
+              : await lifecycle.remember(String(payload.sessionId ?? ''), request))
+          }
         case 'link':
-          return success(await service.link(
-            String(payload.sourceId ?? ''),
-            String(payload.targetId ?? ''),
-            payload.type as EdgeType | undefined,
-            payload.weight === undefined ? 0.5 : Number(payload.weight),
-            payload.reason === undefined ? undefined : String(payload.reason),
-          ))
+          return success(lifecycle === undefined
+            ? await service.link(String(payload.sourceId ?? ''), String(payload.targetId ?? ''), payload.type as EdgeType | undefined, payload.weight === undefined ? 0.5 : Number(payload.weight), payload.reason === undefined ? undefined : String(payload.reason), undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
+            : await lifecycle.mutate(String(payload.sessionId ?? ''), 'link', payload))
         case 'forget':
-          return success(await service.forget(String(payload.id ?? '')))
+          return success(lifecycle === undefined
+            ? await service.forget(String(payload.id ?? ''), undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
+            : await lifecycle.mutate(String(payload.sessionId ?? ''), 'forget', { id: String(payload.id ?? ''), ...(payload.memoryBodyId === undefined ? {} : { memoryBodyId: String(payload.memoryBodyId) }) }))
+        case 'body-create':
+          return success(await service.createBody({
+            ...(payload.id === undefined ? {} : { id: String(payload.id) }),
+            name: String(payload.name ?? ''),
+            ...(payload.description === undefined ? {} : { description: String(payload.description) }),
+            ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
+          }))
+        case 'body-update':
+          return success(service.updateBody(String(payload.memoryBodyId ?? ''), {
+            ...(payload.name === undefined ? {} : { name: String(payload.name) }),
+            ...(payload.description === undefined ? {} : { description: String(payload.description) }),
+            ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
+          }))
         default:
           return { ok: false, error: { code: 'not-found', message: `unknown write endpoint: ${endpoint}` } }
       }

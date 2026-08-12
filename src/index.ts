@@ -7,11 +7,12 @@ import { registerRpc } from './rpc.ts'
 import { createRunner } from './runner.ts'
 import { MnemonService } from './service.ts'
 import { registerSettingsRpc } from './settings.ts'
+import { MnemonSubagentCoordinator } from './subagent.ts'
 import { registerTools } from './tools.ts'
 
 export const name = 'dsh-mnemon'
-export const inject = ['tools', 'settings', 'commands', 'agents']
-export { Config, resolveConfig, MnemonLifecycle, MnemonService, createRunner }
+export const inject = ['tools', 'settings', 'commands', 'agents', 'subagents']
+export { Config, resolveConfig, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, createRunner }
 export type { MnemonConfig }
 
 /** Mount native model tools on every DSH surface and UI RPC only when Web connection exists. */
@@ -24,10 +25,11 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   })
   const resolved = resolveConfig(settings.get())
   const service = new MnemonService(createRunner(resolved), resolved)
-  const lifecycle = new MnemonLifecycle(ctx, service, resolved)
+  const coordinator = new MnemonSubagentCoordinator(ctx.subagents, service)
+  const lifecycle = new MnemonLifecycle(ctx, service, coordinator, resolved)
   ctx.effect(() => lifecycle.start(), 'dsh-mnemon.lifecycle-root()')
-  registerTools(ctx, service)
-  registerCommands(ctx.commands, service)
+  registerTools(ctx, service, coordinator)
+  registerCommands(ctx.commands, service, coordinator)
   if (resolved.routingGuidance) registerGuidance(ctx)
   ctx.inject(['connection'], (webContext) => {
     if (resolved.tabEnabled) registerRpc(webContext.connection, service, lifecycle)

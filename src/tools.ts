@@ -1,4 +1,5 @@
 import type { HostContextShape, ToolDefinition, ToolExecution } from './contracts.ts'
+import { isSubagent, MnemonSubagentCoordinator } from './subagent.ts'
 import {
   CATEGORIES,
   EDGE_TYPES,
@@ -25,10 +26,26 @@ function definition(value: ToolDefinition): ToolDefinition {
 const JSON_OBJECT_OUTPUT = { type: 'object', additionalProperties: true } as const
 
 /** Register a deliberately small model-facing surface over Mnemon's protocol. */
-export function registerTools(ctx: HostContextShape, service: MnemonService): void {
+function requireAgent(exec: ToolExecution) {
+  if (exec.agent === undefined) throw new Error('Mnemon semantic operations require a live DSH agent')
+  return exec.agent
+}
+
+/** Root calls delegate to a bounded child; memory-worker calls reach the deterministic service. */
+export function registerTools(ctx: HostContextShape, service: MnemonService, coordinator: MnemonSubagentCoordinator): void {
+  ctx.tools.register(definition({
+    name: 'mnemon_memory_bodies',
+    description: 'List the global Mnemon memory-body catalog, including each body id, name, description, activation state, database path, and statistics. Read only. Use this before choosing a write target, or when the Prime summary is insufficient. Recall may only read active bodies; writes may target any body.',
+    parameters: { type: 'object', properties: {} },
+    output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
+    execute: (_args: unknown, exec: ToolExecution) => service.bodies(exec.signal),
+    presentCall: () => ({ card: 'generic', title: 'Inspect Mnemon memory bodies', kind: 'search' }),
+    presentResult: () => ({ card: 'generic', title: 'Mnemon memory bodies ready' }),
+  } as never))
+
   ctx.tools.register(definition({
     name: 'mnemon_recall',
-    description: 'Recall durable knowledge from the shared Mnemon graph. Use for prior decisions, preferences, rationale, project conventions, known pitfalls, and tasks that resume earlier work. Run one focused query when memory could materially change the answer; do not recall mechanically for trivial or self-contained tasks.',
+    description: 'Recall durable knowledge from one or more active Mnemon memory bodies. Choose bodies whose name/description matches the task; omit memoryBodyIds only when a cross-body search is intentionally useful. Use one focused query when prior decisions, preferences, rationale, conventions, pitfalls, or earlier work could materially change the answer.',
     parameters: {
       type: 'object',
       properties: {
@@ -38,6 +55,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService): vo
         category: { type: 'string', enum: [...CATEGORIES] },
         source: { type: 'string', enum: [...SOURCES] },
         intent: { type: 'string', enum: [...INTENTS] },
+        memoryBodyIds: { type: 'array', items: { type: 'string' }, description: 'One or more active memory-body ids. Omit to search every active body.', maxItems: 20 },
       },
       required: ['query'],
     },
@@ -45,8 +63,10 @@ export function registerTools(ctx: HostContextShape, service: MnemonService): vo
       schema: JSON_OBJECT_OUTPUT,
       render: (_args: unknown, value: unknown) => text(value),
     },
-    async execute(args: { query: string; mode?: 'smart' | 'keyword' | 'basic'; limit?: number; category?: Category; source?: Source; intent?: Intent }, exec: ToolExecution) {
-      return service.search(args, exec.signal)
+    async execute(args: { query: string; mode?: 'smart' | 'keyword' | 'basic'; limit?: number; category?: Category; source?: Source; intent?: Intent; memoryBodyIds?: string[] }, exec: ToolExecution) {
+      return isSubagent(exec.agent)
+        ? service.search(args, exec.signal)
+        : coordinator.recall(requireAgent(exec), args, exec.signal)
     },
     presentCall: (args: { query: string }) => ({ card: 'generic', title: 'Recall Mnemon memory', kind: 'search', rawInput: args.query }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon recall complete' }),
@@ -61,12 +81,15 @@ export function registerTools(ctx: HostContextShape, service: MnemonService): vo
         id: { type: 'string', description: 'Insight id returned by mnemon_recall.' },
         depth: { type: 'integer', minimum: 1, maximum: 5 },
         edge: { type: 'string', enum: [...EDGE_TYPES] },
+        memoryBodyId: { type: 'string', description: 'Active memory body that returned this insight id.' },
       },
       required: ['id'],
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    async execute(args: { id: string; depth?: number; edge?: EdgeType }, exec: ToolExecution) {
-      return service.related(args.id, args.depth, args.edge, exec.signal)
+    async execute(args: { id: string; depth?: number; edge?: EdgeType; memoryBodyId?: string }, exec: ToolExecution) {
+      return isSubagent(exec.agent)
+        ? service.related(args.id, args.depth, args.edge, exec.signal, args.memoryBodyId)
+        : coordinator.related(requireAgent(exec), args.id, args.memoryBodyId, exec.signal)
     },
     presentCall: (args: { id: string }) => ({ card: 'generic', title: 'Traverse Mnemon graph', kind: 'search', rawInput: args.id }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon graph traversal complete' }),
@@ -74,7 +97,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService): vo
 
   ctx.tools.register(definition({
     name: 'mnemon_status',
-    description: 'Check the local Mnemon integration, active named store, database statistics, and configuration. Use when a Mnemon operation fails or the user asks about memory health.',
+    description: 'Check the local Mnemon integration, active memory bodies, aggregate database statistics, and configuration. Use when a Mnemon operation fails or the user asks about memory health.',
     parameters: { type: 'object', properties: {} },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     execute: (_args: unknown, exec: ToolExecution) => service.status(exec.signal),
@@ -86,7 +109,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService): vo
 
   ctx.tools.register(definition({
     name: 'mnemon_remember',
-    description: 'Store one durable insight in Mnemon. Use only for stable preferences, decisions with rationale, reusable procedures, non-obvious facts, or important continuity that future sessions should find. Search first to avoid duplicates; do not dump transcripts, temporary progress, routine observations, or information already present in the repository.',
+    description: 'Store one durable insight in a selected Mnemon memory body. Choose the narrowest existing body whose description owns the knowledge; search that body first. If several bodies are active, memoryBodyId is required. Writing to an inactive body activates it. Do not dump transcripts, temporary progress, routine observations, or repository-obvious facts.',
     parameters: {
       type: 'object',
       properties: {
@@ -96,12 +119,16 @@ export function registerTools(ctx: HostContextShape, service: MnemonService): vo
         tags: { type: 'array', items: { type: 'string' }, maxItems: 20 },
         entities: { type: 'array', items: { type: 'string' }, maxItems: 50 },
         source: { type: 'string', enum: [...SOURCES], description: 'Defaults to agent for model-authored writeback.' },
+        memoryBodyId: { type: 'string', description: 'Target memory-body id. Required unless exactly one body is active.' },
       },
       required: ['content'],
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    async execute(args: { content: string; category?: Category; importance?: number; tags?: string[]; entities?: string[]; source?: Source }, exec: ToolExecution) {
-      return service.remember({ ...args, source: args.source ?? 'agent' }, exec.signal)
+    async execute(args: { content: string; category?: Category; importance?: number; tags?: string[]; entities?: string[]; source?: Source; memoryBodyId?: string }, exec: ToolExecution) {
+      const request = { ...args, source: args.source ?? 'agent' }
+      return isSubagent(exec.agent)
+        ? service.remember(request, exec.signal)
+        : coordinator.remember(requireAgent(exec), request, exec.signal)
     },
     presentCall: () => ({ card: 'generic', title: 'Write Mnemon memory', kind: 'edit' }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon memory processed' }),
@@ -118,12 +145,15 @@ export function registerTools(ctx: HostContextShape, service: MnemonService): vo
         type: { type: 'string', enum: [...EDGE_TYPES] },
         weight: { type: 'number', minimum: 0, maximum: 1 },
         reason: { type: 'string' },
+        memoryBodyId: { type: 'string', description: 'Body containing both insight ids.' },
       },
       required: ['sourceId', 'targetId'],
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    async execute(args: { sourceId: string; targetId: string; type?: EdgeType; weight?: number; reason?: string }, exec: ToolExecution) {
-      return service.link(args.sourceId, args.targetId, args.type, args.weight, args.reason, exec.signal)
+    async execute(args: { sourceId: string; targetId: string; type?: EdgeType; weight?: number; reason?: string; memoryBodyId?: string }, exec: ToolExecution) {
+      return isSubagent(exec.agent)
+        ? service.link(args.sourceId, args.targetId, args.type, args.weight, args.reason, exec.signal, args.memoryBodyId)
+        : coordinator.write(requireAgent(exec), 'link', args, exec.signal)
     },
     presentCall: () => ({ card: 'generic', title: 'Link Mnemon insights', kind: 'edit' }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon insights linked' }),
@@ -134,12 +164,75 @@ export function registerTools(ctx: HostContextShape, service: MnemonService): vo
     description: 'Soft-delete one Mnemon insight by exact id. This is a destructive semantic operation; use only when the user explicitly asks to forget it or the insight is verified obsolete/incorrect.',
     parameters: {
       type: 'object',
-      properties: { id: { type: 'string' } },
+      properties: { id: { type: 'string' }, memoryBodyId: { type: 'string', description: 'Body containing the insight id.' } },
       required: ['id'],
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    execute: (args: { id: string }, exec: ToolExecution) => service.forget(args.id, exec.signal),
+    execute: (args: { id: string; memoryBodyId?: string }, exec: ToolExecution) => isSubagent(exec.agent)
+      ? service.forget(args.id, exec.signal, args.memoryBodyId)
+      : coordinator.write(requireAgent(exec), 'forget', args, exec.signal),
     presentCall: (args: { id: string }) => ({ card: 'generic', title: 'Forget Mnemon insight', kind: 'edit', rawInput: args.id }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon insight forgotten' }),
+  } as never))
+
+  ctx.tools.register(definition({
+    name: 'mnemon_memory_body_create',
+    description: 'Create a new isolated Mnemon memory body. Use only when durable knowledge forms a recurring scope not owned by any existing body; never create one for a single temporary task. After creation, write the qualifying insight into it with mnemon_remember, which will activate it.',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Stable ASCII id matching letters, numbers, underscore, or hyphen.' },
+        name: { type: 'string', description: 'Short human-readable name.' },
+        description: { type: 'string', description: 'Clear routing boundary: what belongs here and when it should be recalled.' },
+      },
+      required: ['name', 'description'],
+    },
+    output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
+    execute: (args: { id?: string; name: string; description?: string }, exec: ToolExecution) => isSubagent(exec.agent)
+      ? service.createBody(args, exec.signal)
+      : coordinator.write(requireAgent(exec), 'create-memory-body', args, exec.signal),
+    presentCall: () => ({ card: 'generic', title: 'Create Mnemon memory body', kind: 'edit' }),
+    presentResult: () => ({ card: 'generic', title: 'Mnemon memory body created' }),
+  } as never))
+
+  ctx.tools.register(definition({
+    name: 'mnemon_memory_body_update',
+    description: 'Update a memory body name, routing description, or activation state. Activation controls reads only. Use conservatively; prefer the user-facing toggle for ordinary manual activation changes.',
+    parameters: {
+      type: 'object',
+      properties: {
+        memoryBodyId: { type: 'string' },
+        name: { type: 'string' },
+        description: { type: 'string' },
+        active: { type: 'boolean' },
+      },
+      required: ['memoryBodyId'],
+    },
+    output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
+    execute: (args: { memoryBodyId: string; name?: string; description?: string; active?: boolean }, exec: ToolExecution) => isSubagent(exec.agent)
+      ? service.updateBody(args.memoryBodyId, args)
+      : coordinator.write(requireAgent(exec), 'update-memory-body', args, exec.signal),
+    presentCall: () => ({ card: 'generic', title: 'Update Mnemon memory body', kind: 'edit' }),
+    presentResult: () => ({ card: 'generic', title: 'Mnemon memory body updated' }),
+  } as never))
+
+  ctx.tools.register(definition({
+    name: 'mnemon_memory_body_merge',
+    description: 'Non-destructively merge complete source memory bodies into one existing target through Mnemon import, preserving durable nodes and typed graph edges where available. Use only after confirming substantial scope overlap or when the user requests consolidation. Source databases are retained; they are merely deactivated by default.',
+    parameters: {
+      type: 'object',
+      properties: {
+        targetMemoryBodyId: { type: 'string' },
+        sourceMemoryBodyIds: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 20 },
+        deactivateSources: { type: 'boolean', description: 'Defaults to true. Never deletes source databases.' },
+      },
+      required: ['targetMemoryBodyId', 'sourceMemoryBodyIds'],
+    },
+    output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
+    execute: (args: { targetMemoryBodyId: string; sourceMemoryBodyIds: string[]; deactivateSources?: boolean }, exec: ToolExecution) => isSubagent(exec.agent)
+      ? service.mergeBodies(args.targetMemoryBodyId, args.sourceMemoryBodyIds, args.deactivateSources ?? true, exec.signal)
+      : coordinator.write(requireAgent(exec), 'merge-memory-bodies', args, exec.signal),
+    presentCall: () => ({ card: 'generic', title: 'Merge Mnemon memory bodies', kind: 'edit' }),
+    presentResult: () => ({ card: 'generic', title: 'Mnemon memory bodies merged' }),
   } as never))
 }
