@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import type { ClientConnectionHandle } from '../contracts.ts'
+import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts'
+import type { Config } from '../config.ts'
 import { CATEGORIES, type Category, type Insight, type SearchRequest, type StatusView } from '../service.ts'
 import { MnemonClient } from './api.ts'
+import { MnemonSettingsCard } from './MnemonSettingsCard.tsx'
 import css from './MnemonView.module.css'
 
 export interface MnemonViewProps {
   connection: ClientConnectionHandle
+  settingsScope: ClientSettingsScope<Config>
   sessionId?: string
 }
 
@@ -86,7 +89,7 @@ function InsightCard(props: {
   )
 }
 
-export function MnemonView({ connection }: MnemonViewProps): JSX.Element {
+export function MnemonView({ connection, settingsScope }: MnemonViewProps): JSX.Element {
   const client = useMemo(() => new MnemonClient(connection), [connection])
   const [page, setPage] = useState<Page>('explore')
   const [status, setStatus] = useState<StatusView | null>(null)
@@ -358,6 +361,7 @@ export function MnemonView({ connection }: MnemonViewProps): JSX.Element {
                 <code>{status?.healthy === true ? 'SYSTEM NOMINAL' : 'CHECK REQUIRED'}</code>
               </div>
               <div className={css.configGrid}>
+                <div className={css.settingsPanel}><MnemonSettingsCard scope={settingsScope} /></div>
                 <article className={`${css.configCard} ${css.runtimeCard}`}>
                   <div className={css.cardTitleRow}><div><span className={css.cardKicker}>CONNECTION</span><h3>Mnemon Runtime</h3></div><span className={`${css.runtimeBadge} ${status?.healthy === true ? css.runtimeOnline : css.runtimeOffline}`}>{status?.healthy === true ? 'ONLINE' : 'OFFLINE'}</span></div>
                   <dl>

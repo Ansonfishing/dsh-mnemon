@@ -347,6 +347,7 @@
 .formActions { display: flex; align-items: center; gap: 12px; padding-top: 3px; color: var(--mn-muted); font-size: 11px; }
 
 .configGrid { display: grid; max-width: 1050px; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 auto; }
+.settingsPanel { grid-column: 1 / -1; }
 .configCard { min-width: 0; padding: 18px; }
 .runtimeCard { grid-row: span 2; }
 .commandCard { grid-column: 1 / -1; }

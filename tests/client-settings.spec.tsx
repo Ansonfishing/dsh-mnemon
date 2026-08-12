@@ -27,7 +27,6 @@ describe('MnemonSettingsCard', () => {
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
 
     render(<MnemonSettingsCard scope={scope} />)
-    fireEvent.click(screen.getByRole('button', { name: /Mnemon 外置记忆/ }))
     fireEvent.change(screen.getByLabelText('Mnemon Store'), { target: { value: 'project-alpha' } })
     fireEvent.click(screen.getByRole('button', { name: '保存到 settings.yaml' }))
 

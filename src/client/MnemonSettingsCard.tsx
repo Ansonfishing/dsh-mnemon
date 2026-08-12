@@ -70,7 +70,6 @@ export function MnemonSettingsCard({ scope }: MnemonSettingsCardProps): JSX.Elem
   const subscribe = useMemo(() => scope.subscribe.bind(scope), [scope])
   const getSnapshot = useMemo(() => scope.getSnapshot.bind(scope), [scope])
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-  const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<Draft>(() => draftOf(snapshot.value))
   const [dirty, setDirty] = useState<Set<Field>>(() => new Set())
   const [reset, setReset] = useState<Set<Field>>(() => new Set())
@@ -137,19 +136,15 @@ export function MnemonSettingsCard({ scope }: MnemonSettingsCardProps): JSX.Elem
   const fieldMeta = (field: Field) => Object.hasOwn(overridden, field) && !reset.has(field)
 
   return (
-    <li className={css.card}>
-      <button type="button" className={css.summary} aria-expanded={open} onClick={() => setOpen(value => !value)}>
-        <span className={css.memoryMark} aria-hidden="true">M</span>
-        <span className={css.summaryCopy}><strong>Mnemon 外置记忆</strong><small>配置持久记忆 CLI、Store 与读写策略。</small></span>
-        <span className={css.summaryMeta}>{dirty.size > 0 ? '未保存' : '重启后生效'}</span>
-        <span className={css.chevron} aria-hidden="true">⌄</span>
-      </button>
+    <section className={css.card} aria-label="Mnemon 配置">
+      <div className={css.panelHeader}>
+        <div><span>PLUGIN CONFIG</span><h3>连接与行为</h3><p>配置 Mnemon CLI、Store、召回上限与读写策略。</p></div>
+        <strong>{dirty.size > 0 ? '未保存' : '重启后生效'}</strong>
+      </div>
+      <div className={css.body}>
+        <div className={css.notice}><span>RESTART</span> 保存到 <code>.dsh/settings.yaml</code>，重启 DSH 后应用。</div>
 
-      {open && (
-        <div className={css.body}>
-          <div className={css.notice}><span>RESTART</span> 保存到 <code>.dsh/settings.yaml</code>，重启 DSH 后应用。</div>
-
-          <div className={css.grid}>
+        <div className={css.grid}>
             <SettingField label="Mnemon CLI" hint="留空时按环境变量、PATH 与常见安装路径自动发现。" overridden={fieldMeta('cliPath')} onReset={() => resetField('cliPath')}>
               <input aria-label="Mnemon CLI" value={String(draft.cliPath)} onChange={event => edit('cliPath', event.target.value)} placeholder="自动发现" disabled={!snapshot.writable} />
             </SettingField>
@@ -165,25 +160,24 @@ export function MnemonSettingsCard({ scope }: MnemonSettingsCardProps): JSX.Elem
             <SettingField label="默认召回条数" hint={`模型工具与 WebUI 的默认上限，默认 ${DEFAULT_RECALL_LIMIT}。`} overridden={fieldMeta('defaultRecallLimit')} onReset={() => resetField('defaultRecallLimit')}>
               <input aria-label="Mnemon 默认召回条数" type="number" min={1} max={50} value={String(draft.defaultRecallLimit)} onChange={event => edit('defaultRecallLimit', event.target.value)} disabled={!snapshot.writable} />
             </SettingField>
-          </div>
+        </div>
 
-          <div className={css.switches}>
+        <div className={css.switches}>
             <SettingToggle label="记忆路由指引" hint="指导 Agent 按需召回、审慎写回。" checked={Boolean(draft.routingGuidance)} overridden={fieldMeta('routingGuidance')} disabled={!snapshot.writable} onChange={value => edit('routingGuidance', value)} onReset={() => resetField('routingGuidance')} />
             <SettingToggle label="会话记忆 Tab" hint="在会话页展示 Mnemon 检索与管理界面。" checked={Boolean(draft.tabEnabled)} overridden={fieldMeta('tabEnabled')} disabled={!snapshot.writable} onChange={value => edit('tabEnabled', value)} onReset={() => resetField('tabEnabled')} />
             <SettingToggle label="允许写入" hint="控制 Agent 与本机 WebUI 的 remember/link/forget 能力。" checked={Boolean(draft.writeEnabled)} overridden={fieldMeta('writeEnabled')} disabled={!snapshot.writable} onChange={value => edit('writeEnabled', value)} onReset={() => resetField('writeEnabled')} />
-          </div>
-
-          {error !== null && <p className={css.error} role="alert">{error}</p>}
-          {failed !== null && <p className={css.error} role="alert">保存失败：{failed}</p>}
-          {!snapshot.writable && <p className={css.readOnly}>当前部署的 settings 为只读。</p>}
-
-          <div className={css.actions}>
-            <button type="button" className={css.discard} disabled={dirty.size === 0 || saving} onClick={discard}>放弃修改</button>
-            <button type="button" className={css.save} disabled={dirty.size === 0 || saving || error !== null || !snapshot.writable} onClick={() => void save()}>{saving ? '保存中…' : '保存到 settings.yaml'}</button>
-          </div>
         </div>
-      )}
-    </li>
+
+        {error !== null && <p className={css.error} role="alert">{error}</p>}
+        {failed !== null && <p className={css.error} role="alert">保存失败：{failed}</p>}
+        {!snapshot.writable && <p className={css.readOnly}>当前部署的 settings 为只读。</p>}
+
+        <div className={css.actions}>
+          <button type="button" className={css.discard} disabled={dirty.size === 0 || saving} onClick={discard}>放弃修改</button>
+          <button type="button" className={css.save} disabled={dirty.size === 0 || saving || error !== null || !snapshot.writable} onClick={() => void save()}>{saving ? '保存中…' : '保存到 settings.yaml'}</button>
+        </div>
+      </div>
+    </section>
   )
 }
 

@@ -2,9 +2,19 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ClientConnectionHandle } from '../src/contracts.ts'
+import type { ClientSettingsScope } from '../src/contracts.ts'
+import type { Config } from '../src/config.ts'
 import { MnemonView } from '../src/client/MnemonView.tsx'
 
 describe('MnemonView', () => {
+  const settingsSnapshot = { status: 'ready' as const, value: {}, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }
+  const settingsScope = {
+    getSnapshot: () => settingsSnapshot,
+    subscribe: () => () => {},
+    set: async () => {},
+    unset: async () => {},
+  } satisfies ClientSettingsScope<Config>
+
   function createConnection() {
     const status = {
       healthy: true,
@@ -37,7 +47,7 @@ describe('MnemonView', () => {
 
   it('shows the live store overview and the sidebar workspaces', async () => {
     const { connection } = createConnection()
-    render(<MnemonView connection={connection} />)
+    render(<MnemonView connection={connection} settingsScope={settingsScope} />)
     await waitFor(() => expect(screen.getByText('已连接 · project')).toBeTruthy())
     expect(screen.getByText('12')).toBeTruthy()
     expect(screen.getByRole('button', { name: /检索记忆/ })).toBeTruthy()
@@ -54,7 +64,7 @@ describe('MnemonView', () => {
 
   it('requires inline confirmation before forgetting a recalled memory', async () => {
     const { connection, call } = createConnection()
-    render(<MnemonView connection={connection} />)
+    render(<MnemonView connection={connection} settingsScope={settingsScope} />)
     await waitFor(() => expect(screen.getByText('已连接 · project')).toBeTruthy())
 
     fireEvent.change(screen.getByRole('textbox', { name: '记忆查询' }), { target: { value: 'SQLite' } })

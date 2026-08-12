@@ -1,6 +1,5 @@
 import type { ClientConnectionHandle, ClientContextShape } from '../contracts.ts'
 import { MnemonView } from './MnemonView.tsx'
-import { MnemonSettingsCard } from './MnemonSettingsCard.tsx'
 import { MnemonSettingsScope } from './settings.ts'
 
 export const inject = ['slots', 'connection']
@@ -14,12 +13,9 @@ export function apply(rawContext: unknown): void {
     id: 'mnemon',
     order: 30,
     label: '记忆',
-    inject: (): { connection: ClientConnectionHandle } => ({ connection: ctx.connection }),
+    inject: (): { connection: ClientConnectionHandle; settingsScope: MnemonSettingsScope } => ({
+      connection: ctx.connection,
+      settingsScope: settings,
+    }),
   }, MnemonView as never))
-  ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
-    name: 'settings.plugin.item',
-    id: 'mnemon',
-    order: 20,
-    inject: () => ({ scope: settings }),
-  }, MnemonSettingsCard as never))
 }

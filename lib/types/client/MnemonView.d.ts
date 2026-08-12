@@ -1,7 +1,9 @@
-import type { ClientConnectionHandle } from '../contracts.ts';
+import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts';
+import type { Config } from '../config.ts';
 export interface MnemonViewProps {
     connection: ClientConnectionHandle;
+    settingsScope: ClientSettingsScope<Config>;
     sessionId?: string;
 }
-export declare function MnemonView({ connection }: MnemonViewProps): JSX.Element;
+export declare function MnemonView({ connection, settingsScope }: MnemonViewProps): JSX.Element;
 //# sourceMappingURL=MnemonView.d.ts.map
