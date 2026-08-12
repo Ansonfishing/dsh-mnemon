@@ -241,10 +241,16 @@ ${memory || '(empty)'}`
   }
 
   /** Apply an LLM-produced compaction only to the exact snapshot it reviewed. */
-  compactTarget(expectedRevision: string, target: RuntimeMemoryTarget, compacted: RuntimeMemoryCompactedEntry[]): Promise<RuntimeMemorySnapshot> {
+  compactTarget(
+    expectedRevision: string,
+    target: RuntimeMemoryTarget,
+    compacted: RuntimeMemoryCompactedEntry[],
+    maxBytes = RUNTIME_MEMORY_LIMITS[target],
+  ): Promise<RuntimeMemorySnapshot> {
     const operation = this.queue.then(() => this.withLock(() => {
       const file = this.readSource()
       if (revision(file) !== expectedRevision) throw new RuntimeMemoryConflictError()
+      if (!Number.isInteger(maxBytes) || maxBytes < 0 || maxBytes > RUNTIME_MEMORY_LIMITS[target]) throw new Error('compaction byte budget is invalid')
       const now = this.now().toISOString()
       const existing = file.entries.filter(entry => entry.target === target)
       const seen = new Set<string>()
@@ -262,7 +268,21 @@ ${memory || '(empty)'}`
           importance: entry.importance,
         }
       })
-      const entries = [...file.entries.filter(entry => entry.target !== target), ...replacements]
+      // The worker supplies semantic candidates; deterministic packing owns exact
+      // UTF-8 accounting so the LLM never has to count bytes or delimiters.
+      const priority: Record<RuntimeMemoryImportance, number> = { critical: 0, normal: 1, low: 2 }
+      const ranked = replacements.map((entry, index) => ({ entry, index })).sort((left, right) => (
+        priority[left.entry.importance] - priority[right.entry.importance] || left.index - right.index
+      ))
+      const selected = new Set<number>()
+      const packed: RuntimeMemoryEntry[] = []
+      for (const candidate of ranked) {
+        if (byteCount([...packed, candidate.entry], target) > maxBytes) continue
+        packed.push(candidate.entry)
+        selected.add(candidate.index)
+      }
+      const fitted = replacements.filter((_, index) => selected.has(index))
+      const entries = [...file.entries.filter(entry => entry.target !== target), ...fitted]
       const used = byteCount(entries, target)
       const limit = RUNTIME_MEMORY_LIMITS[target]
       if (used > limit) throw new RuntimeMemoryCapacityError(target, byteCount(file.entries, target), used, limit)

@@ -142,4 +142,21 @@ describe('RuntimeMemoryController', () => {
     await expect(controller.compactTarget(reviewed.revision, 'user', [{ content: 'User prefers concise Chinese replies.', importance: 'critical' }])).rejects.toThrow('changed while archival')
     expect(controller.snapshot().entries.map(entry => entry.content)).toEqual(['User prefers concise replies.', 'User prefers Chinese.'])
   })
+
+  it('packs semantic compaction candidates into an exact host-owned byte budget', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'user', content: 'Original verbose preference.' })
+    const reviewed = controller.snapshot()
+
+    await controller.compactTarget(reviewed.revision, 'user', [
+      { content: 'normal candidate that cannot join the critical one', importance: 'normal' },
+      { content: 'critical rule', importance: 'critical' },
+      { content: 'low detail', importance: 'low' },
+    ], 28)
+
+    expect(controller.snapshot().entries.map(entry => ({ content: entry.content, importance: entry.importance }))).toEqual([
+      { content: 'critical rule', importance: 'critical' },
+      { content: 'low detail', importance: 'low' },
+    ])
+  })
 })

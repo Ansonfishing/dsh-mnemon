@@ -23,7 +23,7 @@ DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https:/
 - **并发控制**：进程内操作按队列串行，跨实例使用文件锁；容量迁移期间使用快照 revision，过期压缩结果绝不会覆盖并发写入。
 - **上下文接入**：`mnemon:runtime-memory` system prompt section 在每次 prompt 组装时读取受控投影，采用从 QoderWork memory protocol 裁剪后的保存、跳过、分类和重要性规则。
 - **容量边界**：`USER.md` 为 4 KiB，`MEMORY.md` 为 10 KiB，均按 UTF-8 字节计算。
-- **先归档后压缩**：新增内容触发容量上限时，插件先启动隔离子 Agent，把现有热记忆写入或查重确认到 Mnemon 记忆体；只有全部归档成功后，才应用低于安全水位的压缩投影并重试原写入。归档失败或 revision 冲突时，原热记忆保持不变。
+- **先归档后压缩**：新增内容触发容量上限时，插件先启动隔离子 Agent，把现有热记忆写入或查重确认到 Mnemon 记忆体；全部归档成功后，子 Agent 给出语义压缩候选，Host 再按重要性与 UTF-8 安全水位确定性装箱并重试原写入。模型不承担精确字节计算；归档失败或 revision 冲突时，原热记忆保持不变。
 
 ## 记忆体模型
 

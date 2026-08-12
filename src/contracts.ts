@@ -156,6 +156,7 @@ export interface HostSubagentsService {
     prompt: Array<{ type: 'text'; text: string }>
     parent: HostAgent
     signal: AbortSignal
+    agentOptions?: { provider?: string; model?: string; maxTokens?: number }
     outputSchema?: Record<string, unknown>
     maxDepth?: number
     toolFilter?: { allow?: string[]; deny?: string[] }

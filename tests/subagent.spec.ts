@@ -153,9 +153,10 @@ describe('Mnemon memory subagent coordinator', () => {
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
       toolFilter: { allow: ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_remember', 'mnemon_memory_body_create'] },
-      prompt: [expect.objectContaining({ text: expect.stringContaining('never compact first') })],
+      agentOptions: { maxTokens: 8_192 },
+      prompt: [expect.objectContaining({ text: expect.stringContaining('Do not count characters, bytes, tokens') })],
     }))
-    expect(runtime.compactTarget).toHaveBeenCalledWith('reviewed-revision', 'memory', [{ content: 'Project uses pnpm.', importance: 'normal' }])
+    expect(runtime.compactTarget).toHaveBeenCalledWith('reviewed-revision', 'memory', [{ content: 'Project uses pnpm.', importance: 'normal' }], 7_143)
     expect(runtime.mutate).toHaveBeenCalledTimes(2)
     expect(coordinator.snapshot()).toMatchObject({ migrations: 1, lastOperation: 'migration' })
   })
