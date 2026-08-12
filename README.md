@@ -14,6 +14,7 @@
   - `mnemon_forget`：按精确 ID 软删除；
   - `mnemon_status`：查看 CLI、store 和数据库健康状态。
 - **轻量系统指引**：任务开始先判断是否值得 recall，任务结束再判断是否有 durable writeback；不做机械调用。
+- **DSH 原生命令**：`/mnemon status`、`recall`、`related`、`remember`、`forget` 直接通过命令面板执行，不经过模型。
 - **会话「记忆」Tab**
   - 「检索」：三种检索模式、分类过滤、结果卡片、关联图遍历、复制 ID、软删除；
   - 「记住」：内容、分类、重要性和标签表单；
@@ -127,6 +128,20 @@ mnemon:
 3. 形成稳定决策、偏好、流程或难得经验后，沉淀一条自包含记忆。
 4. 临时进度、普通聊天、可直接从仓库读出的事实不写入。
 5. 需要解释关系时，从 recall 返回的完整 ID 调用 `mnemon_related`；不要猜 ID。
+
+## DSH 命令
+
+在会话输入框的“命令”菜单中选择 `/mnemon`，或直接输入：
+
+```text
+/mnemon status
+/mnemon recall 为什么选择 SQLite
+/mnemon related <完整记忆 ID>
+/mnemon remember 一条稳定、可复用、自包含的记忆
+/mnemon forget <完整记忆 ID>
+```
+
+命令由 DSH command registry 执行并记录 command 生命周期，不会发送给模型。`writeEnabled: false` 时仍可使用 `status` / `recall` / `related`，写入与删除命令会明确拒绝。
 
 ## 开发与验证
 

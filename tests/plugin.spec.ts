@@ -16,8 +16,10 @@ function context() {
     },
   }
   const registrations: unknown[] = []
+  const commands: unknown[] = []
   const ctx = {
     tools: { register: vi.fn((tool: unknown) => { tools.push(tool) }) },
+    commands: { register: vi.fn((command: unknown) => { commands.push(command) }) },
     settings: {
       register: vi.fn((...args: unknown[]) => {
         registrations.push(args)
@@ -30,7 +32,7 @@ function context() {
       : undefined),
     inject: vi.fn((_services: string[], callback: (value: unknown) => void) => { callback(ctx) }),
   }
-  return { ctx, tools, sections, channels, registrations }
+  return { ctx, tools, sections, channels, registrations, commands }
 }
 
 describe('dsh-mnemon plugin composition', () => {
@@ -61,6 +63,7 @@ describe('dsh-mnemon plugin composition', () => {
     ]))
     expect(fixture.tools.every(tool => (tool as { output: { schema: { type: string } } }).output.schema.type !== 'json')).toBe(true)
     expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:routing' })])
+    expect(fixture.commands).toEqual([expect.objectContaining({ name: 'mnemon' })])
     expect(fixture.channels).toHaveLength(3)
     expect(fixture.registrations).toEqual([
       expect.arrayContaining(['mnemon', expect.anything(), expect.objectContaining({ applies: 'restart' })]),

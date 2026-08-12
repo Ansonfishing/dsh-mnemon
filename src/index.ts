@@ -1,4 +1,5 @@
 import { Config, resolveConfig, type Config as MnemonConfig } from './config.ts'
+import { registerCommands } from './commands.ts'
 import type { HostContextShape } from './contracts.ts'
 import { registerGuidance } from './guidance.ts'
 import { registerRpc } from './rpc.ts'
@@ -8,7 +9,7 @@ import { registerSettingsRpc } from './settings.ts'
 import { registerTools } from './tools.ts'
 
 export const name = 'dsh-mnemon'
-export const inject = ['tools', 'settings']
+export const inject = ['tools', 'settings', 'commands']
 export { Config, resolveConfig, MnemonService, createRunner }
 export type { MnemonConfig }
 
@@ -23,6 +24,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   const resolved = resolveConfig(settings.get())
   const service = new MnemonService(createRunner(resolved), resolved)
   registerTools(ctx, service)
+  registerCommands(ctx.commands, service)
   if (resolved.routingGuidance) registerGuidance(ctx)
   ctx.inject(['connection'], (webContext) => {
     if (resolved.tabEnabled) registerRpc(webContext.connection, service)

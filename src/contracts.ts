@@ -51,6 +51,24 @@ export interface ToolExecution {
   signal: AbortSignal
 }
 
+export type CommandResult = { kind: 'success'; text?: string } | { kind: 'error'; text: string }
+
+export interface CommandInvocation {
+  rawInput: string
+  signal: AbortSignal
+}
+
+export interface CommandDefinition {
+  name: string
+  description: string
+  input?: { hint: string }
+  handler(invocation: CommandInvocation): CommandResult | Promise<CommandResult>
+}
+
+export interface CommandService {
+  register(definition: CommandDefinition): unknown
+}
+
 export interface ToolDefinition {
   name: string
   description: string
@@ -66,6 +84,7 @@ export interface ToolDefinition {
 
 export interface HostContextShape {
   tools: { register(definition: ToolDefinition): unknown }
+  commands: CommandService
   settings: HostSettingsService
   connection: HostConnectionHandle
   get(name: string): unknown
