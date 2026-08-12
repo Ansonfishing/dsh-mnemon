@@ -1,5 +1,6 @@
 import type { ClientConnectionHandle } from '../contracts.ts';
-import type { EntityView, Insight, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts';
+import type { MemoryBody } from '../memory-bodies.ts';
+import type { EntityView, Insight, MemoryBodyCatalog, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts';
 export interface SearchResponse {
     query: string;
     mode: string;
@@ -8,21 +9,37 @@ export interface SearchResponse {
 }
 export declare class MnemonClient {
     private readonly connection;
-    constructor(connection: ClientConnectionHandle);
+    private readonly sessionId?;
+    constructor(connection: ClientConnectionHandle, sessionId?: string | undefined);
     private call;
-    status(sessionId?: string): Promise<StatusView>;
-    graph(): Promise<MemoryGraphSnapshot>;
+    status(): Promise<StatusView>;
+    bodies(): Promise<MemoryBodyCatalog>;
+    graph(memoryBodyIds?: string[]): Promise<MemoryGraphSnapshot>;
     list(request?: MemoryListRequest): Promise<MemoryListView>;
     entities(entity?: string, limit?: number): Promise<EntityView>;
     search(request: SearchRequest): Promise<SearchResponse>;
-    related(id: string): Promise<Insight[]>;
+    related(id: string, memoryBodyId?: string): Promise<Insight[]>;
     remember(request: RememberRequest): Promise<Record<string, unknown>>;
-    supervise(sessionId: string, content: string): Promise<{
-        queued: true;
+    supervise(content: string): Promise<{
+        delegated: true;
         sessionId: string;
-        messageId: string;
-        agentStatus: 'idle' | 'running';
+        runId: string;
+        provider: string;
+        summary: string;
+        action: string;
+        memoryBodyIds: string[];
     }>;
-    forget(id: string): Promise<Record<string, unknown>>;
+    forget(id: string, memoryBodyId?: string): Promise<Record<string, unknown>>;
+    createBody(request: {
+        id?: string;
+        name: string;
+        description?: string;
+        active?: boolean;
+    }): Promise<MemoryBody>;
+    updateBody(memoryBodyId: string, request: {
+        name?: string;
+        description?: string;
+        active?: boolean;
+    }): Promise<MemoryBody>;
 }
 //# sourceMappingURL=api.d.ts.map

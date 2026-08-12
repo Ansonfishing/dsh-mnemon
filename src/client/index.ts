@@ -12,7 +12,7 @@ export function apply(rawContext: unknown): void {
     name: 'conversation.view',
     id: 'mnemon',
     order: 30,
-    label: '记忆',
+    label: '记忆体',
     inject: (): { connection: ClientConnectionHandle; settingsScope: MnemonSettingsScope } => ({
       connection: ctx.connection,
       settingsScope: settings,

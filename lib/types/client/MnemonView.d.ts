@@ -5,5 +5,5 @@ export interface MnemonViewProps {
     settingsScope: ClientSettingsScope<Config>;
     sessionId?: string;
 }
-export declare function MnemonView({ connection, settingsScope, sessionId }: MnemonViewProps): JSX.Element;
+export declare function MnemonView({ connection, sessionId }: MnemonViewProps): JSX.Element;
 //# sourceMappingURL=MnemonView.d.ts.map

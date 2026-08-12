@@ -17,6 +17,17 @@ describe('MnemonView', () => {
   } satisfies ClientSettingsScope<Config>
 
   function createConnection() {
+    const body = {
+      id: 'project',
+      name: '项目记忆体',
+      description: '项目决策、约定与交付上下文。',
+      active: true,
+      dbPath: '/tmp/mnemon/data/project/mnemon.db',
+      createdAt: '2026-08-13T02:00:00.000Z',
+      updatedAt: '2026-08-13T03:00:00.000Z',
+      healthy: true,
+      stats: { totalInsights: 12, deletedInsights: 0, edgeCount: 9, oplogCount: 20, dbSizeBytes: 4096, byCategory: {}, topEntities: [] },
+    }
     const status = {
       healthy: true,
       version: '0.1.2',
@@ -27,6 +38,8 @@ describe('MnemonView', () => {
       writeEnabled: true,
       timeoutMs: 10000,
       defaultRecallLimit: 10,
+      memoryBodyDirectory: '/tmp/mnemon/data',
+      memoryBodies: [body],
       stats: { totalInsights: 12, deletedInsights: 0, edgeCount: 9, oplogCount: 20, dbSizeBytes: 4096, byCategory: {}, topEntities: [] },
       lifecycle: {
         enabled: true,
@@ -35,6 +48,7 @@ describe('MnemonView', () => {
         activeAgents: 1,
         sessionAvailable: true,
         counters: { primes: 1, recallCues: 2, writebackChecks: 1, supervisedRequests: 1, failures: 0 },
+        subagents: { recalls: 2, writes: 1, failures: 0 },
         current: {
           sessionId: 'session-1',
           status: 'idle',
@@ -47,14 +61,15 @@ describe('MnemonView', () => {
         },
       },
     }
-    const memory = { id: 'memory-12345678', content: '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], color: '#e74c3c' }
-    const call = vi.fn(async (_channel: string, endpoint: string) => {
+    const memory = { id: 'memory-12345678', content: '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], color: '#e74c3c', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-12345678` }
+    const call = vi.fn(async (_channel: string, endpoint: string, payload?: Record<string, unknown>) => {
       if (endpoint === 'status') return { ok: true, value: status }
+      if (endpoint === 'bodies') return { ok: true, value: { items: [body], total: 1, activeCount: 1, directory: '/tmp/mnemon/data', generatedAt: '2026-08-13T03:00:00.000Z' } }
       if (endpoint === 'graph') return {
         ok: true,
         value: {
-          nodes: [memory, { id: 'memory-graph-2', content: 'Mnemon 使用四图持久记忆。', category: 'fact', color: '#3498db' }],
-          edges: [{ sourceId: memory.id, targetId: 'memory-graph-2', label: 'backbone', color: '#aaaaaa', type: 'temporal' }],
+          nodes: [memory, { id: 'memory-graph-2', content: 'Mnemon 使用四图持久记忆。', category: 'fact', color: '#3498db', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-graph-2` }],
+          edges: [{ sourceId: `${body.id}:${memory.id}`, targetId: `${body.id}:memory-graph-2`, label: 'backbone', color: '#aaaaaa', type: 'temporal' }],
           generatedAt: '2026-08-13T03:00:00.000Z',
         },
       }
@@ -69,9 +84,11 @@ describe('MnemonView', () => {
         },
       }
       if (endpoint === 'related') return { ok: true, value: [] }
-      if (endpoint === 'supervise') return { ok: true, value: { queued: true, sessionId: 'session-1', messageId: 'message-1', agentStatus: 'idle' } }
-      if (endpoint === 'remember') return { ok: true, value: { action: 'added' } }
+      if (endpoint === 'supervise') return { ok: true, value: { delegated: true, sessionId: 'session-1', runId: 'child-1', provider: 'spawn', summary: '已提炼并写入项目交付约束。', action: 'stored', memoryBodyIds: ['project'] } }
+      if (endpoint === 'remember') return { ok: true, value: { delegated: true, runId: 'child-2', provider: 'spawn', summary: '已按高级约束写入。', action: 'stored', memoryBodyIds: ['project'] } }
       if (endpoint === 'forget') return { ok: true, value: { action: 'forgotten' } }
+      if (endpoint === 'body-update') return { ok: true, value: { ...body, active: payload?.active as boolean } }
+      if (endpoint === 'body-create') return { ok: true, value: { ...body, id: 'new-body', name: String(payload?.name ?? '') } }
       return { ok: false, error: { code: 'unexpected', message: endpoint } }
     })
     return { connection: { rpc: { call } } as unknown as ClientConnectionHandle, call }
@@ -80,7 +97,11 @@ describe('MnemonView', () => {
   it('shows the live graph and all six Mnemon workspaces', async () => {
     const { connection } = createConnection()
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
-    await waitFor(() => expect(screen.getByText('已连接 · project')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('已连接 · 1 个记忆体')).toBeTruthy())
+    expect(screen.getByRole('heading', { name: '记忆体总览' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy()
+    expect(screen.getAllByText('项目记忆体').length).toBeGreaterThan(0)
+    expect(screen.getByRole('switch', { name: '项目记忆体读取开关' }).getAttribute('aria-checked')).toBe('true')
     expect(screen.getByText('12')).toBeTruthy()
     expect(screen.getByText('LLM-supervised 4-graph persistent memory for AI agents.')).toBeTruthy()
     expect(screen.getByRole('img', { name: 'Mnemon' })).toBeTruthy()
@@ -106,26 +127,24 @@ describe('MnemonView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /沉淀 LLM 监督写回/ }))
     expect(screen.getByRole('heading', { name: '沉淀记忆' })).toBeTruthy()
-    expect(screen.getByText('模型会完成什么')).toBeTruthy()
-    expect(screen.getByText('人工高级写入')).toBeTruthy()
+    expect(screen.getByText('记忆子 Agent 会完成什么')).toBeTruthy()
+    expect(screen.getByText('人工高级选项')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: /记忆库 浏览与维护/ }))
-    expect(screen.getByRole('heading', { name: '记忆库' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /内容 浏览与维护/ }))
+    expect(screen.getByRole('heading', { name: '记忆内容' })).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: /状态 配置与诊断/ }))
-    expect(screen.getByRole('heading', { name: '状态与配置' })).toBeTruthy()
-    expect(screen.getByText('生命周期编排已启用')).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '记忆生命周期' })).toBeTruthy()
-    expect(screen.getByText('Recall Gate')).toBeTruthy()
-    expect(screen.getByText('当前会话已绑定')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /状态 运行与诊断/ }))
+    expect(screen.getByRole('heading', { name: '运行状态' })).toBeTruthy()
+    expect(screen.getByText('记忆子 Agent 可用')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '子 Agent 生命周期' })).toBeTruthy()
+    expect(screen.getByText('Recall Worker')).toBeTruthy()
     expect(screen.getByText('/mnemon status')).toBeTruthy()
-    expect(screen.getAllByText(/\.dsh\/settings.yaml/)).toHaveLength(2)
   })
 
   it('requires inline confirmation before forgetting a recalled memory', async () => {
     const { connection, call } = createConnection()
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
-    await waitFor(() => expect(screen.getByText('已连接 · project')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('已连接 · 1 个记忆体')).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: /检索 意图增强召回/ }))
     fireEvent.change(screen.getByRole('textbox', { name: '记忆查询' }), { target: { value: 'SQLite' } })
@@ -138,19 +157,19 @@ describe('MnemonView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '确认忘记' }))
     await waitFor(() => expect(screen.queryByText('项目选择 SQLite，因为需要单文件部署。')).toBeNull())
-    expect(call).toHaveBeenCalledWith(expect.anything(), 'forget', { id: 'memory-12345678' })
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'forget', { id: 'memory-12345678', memoryBodyId: 'project', sessionId: 'session-1' })
   })
 
-  it('queues the default writeback path through the live DSH model', async () => {
+  it('dispatches the default writeback path to an isolated memory subagent', async () => {
     const { connection, call } = createConnection()
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
-    await waitFor(() => expect(screen.getByText('已连接 · project')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('已连接 · 1 个记忆体')).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: /沉淀 LLM 监督写回/ }))
     fireEvent.change(screen.getByRole('textbox', { name: '待沉淀内容' }), { target: { value: '项目发布前必须通过真实 WebUI 验证。' } })
-    fireEvent.click(screen.getByRole('button', { name: '交给当前 LLM 判断并沉淀' }))
+    fireEvent.click(screen.getByRole('button', { name: '调度子 Agent 判断并沉淀' }))
 
-    await waitFor(() => expect(screen.getByText(/已交给当前对话的 LLM/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/记忆子 Agent 已完成处理/)).toBeTruthy())
     expect(call).toHaveBeenCalledWith(expect.anything(), 'supervise', {
       sessionId: 'session-1',
       content: '项目发布前必须通过真实 WebUI 验证。',

@@ -107,6 +107,34 @@
 .inlineError { margin: 0 0 14px; }
 .muted, .loading { padding: 16px 0; color: var(--mn-faint); font-size: 12px; }
 
+.bodyDirectory { margin-bottom: 16px; padding: 15px; border: 1px solid var(--mn-line); border-radius: 13px; background: var(--mn-layer-1); box-shadow: 0 8px 30px color-mix(in srgb, var(--mn-text) 3%, transparent); }
+.bodyDirectoryHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 13px; }
+.bodyDirectoryHeader h3 { margin: 4px 0 2px; font-size: 15px; }
+.bodyDirectoryHeader p { margin: 0; color: var(--mn-muted); font-size: 10px; }
+.bodyDirectoryHeader > strong { flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 9%, transparent); font: 650 9px var(--mn-code); }
+.bodyGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 8px; }
+.bodyCard { --mn-body-accent: var(--mn-faint); min-width: 0; padding: 11px; border: 1px solid var(--mn-line); border-radius: 10px; background: color-mix(in srgb, var(--mn-layer-2) 44%, var(--mn-layer-1)); opacity: .7; transition: opacity .18s, border-color .18s, transform .18s; }
+.bodyCard[data-active] { border-color: color-mix(in srgb, var(--mn-body-accent) 42%, var(--mn-line)); opacity: 1; box-shadow: inset 0 1px 0 color-mix(in srgb, var(--mn-body-accent) 10%, transparent); }
+.bodyCard:hover { transform: translateY(-1px); }
+.bodyCardTop { display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.bodySignal { width: 7px; height: 7px; border-radius: 50%; background: var(--mn-faint); }
+.bodyCard[data-active] .bodySignal { background: var(--mn-body-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mn-body-accent) 14%, transparent); }
+.bodyCardTop > div { display: grid; min-width: 0; }
+.bodyCardTop strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.bodyCardTop code { overflow: hidden; color: var(--mn-faint); font: 9px var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
+.bodyCardTop button { display: flex; min-height: 27px; align-items: center; gap: 5px; border: 1px solid var(--mn-line); border-radius: 999px; padding: 0 8px; color: var(--mn-muted); background: var(--mn-layer-1); font-size: 9px; cursor: pointer; }
+.bodyCardTop button i { width: 7px; height: 7px; border-radius: 50%; background: var(--mn-faint); }
+.bodyCardTop button[aria-checked="true"] { border-color: color-mix(in srgb, var(--mn-body-accent) 38%, var(--mn-line)); color: var(--mn-text); }
+.bodyCardTop button[aria-checked="true"] i { background: var(--mn-body-accent); }
+.bodyCard > p { min-height: 31px; margin: 10px 0; color: var(--mn-muted); font-size: 10px; line-height: 1.5; }
+.bodyCard footer { display: flex; flex-wrap: wrap; gap: 5px 11px; padding-top: 8px; border-top: 1px solid var(--mn-line); color: var(--mn-faint); font-size: 9px; }
+.bodyCreate { margin-top: 10px; border-top: 1px solid var(--mn-line); padding-top: 8px; }
+.bodyCreate summary { width: max-content; cursor: pointer; color: var(--mn-accent); font-size: 10px; list-style: none; }
+.bodyCreate summary::-webkit-details-marker { display: none; }
+.bodyCreate form { display: grid; grid-template-columns: minmax(130px, .7fr) minmax(150px, .9fr) minmax(230px, 1.7fr) auto; gap: 7px; margin-top: 9px; }
+.bodyCreate input { min-width: 0; height: 34px; border: 1px solid var(--mn-line); border-radius: 8px; outline: 0; padding: 0 9px; background: var(--mn-input); }
+.bodyCreate input:focus { border-color: var(--mn-accent); }
+
 .graphLayout { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 14px; }
 .graphPanel, .graphInspector { border: 1px solid var(--mn-line); border-radius: 13px; background: var(--mn-layer-1); box-shadow: 0 8px 30px color-mix(in srgb, var(--mn-text) 3%, transparent); }
 .graphPanel { min-width: 0; overflow: hidden; }
@@ -146,6 +174,7 @@
 .nodeHalo { fill: color-mix(in srgb, var(--node) 18%, var(--mn-layer-1)); stroke: color-mix(in srgb, var(--node) 60%, var(--mn-layer-1)); stroke-width: 1.5; transition: r .16s; }
 .nodeCore { fill: var(--node); }
 .nodeLabel { fill: var(--mn-muted); font: 10px var(--mn-code); pointer-events: none; }
+.nodeBodyLabel { fill: var(--mn-faint); font: 650 8px var(--mn-code); letter-spacing: .04em; pointer-events: none; }
 .graphSvg[data-density="sparse"] .nodeLabel { font-size: 12px; }
 .graphNode:hover .nodeHalo, .graphNode:focus .nodeHalo, .graphNode[data-selected] .nodeHalo { fill: color-mix(in srgb, var(--node) 28%, var(--mn-layer-1)); stroke: var(--node); }
 .graphNode[data-selected] .nodeLabel { fill: var(--mn-text); font-weight: 650; }
@@ -343,6 +372,8 @@
   .searchControls .primaryButton { grid-column: 1 / -1; }
   .searchControls select { width: 100%; min-width: 0; }
   .listToolbar { grid-template-columns: 1fr; }
+  .bodyDirectoryHeader { display: grid; }
+  .bodyCreate form { grid-template-columns: 1fr; }
   .graphViewport, .graphSvg { min-height: 390px; }
   .graphCanvasControls { right: 7px; top: 7px; }
   .graphCanvasControls span { display: none; }

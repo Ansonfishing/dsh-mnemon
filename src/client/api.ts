@@ -1,6 +1,7 @@
 import type { ClientConnectionHandle } from '../contracts.ts'
 import { MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from '../rpc.ts'
-import type { EntityView, Insight, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts'
+import type { MemoryBody } from '../memory-bodies.ts'
+import type { EntityView, Insight, MemoryBodyCatalog, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts'
 
 export interface SearchResponse {
   query: string
@@ -10,7 +11,7 @@ export interface SearchResponse {
 }
 
 export class MnemonClient {
-  constructor(private readonly connection: ClientConnectionHandle) {}
+  constructor(private readonly connection: ClientConnectionHandle, private readonly sessionId?: string) {}
 
   private async call<T>(channel: string, endpoint: string, payload: unknown): Promise<T> {
     const response = await this.connection.rpc.call(channel, endpoint, payload)
@@ -18,12 +19,16 @@ export class MnemonClient {
     return response.value as T
   }
 
-  status(sessionId?: string): Promise<StatusView> {
-    return this.call(MNEMON_READ_CHANNEL, 'status', sessionId === undefined ? {} : { sessionId })
+  status(): Promise<StatusView> {
+    return this.call(MNEMON_READ_CHANNEL, 'status', this.sessionId === undefined ? {} : { sessionId: this.sessionId })
   }
 
-  graph(): Promise<MemoryGraphSnapshot> {
-    return this.call(MNEMON_READ_CHANNEL, 'graph', {})
+  bodies(): Promise<MemoryBodyCatalog> {
+    return this.call(MNEMON_READ_CHANNEL, 'bodies', {})
+  }
+
+  graph(memoryBodyIds?: string[]): Promise<MemoryGraphSnapshot> {
+    return this.call(MNEMON_READ_CHANNEL, 'graph', memoryBodyIds === undefined ? {} : { memoryBodyIds })
   }
 
   list(request: MemoryListRequest = {}): Promise<MemoryListView> {
@@ -32,28 +37,37 @@ export class MnemonClient {
 
   entities(entity?: string, limit?: number): Promise<EntityView> {
     return this.call(MNEMON_READ_CHANNEL, 'entities', {
+      sessionId: this.sessionId,
       ...(entity === undefined ? {} : { entity }),
       ...(limit === undefined ? {} : { limit }),
     })
   }
 
   search(request: SearchRequest): Promise<SearchResponse> {
-    return this.call(MNEMON_READ_CHANNEL, 'search', request)
+    return this.call(MNEMON_READ_CHANNEL, 'search', { ...request, sessionId: this.sessionId })
   }
 
-  related(id: string): Promise<Insight[]> {
-    return this.call(MNEMON_READ_CHANNEL, 'related', { id, depth: 2 })
+  related(id: string, memoryBodyId?: string): Promise<Insight[]> {
+    return this.call(MNEMON_READ_CHANNEL, 'related', { id, depth: 2, sessionId: this.sessionId, ...(memoryBodyId === undefined ? {} : { memoryBodyId }) })
   }
 
   remember(request: RememberRequest): Promise<Record<string, unknown>> {
-    return this.call(MNEMON_WRITE_CHANNEL, 'remember', request)
+    return this.call(MNEMON_WRITE_CHANNEL, 'remember', { ...request, sessionId: this.sessionId })
   }
 
-  supervise(sessionId: string, content: string): Promise<{ queued: true; sessionId: string; messageId: string; agentStatus: 'idle' | 'running' }> {
-    return this.call(MNEMON_WRITE_CHANNEL, 'supervise', { sessionId, content })
+  supervise(content: string): Promise<{ delegated: true; sessionId: string; runId: string; provider: string; summary: string; action: string; memoryBodyIds: string[] }> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'supervise', { sessionId: this.sessionId, content })
   }
 
-  forget(id: string): Promise<Record<string, unknown>> {
-    return this.call(MNEMON_WRITE_CHANNEL, 'forget', { id })
+  forget(id: string, memoryBodyId?: string): Promise<Record<string, unknown>> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'forget', { id, sessionId: this.sessionId, ...(memoryBodyId === undefined ? {} : { memoryBodyId }) })
+  }
+
+  createBody(request: { id?: string; name: string; description?: string; active?: boolean }): Promise<MemoryBody> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'body-create', request)
+  }
+
+  updateBody(memoryBodyId: string, request: { name?: string; description?: string; active?: boolean }): Promise<MemoryBody> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'body-update', { memoryBodyId, ...request })
   }
 }

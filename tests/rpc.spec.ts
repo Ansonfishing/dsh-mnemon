@@ -9,6 +9,7 @@ function fakeService(writeEnabled = true): MnemonService {
   return {
     config: resolveConfig({ writeEnabled }),
     status: vi.fn(async () => ({ healthy: true })),
+    bodies: vi.fn(async () => ({ items: [], total: 0, activeCount: 0, directory: '/tmp/mnemon/data', generatedAt: 'now' })),
     graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
     list: vi.fn(async () => ({ items: [], total: 0, generatedAt: 'now' })),
     entities: vi.fn(async () => ({ items: [], insights: [] })),
@@ -17,6 +18,8 @@ function fakeService(writeEnabled = true): MnemonService {
     remember: vi.fn(async () => ({ action: 'added' })),
     link: vi.fn(async () => ({ status: 'linked' })),
     forget: vi.fn(async () => ({ status: 'deleted' })),
+    createBody: vi.fn(async request => ({ id: request.id ?? 'new', name: request.name, description: request.description ?? '', active: request.active ?? false })),
+    updateBody: vi.fn((id, request) => ({ id, name: request.name ?? id, description: request.description ?? '', active: request.active ?? false })),
   } as unknown as MnemonService
 }
 
@@ -25,6 +28,7 @@ describe('Mnemon RPC', () => {
     const service = fakeService()
     await expect(createReadHandler(service)('search', { query: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { query: 'SQLite' } })
     await expect(createReadHandler(service)('graph', {})).resolves.toMatchObject({ ok: true, value: { nodes: [] } })
+    await expect(createReadHandler(service)('bodies', {})).resolves.toMatchObject({ ok: true, value: { items: [], total: 0 } })
     await expect(createReadHandler(service)('list', { category: 'decision' })).resolves.toMatchObject({ ok: true, value: { total: 0 } })
     await expect(createReadHandler(service)('entities', { entity: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { insights: [] } })
     await expect(createReadHandler(service)('nope', {})).resolves.toMatchObject({ ok: false, error: { code: 'not-found' } })
@@ -49,13 +53,28 @@ describe('Mnemon RPC', () => {
     expect(service.remember).toHaveBeenCalledWith(expect.objectContaining({ source: 'user' }))
   })
 
-  it('routes supervised Tab writeback through the current DSH agent', async () => {
+  it('routes supervised Tab writeback through an isolated memory subagent', async () => {
     const service = fakeService()
     const lifecycle = {
-      supervise: vi.fn(() => ({ queued: true, sessionId: 'session-1', messageId: 'message-1', agentStatus: 'idle' })),
+      supervise: vi.fn(async () => ({ delegated: true, sessionId: 'session-1', runId: 'child-1', provider: 'spawn', summary: 'stored', action: 'stored', memoryBodyIds: ['project'] })),
     } as unknown as MnemonLifecycle
-    await expect(createWriteHandler(service, lifecycle)('supervise', { sessionId: 'session-1', content: 'A candidate' })).resolves.toMatchObject({ ok: true, value: { queued: true } })
+    await expect(createWriteHandler(service, lifecycle)('supervise', { sessionId: 'session-1', content: 'A candidate' })).resolves.toMatchObject({ ok: true, value: { delegated: true, runId: 'child-1' } })
     expect(lifecycle.supervise).toHaveBeenCalledWith('session-1', 'A candidate')
+    expect(service.remember).not.toHaveBeenCalled()
+  })
+
+  it('delegates semantic reads and writes when a live lifecycle is available', async () => {
+    const service = fakeService()
+    const lifecycle = {
+      recall: vi.fn(async (_sessionId, request) => ({ query: request.query, mode: 'smart', results: [], delegation: { runId: 'recall-1', provider: 'spawn', summary: '', selectedMemoryBodyIds: [] } })),
+      remember: vi.fn(async () => ({ delegated: true, runId: 'write-1', provider: 'spawn', summary: 'stored', action: 'stored', memoryBodyIds: ['project'] })),
+    } as unknown as MnemonLifecycle
+
+    await expect(createReadHandler(service, lifecycle)('search', { sessionId: 'session-1', query: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { delegation: { runId: 'recall-1' } } })
+    await expect(createWriteHandler(service, lifecycle)('remember', { sessionId: 'session-1', content: 'Use SQLite', memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { runId: 'write-1' } })
+    expect(lifecycle.recall).toHaveBeenCalledWith('session-1', expect.objectContaining({ query: 'SQLite' }))
+    expect(lifecycle.remember).toHaveBeenCalledWith('session-1', expect.objectContaining({ content: 'Use SQLite', memoryBodyId: 'project', source: 'user' }))
+    expect(service.search).not.toHaveBeenCalled()
     expect(service.remember).not.toHaveBeenCalled()
   })
 
