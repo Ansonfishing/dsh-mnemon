@@ -79,8 +79,21 @@ describe('MnemonView', () => {
     }
     const memory = { id: 'memory-12345678', content: '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], entities: ['SQLite'], color: '#e74c3c', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-12345678` }
     const secondaryMemory = { id: 'preference-1', content: '用户偏好简洁中文回答。', category: 'preference', importance: 4, tags: ['style'], color: '#9b59b6', memoryBodyId: secondaryBody.id, memoryBodyName: secondaryBody.name, graphId: `${secondaryBody.id}:preference-1` }
+    let runtimeEntries = [{ content: '用户偏好简洁中文回答。', created_at: '2026-08-13T02:00:00.000Z', updated_at: '2026-08-13T02:00:00.000Z', target: 'user', importance: 'critical' }]
     const call = vi.fn(async (_channel: string, endpoint: string, payload?: Record<string, unknown>) => {
       const bodies = options.withInactiveBody ? [body, { ...secondaryBody, active: secondaryActive }] : [body]
+      if (endpoint === 'runtime-memory') {
+        if (payload?.action !== undefined) {
+          const target = String(payload.target)
+          if (payload.action === 'add') runtimeEntries = [...runtimeEntries, { content: String(payload.content), created_at: '2026-08-13T03:01:00.000Z', updated_at: '2026-08-13T03:01:00.000Z', target, importance: String(payload.importance ?? 'normal') }]
+          if (payload.action === 'replace') runtimeEntries = runtimeEntries.map(entry => entry.target === target && entry.content.includes(String(payload.old_text)) ? { ...entry, content: String(payload.content), importance: String(payload.importance ?? entry.importance), updated_at: '2026-08-13T03:01:00.000Z' } : entry)
+          if (payload.action === 'remove') runtimeEntries = runtimeEntries.filter(entry => !(entry.target === target && entry.content.includes(String(payload.old_text))))
+          const targetEntries = runtimeEntries.filter(entry => entry.target === target)
+          return { ok: true, value: { success: true, message: 'updated', target, entryCount: targetEntries.length, usage: { used: targetEntries.reduce((sum, entry) => sum + entry.content.length, 0), limit: target === 'user' ? 4096 : 10240 } } }
+        }
+        const targetView = (target: string, limit: number) => { const entries = runtimeEntries.filter(entry => entry.target === target); return { target, entryCount: entries.length, used: entries.reduce((sum, entry) => sum + entry.content.length, 0), limit, markdownPath: `/tmp/mnemon/runtime/${target === 'user' ? 'USER' : 'MEMORY'}.md` } }
+        return { ok: true, value: { directory: '/tmp/mnemon/runtime', sourcePath: '/tmp/mnemon/runtime/memories.json', generatedAt: '2026-08-13T03:00:00.000Z', entries: runtimeEntries, targets: { user: targetView('user', 4096), memory: targetView('memory', 10240) } } }
+      }
       if (endpoint === 'status') return { ok: true, value: { ...status, memoryBodies: bodies } }
       if (endpoint === 'bodies') return { ok: true, value: { items: bodies, total: bodies.length, activeCount: bodies.filter(item => item.active).length, directory: '/tmp/mnemon/data', generatedAt: '2026-08-13T03:00:00.000Z' } }
       if (endpoint === 'graph') return {
@@ -123,7 +136,7 @@ describe('MnemonView', () => {
     return { connection: { rpc: { call } } as unknown as ClientConnectionHandle, call }
   }
 
-  it('shows the live graph and all six Mnemon workspaces', async () => {
+  it('shows the live graph and all seven Mnemon workspaces', async () => {
     const { connection } = createConnection()
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
     await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
@@ -155,6 +168,15 @@ describe('MnemonView', () => {
     fireEvent.keyDown(graphNode, { key: 'ArrowRight' })
     expect(screen.getByRole('status', { name: '布局状态：自定义布局' })).toBeTruthy()
 
+    fireEvent.click(screen.getByRole('button', { name: /运行时 热记忆与上下文/ }))
+    expect(screen.getByRole('heading', { name: '运行时记忆' })).toBeTruthy()
+    await waitFor(() => expect(screen.getByText('用户偏好简洁中文回答。')).toBeTruthy())
+    expect(screen.getByRole('region', { name: '用户画像' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: '工作记忆' })).toBeTruthy()
+    fireEvent.change(screen.getByRole('textbox', { name: '运行时记忆内容' }), { target: { value: '项目默认使用 pnpm。' } })
+    fireEvent.click(screen.getByRole('button', { name: '添加' }))
+    await waitFor(() => expect(screen.getByText('项目默认使用 pnpm。')).toBeTruthy())
+
     fireEvent.click(screen.getByRole('button', { name: /检索 意图增强召回/ }))
     expect(screen.getByRole('heading', { name: '检索记忆' })).toBeTruthy()
 
@@ -170,7 +192,7 @@ describe('MnemonView', () => {
     expect(screen.getByRole('heading', { name: '记忆内容' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: /状态 运行与诊断/ }))
-    expect(screen.getByRole('heading', { name: '运行状态' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '系统状态' })).toBeTruthy()
     expect(screen.getByText('记忆子 Agent 可用')).toBeTruthy()
     expect(screen.getByRole('heading', { name: '子 Agent 生命周期' })).toBeTruthy()
     expect(screen.getByText('召回处理')).toBeTruthy()
@@ -319,7 +341,7 @@ describe('MnemonView', () => {
     expect(screen.queryByText(/Memory Bod(y|ies)/i)).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: /Status Runtime and diagnostics/ }))
-    expect(screen.getByRole('heading', { name: 'Runtime Status' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'System Status' })).toBeTruthy()
     expect(screen.getByText('Recall worker')).toBeTruthy()
     expect(screen.getAllByText('Memory Spaces').length).toBeGreaterThan(0)
   })

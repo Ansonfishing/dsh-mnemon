@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts'
 import type { Config } from '../config.ts'
+import type { RuntimeMemoryEntry, RuntimeMemoryImportance, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts'
 import {
   CATEGORIES,
   type Category,
@@ -25,10 +26,11 @@ export interface MnemonViewProps {
   t?: MnemonTranslate
 }
 
-type Page = 'overview' | 'explore' | 'entities' | 'remember' | 'list' | 'status'
+type Page = 'overview' | 'runtime' | 'explore' | 'entities' | 'remember' | 'list' | 'status'
 
 const PAGE_NAV: Array<{ id: Page; label: MnemonKey; detail: MnemonKey; glyph: string }> = [
   { id: 'overview', label: 'nav.overview', detail: 'nav.overview.detail', glyph: '◇' },
+  { id: 'runtime', label: 'nav.runtime', detail: 'nav.runtime.detail', glyph: '◫' },
   { id: 'explore', label: 'nav.search', detail: 'nav.search.detail', glyph: '⌕' },
   { id: 'entities', label: 'nav.entities', detail: 'nav.entities.detail', glyph: '◎' },
   { id: 'remember', label: 'nav.remember', detail: 'nav.remember.detail', glyph: '+' },
@@ -808,6 +810,112 @@ function EntitiesPage(props: { client: MnemonClient; revision: number; writeEnab
   )
 }
 
+function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; onMutate: () => void }): JSX.Element {
+  const t = useT()
+  const [snapshot, setSnapshot] = useState<RuntimeMemorySnapshot | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [target, setTarget] = useState<RuntimeMemoryTarget>('memory')
+  const [importance, setImportance] = useState<RuntimeMemoryImportance>('normal')
+  const [content, setContent] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [editContent, setEditContent] = useState('')
+  const [editImportance, setEditImportance] = useState<RuntimeMemoryImportance>('normal')
+  const [removing, setRemoving] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true); setError(null)
+    try { setSnapshot(await props.client.runtimeMemory()) } catch (reason) { setError(message(reason)) } finally { setLoading(false) }
+  }, [props.client])
+  useEffect(() => { void load() }, [load, props.revision])
+
+  const entryKey = (entry: RuntimeMemoryEntry) => `${entry.target}:${entry.created_at}:${entry.content}`
+  const mutate = async (request: Parameters<MnemonClient['mutateRuntimeMemory']>[0]) => {
+    setNotice(null); setError(null)
+    const result = await props.client.mutateRuntimeMemory(request)
+    setNotice(t(`runtime.result.${request.action}` as MnemonKey, { target: t(`runtime.target.${request.target}` as MnemonKey), count: result.entryCount }))
+    await load()
+    props.onMutate()
+  }
+  const add = async (event: FormEvent) => {
+    event.preventDefault()
+    if (content.trim() === '') return
+    setSaving(true)
+    try {
+      await mutate({ action: 'add', target, content, importance })
+      setContent('')
+    } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
+  }
+  const beginEdit = (entry: RuntimeMemoryEntry) => {
+    setEditing(entryKey(entry)); setEditContent(entry.content); setEditImportance(entry.importance); setRemoving(null)
+  }
+  const replace = async (entry: RuntimeMemoryEntry) => {
+    if (editContent.trim() === '') return
+    setSaving(true)
+    try {
+      await mutate({ action: 'replace', target: entry.target, old_text: entry.content, content: editContent, importance: editImportance })
+      setEditing(null)
+    } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
+  }
+  const remove = async (entry: RuntimeMemoryEntry) => {
+    setSaving(true)
+    try {
+      await mutate({ action: 'remove', target: entry.target, old_text: entry.content })
+      setRemoving(null)
+    } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
+  }
+
+  const targetPanel = (value: RuntimeMemoryTarget) => {
+    const view = snapshot?.targets[value]
+    const entries = snapshot?.entries.filter(entry => entry.target === value) ?? []
+    const percentage = view === undefined || view.limit === 0 ? 0 : Math.min(100, Math.round(view.used / view.limit * 100))
+    return (
+      <section className={css.runtimeTarget} aria-label={t(`runtime.target.${value}` as MnemonKey)}>
+        <header className={css.runtimeTargetHeader}>
+          <div><span>{value === 'user' ? 'USER.md' : 'MEMORY.md'}</span><h3>{t(`runtime.target.${value}` as MnemonKey)}</h3></div>
+          <strong>{view?.entryCount ?? 0}</strong>
+        </header>
+        <div className={css.capacityLine}><div><i style={{ width: `${percentage}%` }} /></div><span>{view === undefined ? '—' : `${humanBytes(view.used)} / ${humanBytes(view.limit)}`}</span></div>
+        <p className={css.runtimeTargetDescription}>{t(`runtime.target.${value}.description` as MnemonKey)}</p>
+        <div className={css.runtimeEntries}>
+          {entries.map(entry => {
+            const key = entryKey(entry)
+            const isEditing = editing === key
+            const isRemoving = removing === key
+            return <article key={key} className={css.runtimeEntry} data-importance={entry.importance}>
+              <div className={css.runtimeEntryMeta}><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span><time dateTime={entry.updated_at}>{new Date(entry.updated_at).toLocaleString()}</time></div>
+              {isEditing ? <textarea aria-label={t('runtime.editContent')} value={editContent} onChange={event => setEditContent(event.target.value)} rows={4} /> : <p>{entry.content}</p>}
+              {isEditing && <select aria-label={t('runtime.importance')} value={editImportance} onChange={event => setEditImportance(event.target.value as RuntimeMemoryImportance)}><option value="critical">{t('runtime.importance.critical')}</option><option value="normal">{t('runtime.importance.normal')}</option><option value="low">{t('runtime.importance.low')}</option></select>}
+              <footer>
+                {isRemoving ? <><span>{t('runtime.removeConfirm')}</span><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void remove(entry)}>{t('runtime.removeAction')}</button><button type="button" className={css.ghostButton} onClick={() => setRemoving(null)}>{t('common.cancel')}</button></> : isEditing ? <><button type="button" className={css.primaryButton} disabled={saving || editContent.trim() === ''} onClick={() => void replace(entry)}>{t('runtime.saveEdit')}</button><button type="button" className={css.ghostButton} onClick={() => setEditing(null)}>{t('common.cancel')}</button></> : props.writeEnabled ? <><button type="button" className={css.ghostButton} onClick={() => beginEdit(entry)}>{t('runtime.editAction')}</button><button type="button" className={css.dangerButton} onClick={() => { setRemoving(key); setEditing(null) }}>{t('runtime.removeAction')}</button></> : null}
+              </footer>
+            </article>
+          })}
+          {!loading && entries.length === 0 && <div className={css.runtimeEmpty}><span>○</span><p>{t('runtime.empty')}</p></div>}
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <div className={css.page}>
+      <PageHeader title={t('runtime.title')} description={t('runtime.description')} meta={snapshot === null ? t('common.loading') : t('runtime.total', { count: snapshot.entries.length })} action={<button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void load()}>{t('runtime.refresh')}</button>} />
+      {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
+      {notice !== null && <div className={css.runtimeNotice} role="status">{notice}</div>}
+      {props.writeEnabled && <form className={css.runtimeComposer} onSubmit={event => void add(event)}>
+        <div className={css.runtimeComposerHeading}><div><h3>{t('runtime.addTitle')}</h3><p>{t('runtime.addDescription')}</p></div><span>{t('runtime.hotContext')}</span></div>
+        <textarea aria-label={t('runtime.content')} value={content} onChange={event => setContent(event.target.value)} rows={3} placeholder={t('runtime.placeholder')} />
+        <div className={css.runtimeComposerActions}><label>{t('runtime.target')}<select value={target} onChange={event => setTarget(event.target.value as RuntimeMemoryTarget)}><option value="memory">{t('runtime.target.memory')}</option><option value="user">{t('runtime.target.user')}</option></select></label><label>{t('runtime.importance')}<select value={importance} onChange={event => setImportance(event.target.value as RuntimeMemoryImportance)}><option value="critical">{t('runtime.importance.critical')}</option><option value="normal">{t('runtime.importance.normal')}</option><option value="low">{t('runtime.importance.low')}</option></select></label><button type="submit" className={css.primaryButton} disabled={saving || content.trim() === ''}>{saving ? t('runtime.saving') : t('runtime.addAction')}</button></div>
+      </form>}
+      {!props.writeEnabled && <div className={css.runtimeReadOnly}>{t('runtime.readOnly')}</div>}
+      <div className={css.runtimeGrid}>{targetPanel('user')}{targetPanel('memory')}</div>
+      <p className={css.runtimeFootnote}>{t('runtime.footnote')}</p>
+    </div>
+  )
+}
+
 function RememberPage(props: { client: MnemonClient; sessionId: string | undefined; memoryBodies: MemoryBodyView[]; writeEnabled: boolean; seed: string; onMutate: () => void }): JSX.Element {
   const t = useT()
   const [content, setContent] = useState(props.seed)
@@ -1002,6 +1110,7 @@ function MnemonWorkspace({ connection, sessionId }: MnemonViewProps): JSX.Elemen
         <div className={css.topNavigation}><nav className={css.nav} aria-label={t('nav.aria')}>{PAGE_NAV.map(item => <button key={item.id} type="button" aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><span className={css.navGlyph} aria-hidden="true">{item.glyph}</span><span><strong>{t(item.label)}</strong><small>{t(item.detail)}</small></span></button>)}</nav><div className={css.spaceSummary}><span>{t('sidebar.activeSpaces')}</span><code>{catalogKnown ? `${activeBodies} / ${memoryBodies.length}` : '— / —'}</code><small>{writeEnabled ? t('common.agentSupervised') : t('common.readOnly')}</small></div></div>
         <section className={css.canvas}>
           {page === 'overview' && <OverviewPage client={client} revision={revision} writeEnabled={writeEnabled} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onExplore={explore} />}
+          {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}
           {page === 'explore' && <ExplorePage client={client} status={status} seed={searchSeed} writeEnabled={writeEnabled} onForget={forget} />}
           {page === 'entities' && <EntitiesPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onExplore={explore} />}
           {page === 'remember' && <RememberPage client={client} sessionId={sessionId} memoryBodies={status?.memoryBodies ?? []} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} />}
