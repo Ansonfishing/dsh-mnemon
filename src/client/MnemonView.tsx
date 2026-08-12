@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts'
 import type { Config } from '../config.ts'
 import {
@@ -14,6 +14,7 @@ import {
   type StatusView,
 } from '../service.ts'
 import { MnemonClient } from './api.ts'
+import { translateZh, type MnemonKey, type MnemonTranslate } from './locales.ts'
 import { MnemonLogo } from './MnemonLogo.tsx'
 import css from './MnemonView.module.css'
 
@@ -21,27 +22,32 @@ export interface MnemonViewProps {
   connection: ClientConnectionHandle
   settingsScope: ClientSettingsScope<Config>
   sessionId?: string
+  t?: MnemonTranslate
 }
 
 type Page = 'overview' | 'explore' | 'entities' | 'remember' | 'list' | 'status'
 
-const PAGE_NAV: Array<{ id: Page; label: string; detail: string; glyph: string }> = [
-  { id: 'overview', label: '总览', detail: '记忆体与实时图谱', glyph: '◇' },
-  { id: 'explore', label: '检索', detail: '意图增强召回', glyph: '⌕' },
-  { id: 'entities', label: '实体', detail: '关系与上下文', glyph: '◎' },
-  { id: 'remember', label: '沉淀', detail: 'LLM 监督写回', glyph: '+' },
-  { id: 'list', label: '内容', detail: '浏览与维护', glyph: '≡' },
-  { id: 'status', label: '状态', detail: '运行与诊断', glyph: '⌘' },
+const PAGE_NAV: Array<{ id: Page; label: MnemonKey; detail: MnemonKey; glyph: string }> = [
+  { id: 'overview', label: 'nav.overview', detail: 'nav.overview.detail', glyph: '◇' },
+  { id: 'explore', label: 'nav.search', detail: 'nav.search.detail', glyph: '⌕' },
+  { id: 'entities', label: 'nav.entities', detail: 'nav.entities.detail', glyph: '◎' },
+  { id: 'remember', label: 'nav.remember', detail: 'nav.remember.detail', glyph: '+' },
+  { id: 'list', label: 'nav.content', detail: 'nav.content.detail', glyph: '≡' },
+  { id: 'status', label: 'nav.status', detail: 'nav.status.detail', glyph: '⌘' },
 ]
 
-const CATEGORY_LABELS: Record<string, string> = {
-  decision: '决策',
-  preference: '偏好',
-  fact: '事实',
-  insight: '洞察',
-  context: '上下文',
-  general: '通用',
+const CATEGORY_KEYS: Record<string, MnemonKey> = {
+  decision: 'category.decision',
+  preference: 'category.preference',
+  fact: 'category.fact',
+  insight: 'category.insight',
+  context: 'category.context',
+  general: 'category.general',
 }
+
+const I18nContext = createContext<MnemonTranslate>(translateZh)
+function useT(): MnemonTranslate { return useContext(I18nContext) }
+function categoryLabel(t: MnemonTranslate, category: string): string { return CATEGORY_KEYS[category] === undefined ? category : t(CATEGORY_KEYS[category]!) }
 
 function humanBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -61,10 +67,10 @@ function insightKey(insight: Insight): string {
   return `${insight.memoryBodyId ?? 'memory'}:${insight.id}`
 }
 
-function PageHeader(props: { kicker: string; title: string; description: string; meta?: string; action?: JSX.Element }): JSX.Element {
+function PageHeader(props: { title: string; description: string; meta?: string; action?: JSX.Element }): JSX.Element {
   return (
     <div className={css.pageHeader}>
-      <div><span>{props.kicker}</span><h2>{props.title}</h2><p>{props.description}</p></div>
+      <div><h2>{props.title}</h2><p>{props.description}</p></div>
       <div className={css.pageHeaderMeta}>{props.meta !== undefined && <code>{props.meta}</code>}{props.action}</div>
     </div>
   )
@@ -86,15 +92,16 @@ function InsightCard(props: {
   onRelated?: (insight: Insight) => void
   onClone?: (insight: Insight) => void
 }): JSX.Element {
+  const t = useT()
   const [confirming, setConfirming] = useState(false)
   const [forgetting, setForgetting] = useState(false)
   const { insight } = props
   const meta = [
     insight.memoryBodyName,
-    insight.category !== undefined ? CATEGORY_LABELS[insight.category] ?? insight.category : undefined,
-    insight.importance !== undefined ? `重要性 ${insight.importance}` : undefined,
+    insight.category !== undefined ? categoryLabel(t, insight.category) : undefined,
+    insight.importance !== undefined ? t('common.importance', { value: insight.importance }) : undefined,
     insight.score !== undefined ? `score ${insight.score.toFixed(3)}` : undefined,
-    insight.depth !== undefined ? `${insight.depth} 跳` : undefined,
+    insight.depth !== undefined ? t('common.hops', { count: insight.depth }) : undefined,
   ].filter((entry): entry is string => entry !== undefined)
 
   const forget = async () => {
@@ -118,17 +125,17 @@ function InsightCard(props: {
       {(insight.entities?.length ?? 0) > 0 && <div className={css.entities}>{insight.entities!.map(entity => <span key={entity}>{entity}</span>)}</div>}
       <div className={css.cardActions}>
         {confirming ? (
-          <div className={css.confirmBar} role="group" aria-label="确认忘记记忆">
-            <span>软删除这条记忆？</span>
-            <button type="button" className={css.dangerSolidButton} disabled={forgetting} onClick={() => void forget()}>{forgetting ? '处理中…' : '确认忘记'}</button>
-            <button type="button" className={css.ghostButton} disabled={forgetting} onClick={() => setConfirming(false)}>取消</button>
+          <div className={css.confirmBar} role="group" aria-label={t('card.confirmAria')}>
+            <span>{t('card.confirmText')}</span>
+            <button type="button" className={css.dangerSolidButton} disabled={forgetting} onClick={() => void forget()}>{forgetting ? t('card.processing') : t('card.confirmForget')}</button>
+            <button type="button" className={css.ghostButton} disabled={forgetting} onClick={() => setConfirming(false)}>{t('common.cancel')}</button>
           </div>
         ) : (
           <>
-            {props.onRelated !== undefined && <button type="button" className={css.ghostButton} onClick={() => props.onRelated?.(insight)}>查看关联</button>}
-            {props.onClone !== undefined && <button type="button" className={css.ghostButton} onClick={() => props.onClone?.(insight)}>基于此新建</button>}
-            <button type="button" className={css.ghostButton} onClick={() => void navigator.clipboard?.writeText(insight.id)}>复制 ID</button>
-            {props.writeEnabled && <button type="button" className={css.dangerButton} onClick={() => setConfirming(true)}>忘记</button>}
+            {props.onRelated !== undefined && <button type="button" className={css.ghostButton} onClick={() => props.onRelated?.(insight)}>{t('card.related')}</button>}
+            {props.onClone !== undefined && <button type="button" className={css.ghostButton} onClick={() => props.onClone?.(insight)}>{t('card.clone')}</button>}
+            <button type="button" className={css.ghostButton} onClick={() => void navigator.clipboard?.writeText(insight.id)}>{t('common.copyId')}</button>
+            {props.writeEnabled && <button type="button" className={css.dangerButton} onClick={() => setConfirming(true)}>{t('card.forget')}</button>}
           </>
         )}
       </div>
@@ -297,6 +304,7 @@ function graphPoint(svg: SVGSVGElement, clientX: number, clientY: number): Graph
 }
 
 function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | undefined; onSelect: (node: MemoryGraphNode) => void }): JSX.Element {
+  const t = useT()
   const visibleNodes = useMemo(() => props.graph.nodes.slice(0, 60), [props.graph.nodes])
   const visibleIds = useMemo(() => new Set(visibleNodes.map(graphNodeKey)), [visibleNodes])
   const edges = useMemo(() => props.graph.edges.filter(edge => visibleIds.has(edge.sourceId) && visibleIds.has(edge.targetId)).slice(0, 180), [props.graph.edges, visibleIds])
@@ -398,15 +406,15 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
     commitPositions(next)
     setLayoutMode('custom')
   }
-  const layoutLabel = layoutMode === 'natural' ? '自然布局' : layoutMode === 'uniform' ? '均匀布局' : '自定义布局'
+  const layoutLabel = t(layoutMode === 'natural' ? 'graph.layoutNatural' : layoutMode === 'uniform' ? 'graph.layoutUniform' : 'graph.layoutCustom')
   return (
     <>
-      <div className={css.graphCanvasControls} role="toolbar" aria-label="图谱布局">
-        <span role="status" aria-label={`布局状态：${layoutLabel}`}><i />{layoutLabel} · 可拖拽</span>
-        <button type="button" data-active={layoutMode === 'natural' || undefined} onClick={() => animateTo(naturalGraphPositions(visibleNodes, edges), 'natural')}>自然铺开</button>
-        <button type="button" data-active={layoutMode === 'uniform' || undefined} onClick={() => animateTo(uniformGraphPositions(visibleNodes), 'uniform')}>均匀重置</button>
+      <div className={css.graphCanvasControls} role="toolbar" aria-label={t('graph.layoutAria')}>
+        <span role="status" aria-label={t('graph.layoutStatus', { layout: layoutLabel })}><i />{t('graph.draggable', { layout: layoutLabel })}</span>
+        <button type="button" data-active={layoutMode === 'natural' || undefined} onClick={() => animateTo(naturalGraphPositions(visibleNodes, edges), 'natural')}>{t('graph.naturalAction')}</button>
+        <button type="button" data-active={layoutMode === 'uniform' || undefined} onClick={() => animateTo(uniformGraphPositions(visibleNodes), 'uniform')}>{t('graph.uniformAction')}</button>
       </div>
-      <svg className={css.graphSvg} viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`} role="img" data-layout={layoutMode} data-density={visibleNodes.length <= 12 ? 'sparse' : 'dense'} aria-label={`Mnemon 实时记忆图谱，${props.graph.nodes.length} 个节点，${props.graph.edges.length} 条连接`}>
+      <svg className={css.graphSvg} viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`} role="img" data-layout={layoutMode} data-density={visibleNodes.length <= 12 ? 'sparse' : 'dense'} aria-label={t('graph.aria', { nodes: props.graph.nodes.length, edges: props.graph.edges.length })}>
       <defs>
         <pattern id="mnemon-grid" width="26" height="26" patternUnits="userSpaceOnUse"><path d="M 26 0 L 0 0 0 26" className={css.graphGridLine} fill="none" /></pattern>
         <filter id="mnemon-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="4" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
@@ -431,7 +439,7 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
         const showLabel = selected || visibleNodes.length < 22 || index % 3 === 0
         return (
           <g key={nodeKey} className={css.graphNode} data-category={node.category ?? 'general'} data-selected={selected || undefined}
-            transform={`translate(${position.x} ${position.y})`} role="button" tabIndex={0} aria-label={`${CATEGORY_LABELS[node.category ?? 'general'] ?? node.category}: ${short(node.content, 80)}`}
+            transform={`translate(${position.x} ${position.y})`} role="button" tabIndex={0} aria-label={`${categoryLabel(t, node.category ?? 'general')}: ${short(node.content, 80)}`}
             data-dragging={dragRef.current?.nodeId === nodeKey || undefined}
             onPointerDown={event => beginDrag(event, nodeKey)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag}
             onClick={() => { if (suppressClickRef.current) { suppressClickRef.current = false; return }; props.onSelect(node) }}
@@ -454,7 +462,8 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
   )
 }
 
-function OverviewPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; onMutate: () => void; onExplore: (query: string) => void }): JSX.Element {
+function OverviewPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; fallbackBodies: MemoryBodyView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onExplore: (query: string) => void }): JSX.Element {
+  const t = useT()
   const [graph, setGraph] = useState<MemoryGraphSnapshot | null>(null)
   const [catalog, setCatalog] = useState<MemoryBodyCatalog | null>(null)
   const [selected, setSelected] = useState<MemoryGraphNode | null>(null)
@@ -465,12 +474,25 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const [bodyId, setBodyId] = useState('')
   const [bodyName, setBodyName] = useState('')
   const [bodyDescription, setBodyDescription] = useState('')
+  const [catalogUnavailable, setCatalogUnavailable] = useState(false)
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true)
     setError(null)
     try {
-      const [nextCatalog, next] = await Promise.all([props.client.bodies(), props.client.graph()])
+      const [nextCatalog, next] = await Promise.all([
+        props.client.bodies().then(next => { setCatalogUnavailable(false); return next }).catch(() => {
+          setCatalogUnavailable(!props.catalogKnown)
+          return {
+            items: props.fallbackBodies,
+            total: props.fallbackBodies.length,
+            activeCount: props.fallbackBodies.filter(body => body.active).length,
+            directory: props.fallbackDirectory ?? '',
+            generatedAt: new Date().toISOString(),
+          }
+        }),
+        props.client.graph(),
+      ])
       setCatalog(nextCatalog)
       setGraph(next)
       setSelected(current => current === null ? null : next.nodes.find(node => graphNodeKey(node) === graphNodeKey(current)) ?? null)
@@ -479,7 +501,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
     } finally {
       setLoading(false)
     }
-  }, [props.client])
+  }, [props.catalogKnown, props.client, props.fallbackBodies, props.fallbackDirectory])
 
   useEffect(() => {
     void load()
@@ -508,62 +530,70 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
     } catch (reason) { setError(message(reason)) } finally { setCreating(false) }
   }
 
-  const generated = graph === null ? '等待首个快照' : `更新于 ${new Date(graph.generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+  const generated = graph === null ? t('overview.waitingSnapshot') : t('overview.updatedAt', { time: new Date(graph.generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) })
   return (
     <div className={css.page}>
-      <PageHeader kicker="MEMORY BODY OVERVIEW" title="记忆体总览" description="管理全局记忆体的读取边界，并在一张实时四图快照中观察所有已激活记忆体。" meta="AUTO · 15S"
-        action={<button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void load()}>{loading ? '同步中…' : '立即同步'}</button>} />
+      <PageHeader title={t('overview.title')} description={t('overview.description')} meta={t('overview.interval')}
+        action={<button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void load()}>{loading ? t('overview.syncing') : t('overview.syncNow')}</button>} />
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
-      <section className={css.bodyDirectory} aria-label="记忆体目录">
+      <section className={css.bodyDirectory} aria-label={t('overview.directory')}>
         <div className={css.bodyDirectoryHeader}>
-          <div><span className={css.cardKicker}>GLOBAL MEMORY BODIES</span><h3>记忆体目录</h3><p>开关只控制读取；写入可选择任意记忆体，写入未激活记忆体后会自动激活。</p></div>
-          <strong>{catalog?.activeCount ?? '—'} / {catalog?.total ?? '—'} ACTIVE</strong>
+          <div><h3>{t('overview.directory')}</h3><p>{t('overview.directory.description')}</p><code className={css.bodyDirectoryPath}>{catalogUnavailable ? t('overview.directory.unsynced') : catalog?.directory || props.fallbackDirectory || t('overview.directory.waiting')}</code></div>
+          <strong>{catalogUnavailable ? t('overview.directory.unsyncedBadge') : `${catalog?.activeCount ?? '—'} / ${catalog?.total ?? '—'} ${t('common.active')}`}</strong>
         </div>
         <div className={css.bodyGrid}>
           {catalog?.items.map((body, index) => (
-            <article key={body.id} className={css.bodyCard} data-active={body.active || undefined} style={{ '--mn-body-accent': `hsl(${(hash(body.id) + index * 29) % 360} 66% 58%)` } as CSSProperties}>
-              <div className={css.bodyCardTop}><span className={css.bodySignal} /><div><strong>{body.name}</strong><code>{body.id}</code></div><button type="button" role="switch" aria-checked={body.active} aria-label={`${body.name}读取开关`} disabled={!props.writeEnabled || changing === body.id} onClick={() => void toggle(body)}><i />{changing === body.id ? '切换中' : body.active ? '已激活' : '未激活'}</button></div>
-              <p>{body.description || '尚未提供路由说明。'}</p>
-              <footer><span>{body.stats?.totalInsights ?? 0} 条记忆</span><span>{body.stats?.edgeCount ?? 0} 条连接</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></footer>
+            <article key={body.id} className={css.bodyCard} data-active={body.active || undefined} data-healthy={body.healthy || undefined} title={body.error} style={{ '--mn-body-accent': `hsl(${(hash(body.id) + index * 29) % 360} 66% 58%)` } as CSSProperties}>
+              <div className={css.bodyCardTop}><span className={css.bodySignal} /><div><strong>{body.name}</strong><code>{body.id}</code><small className={css.bodyHealth}>{body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small></div><button type="button" role="switch" aria-checked={body.active} aria-label={t('overview.toggleAria', { name: body.name })} disabled={!props.writeEnabled || changing === body.id} onClick={() => void toggle(body)}><i />{changing === body.id ? t('overview.toggling') : body.active ? t('common.active') : t('common.inactive')}</button></div>
+              <p>{body.description || t('overview.noDescription')}</p>
+              <footer><span>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></footer>
             </article>
           ))}
+          {catalog?.total === 0 && <div className={css.bodyDirectoryEmpty}><span>◇</span><div><strong>{catalogUnavailable ? t('overview.unsyncedTitle') : t('overview.emptyTitle')}</strong><p>{catalogUnavailable ? t('overview.unsyncedShort') : t('overview.emptyShort')}</p></div></div>}
         </div>
-        {props.writeEnabled && <details className={css.bodyCreate}><summary>＋ 创建空白记忆体</summary><form onSubmit={event => void create(event)}><input aria-label="新记忆体 ID" value={bodyId} onChange={event => setBodyId(event.target.value)} placeholder="可选 ID，例如 project-alpha" /><input aria-label="新记忆体名称" value={bodyName} onChange={event => setBodyName(event.target.value)} placeholder="名称" required /><input aria-label="新记忆体描述" value={bodyDescription} onChange={event => setBodyDescription(event.target.value)} placeholder="说明哪些内容属于它，以及何时应被召回" required /><button type="submit" className={css.secondaryButton} disabled={creating}>{creating ? '创建中…' : '创建'}</button></form></details>}
+        {props.writeEnabled && !catalogUnavailable && <details className={css.bodyCreate} open={catalog?.total === 0 ? true : undefined}><summary>{t('overview.create')}</summary><form onSubmit={event => void create(event)}><input aria-label={t('overview.createId')} value={bodyId} onChange={event => setBodyId(event.target.value)} placeholder={t('overview.createIdPlaceholder')} /><input aria-label={t('overview.createName')} value={bodyName} onChange={event => setBodyName(event.target.value)} placeholder={t('overview.createNamePlaceholder')} required /><input aria-label={t('overview.createDescription')} value={bodyDescription} onChange={event => setBodyDescription(event.target.value)} placeholder={t('overview.createDescriptionPlaceholder')} required /><button type="submit" className={css.secondaryButton} disabled={creating}>{creating ? t('overview.creating') : t('overview.createAction')}</button></form></details>}
       </section>
-      {graph !== null && graph.nodes.length > 0 ? (
+      {!catalogUnavailable && graph !== null && graph.nodes.length > 0 ? (
         <div className={css.graphLayout}>
           <section className={css.graphPanel}>
             <div className={css.graphToolbar}>
-              <div><span className={css.liveDot} />多记忆体实时快照 <small>{generated}</small></div>
-              <div className={css.graphLegend}><span data-edge="temporal">时间</span><span data-edge="semantic">语义</span><span data-edge="causal">因果</span><span data-edge="entity">实体</span></div>
+              <div><span className={css.liveDot} />{t('overview.snapshot')} <small>{generated}</small></div>
+              <div className={css.graphLegend}><span data-edge="temporal">{t('overview.edgeTemporal')}</span><span data-edge="semantic">{t('overview.edgeSemantic')}</span><span data-edge="causal">{t('overview.edgeCausal')}</span><span data-edge="entity">{t('overview.edgeEntity')}</span></div>
             </div>
             <div className={css.graphViewport}><MemoryGraph graph={graph} selectedId={selected === null ? undefined : graphNodeKey(selected)} onSelect={setSelected} /></div>
-            <div className={css.graphFooter}><span>展示 {Math.min(graph.nodes.length, 60)} / {graph.nodes.length} 个节点</span><span>{graph.edges.length} 条图谱连接</span></div>
+            <div className={css.graphFooter}><span>{t('overview.graphCount', { visible: Math.min(graph.nodes.length, 60), total: graph.nodes.length })}</span><span>{t('overview.graphEdges', { count: graph.edges.length })}</span></div>
           </section>
           <aside className={css.graphInspector}>
             {selected === null ? (
-              <div className={css.inspectorEmpty}><MnemonLogo className={css.inspectorLogo} title="Mnemon node inspector" /><span>NODE INSPECTOR</span><h3>选择一个记忆节点</h3><p>查看完整内容、分类与精确 ID。</p></div>
+              <div className={css.inspectorEmpty}><MnemonLogo className={css.inspectorLogo} title={t('overview.inspector')} /><h3>{t('overview.selectNode')}</h3><p>{t('overview.selectNodeText')}</p></div>
             ) : (
               <>
-                <div className={css.inspectorHeading}><span>NODE INSPECTOR</span><button type="button" onClick={() => setSelected(null)} aria-label="关闭节点详情">×</button></div>
-                <span className={css.categoryChip}>{CATEGORY_LABELS[selected.category ?? 'general'] ?? selected.category}</span>
+                <div className={css.inspectorHeading}><span>{t('overview.inspector')}</span><button type="button" onClick={() => setSelected(null)} aria-label={t('overview.closeInspector')}>×</button></div>
+                <span className={css.categoryChip}>{categoryLabel(t, selected.category ?? 'general')}</span>
                 <h3>{selected.content}</h3>
-                <dl className={css.inspectorMeta}><div><dt>Memory body</dt><dd>{selected.memoryBodyName ?? '—'} <code>{selected.memoryBodyId ?? ''}</code></dd></div><div><dt>Memory ID</dt><dd><code>{selected.id}</code></dd></div><div><dt>Category</dt><dd>{selected.category ?? 'general'}</dd></div></dl>
-                <div className={css.inspectorActions}><button type="button" className={css.primaryButton} onClick={() => props.onExplore(selected.content)}>围绕它检索</button><button type="button" className={css.secondaryButton} onClick={() => void navigator.clipboard?.writeText(selected.id)}>复制 ID</button></div>
+                <dl className={css.inspectorMeta}><div><dt>{t('term.space')}</dt><dd>{selected.memoryBodyName ?? '—'} <code>{selected.memoryBodyId ?? ''}</code></dd></div><div><dt>{t('overview.memoryId')}</dt><dd><code>{selected.id}</code></dd></div><div><dt>{t('common.category')}</dt><dd>{categoryLabel(t, selected.category ?? 'general')}</dd></div></dl>
+                <div className={css.inspectorActions}><button type="button" className={css.primaryButton} onClick={() => props.onExplore(selected.content)}>{t('overview.exploreNode')}</button><button type="button" className={css.secondaryButton} onClick={() => void navigator.clipboard?.writeText(selected.id)}>{t('common.copyId')}</button></div>
               </>
             )}
           </aside>
         </div>
       ) : !loading && error === null ? (
-        <EmptyState glyph="◇" title="已激活记忆体尚无内容">向任意记忆体沉淀稳定上下文后，这里会聚合呈现节点与关系。</EmptyState>
+        catalogUnavailable
+          ? <EmptyState glyph="◇" title={t('overview.unsyncedTitle')}>{t('overview.unsyncedLong')}</EmptyState>
+          : catalog?.total === 0
+          ? <EmptyState glyph="◇" title={t('overview.emptyTitle')}>{t('overview.emptyLong')}</EmptyState>
+          : catalog?.activeCount === 0
+            ? <EmptyState glyph="◇" title={t('overview.noActiveTitle')}>{t('overview.noActiveText')}</EmptyState>
+            : <EmptyState glyph="◇" title={t('overview.noContentTitle')}>{t('overview.noContentText')}</EmptyState>
       ) : (
-        <div className={css.loadingPanel}>正在同步记忆体目录与多库图谱…</div>
+        <div className={css.loadingPanel}>{t('overview.loading')}</div>
       )}
     </div>
   )
 }
 
 function ExplorePage(props: { client: MnemonClient; status: StatusView | null; seed: string; writeEnabled: boolean; onForget: (insight: Insight) => Promise<void> }): JSX.Element {
+  const t = useT()
   const [query, setQuery] = useState(props.seed)
   const [mode, setMode] = useState<'smart' | 'keyword' | 'basic'>('smart')
   const [category, setCategory] = useState<Category | ''>('')
@@ -605,22 +635,22 @@ function ExplorePage(props: { client: MnemonClient; status: StatusView | null; s
 
   return (
     <div className={css.page}>
-      <PageHeader kicker="INTENT RECALL" title="检索记忆" description="用明确问题召回相关上下文，再沿图谱关系继续查阅。" meta={`${props.status?.defaultRecallLimit ?? '—'} MAX RESULTS`} />
+      <PageHeader title={t('search.title')} description={t('search.description')} meta={t('search.maxResults', { count: props.status?.defaultRecallLimit ?? '—' })} />
       <form className={css.searchBar} onSubmit={event => void search(event)}>
-        <div className={css.queryField}><span aria-hidden="true">⌕</span><input value={query} onChange={event => setQuery(event.target.value)} placeholder="为什么选用 SQLite？这个项目有哪些发布约定？" aria-label="记忆查询" /><kbd>↵</kbd></div>
+        <div className={css.queryField}><span aria-hidden="true">⌕</span><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t('search.placeholder')} aria-label={t('search.queryAria')} /><kbd>↵</kbd></div>
         <div className={css.searchControls}>
-          <label>分类<select value={category} onChange={event => setCategory(event.target.value as Category | '')} aria-label="记忆分类"><option value="">全部分类</option>{CATEGORIES.map(value => <option key={value} value={value}>{CATEGORY_LABELS[value]}</option>)}</select></label>
-          <label>策略<select value={mode} onChange={event => setMode(event.target.value as 'smart' | 'keyword' | 'basic')} aria-label="检索模式"><option value="smart">图增强召回</option><option value="keyword">关键词检索</option><option value="basic">基础匹配</option></select></label>
-          <button type="submit" className={css.primaryButton} disabled={searching || query.trim() === ''}>{searching ? '检索中…' : '开始召回'}</button>
+          <label>{t('common.category')}<select value={category} onChange={event => setCategory(event.target.value as Category | '')} aria-label={t('search.categoryAria')}><option value="">{t('common.allCategories')}</option>{CATEGORIES.map(value => <option key={value} value={value}>{categoryLabel(t, value)}</option>)}</select></label>
+          <label>{t('search.strategy')}<select value={mode} onChange={event => setMode(event.target.value as 'smart' | 'keyword' | 'basic')} aria-label={t('search.modeAria')}><option value="smart">{t('search.modeSmart')}</option><option value="keyword">{t('search.modeKeyword')}</option><option value="basic">{t('search.modeBasic')}</option></select></label>
+          <button type="submit" className={css.primaryButton} disabled={searching || query.trim() === ''}>{searching ? t('search.searching') : t('search.action')}</button>
         </div>
       </form>
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
-      {!searched && <EmptyState glyph="⌕" title="从一个明确问题开始">聚焦实体、决策或时间线，比批量加载整库更可靠。</EmptyState>}
-      {searched && !searching && results.length === 0 && error === null && <EmptyState glyph="0" title="没有命中">换一个更具体的实体、决策或时间线关键词试试。</EmptyState>}
+      {!searched && <EmptyState glyph="⌕" title={t('search.startTitle')}>{t('search.startText')}</EmptyState>}
+      {searched && !searching && results.length === 0 && error === null && <EmptyState glyph="0" title={t('search.emptyTitle')}>{t('search.emptyText')}</EmptyState>}
       {results.length > 0 && (
         <div className={relatedTo === null ? css.singleColumn : css.resultLayout}>
-          <section className={css.results}><div className={css.sectionHeading}><div><span>RESULT SET</span><h3>召回结果</h3></div><strong>{results.length}</strong></div>{results.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}</section>
-          {relatedTo !== null && <aside className={css.relatedPane}><div className={css.sectionHeading}><div><span>GRAPH INSPECTOR</span><h3>关联记忆</h3></div><button type="button" onClick={() => setRelatedTo(null)} aria-label="关闭关联记忆">×</button></div><p className={css.relatedSource}>{relatedTo.content}</p>{relatedLoading && <div className={css.loading}>正在遍历图谱…</div>}{!relatedLoading && related.length === 0 && <div className={css.muted}>没有找到两跳内的关联节点。</div>}{related.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}</aside>}
+          <section className={css.results}><div className={css.sectionHeading}><div><h3>{t('search.results')}</h3></div><strong>{results.length}</strong></div>{results.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}</section>
+          {relatedTo !== null && <aside className={css.relatedPane}><div className={css.sectionHeading}><div><h3>{t('search.related')}</h3></div><button type="button" onClick={() => setRelatedTo(null)} aria-label={t('search.closeRelated')}>×</button></div><p className={css.relatedSource}>{relatedTo.content}</p>{relatedLoading && <div className={css.loading}>{t('search.traversing')}</div>}{!relatedLoading && related.length === 0 && <div className={css.muted}>{t('search.noRelated')}</div>}{related.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}</aside>}
         </div>
       )}
     </div>
@@ -628,6 +658,7 @@ function ExplorePage(props: { client: MnemonClient; status: StatusView | null; s
 }
 
 function EntitiesPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; onForget: (insight: Insight) => Promise<void>; onExplore: (query: string) => void }): JSX.Element {
+  const t = useT()
   const [view, setView] = useState<EntityView>({ items: [], insights: [] })
   const [entity, setEntity] = useState('')
   const [loading, setLoading] = useState(true)
@@ -643,19 +674,19 @@ function EntitiesPage(props: { client: MnemonClient; revision: number; writeEnab
 
   return (
     <div className={css.page}>
-      <PageHeader kicker="ENTITY LENS" title="实体查阅" description="选择 Mnemon 识别出的实体，召回它跨越事实、决策与上下文的关系。" meta={`${view.items.length} ACTIVE ENTITIES`} />
+      <PageHeader title={t('entities.title')} description={t('entities.description')} meta={t('entities.count', { count: view.items.length })} />
       <div className={css.entityLayout}>
         <aside className={css.entityRail}>
-          <form className={css.entitySearch} onSubmit={submit}><input aria-label="实体名称" value={entity} onChange={event => setEntity(event.target.value)} placeholder="输入任意实体…" /><button type="submit" className={css.primaryButton} disabled={loading || entity.trim() === ''}>查阅</button></form>
-          <div className={css.entityHeading}><span>TOP ENTITIES</span><small>按出现频率</small></div>
+          <form className={css.entitySearch} onSubmit={submit}><input aria-label={t('entities.nameAria')} value={entity} onChange={event => setEntity(event.target.value)} placeholder={t('entities.placeholder')} /><button type="submit" className={css.primaryButton} disabled={loading || entity.trim() === ''}>{t('entities.action')}</button></form>
+          <div className={css.entityHeading}><span>{t('entities.top')}</span><small>{t('entities.frequency')}</small></div>
           <div className={css.entityList}>{view.items.map(item => <button key={item.entity} type="button" aria-pressed={view.selected === item.entity} onClick={() => { setEntity(item.entity); void load(item.entity) }}><span>{item.entity}</span><strong>{item.count}</strong></button>)}</div>
-          {!loading && view.items.length === 0 && <p className={css.muted}>写入带实体的记忆后，这里会形成入口。</p>}
+          {!loading && view.items.length === 0 && <p className={css.muted}>{t('entities.emptyRail')}</p>}
         </aside>
         <section className={css.entityResults}>
           {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
-          {loading && <div className={css.loadingPanel}>正在沿实体关系召回…</div>}
-          {!loading && view.selected === undefined && <EmptyState glyph="◎" title="选择或输入一个实体">实体视图会聚合与它相关的记忆，而不是只做字面匹配。</EmptyState>}
-          {!loading && view.selected !== undefined && <><div className={css.sectionHeading}><div><span>ENTITY CONTEXT</span><h3>{view.selected}</h3></div><strong>{view.insights.length}</strong></div>{view.insights.length === 0 ? <EmptyState glyph="0" title="没有关联记忆">尝试更完整的名称或另一个实体别名。</EmptyState> : view.insights.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={props.onForget} onRelated={() => props.onExplore(insight.content)} />)}</>}
+          {loading && <div className={css.loadingPanel}>{t('entities.loading')}</div>}
+          {!loading && view.selected === undefined && <EmptyState glyph="◎" title={t('entities.selectTitle')}>{t('entities.selectText')}</EmptyState>}
+          {!loading && view.selected !== undefined && <><div className={css.sectionHeading}><div><h3>{view.selected}</h3></div><strong>{view.insights.length}</strong></div>{view.insights.length === 0 ? <EmptyState glyph="0" title={t('entities.emptyTitle')}>{t('entities.emptyText')}</EmptyState> : view.insights.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={props.onForget} onRelated={() => props.onExplore(insight.content)} />)}</>}
         </section>
       </div>
     </div>
@@ -663,6 +694,7 @@ function EntitiesPage(props: { client: MnemonClient; revision: number; writeEnab
 }
 
 function RememberPage(props: { client: MnemonClient; sessionId: string | undefined; memoryBodies: MemoryBodyView[]; writeEnabled: boolean; seed: string; onMutate: () => void }): JSX.Element {
+  const t = useT()
   const [content, setContent] = useState(props.seed)
   const [category, setCategory] = useState<Category>('general')
   const [importance, setImportance] = useState(3)
@@ -683,10 +715,10 @@ function RememberPage(props: { client: MnemonClient; sessionId: string | undefin
     setSupervising(true); setResult(null)
     try {
       const response = await props.client.supervise(content)
-      setResult(`${response.action === 'skipped' ? '记忆子 Agent 判断无需写入' : '记忆子 Agent 已完成处理'}${response.memoryBodyIds.length === 0 ? '' : ` · ${response.memoryBodyIds.join(', ')}`}${response.summary === '' ? '' : `：${response.summary}`}`)
+      setResult(`${t(response.action === 'skipped' ? 'remember.skipped' : 'remember.completed')}${response.memoryBodyIds.length === 0 ? '' : ` · ${response.memoryBodyIds.join(', ')}`}${response.summary === '' ? '' : ` · ${response.summary}`}`)
       setContent('')
       props.onMutate()
-    } catch (reason) { setResult(`调度失败：${message(reason)}`) } finally { setSupervising(false) }
+    } catch (reason) { setResult(t('remember.dispatchFailed', { error: message(reason) })) } finally { setSupervising(false) }
   }
 
   const manualSave = async (event: FormEvent) => {
@@ -696,29 +728,29 @@ function RememberPage(props: { client: MnemonClient; sessionId: string | undefin
       const response = await props.client.remember({ content, category, importance, tags: tags.split(',').map(value => value.trim()).filter(Boolean), entities: entities.split(',').map(value => value.trim()).filter(Boolean), source: 'user', ...(memoryBodyId === '' ? {} : { memoryBodyId }) })
       const action = typeof response.action === 'string' ? response.action : 'saved'
       const summary = typeof response.summary === 'string' ? response.summary : ''
-      setResult(action === 'skipped' ? `记忆子 Agent 判定无需写入${summary === '' ? '' : `：${summary}`}` : `记忆子 Agent 已处理：${action}${summary === '' ? '' : ` · ${summary}`}`)
+      setResult(action === 'skipped' ? `${t('remember.skipped')}${summary === '' ? '' : ` · ${summary}`}` : `${t('remember.processed', { action })}${summary === '' ? '' : ` · ${summary}`}`)
       if (action !== 'skipped') { setContent(''); setTags(''); setEntities(''); props.onMutate() }
-    } catch (reason) { setResult(`保存失败：${message(reason)}`) } finally { setSaving(false) }
+    } catch (reason) { setResult(t('remember.saveFailed', { error: message(reason) })) } finally { setSaving(false) }
   }
 
   return (
     <div className={css.page}>
-      <PageHeader kicker="SUBAGENT-SUPERVISED WRITEBACK" title="沉淀记忆" description="候选内容会进入隔离的记忆子 Agent，由它选择记忆体、查重、提炼并执行写入，不占用主对话上下文。" meta={props.writeEnabled ? 'MEMORY SUBAGENT' : 'READ ONLY'} />
-      {!props.writeEnabled ? <EmptyState glyph="⊘" title="当前为只读模式">当前部署禁止记忆写入；如需调整，请修改 DSH 的 Mnemon 配置并重启。</EmptyState> : (
+      <PageHeader title={t('remember.title')} description={t('remember.description')} meta={props.writeEnabled ? t('remember.worker') : t('common.readOnly')} />
+      {!props.writeEnabled ? <EmptyState glyph="⊘" title={t('remember.readOnlyTitle')}>{t('remember.readOnlyText')}</EmptyState> : (
         <div className={css.writebackLayout}>
-          <aside className={css.writeGuide}><span className={css.cardKicker}>SUPERVISION FLOW</span><h3>记忆子 Agent 会完成什么</h3><ol><li><strong>判断归属</strong><span>选择既有记忆体，必要时判断是否形成新范围</span></li><li><strong>检索查重</strong><span>识别重复、补充或冲突的旧记忆</span></li><li><strong>结构化写入</strong><span>提炼内容、元数据与必要关系并返回回执</span></li></ol><p>子 Agent 只拥有 Mnemon 工具，原始目录和检索过程不会挤占主对话上下文。</p></aside>
+          <aside className={css.writeGuide}><h3>{t('remember.flowTitle')}</h3><ol><li><strong>{t('remember.routeTitle')}</strong><span>{t('remember.routeText')}</span></li><li><strong>{t('remember.dedupeTitle')}</strong><span>{t('remember.dedupeText')}</span></li><li><strong>{t('remember.writeTitle')}</strong><span>{t('remember.writeText')}</span></li></ol><p>{t('remember.flowText')}</p></aside>
           <section className={css.supervisedComposer}>
             <form className={css.supervisedForm} onSubmit={event => void supervise(event)}>
-              <div className={css.supervisedHeading}><div><span className={css.cardKicker}>ISOLATED MEMORY WORKER</span><h3>交给记忆子 Agent</h3></div><span className={props.sessionId === undefined ? css.sessionMissing : css.sessionReady}>{props.sessionId === undefined ? 'NO SESSION' : 'SUBAGENT READY'}</span></div>
-              <label className={css.fieldWide}>候选内容<textarea aria-label="待沉淀内容" value={content} onChange={event => setContent(event.target.value)} maxLength={8000} rows={8} placeholder="输入希望跨任务保留的背景、偏好、决策或洞察。模型会先判断它是否真的值得沉淀。" /></label>
-              {props.sessionId === undefined && <p className={css.sessionHint}>当前视图没有绑定 live session，无法创建记忆子 Agent。</p>}
-              <div className={css.formActions}><button type="submit" className={css.primaryButton} disabled={supervising || content.trim() === '' || props.sessionId === undefined}>{supervising ? '记忆子 Agent 处理中…' : '调度子 Agent 判断并沉淀'}</button>{result !== null && <span role="status">{result}</span>}</div>
+              <div className={css.supervisedHeading}><div><h3>{t('remember.delegateTitle')}</h3></div><span className={props.sessionId === undefined ? css.sessionMissing : css.sessionReady}>{props.sessionId === undefined ? t('remember.noSession') : t('remember.ready')}</span></div>
+              <label className={css.fieldWide}>{t('remember.candidate')}<textarea aria-label={t('remember.candidateAria')} value={content} onChange={event => setContent(event.target.value)} maxLength={8000} rows={8} placeholder={t('remember.placeholder')} /></label>
+              {props.sessionId === undefined && <p className={css.sessionHint}>{t('remember.sessionHint')}</p>}
+              <div className={css.formActions}><button type="submit" className={css.primaryButton} disabled={supervising || content.trim() === '' || props.sessionId === undefined}>{supervising ? t('remember.processing') : t('remember.action')}</button>{result !== null && <span role="status">{result}</span>}</div>
             </form>
             <details className={css.advancedWrite}>
-              <summary><span><strong>人工高级选项</strong><small>为记忆子 Agent指定目标记忆体与元数据约束</small></span><span>展开</span></summary>
+              <summary><span><strong>{t('remember.advanced')}</strong><small>{t('remember.advancedHint')}</small></span><span>{t('remember.expand')}</span></summary>
               <form className={css.manualForm} onSubmit={event => void manualSave(event)}>
-                <div className={css.formGrid}><label className={css.fieldWide}>目标记忆体<select aria-label="目标记忆体" value={memoryBodyId} onChange={event => setMemoryBodyId(event.target.value)}>{props.memoryBodies.map(body => <option key={body.id} value={body.id}>{body.name} · {body.id}{body.active ? ' · 已激活' : ''}</option>)}</select></label><label>分类<select value={category} onChange={event => setCategory(event.target.value as Category)}>{CATEGORIES.map(value => <option key={value} value={value}>{CATEGORY_LABELS[value]}</option>)}</select></label><label>重要性<select value={importance} onChange={event => setImportance(Number(event.target.value))}>{[1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value} / 5</option>)}</select></label><label className={css.fieldWide}>实体（逗号分隔）<input value={entities} onChange={event => setEntities(event.target.value)} placeholder="SQLite, DSH" /></label><label className={css.fieldWide}>标签（逗号分隔）<input value={tags} onChange={event => setTags(event.target.value)} placeholder="architecture, local-first" /></label></div>
-                <div className={css.manualActions}><p>高级选项是约束而不是绕过监督；记忆子 Agent 仍会查重并返回结构化回执。</p><button type="submit" className={css.secondaryButton} disabled={saving || content.trim() === '' || props.sessionId === undefined || memoryBodyId === ''}>{saving ? '子 Agent 写入中…' : '按高级约束沉淀'}</button></div>
+                <div className={css.formGrid}><label className={css.fieldWide}>{t('remember.target')}<select aria-label={t('remember.target')} value={memoryBodyId} onChange={event => setMemoryBodyId(event.target.value)}>{props.memoryBodies.map(body => <option key={body.id} value={body.id}>{body.name} · {body.id}{body.active ? ` · ${t('common.active')}` : ''}</option>)}</select></label><label>{t('common.category')}<select value={category} onChange={event => setCategory(event.target.value as Category)}>{CATEGORIES.map(value => <option key={value} value={value}>{categoryLabel(t, value)}</option>)}</select></label><label>{t('common.importanceLabel')}<select value={importance} onChange={event => setImportance(Number(event.target.value))}>{[1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value} / 5</option>)}</select></label><label className={css.fieldWide}>{t('remember.entities')}<input value={entities} onChange={event => setEntities(event.target.value)} placeholder="SQLite, DSH" /></label><label className={css.fieldWide}>{t('remember.tags')}<input value={tags} onChange={event => setTags(event.target.value)} placeholder="architecture, local-first" /></label></div>
+                <div className={css.manualActions}><p>{t('remember.advancedText')}</p><button type="submit" className={css.secondaryButton} disabled={saving || content.trim() === '' || props.sessionId === undefined || memoryBodyId === ''}>{saving ? t('remember.saving') : t('remember.advancedAction')}</button></div>
               </form>
             </details>
           </section>
@@ -729,6 +761,7 @@ function RememberPage(props: { client: MnemonClient; sessionId: string | undefin
 }
 
 function ListPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; onForget: (insight: Insight) => Promise<void>; onClone: (insight: Insight) => void; onExplore: (query: string) => void }): JSX.Element {
+  const t = useT()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<Category | ''>('')
   const [view, setView] = useState<MemoryListView | null>(null)
@@ -745,68 +778,75 @@ function ListPage(props: { client: MnemonClient; revision: number; writeEnabled:
 
   return (
     <div className={css.page}>
-      <PageHeader kicker="ACTIVE MEMORY CONTENT" title="记忆内容" description="无副作用浏览所有已激活记忆体；每条内容都会标明所属记忆体，可继续查阅或维护。" meta={`${view?.total ?? '—'} MEMORIES`} />
-      <form className={css.listToolbar} onSubmit={submit}><input aria-label="筛选记忆库" value={query} onChange={event => setQuery(event.target.value)} placeholder="按内容或精确 ID 筛选…" /><select aria-label="记忆库分类" value={category} onChange={event => setCategory(event.target.value as Category | '')}><option value="">全部分类</option>{CATEGORIES.map(value => <option key={value} value={value}>{CATEGORY_LABELS[value]}</option>)}</select><button type="submit" className={css.primaryButton} disabled={loading}>{loading ? '载入中…' : '应用筛选'}</button></form>
-      <div className={css.listNotice}><span>NON-MUTATING READ</span> 内容列表读取已激活记忆体的图谱快照，不会增加 recall 访问计数。</div>
+      <PageHeader title={t('content.title')} description={t('content.description')} meta={t('content.count', { count: view?.total ?? '—' })} />
+      <form className={css.listToolbar} onSubmit={submit}><input aria-label={t('content.filterAria')} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('content.filterPlaceholder')} /><select aria-label={t('content.categoryAria')} value={category} onChange={event => setCategory(event.target.value as Category | '')}><option value="">{t('common.allCategories')}</option>{CATEGORIES.map(value => <option key={value} value={value}>{categoryLabel(t, value)}</option>)}</select><button type="submit" className={css.primaryButton} disabled={loading}>{loading ? t('common.loading') : t('content.apply')}</button></form>
+      <div className={css.listNotice}>{t('content.notice')}</div>
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
-      {!loading && view?.items.length === 0 && <EmptyState glyph="≡" title="没有符合条件的记忆">清空筛选，或前往“沉淀”写入第一条稳定上下文。</EmptyState>}
+      {!loading && view?.items.length === 0 && <EmptyState glyph="≡" title={t('content.emptyTitle')}>{t('content.emptyText')}</EmptyState>}
       <div className={css.memoryList}>{view?.items.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onClone={props.onClone} onRelated={() => props.onExplore(insight.content)} />)}</div>
     </div>
   )
 }
 
 function StatusPage(props: { status: StatusView | null; loading: boolean; onRefresh: () => void }): JSX.Element {
+  const t = useT()
   const status = props.status
   const lifecycle = status?.lifecycle
   const current = lifecycle?.current
   const workers = lifecycle?.subagents
-  const memoryBodies = status?.memoryBodies ?? []
+  const catalogKnown = status?.memoryBodies !== undefined
+  const memoryBodies = useMemo(() => status?.memoryBodies ?? [], [status])
   const activeBodies = memoryBodies.filter(body => body.active).length
-  const latest = current?.lastAt === undefined ? '尚无运行记录' : new Date(current.lastAt).toLocaleString()
-  const phase = current?.lastPhase === undefined ? 'idle' : ({ idle: '待命', prime: 'Prime', recall: 'Recall', writeback: 'Writeback', supervised: '受监督请求', error: '异常' } as const)[current.lastPhase]
+  const latest = current?.lastAt === undefined ? t('status.noActivity') : new Date(current.lastAt).toLocaleString()
+  const phase = current?.lastPhase === undefined || current.lastPhase === 'idle' ? t('status.phaseIdle') : current.lastPhase === 'supervised' ? t('status.phaseSupervised') : current.lastPhase === 'error' ? t('status.phaseError') : current.lastPhase === 'prime' ? t('status.prime') : current.lastPhase === 'recall' ? t('status.recallWorker') : t('status.writeWorker')
   return (
     <div className={css.page}>
-      <PageHeader kicker="RUNTIME OBSERVABILITY" title="运行状态" description="聚焦 Mnemon 引擎、记忆体目录和子 Agent 编排；连接配置由 DSH 部署统一管理。" meta={status?.healthy === true && lifecycle?.sessionAvailable === true ? 'SYSTEM NOMINAL' : 'CHECK REQUIRED'} action={<button type="button" className={css.secondaryButton} onClick={props.onRefresh}>{props.loading ? '检查中…' : '重新检查'}</button>} />
+      <PageHeader title={t('status.title')} description={t('status.description')} meta={status?.healthy === true && lifecycle?.sessionAvailable === true ? t('status.nominal') : t('status.checkRequired')} action={<button type="button" className={css.secondaryButton} onClick={props.onRefresh}>{props.loading ? t('status.rechecking') : t('status.recheck')}</button>} />
 
-      <section className={css.healthStrip} aria-label="Mnemon 运行状态">
-        <article><span className={`${css.healthIndicator} ${status?.healthy === true ? css.healthGood : css.healthBad}`} /><div><small>MEMORY ENGINE</small><strong>{status?.healthy === true ? 'Mnemon 已连接' : 'Mnemon 不可用'}</strong><p>{status?.version === undefined ? '等待版本信息' : `CLI ${status.version}`}</p></div></article>
-        <article><span className={`${css.healthIndicator} ${activeBodies > 0 ? css.healthGood : css.healthMuted}`} /><div><small>MEMORY BODIES</small><strong>{activeBodies} / {memoryBodies.length} 已激活</strong><p>{status?.stats?.totalInsights ?? 0} 条有效记忆</p></div></article>
-        <article><span className={`${css.healthIndicator} ${lifecycle?.sessionAvailable === true ? css.healthGood : css.healthBad}`} /><div><small>SUBAGENT ROUTER</small><strong>{lifecycle?.sessionAvailable === true ? '记忆子 Agent 可用' : '当前会话未绑定'}</strong><p>{workers === undefined ? '等待编排状态' : `${workers.recalls} 次召回 · ${workers.writes} 次写入`}</p></div></article>
+      <section className={css.healthStrip} aria-label={t('status.aria')}>
+        <article><span className={`${css.healthIndicator} ${status?.healthy === true ? css.healthGood : css.healthBad}`} /><div><small>{t('status.engine')}</small><strong>{status?.healthy === true ? t('status.engineConnected') : t('status.engineUnavailable')}</strong><p>{status?.version === undefined ? t('status.versionWaiting') : `CLI ${status.version}`}</p></div></article>
+        <article><span className={`${css.healthIndicator} ${activeBodies > 0 ? css.healthGood : css.healthMuted}`} /><div><small>{t('status.spaces')}</small><strong>{catalogKnown ? t('status.activeRatio', { active: activeBodies, total: memoryBodies.length }) : t('status.directoryUnsynced')}</strong><p>{t('status.activeMemories', { count: status?.stats?.totalInsights ?? 0 })}</p></div></article>
+        <article><span className={`${css.healthIndicator} ${lifecycle?.sessionAvailable === true ? css.healthGood : css.healthBad}`} /><div><small>{t('status.router')}</small><strong>{lifecycle?.sessionAvailable === true ? t('status.routerReady') : t('status.sessionMissing')}</strong><p>{workers === undefined ? t('status.orchestrationWaiting') : t('status.workerCounts', { recalls: workers.recalls, writes: workers.writes })}</p></div></article>
       </section>
 
       <div className={css.statusLayout}>
         <section className={css.lifecyclePanel}>
-          <div className={css.statusSectionHeader}><div><span className={css.cardKicker}>ISOLATED MEMORY LIFECYCLE</span><h3>子 Agent 生命周期</h3><p>主 Agent 只接收压缩证据与回执；记忆体选择、查重和写入在隔离子上下文中完成。</p></div><span className={css.phaseBadge}>{phase}</span></div>
+          <div className={css.statusSectionHeader}><div><h3>{t('status.lifecycle')}</h3><p>{t('status.lifecycleText')}</p></div><span className={css.phaseBadge}>{phase}</span></div>
           <div className={css.lifecycleFlow}>
-            <article><span>01</span><div><strong>Prime</strong><p>只注入计数和编排能力，不展开目录</p></div><code>{lifecycle?.counters.primes ?? 0}</code></article>
-            <article data-disabled={lifecycle?.recallMode === 'off' || undefined}><span>02</span><div><strong>Recall Worker</strong><p>{lifecycle?.recallMode === 'guided' ? 'pre-step 选择记忆体并压缩证据' : '自动召回已关闭'}</p></div><code>{workers?.recalls ?? 0}</code></article>
-            <article data-disabled={lifecycle?.writebackMode === 'off' || undefined}><span>03</span><div><strong>Write Worker</strong><p>{lifecycle?.writebackMode === 'guided' ? 'turn-stopping 内判断并完成副作用' : '自动写回已关闭'}</p></div><code>{workers?.writes ?? 0}</code></article>
+            <article><span>01</span><div><strong>{t('status.prime')}</strong><p>{t('status.primeText')}</p></div><code>{lifecycle?.counters.primes ?? 0}</code></article>
+            <article data-disabled={lifecycle?.recallMode === 'off' || undefined}><span>02</span><div><strong>{t('status.recallWorker')}</strong><p>{lifecycle?.recallMode === 'guided' ? t('status.recallText') : t('status.recallOff')}</p></div><code>{workers?.recalls ?? 0}</code></article>
+            <article data-disabled={lifecycle?.writebackMode === 'off' || undefined}><span>03</span><div><strong>{t('status.writeWorker')}</strong><p>{lifecycle?.writebackMode === 'guided' ? t('status.writeText') : t('status.writeOff')}</p></div><code>{workers?.writes ?? 0}</code></article>
           </div>
-          <div className={css.lifecycleFoot}><span>最近阶段 <strong>{phase}</strong></span><span>最近活动 <strong>{latest}</strong></span><span>受监督请求 <strong>{lifecycle?.counters.supervisedRequests ?? 0}</strong></span><span>子 Agent 失败 <strong>{workers?.failures ?? 0}</strong></span></div>
+          <div className={css.lifecycleFoot}><span>{t('status.latestPhase')} <strong>{phase}</strong></span><span>{t('status.latestActivity')} <strong>{latest}</strong></span><span>{t('status.supervisedRequests')} <strong>{lifecycle?.counters.supervisedRequests ?? 0}</strong></span><span>{t('status.workerFailures')} <strong>{workers?.failures ?? 0}</strong></span></div>
           {current?.lastError !== undefined && <div className={css.inlineError} role="alert">Lifecycle：{current.lastError}</div>}
         </section>
 
         <aside className={css.diagnosticsPanel}>
-          <div className={css.statusSectionHeader}><div><span className={css.cardKicker}>QUICK DIAGNOSTICS</span><h3>快速诊断</h3></div></div>
+          <div className={css.statusSectionHeader}><div><h3>{t('status.quickDiagnostics')}</h3></div></div>
           <ul className={css.diagnosticList}>
-            <li data-ok={status?.commandFound || undefined}><span />Mnemon CLI {status?.commandFound ? '可执行' : '未找到'}</li>
-            <li data-ok={activeBodies > 0 || undefined}><span />{activeBodies} 个记忆体参与读取</li>
-            <li data-ok={lifecycle?.sessionAvailable || undefined}><span />{lifecycle?.sessionAvailable ? 'WebUI 可创建隔离记忆子 Agent' : '缺少 live session'}</li>
-            <li data-ok={(lifecycle?.counters.failures ?? 0) === 0 || undefined}><span />Lifecycle 失败 {lifecycle?.counters.failures ?? 0} 次</li>
+            <li data-ok={status?.commandFound || undefined}><span />{status?.commandFound ? t('status.cliExecutable') : t('status.cliMissing')}</li>
+            <li data-ok={catalogKnown && activeBodies > 0 || undefined}><span />{catalogKnown ? t('status.readingSpaces', { count: activeBodies }) : t('status.directoryWaiting')}</li>
+            <li data-ok={lifecycle?.sessionAvailable || undefined}><span />{lifecycle?.sessionAvailable ? t('status.webAgentReady') : t('status.liveSessionMissing')}</li>
+            <li data-ok={(lifecycle?.counters.failures ?? 0) === 0 || undefined}><span />{t('status.lifecycleFailures', { count: lifecycle?.counters.failures ?? 0 })}</li>
           </ul>
-          <div className={css.nativeAccess}><span className={css.cardKicker}>NATIVE ACCESS</span><code>/mnemon status</code><code>/mnemon recall &lt;query&gt;</code><p>模型侧使用原生 <code>mnemon_*</code> 工具；人工命令不会绕入模型。</p></div>
+          <div className={css.nativeAccess}><h3>{t('status.nativeAccess')}</h3><code>/mnemon status</code><code>/mnemon recall &lt;query&gt;</code><p>{t('status.nativeAccessText')}</p></div>
         </aside>
       </div>
 
       <section className={css.runtimeDetails}>
-        <div className={css.statusSectionHeader}><div><span className={css.cardKicker}>RUNTIME DETAILS</span><h3>引擎与存储</h3></div><span className={`${css.runtimeBadge} ${status?.healthy === true ? css.runtimeOnline : css.runtimeOffline}`}>{status?.healthy === true ? 'ONLINE' : 'OFFLINE'}</span></div>
-        <dl><div><dt>CLI</dt><dd><code>{status?.cliPath ?? 'mnemon'}</code></dd></div><div><dt>Mnemon 版本</dt><dd>{status?.version ?? '—'}</dd></div><div><dt>记忆体目录</dt><dd><code>{status?.memoryBodyDirectory ?? '—'}</code></dd></div><div><dt>总数据库大小</dt><dd>{status?.stats === undefined ? '—' : humanBytes(status.stats.dbSizeBytes)}</dd></div><div><dt>记忆体</dt><dd>{status === undefined ? '—' : memoryBodies.length} 个</dd></div><div><dt>已激活</dt><dd>{activeBodies} 个</dd></div><div><dt>有效记忆</dt><dd>{status?.stats?.totalInsights ?? '—'}</dd></div><div><dt>图谱连接</dt><dd>{status?.stats?.edgeCount ?? '—'}</dd></div></dl>
+        <div className={css.statusSectionHeader}><div><h3>{t('status.engineStorage')}</h3></div><span className={`${css.runtimeBadge} ${status?.healthy === true ? css.runtimeOnline : css.runtimeOffline}`}>{status?.healthy === true ? t('status.online') : t('status.offline')}</span></div>
+        <dl><div><dt>CLI</dt><dd><code>{status?.cliPath ?? 'mnemon'}</code></dd></div><div><dt>{t('status.mnemonVersion')}</dt><dd>{status?.version ?? '—'}</dd></div><div><dt>{t('status.directory')}</dt><dd><code>{status?.memoryBodyDirectory ?? '—'}</code></dd></div><div><dt>{t('status.activeDbSize')}</dt><dd>{status?.stats === undefined ? '—' : humanBytes(status.stats.dbSizeBytes)}</dd></div><div><dt>{t('term.spaces')}</dt><dd>{catalogKnown ? t('common.count', { count: memoryBodies.length }) : '—'}</dd></div><div><dt>{t('status.activeCount')}</dt><dd>{catalogKnown ? t('common.count', { count: activeBodies }) : '—'}</dd></div><div><dt>{t('telemetry.memories')}</dt><dd>{status?.stats?.totalInsights ?? '—'}</dd></div><div><dt>{t('status.activeGraphEdges')}</dt><dd>{status?.stats?.edgeCount ?? '—'}</dd></div></dl>
       </section>
     </div>
   )
 }
 
-export function MnemonView({ connection, sessionId }: MnemonViewProps): JSX.Element {
+export function MnemonView(props: MnemonViewProps): JSX.Element {
+  return <I18nContext.Provider value={props.t ?? translateZh}><MnemonWorkspace {...props} /></I18nContext.Provider>
+}
+
+function MnemonWorkspace({ connection, sessionId }: MnemonViewProps): JSX.Element {
+  const t = useT()
   const client = useMemo(() => new MnemonClient(connection, sessionId), [connection, sessionId])
   const [page, setPage] = useState<Page>('overview')
   const [status, setStatus] = useState<StatusView | null>(null)
@@ -829,21 +869,22 @@ export function MnemonView({ connection, sessionId }: MnemonViewProps): JSX.Elem
   const refreshAll = () => { setRevision(value => value + 1); void loadStatus() }
   const writeEnabled = status?.writeEnabled === true
   const stats = status?.stats
-  const memoryBodies = status?.memoryBodies ?? []
+  const catalogKnown = status?.memoryBodies !== undefined
+  const memoryBodies = useMemo(() => status?.memoryBodies ?? [], [status])
   const activeBodies = memoryBodies.filter(body => body.active).length
 
   return (
     <main className={css.shell}>
       <header className={css.masthead}>
-        <div className={css.brand}><MnemonLogo className={css.brandLogo} /><div><div className={css.eyebrow}>PERSISTENT AGENT MEMORY</div><h1>Mnemon</h1><p>LLM-supervised 4-graph persistent memory for AI agents.</p></div></div>
-        <div className={css.statusCluster}><span className={`${css.statusDot} ${status?.healthy === true ? css.online : css.offline}`} /><span>{statusLoading ? '检查中' : status?.healthy === true ? `已连接 · ${activeBodies} 个记忆体` : '不可用'}</span><button type="button" className={css.iconButton} onClick={refreshAll} aria-label="刷新状态">↻</button></div>
+        <div className={css.brand}><MnemonLogo className={css.brandLogo} /><div><h1>Mnemon</h1><p>LLM-supervised 4-graph persistent memory for AI agents.</p></div></div>
+        <div className={css.statusCluster}><span className={`${css.statusDot} ${status?.healthy === true ? css.online : css.offline}`} /><span>{statusLoading ? t('header.checking') : status?.healthy === true ? catalogKnown ? t('header.connected', { count: activeBodies }) : t('header.directoryPending') : t('header.unavailable')}</span><button type="button" className={css.iconButton} onClick={refreshAll} aria-label={t('common.refresh')}>↻</button></div>
       </header>
-      {(statusError !== null || status?.healthy === false) && <div className={css.alert} role="alert"><strong>Mnemon 尚未就绪</strong><span>{statusError ?? status?.error}</span></div>}
-      <section className={css.telemetry} aria-label="记忆统计"><div className={css.telemetryLead}><span className={css.telemetryPulse} />Memory telemetry</div><div className={css.telemetryMetric}><span>有效记忆</span><strong>{stats?.totalInsights ?? '—'}</strong></div><div className={css.telemetryMetric}><span>图谱连接</span><strong>{stats?.edgeCount ?? '—'}</strong></div><div className={css.telemetryMetric}><span>已识别实体</span><strong>{stats?.topEntities.length ?? '—'}</strong></div><div className={css.telemetryMetric}><span>激活记忆体</span><strong>{status === null ? '—' : activeBodies}</strong></div></section>
+      {(statusError !== null || status?.healthy === false) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
+      <section className={css.telemetry} aria-label={t('telemetry.aria')}><div className={css.telemetryLead}><span className={css.telemetryPulse} />{t('telemetry.title')}</div><div className={css.telemetryMetric}><span>{t('telemetry.memories')}</span><strong>{stats?.totalInsights ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.graph')}</span><strong>{stats?.edgeCount ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.entities')}</span><strong>{stats?.topEntities.length ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.spaces')}</span><strong>{status === null || !catalogKnown ? '—' : activeBodies}</strong></div></section>
       <div className={css.workspace}>
-        <aside className={css.sidebar}><nav className={css.nav} aria-label="Mnemon 页面">{PAGE_NAV.map(item => <button key={item.id} type="button" aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><span className={css.navGlyph} aria-hidden="true">{item.glyph}</span><span><strong>{item.label}</strong><small>{item.detail}</small></span></button>)}</nav><div className={css.sidebarFooter}><span>ACTIVE MEMORY BODIES</span><code>{activeBodies} / {status === undefined ? '—' : memoryBodies.length}</code><small>{writeEnabled ? 'Subagent supervised' : 'Read only'}</small></div></aside>
+        <div className={css.topNavigation}><nav className={css.nav} aria-label={t('nav.aria')}>{PAGE_NAV.map(item => <button key={item.id} type="button" aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><span className={css.navGlyph} aria-hidden="true">{item.glyph}</span><span><strong>{t(item.label)}</strong><small>{t(item.detail)}</small></span></button>)}</nav><div className={css.spaceSummary}><span>{t('sidebar.activeSpaces')}</span><code>{catalogKnown ? `${activeBodies} / ${memoryBodies.length}` : '— / —'}</code><small>{writeEnabled ? t('common.agentSupervised') : t('common.readOnly')}</small></div></div>
         <section className={css.canvas}>
-          {page === 'overview' && <OverviewPage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} onExplore={explore} />}
+          {page === 'overview' && <OverviewPage client={client} revision={revision} writeEnabled={writeEnabled} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onExplore={explore} />}
           {page === 'explore' && <ExplorePage client={client} status={status} seed={searchSeed} writeEnabled={writeEnabled} onForget={forget} />}
           {page === 'entities' && <EntitiesPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onExplore={explore} />}
           {page === 'remember' && <RememberPage client={client} sessionId={sessionId} memoryBodies={status?.memoryBodies ?? []} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} />}

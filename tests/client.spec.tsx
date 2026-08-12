@@ -5,6 +5,7 @@ import type { ClientConnectionHandle } from '../src/contracts.ts'
 import type { ClientSettingsScope } from '../src/contracts.ts'
 import type { Config } from '../src/config.ts'
 import { MnemonView } from '../src/client/MnemonView.tsx'
+import { translateEn } from '../src/client/locales.ts'
 
 describe('MnemonView', () => {
   afterEach(cleanup)
@@ -97,7 +98,7 @@ describe('MnemonView', () => {
   it('shows the live graph and all six Mnemon workspaces', async () => {
     const { connection } = createConnection()
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
-    await waitFor(() => expect(screen.getByText('已连接 · 1 个记忆体')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
     expect(screen.getByRole('heading', { name: '记忆体总览' })).toBeTruthy()
     expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy()
     expect(screen.getAllByText('项目记忆体').length).toBeGreaterThan(0)
@@ -137,14 +138,14 @@ describe('MnemonView', () => {
     expect(screen.getByRole('heading', { name: '运行状态' })).toBeTruthy()
     expect(screen.getByText('记忆子 Agent 可用')).toBeTruthy()
     expect(screen.getByRole('heading', { name: '子 Agent 生命周期' })).toBeTruthy()
-    expect(screen.getByText('Recall Worker')).toBeTruthy()
+    expect(screen.getByText('召回处理')).toBeTruthy()
     expect(screen.getByText('/mnemon status')).toBeTruthy()
   })
 
   it('requires inline confirmation before forgetting a recalled memory', async () => {
     const { connection, call } = createConnection()
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
-    await waitFor(() => expect(screen.getByText('已连接 · 1 个记忆体')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: /检索 意图增强召回/ }))
     fireEvent.change(screen.getByRole('textbox', { name: '记忆查询' }), { target: { value: 'SQLite' } })
@@ -163,7 +164,7 @@ describe('MnemonView', () => {
   it('dispatches the default writeback path to an isolated memory subagent', async () => {
     const { connection, call } = createConnection()
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
-    await waitFor(() => expect(screen.getByText('已连接 · 1 个记忆体')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: /沉淀 LLM 监督写回/ }))
     fireEvent.change(screen.getByRole('textbox', { name: '待沉淀内容' }), { target: { value: '项目发布前必须通过真实 WebUI 验证。' } })
@@ -175,5 +176,84 @@ describe('MnemonView', () => {
       content: '项目发布前必须通过真实 WebUI 验证。',
     })
     expect(call).not.toHaveBeenCalledWith(expect.anything(), 'remember', expect.anything())
+  })
+
+  it('renders a usable empty overview when no memory bodies exist', async () => {
+    const call = vi.fn(async (_channel: string, endpoint: string) => {
+      if (endpoint === 'status') return {
+        ok: true,
+        value: {
+          healthy: true,
+          version: '0.2.0',
+          cliPath: '/usr/local/bin/mnemon',
+          commandFound: true,
+          dataDir: '/tmp/mnemon',
+          store: 'none',
+          writeEnabled: true,
+          timeoutMs: 10000,
+          defaultRecallLimit: 10,
+          memoryBodyDirectory: '/tmp/mnemon/data',
+          memoryBodies: [],
+          stats: { totalInsights: 0, deletedInsights: 0, edgeCount: 0, oplogCount: 0, dbSizeBytes: 0, byCategory: {}, topEntities: [] },
+        },
+      }
+      if (endpoint === 'bodies') return { ok: false, error: { code: 'compatibility', message: 'memory-body catalog unavailable' } }
+      if (endpoint === 'graph') return { ok: true, value: { nodes: [], edges: [], generatedAt: '2026-08-13T03:00:00.000Z' } }
+      return { ok: false, error: { code: 'unexpected', message: endpoint } }
+    })
+    render(<MnemonView connection={{ rpc: { call } } as unknown as ClientConnectionHandle} settingsScope={settingsScope} sessionId="session-1" />)
+
+    await waitFor(() => expect(screen.getAllByRole('heading', { name: '还没有记忆体' })).toHaveLength(1))
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByText('0 / 0')).toBeTruthy()
+    expect(screen.getByText('＋ 创建空白记忆体')).toBeTruthy()
+  })
+
+  it('marks an old Host catalog as unsynchronized instead of reporting zero bodies', async () => {
+    const call = vi.fn(async (_channel: string, endpoint: string) => {
+      if (endpoint === 'status') return {
+        ok: true,
+        value: {
+          healthy: true,
+          version: '0.2.0',
+          cliPath: '/usr/local/bin/mnemon',
+          commandFound: true,
+          dataDir: '/tmp/mnemon',
+          store: 'legacy',
+          writeEnabled: true,
+          timeoutMs: 10000,
+          defaultRecallLimit: 10,
+          stats: { totalInsights: 2, deletedInsights: 0, edgeCount: 6, oplogCount: 4, dbSizeBytes: 4096, byCategory: {}, topEntities: [] },
+        },
+      }
+      if (endpoint === 'bodies') return { ok: false, error: { code: 'compatibility', message: 'unknown endpoint' } }
+      if (endpoint === 'graph') return { ok: true, value: { nodes: [], edges: [], generatedAt: '2026-08-13T03:00:00.000Z' } }
+      return { ok: false, error: { code: 'unexpected', message: endpoint } }
+    })
+    render(<MnemonView connection={{ rpc: { call } } as unknown as ClientConnectionHandle} settingsScope={settingsScope} sessionId="session-1" />)
+
+    await waitFor(() => expect(screen.getByText('已连接 · 目录待同步')).toBeTruthy())
+    expect(screen.getAllByText('记忆体目录尚未同步').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByText('0 / 0')).toBeNull()
+    expect(screen.getByText('2')).toBeTruthy()
+  })
+
+  it('renders all product copy in English with Memory Space terminology', async () => {
+    const { connection } = createConnection()
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" t={translateEn} />)
+
+    await waitFor(() => expect(screen.getByText('Connected · 1 active')).toBeTruthy())
+    expect(screen.getByRole('heading', { name: 'Memory Overview' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Memory Space Directory' })).toBeTruthy()
+    expect(screen.getByRole('navigation', { name: 'Mnemon pages' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Recall Intent-aware retrieval/ })).toBeTruthy()
+    expect(screen.queryByText('PERSISTENT AGENT MEMORY')).toBeNull()
+    expect(screen.queryByText(/Memory Bod(y|ies)/i)).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /Status Runtime and diagnostics/ }))
+    expect(screen.getByRole('heading', { name: 'Runtime Status' })).toBeTruthy()
+    expect(screen.getByText('Recall worker')).toBeTruthy()
+    expect(screen.getAllByText('Memory Spaces').length).toBeGreaterThan(0)
   })
 })

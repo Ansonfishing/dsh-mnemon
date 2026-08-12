@@ -178,9 +178,14 @@ export interface HostContextShape {
 export interface SlotsService {
   inject(name: string, factory: () => unknown): unknown
   register(
-    options: { name: string; id: string; order?: number; label?: string; inject?: () => Record<string, unknown> },
+    options: { name: string; id: string; order?: number; label?: string | (() => string); locale?: string; inject?: () => Record<string, unknown> },
     component: (props: never) => unknown,
   ): unknown
+}
+
+export interface ClientLocaleService {
+  register(namespace: string, dictionaries: { zh: Record<string, string>; en: Record<string, string> }): () => void
+  bind(namespace: string): (key: string, params?: Record<string, unknown>) => string
 }
 
 export interface ClientSettingsSnapshot<T> {
@@ -203,4 +208,6 @@ export interface ClientSettingsScope<T> {
 export interface ClientContextShape {
   slots: SlotsService
   connection: ClientConnectionHandle
+  locale: ClientLocaleService
+  effect(callback: () => (() => unknown) | void, label?: string): () => unknown
 }

@@ -43,7 +43,7 @@
 .brandLogo { width: 46px; height: 46px; flex: 0 0 auto; overflow: hidden; border-radius: 10px; box-shadow: 0 0 0 1px var(--mn-line-strong); }
 .brand h1 { margin: 1px 0 0; font-size: 19px; line-height: 1.15; letter-spacing: -.02em; }
 .brand p { margin: 3px 0 0; color: var(--mn-muted); font-size: 12px; }
-.eyebrow, .cardKicker, .pageHeader > div > span, .sectionHeading > div > span, .sidebarFooter > span, .entityHeading > span, .inspectorHeading > span, .inspectorEmpty > span {
+.cardKicker, .sectionHeading > div > span, .entityHeading > span, .inspectorHeading > span {
   color: var(--mn-faint); font: 650 9px/1.2 var(--mn-code); letter-spacing: .12em; text-transform: uppercase;
 }
 
@@ -65,20 +65,23 @@
 .telemetryMetric span { overflow: hidden; color: var(--mn-faint); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .telemetryMetric strong { font: 650 14px/1 var(--mn-code); font-variant-numeric: tabular-nums; }
 
-.workspace { display: flex; min-height: 0; flex: 1; }
-.sidebar { display: flex; width: 198px; flex: 0 0 198px; flex-direction: column; justify-content: space-between; padding: 14px 10px 12px; border-right: 1px solid var(--mn-line); background: color-mix(in srgb, var(--mn-layer-1) 56%, var(--mn-bg)); }
-.nav { display: grid; gap: 3px; }
-.nav button { display: grid; width: 100%; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 8px; padding: 7px 8px; border: 1px solid transparent; border-radius: 8px; color: var(--mn-muted); background: transparent; text-align: left; cursor: pointer; }
+.workspace { display: flex; min-height: 0; flex: 1; flex-direction: column; }
+.topNavigation { display: flex; min-width: 0; flex: 0 0 auto; align-items: stretch; justify-content: space-between; gap: 14px; padding: 8px clamp(18px, 2.5vw, 32px); border-bottom: 1px solid var(--mn-line); background: color-mix(in srgb, var(--mn-layer-1) 72%, var(--mn-bg)); }
+.nav { display: flex; min-width: 0; align-items: stretch; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.nav::-webkit-scrollbar { display: none; }
+.nav button { position: relative; display: grid; min-width: 116px; grid-template-columns: 26px minmax(0, 1fr); align-items: center; gap: 7px; padding: 6px 9px; border: 1px solid transparent; border-radius: 8px; color: var(--mn-muted); background: transparent; text-align: left; cursor: pointer; }
 .nav button:hover { color: var(--mn-text); background: var(--mn-hover); }
-.nav button[aria-current="page"] { border-color: var(--mn-line); color: var(--mn-text); background: var(--mn-layer-1); box-shadow: 0 1px 2px color-mix(in srgb, var(--mn-text) 5%, transparent); }
+.nav button[aria-current="page"] { border-color: var(--mn-line); color: var(--mn-text); background: var(--mn-bg); box-shadow: 0 1px 2px color-mix(in srgb, var(--mn-text) 5%, transparent); }
+.nav button[aria-current="page"]::after { position: absolute; right: 11px; bottom: -9px; left: 11px; height: 2px; border-radius: 2px 2px 0 0; content: ""; background: var(--mn-accent); }
 .nav button[aria-current="page"] .navGlyph { border-color: color-mix(in srgb, var(--mn-accent) 40%, var(--mn-line)); color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 9%, transparent); }
 .nav button > span:last-child { display: grid; min-width: 0; }
 .nav button strong { font-size: 12px; font-weight: 600; }
 .nav button small { color: var(--mn-faint); font-size: 10px; }
 .navGlyph { display: grid; width: 27px; height: 27px; place-items: center; border: 1px solid var(--mn-line); border-radius: 7px; color: var(--mn-faint); background: var(--mn-bg); font: 600 14px/1 var(--mn-code); }
-.sidebarFooter { display: grid; gap: 4px; padding: 12px 10px 5px; border-top: 1px solid var(--mn-line); }
-.sidebarFooter code { overflow: hidden; font: 600 11px/1.3 var(--mn-code); text-overflow: ellipsis; }
-.sidebarFooter small { color: var(--mn-faint); font-size: 10px; }
+.spaceSummary { display: grid; min-width: 142px; flex: 0 0 auto; grid-template-columns: minmax(0, 1fr) auto; align-content: center; gap: 2px 9px; padding: 0 0 0 14px; border-left: 1px solid var(--mn-line); }
+.spaceSummary > span { overflow: hidden; color: var(--mn-faint); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.spaceSummary code { grid-row: span 2; align-self: center; color: var(--mn-accent); font: 650 12px/1 var(--mn-code); }
+.spaceSummary small { color: var(--mn-faint); font-size: 9px; }
 
 .canvas { min-width: 0; flex: 1; overflow: auto; background: var(--mn-bg); }
 .page { width: min(1240px, 100%); min-height: 100%; margin: 0 auto; padding: clamp(20px, 2.8vw, 34px); }
@@ -111,17 +114,25 @@
 .bodyDirectoryHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 13px; }
 .bodyDirectoryHeader h3 { margin: 4px 0 2px; font-size: 15px; }
 .bodyDirectoryHeader p { margin: 0; color: var(--mn-muted); font-size: 10px; }
+.bodyDirectoryPath { display: block; max-width: min(62vw, 720px); margin-top: 7px; overflow: hidden; color: var(--mn-faint); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .bodyDirectoryHeader > strong { flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 9%, transparent); font: 650 9px var(--mn-code); }
 .bodyGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 8px; }
+.bodyDirectoryEmpty { grid-column: 1 / -1; min-height: 92px; display: flex; align-items: center; justify-content: center; gap: 14px; border: 1px dashed color-mix(in srgb, var(--mn-line) 84%, transparent); border-radius: 12px; color: var(--mn-muted); }
+.bodyDirectoryEmpty > span { font-size: 28px; opacity: .6; }
+.bodyDirectoryEmpty strong { display: block; color: var(--mn-text); }
+.bodyDirectoryEmpty p { margin: 3px 0 0; font-size: 10px; }
 .bodyCard { --mn-body-accent: var(--mn-faint); min-width: 0; padding: 11px; border: 1px solid var(--mn-line); border-radius: 10px; background: color-mix(in srgb, var(--mn-layer-2) 44%, var(--mn-layer-1)); opacity: .7; transition: opacity .18s, border-color .18s, transform .18s; }
 .bodyCard[data-active] { border-color: color-mix(in srgb, var(--mn-body-accent) 42%, var(--mn-line)); opacity: 1; box-shadow: inset 0 1px 0 color-mix(in srgb, var(--mn-body-accent) 10%, transparent); }
 .bodyCard:hover { transform: translateY(-1px); }
 .bodyCardTop { display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .bodySignal { width: 7px; height: 7px; border-radius: 50%; background: var(--mn-faint); }
 .bodyCard[data-active] .bodySignal { background: var(--mn-body-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mn-body-accent) 14%, transparent); }
+.bodyCard:not([data-healthy]) .bodySignal { background: var(--mn-danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mn-danger) 12%, transparent); }
 .bodyCardTop > div { display: grid; min-width: 0; }
 .bodyCardTop strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .bodyCardTop code { overflow: hidden; color: var(--mn-faint); font: 9px var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
+.bodyHealth { color: var(--mn-success); font: 650 8px var(--mn-code); letter-spacing: .07em; text-transform: uppercase; }
+.bodyCard:not([data-healthy]) .bodyHealth { color: var(--mn-danger); }
 .bodyCardTop button { display: flex; min-height: 27px; align-items: center; gap: 5px; border: 1px solid var(--mn-line); border-radius: 999px; padding: 0 8px; color: var(--mn-muted); background: var(--mn-layer-1); font-size: 9px; cursor: pointer; }
 .bodyCardTop button i { width: 7px; height: 7px; border-radius: 50%; background: var(--mn-faint); }
 .bodyCardTop button[aria-checked="true"] { border-color: color-mix(in srgb, var(--mn-body-accent) 38%, var(--mn-line)); color: var(--mn-text); }
@@ -272,7 +283,7 @@
 .advancedWrite summary > span:last-child { color: var(--mn-accent); font: 10px var(--mn-code); }
 .advancedWrite[open] summary { border-bottom: 1px solid var(--mn-line); }
 .advancedWrite[open] summary > span:last-child { font-size: 0; }
-.advancedWrite[open] summary > span:last-child::after { content: "收起"; font-size: 10px; }
+.advancedWrite[open] summary > span:last-child::after { content: "−"; font-size: 13px; }
 .manualForm { padding: 3px 18px 18px; }
 .manualActions { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 15px; }
 .manualActions p { max-width: 520px; margin: 0; color: var(--mn-faint); font-size: 10px; }
@@ -335,7 +346,7 @@
 .configDisclosure summary > span:last-child { color: var(--mn-accent); font: 10px var(--mn-code); }
 .configDisclosure[open] summary { border-bottom: 1px solid var(--mn-line); }
 .configDisclosure[open] summary > span:last-child { font-size: 0; }
-.configDisclosure[open] summary > span:last-child::after { content: "收起配置"; font-size: 10px; }
+.configDisclosure[open] summary > span:last-child::after { content: "−"; font-size: 13px; }
 .settingsPanel { padding: 14px; }
 
 @media (max-width: 1000px) {
@@ -356,11 +367,11 @@
   .telemetry { grid-template-columns: repeat(4, 1fr); padding: 0 9px; }
   .telemetryLead { display: none; }
   .telemetryMetric { display: grid; justify-items: center; gap: 4px; padding: 9px 5px; text-align: center; }
-  .workspace { flex-direction: column; }
-  .sidebar { width: 100%; flex: 0 0 auto; padding: 7px; border-right: 0; border-bottom: 1px solid var(--mn-line); }
-  .nav { display: grid; grid-template-columns: repeat(6, minmax(48px, 1fr)); gap: 3px; }
-  .nav button { display: flex; flex-direction: column; gap: 3px; justify-content: center; padding: 5px 2px; text-align: center; }
-  .nav button small, .sidebarFooter { display: none; }
+  .topNavigation { padding: 6px 9px; }
+  .nav { flex: 1; }
+  .nav button { display: flex; min-width: 66px; flex-direction: column; gap: 2px; justify-content: center; padding: 4px 7px; text-align: center; }
+  .nav button small, .spaceSummary { display: none; }
+  .nav button[aria-current="page"]::after { bottom: -7px; }
   .navGlyph { width: 24px; height: 22px; border: 0; background: transparent; }
   .page { padding: 18px 13px 26px; }
   .pageHeader { display: grid; gap: 10px; }

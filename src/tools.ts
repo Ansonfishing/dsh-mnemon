@@ -35,17 +35,17 @@ function requireAgent(exec: ToolExecution) {
 export function registerTools(ctx: HostContextShape, service: MnemonService, coordinator: MnemonSubagentCoordinator): void {
   ctx.tools.register(definition({
     name: 'mnemon_memory_bodies',
-    description: 'List the global Mnemon memory-body catalog, including each body id, name, description, activation state, database path, and statistics. Read only. Use this before choosing a write target, or when the Prime summary is insufficient. Recall may only read active bodies; writes may target any body.',
+    description: 'List the global Mnemon Memory Space catalog, including each space id, name, description, activation state, database path, and statistics. Read only. Use this before choosing a write target, or when the Prime summary is insufficient. Recall may only read active spaces; writes may target any space.',
     parameters: { type: 'object', properties: {} },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     execute: (_args: unknown, exec: ToolExecution) => service.bodies(exec.signal),
-    presentCall: () => ({ card: 'generic', title: 'Inspect Mnemon memory bodies', kind: 'search' }),
-    presentResult: () => ({ card: 'generic', title: 'Mnemon memory bodies ready' }),
+    presentCall: () => ({ card: 'generic', title: 'Inspect Mnemon Memory Spaces', kind: 'search' }),
+    presentResult: () => ({ card: 'generic', title: 'Mnemon Memory Spaces ready' }),
   } as never))
 
   ctx.tools.register(definition({
     name: 'mnemon_recall',
-    description: 'Recall durable knowledge from one or more active Mnemon memory bodies. Choose bodies whose name/description matches the task; omit memoryBodyIds only when a cross-body search is intentionally useful. Use one focused query when prior decisions, preferences, rationale, conventions, pitfalls, or earlier work could materially change the answer.',
+    description: 'Recall durable knowledge from one or more active Mnemon Memory Spaces. Choose spaces whose name/description matches the task; omit memoryBodyIds only when a cross-space search is intentionally useful. Use one focused query when prior decisions, preferences, rationale, conventions, pitfalls, or earlier work could materially change the answer.',
     parameters: {
       type: 'object',
       properties: {
@@ -55,7 +55,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
         category: { type: 'string', enum: [...CATEGORIES] },
         source: { type: 'string', enum: [...SOURCES] },
         intent: { type: 'string', enum: [...INTENTS] },
-        memoryBodyIds: { type: 'array', items: { type: 'string' }, description: 'One or more active memory-body ids. Omit to search every active body.', maxItems: 20 },
+        memoryBodyIds: { type: 'array', items: { type: 'string' }, description: 'One or more active Memory Space ids. Omit to search every active space.', maxItems: 20 },
       },
       required: ['query'],
     },
@@ -81,7 +81,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
         id: { type: 'string', description: 'Insight id returned by mnemon_recall.' },
         depth: { type: 'integer', minimum: 1, maximum: 5 },
         edge: { type: 'string', enum: [...EDGE_TYPES] },
-        memoryBodyId: { type: 'string', description: 'Active memory body that returned this insight id.' },
+        memoryBodyId: { type: 'string', description: 'Active Memory Space that returned this insight id.' },
       },
       required: ['id'],
     },
@@ -97,7 +97,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
 
   ctx.tools.register(definition({
     name: 'mnemon_status',
-    description: 'Check the local Mnemon integration, active memory bodies, aggregate database statistics, and configuration. Use when a Mnemon operation fails or the user asks about memory health.',
+    description: 'Check the local Mnemon integration, active Memory Spaces, aggregate database statistics, and configuration. Use when a Mnemon operation fails or the user asks about memory health.',
     parameters: { type: 'object', properties: {} },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     execute: (_args: unknown, exec: ToolExecution) => service.status(exec.signal),
@@ -109,7 +109,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
 
   ctx.tools.register(definition({
     name: 'mnemon_remember',
-    description: 'Store one durable insight in a selected Mnemon memory body. Choose the narrowest existing body whose description owns the knowledge; search that body first. If several bodies are active, memoryBodyId is required. Writing to an inactive body activates it. Do not dump transcripts, temporary progress, routine observations, or repository-obvious facts.',
+    description: 'Store one durable insight in a selected Mnemon Memory Space. Choose the narrowest existing space whose description owns the knowledge; search that space first. If several spaces are active, memoryBodyId is required. Writing to an inactive space activates it. Do not dump transcripts, temporary progress, routine observations, or repository-obvious facts.',
     parameters: {
       type: 'object',
       properties: {
@@ -119,7 +119,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
         tags: { type: 'array', items: { type: 'string' }, maxItems: 20 },
         entities: { type: 'array', items: { type: 'string' }, maxItems: 50 },
         source: { type: 'string', enum: [...SOURCES], description: 'Defaults to agent for model-authored writeback.' },
-        memoryBodyId: { type: 'string', description: 'Target memory-body id. Required unless exactly one body is active.' },
+        memoryBodyId: { type: 'string', description: 'Target Memory Space id. Required unless exactly one space is active.' },
       },
       required: ['content'],
     },
@@ -177,7 +177,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
 
   ctx.tools.register(definition({
     name: 'mnemon_memory_body_create',
-    description: 'Create a new isolated Mnemon memory body. Use only when durable knowledge forms a recurring scope not owned by any existing body; never create one for a single temporary task. After creation, write the qualifying insight into it with mnemon_remember, which will activate it.',
+    description: 'Create a new isolated Mnemon Memory Space. Use only when durable knowledge forms a recurring scope not owned by any existing space; never create one for a single temporary task. After creation, write the qualifying insight into it with mnemon_remember, which will activate it.',
     parameters: {
       type: 'object',
       properties: {
@@ -191,13 +191,13 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     execute: (args: { id?: string; name: string; description?: string }, exec: ToolExecution) => isSubagent(exec.agent)
       ? service.createBody(args, exec.signal)
       : coordinator.write(requireAgent(exec), 'create-memory-body', args, exec.signal),
-    presentCall: () => ({ card: 'generic', title: 'Create Mnemon memory body', kind: 'edit' }),
-    presentResult: () => ({ card: 'generic', title: 'Mnemon memory body created' }),
+    presentCall: () => ({ card: 'generic', title: 'Create Mnemon Memory Space', kind: 'edit' }),
+    presentResult: () => ({ card: 'generic', title: 'Mnemon Memory Space created' }),
   } as never))
 
   ctx.tools.register(definition({
     name: 'mnemon_memory_body_update',
-    description: 'Update a memory body name, routing description, or activation state. Activation controls reads only. Use conservatively; prefer the user-facing toggle for ordinary manual activation changes.',
+    description: 'Update a Memory Space name, routing description, or activation state. Activation controls reads only. Use conservatively; prefer the user-facing toggle for ordinary manual activation changes.',
     parameters: {
       type: 'object',
       properties: {
@@ -212,13 +212,13 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     execute: (args: { memoryBodyId: string; name?: string; description?: string; active?: boolean }, exec: ToolExecution) => isSubagent(exec.agent)
       ? service.updateBody(args.memoryBodyId, args)
       : coordinator.write(requireAgent(exec), 'update-memory-body', args, exec.signal),
-    presentCall: () => ({ card: 'generic', title: 'Update Mnemon memory body', kind: 'edit' }),
-    presentResult: () => ({ card: 'generic', title: 'Mnemon memory body updated' }),
+    presentCall: () => ({ card: 'generic', title: 'Update Mnemon Memory Space', kind: 'edit' }),
+    presentResult: () => ({ card: 'generic', title: 'Mnemon Memory Space updated' }),
   } as never))
 
   ctx.tools.register(definition({
     name: 'mnemon_memory_body_merge',
-    description: 'Non-destructively merge complete source memory bodies into one existing target through Mnemon import, preserving durable nodes and typed graph edges where available. Use only after confirming substantial scope overlap or when the user requests consolidation. Source databases are retained; they are merely deactivated by default.',
+    description: 'Non-destructively merge complete source Memory Spaces into one existing target through Mnemon import, preserving durable nodes and typed graph edges where available. Use only after confirming substantial scope overlap or when the user requests consolidation. Source databases are retained; they are merely deactivated by default.',
     parameters: {
       type: 'object',
       properties: {
@@ -232,7 +232,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     execute: (args: { targetMemoryBodyId: string; sourceMemoryBodyIds: string[]; deactivateSources?: boolean }, exec: ToolExecution) => isSubagent(exec.agent)
       ? service.mergeBodies(args.targetMemoryBodyId, args.sourceMemoryBodyIds, args.deactivateSources ?? true, exec.signal)
       : coordinator.write(requireAgent(exec), 'merge-memory-bodies', args, exec.signal),
-    presentCall: () => ({ card: 'generic', title: 'Merge Mnemon memory bodies', kind: 'edit' }),
-    presentResult: () => ({ card: 'generic', title: 'Mnemon memory bodies merged' }),
+    presentCall: () => ({ card: 'generic', title: 'Merge Mnemon Memory Spaces', kind: 'edit' }),
+    presentResult: () => ({ card: 'generic', title: 'Mnemon Memory Spaces merged' }),
   } as never))
 }

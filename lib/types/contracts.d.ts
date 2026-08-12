@@ -215,9 +215,17 @@ export interface SlotsService {
         name: string;
         id: string;
         order?: number;
-        label?: string;
+        label?: string | (() => string);
+        locale?: string;
         inject?: () => Record<string, unknown>;
     }, component: (props: never) => unknown): unknown;
+}
+export interface ClientLocaleService {
+    register(namespace: string, dictionaries: {
+        zh: Record<string, string>;
+        en: Record<string, string>;
+    }): () => void;
+    bind(namespace: string): (key: string, params?: Record<string, unknown>) => string;
 }
 export interface ClientSettingsSnapshot<T> {
     status: 'loading' | 'ready' | 'unavailable';
@@ -237,5 +245,7 @@ export interface ClientSettingsScope<T> {
 export interface ClientContextShape {
     slots: SlotsService;
     connection: ClientConnectionHandle;
+    locale: ClientLocaleService;
+    effect(callback: () => (() => unknown) | void, label?: string): () => unknown;
 }
 //# sourceMappingURL=contracts.d.ts.map
