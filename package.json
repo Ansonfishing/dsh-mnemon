@@ -1,7 +1,33 @@
 {
   "name": "dsh-mnemon",
   "version": "0.1.0",
-  "description": "Mnemon external-memory bridge for DeepSeek Harness, with native agent tools and a conversation memory tab.",
+  "description": "LLM-supervised persistent memory for DeepSeek Harness, powered by Mnemon with native tools, commands, settings, and WebUI.",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "mnemon",
+    "agent-memory",
+    "persistent-memory",
+    "llm-memory",
+    "knowledge-graph",
+    "ai-agent",
+    "llm-agent",
+    "external-memory",
+    "local-first",
+    "llm-supervised",
+    "sqlite",
+    "typescript",
+    "cordis",
+    "plugin"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dsh-external/dsh-mnemon.git"
+  },
+  "homepage": "https://github.com/dsh-external/dsh-mnemon#readme",
+  "bugs": {
+    "url": "https://github.com/dsh-external/dsh-mnemon/issues"
+  },
   "license": "BSD-3-Clause",
   "type": "module",
   "main": "lib/index.js",

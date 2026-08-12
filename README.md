@@ -1,8 +1,19 @@
 # dsh-mnemon
 
-把 [Mnemon](https://github.com/mnemon-dev/mnemon) 作为 **DeepSeek Harness（DSH）的外置记忆层**：模型通过 DSH 原生工具按需召回与沉淀，用户通过会话页顶部的「记忆」Tab 检索、查看关联、写入和诊断本地记忆库。
+**DeepSeek Harness（DSH）的 LLM-supervised 持久记忆插件。** 它把 [Mnemon](https://github.com/mnemon-dev/mnemon) 接入 DSH：Agent 通过原生工具按需召回和沉淀跨会话知识，用户通过 `/mnemon` 命令、插件设置和会话「记忆」Tab 管理本地记忆图谱。
 
-设计遵循 Mnemon 的 **LLM-led / protocol-constrained** 原则：插件提供记忆能力和轻量路由指引，但不会在每轮自动召回，也不会把整个记忆库塞进模型上下文。当前指令和仓库证据始终高于可能过时的记忆。
+Mnemon 采用 **LLM-supervised** 模式：宿主 LLM 判断何时召回、什么值得记住以及何时遗忘；本地单一二进制负责存储、四图索引、检索、衰减和去重。`dsh-mnemon` 将这一分工映射到 DSH 原生扩展点，不引入第二个 LLM、不要求额外 API Key，也不会在每轮机械召回或把整库塞入上下文。
+
+## 定位
+
+| 层 | 职责 |
+|---|---|
+| DSH Agent | 根据任务与路由指引决定是否 `recall / remember / link / forget` |
+| `dsh-mnemon` | 注册工具、命令、设置、WebUI，校验输入并控制权限与超时 |
+| Mnemon CLI | 执行确定性的 SQLite 存储、四图索引、意图感知召回、衰减与去重 |
+| DSH 用户 | 在「记忆」Tab 检索和审阅，在插件设置中选择 Store 与读写策略 |
+
+当前用户指令与仓库事实始终高于可能过时的历史记忆。记忆是可复核的辅助证据，不是自动覆盖当前事实的真相源。
 
 ## 功能
 
@@ -16,9 +27,10 @@
 - **轻量系统指引**：任务开始先判断是否值得 recall，任务结束再判断是否有 durable writeback；不做机械调用。
 - **DSH 原生命令**：`/mnemon status`、`recall`、`related`、`remember`、`forget` 直接通过命令面板执行，不经过模型。
 - **会话「记忆」Tab**
-  - 「检索」：三种检索模式、分类过滤、结果卡片、关联图遍历、复制 ID、软删除；
-  - 「记住」：内容、分类、重要性和标签表单；
-  - 「配置」：真实 CLI 版本、命名 store、数据目录、库统计、当前开关与配置示例。
+  - 「检索记忆」：三种检索模式、分类过滤、结果卡片、关联图检查器、复制 ID、卡片内软删除确认；
+  - 「沉淀记忆」：耐久性判断提示，以及内容、分类、重要性和标签表单；
+  - 「运行状态」：CLI 版本、命名 Store、数据目录、库统计、访问模式和原生命令入口。
+- **DSH 插件配置**：在「设置 → 插件配置 → Mnemon 外置记忆」编辑配置，写入 `.dsh/settings.yaml` 并在重启后生效。
 - **命名 store 与数据隔离**：支持 Mnemon 的 `--store` / `MNEMON_STORE` / active store 优先级。
 - **安全边界**：所有 CLI 调用使用参数数组并禁用 shell；远程可信 Web 页面可读，本地记忆写入 RPC 仅允许 loopback 页面；`writeEnabled: false` 可整体切成只读。
 - **版本兼容**：同时解析 Mnemon 0.1.2 的嵌套 recall 结果和当前上游的紧凑结果。
@@ -26,23 +38,36 @@
 ## 架构
 
 ```text
-DSH agent ── native tools ─┐
-                           ├── dsh-mnemon host ── mnemon CLI ── ~/.mnemon/data/<store>/
-DSH Web ── 「记忆」Tab ───┘                  remember / recall / related / link / forget
+DSH Agent ── native tools ─────┐
+DSH Chat  ── /mnemon command ──┼── dsh-mnemon host ── mnemon CLI ── ~/.mnemon/data/<store>/
+DSH Web   ── 「记忆」Tab ──────┤                  remember / link / recall / forget
+DSH 设置  ── settings.yaml ────┘
 ```
 
 浏览器不直接启动进程、不接触数据库，也不保存任何密钥或特殊权限。Host 半区统一解析配置、校验输入、设置超时并调用本地 `mnemon` 可执行文件。
 
 ## 前置条件
 
-先安装 Mnemon，并确认命令可用：
+先安装 Mnemon。macOS 推荐使用官方 Homebrew Cask：
+
+```sh
+brew install --cask mnemon-dev/tap/mnemon
+```
+
+macOS / Linux 也可以通过 Go 安装：
+
+```sh
+go install github.com/mnemon-dev/mnemon@latest
+```
+
+确认命令可用：
 
 ```sh
 mnemon --version
 mnemon status
 ```
 
-Mnemon 是 local-first 单二进制记忆图谱；嵌入向量可选，未安装 Ollama 时核心 remember / recall / graph 能力仍可工作。详细安装方式见 [Mnemon 官方仓库](https://github.com/mnemon-dev/mnemon)。
+Mnemon 是 local-first 单二进制持久记忆图谱，核心协议是 `remember / link / recall`。它同时维护 temporal、entity、causal、semantic 四类关系；本地嵌入是可选增强，未安装 Ollama 时核心记忆与图召回能力仍可工作。详细安装和设计说明见 [Mnemon 官方仓库](https://github.com/mnemon-dev/mnemon)。
 
 ## 安装到 DSH
 
@@ -50,7 +75,7 @@ Mnemon 是 local-first 单二进制记忆图谱；嵌入向量可选，未安装
 dsh plugin --profile web add "github:dsh-external/dsh-mnemon"
 ```
 
-安装后重启 `dsh web`，再刷新浏览器。包内的 `cordis.patch.yml` 会自动挂载插件并启用「记忆」Tab。
+安装后重启 `dsh web`，再刷新浏览器。包内的 `cordis.patch.yml` 会自动挂载插件、注册 Agent 工具与 `/mnemon` 命令，并启用「记忆」Tab 和插件配置卡片。
 
 本地开发检出可使用：
 
@@ -60,7 +85,7 @@ dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 
 ## 配置
 
-推荐在 DSH Web 的 **设置 → 插件配置 → Mnemon 外置记忆** 中修改。设置会写入 `$DSH_HOME/settings.yaml` 的 `mnemon` namespace，并在重启 DSH 后生效；profile 的插件配置作为 base，`settings.yaml` 中的用户值拥有更高优先级。
+推荐在 DSH Web 的 **设置 → 插件配置 → Mnemon 外置记忆** 中修改。设置会写入 `$DSH_HOME/settings.yaml` 的 `mnemon` 命名空间，并在重启 DSH 后生效；profile 的插件配置作为 base，`settings.yaml` 中的用户值拥有更高优先级。
 
 ```yaml
 # ~/.dsh/settings.yaml
@@ -129,6 +154,8 @@ mnemon:
 4. 临时进度、普通聊天、可直接从仓库读出的事实不写入。
 5. 需要解释关系时，从 recall 返回的完整 ID 调用 `mnemon_related`；不要猜 ID。
 
+这对应 Mnemon 的生命周期判断：任务到来时只问“召回是否可能改变结果”，任务结束时只问“是否产生了稳定、可复用、未来值得检索的知识”。插件提供提醒和能力，最终判断仍由 DSH Agent 完成。
+
 ## DSH 命令
 
 在会话输入框的“命令”菜单中选择 `/mnemon`，或直接输入：
@@ -160,7 +187,7 @@ pnpm run verify
 - `lib/client.js`：自包含浏览器 bundle，仅 external `react` / `react/jsx-runtime`；
 - `lib/types/`：Host 与 Client 类型声明和中间 ESM。
 
-测试覆盖配置解析、CLI 参数/超时边界、0.1.2 与当前 recall 数据形态、只读模式、RPC 权限划分、Tab 首屏渲染。另已使用真实 Mnemon 0.1.2 的隔离临时 store 验证 `status → remember → recall → related → forget → status` 全链路。
+测试覆盖配置解析、CLI 参数/超时边界、0.1.2 与当前 recall 数据形态、只读模式、RPC 权限划分、插件设置和 Tab 交互。另使用真实 Mnemon 与独立端口 DSH 验证了配置重启、`status → remember → recall → related → forget → status`、只读拒绝和 WebUI 全链路。
 
 ## License
 
