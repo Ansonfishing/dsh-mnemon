@@ -128,6 +128,11 @@ describe('Mnemon root/child tool split', () => {
     } as unknown as MnemonSubagentCoordinator
     registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, memoryService, coordinator)
     const recall = registered.find(tool => tool.name === 'mnemon_recall')!
+    const schemas = registered.flatMap(tool => [tool.parameters, tool.output?.schema]).filter(Boolean)
+    for (const schema of schemas) {
+      const serialized = JSON.stringify(schema)
+      expect(serialized).not.toMatch(/"(?:maxItems|minItems|minimum|maximum)":/)
+    }
     const signal = new AbortController().signal
 
     await recall.execute({ query: 'root query' } as never, { agent: parent(), signal })
