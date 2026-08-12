@@ -565,7 +565,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
             <div className={css.graphViewport}><MemoryGraph graph={graph} selectedId={selected === null ? undefined : graphNodeKey(selected)} onSelect={setSelected} /></div>
             <div className={css.graphFooter}><span>{t('overview.graphCount', { visible: Math.min(graph.nodes.length, 60), total: graph.nodes.length })}</span><span>{t('overview.graphEdges', { count: graph.edges.length })}</span></div>
           </section>
-          <aside className={css.graphInspector}>
+          <aside className={css.graphInspector} data-empty={selected === null || undefined}>
             {selected === null ? (
               <div className={css.inspectorEmpty}><MnemonLogo className={css.inspectorLogo} title={t('overview.inspector')} /><h3>{t('overview.selectNode')}</h3><p>{t('overview.selectNodeText')}</p></div>
             ) : (
@@ -878,7 +878,7 @@ function MnemonWorkspace({ connection, sessionId }: MnemonViewProps): JSX.Elemen
   return (
     <main className={css.shell}>
       <header className={css.masthead}>
-        <div className={css.brand}><MnemonLogo className={css.brandLogo} /><div><h1>Mnemon</h1><p>LLM-supervised 4-graph persistent memory for AI agents.</p></div></div>
+        <div className={css.brand}><MnemonLogo className={css.brandLogo} /><h1>Mnemon</h1></div>
         <section className={css.telemetry} aria-label={t('telemetry.aria')}><div className={css.telemetryMetric}><span>{t('telemetry.memories')}</span><strong>{stats?.totalInsights ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.graph')}</span><strong>{stats?.edgeCount ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.entities')}</span><strong>{stats?.topEntities.length ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.spaces')}</span><strong>{status === null || !catalogKnown ? '—' : activeBodies}</strong></div></section>
         <div className={css.statusCluster}><span className={`${css.statusDot} ${status?.healthy === true ? css.online : css.offline}`} /><span>{statusLoading ? t('header.checking') : status?.healthy === true ? catalogKnown ? t('header.connected', { count: activeBodies }) : t('header.directoryPending') : t('header.unavailable')}</span><button type="button" className={css.iconButton} onClick={refreshAll} aria-label={t('common.refresh')}>↻</button></div>
       </header>
