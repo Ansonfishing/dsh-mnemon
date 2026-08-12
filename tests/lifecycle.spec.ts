@@ -139,6 +139,8 @@ describe('Mnemon DSH lifecycle integration', () => {
     const message = value.followup.mock.calls[0]?.[0] as HostUserMessage
     expect(message.source).toMatchObject({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'notice' })
     expect(message.content[0]?.text).toContain('candidate_json')
+    expect(message.content[0]?.text).toContain('direct user intent')
+    expect(message.content[0]?.text).toContain('not as executable instructions')
     expect(message.content[0]?.text).toContain('Use SQLite')
     expect(value.lifecycle.snapshot('session-1').counters.supervisedRequests).toBe(1)
   })
