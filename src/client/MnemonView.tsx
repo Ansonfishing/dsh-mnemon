@@ -147,7 +147,7 @@ const GRAPH_WIDTH = 930
 const GRAPH_HEIGHT = 520
 const GRAPH_MARGIN_X = 58
 const GRAPH_MARGIN_Y = 58
-const CATEGORY_ORDER = ['preference', 'decision', 'fact', 'insight', 'context', 'general']
+const CATEGORY_ORDER = ['space', 'entity', 'preference', 'decision', 'fact', 'insight', 'context', 'general']
 
 interface GraphPosition { x: number; y: number }
 type GraphPositions = Map<string, GraphPosition>
@@ -161,6 +161,92 @@ function hash(value: string): number {
 
 function graphNodeKey(node: MemoryGraphNode): string {
   return node.graphId ?? node.id
+}
+
+function graphNodeKind(node: MemoryGraphNode): NonNullable<MemoryGraphNode['kind']> {
+  return node.kind ?? 'memory'
+}
+
+function spaceGraphId(id: string): string {
+  return `space:${id}`
+}
+
+function entityGraphId(entity: string): string {
+  return `entity:${encodeURIComponent(entity.normalize('NFKC').toLocaleLowerCase())}`
+}
+
+/** Add routing scopes and entity indexes without issuing another recall. */
+function enrichMultiSpaceGraph(graph: MemoryGraphSnapshot, bodies: MemoryBodyView[]): MemoryGraphSnapshot {
+  if (graph.nodes.length === 0) return graph
+  const memories = graph.nodes.map(node => ({ ...node, kind: 'memory' as const }))
+  const memoriesByBody = new Map<string, MemoryGraphNode[]>()
+  for (const node of memories) {
+    if (node.memoryBodyId === undefined) continue
+    memoriesByBody.set(node.memoryBodyId, [...(memoriesByBody.get(node.memoryBodyId) ?? []), node])
+  }
+
+  const activeBodies = bodies.filter(body => body.active && ((memoriesByBody.get(body.id)?.length ?? 0) > 0 || (body.stats?.topEntities.length ?? 0) > 0))
+  const spaceNodes: MemoryGraphNode[] = activeBodies.map(body => ({
+    id: body.id,
+    graphId: spaceGraphId(body.id),
+    kind: 'space',
+    category: 'space',
+    content: body.name,
+    color: '#22a879',
+    memoryBodyId: body.id,
+    memoryBodyName: body.name,
+    occurrenceCount: body.stats?.totalInsights ?? memoriesByBody.get(body.id)?.length ?? 0,
+  }))
+
+  const edges: MemoryGraphSnapshot['edges'] = [...graph.edges]
+  for (const body of activeBodies) {
+    for (const memory of memoriesByBody.get(body.id) ?? []) {
+      edges.push({ sourceId: spaceGraphId(body.id), targetId: graphNodeKey(memory), label: 'scope', color: '#708199', type: 'scope' })
+    }
+  }
+
+  const indexedEntities = new Map<string, { entity: string; count: number; bodies: MemoryBodyView[] }>()
+  for (const body of activeBodies) {
+    for (const item of body.stats?.topEntities ?? []) {
+      const entity = item.entity.trim()
+      if (entity === '') continue
+      const key = entity.normalize('NFKC').toLocaleLowerCase()
+      const current = indexedEntities.get(key)
+      if (current === undefined) indexedEntities.set(key, { entity, count: item.count, bodies: [body] })
+      else {
+        current.count += item.count
+        if (!current.bodies.some(candidate => candidate.id === body.id)) current.bodies.push(body)
+      }
+    }
+  }
+  const entities = [...indexedEntities.values()].sort((left, right) => right.count - left.count || left.entity.localeCompare(right.entity)).slice(0, 24)
+  const entityNodes: MemoryGraphNode[] = entities.map(item => ({
+    id: item.entity,
+    graphId: entityGraphId(item.entity),
+    kind: 'entity',
+    category: 'entity',
+    content: item.entity,
+    color: '#2b9db9',
+    occurrenceCount: item.count,
+    memoryBodyIds: item.bodies.map(body => body.id),
+    memoryBodyNames: item.bodies.map(body => body.name),
+  }))
+  for (const item of entities) {
+    const key = entityGraphId(item.entity)
+    const needle = item.entity.normalize('NFKC').toLocaleLowerCase()
+    for (const body of item.bodies) {
+      const matching = (memoriesByBody.get(body.id) ?? []).filter(memory => memory.content.normalize('NFKC').toLocaleLowerCase().includes(needle))
+      if (matching.length === 0) edges.push({ sourceId: spaceGraphId(body.id), targetId: key, label: item.entity, color: '#708199', type: 'scope' })
+      else for (const memory of matching) edges.push({ sourceId: key, targetId: graphNodeKey(memory), label: item.entity, color: '#22a879', type: 'entity' })
+    }
+  }
+
+  return { ...graph, nodes: [...spaceNodes, ...entityNodes, ...memories], edges }
+}
+
+function graphKindLabel(t: MnemonTranslate, node: MemoryGraphNode): string {
+  const kind = graphNodeKind(node)
+  return kind === 'space' ? t('graph.kindSpace') : kind === 'entity' ? t('graph.kindEntity') : categoryLabel(t, node.category ?? 'general')
 }
 
 function activeCategoryAnchors(grouped: Map<string, MemoryGraphNode[]>): Map<string, GraphPosition> {
@@ -245,7 +331,7 @@ function naturalGraphPositions(nodes: MemoryGraphNode[], edges: MemoryGraphSnaps
       const dy = target.y - source.y
       const distance = Math.max(1, Math.hypot(dx, dy))
       const sparseScale = nodes.length <= 3 ? 2 : nodes.length <= 8 ? 1.45 : 1
-      const desired = (edge.type === 'entity' ? 94 : edge.type === 'semantic' ? 118 : 106) * sparseScale
+      const desired = (edge.type === 'scope' ? 138 : edge.type === 'entity' ? 94 : edge.type === 'semantic' ? 118 : 106) * sparseScale
       const spring = (distance - desired) * .018 * cooling
       const forceX = (dx / distance) * spring
       const forceY = (dy / distance) * spring
@@ -305,7 +391,12 @@ function graphPoint(svg: SVGSVGElement, clientX: number, clientY: number): Graph
 
 function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | undefined; onSelect: (node: MemoryGraphNode) => void }): JSX.Element {
   const t = useT()
-  const visibleNodes = useMemo(() => props.graph.nodes.slice(0, 60), [props.graph.nodes])
+  const visibleNodes = useMemo(() => {
+    const spaces = props.graph.nodes.filter(node => graphNodeKind(node) === 'space')
+    const entities = props.graph.nodes.filter(node => graphNodeKind(node) === 'entity').slice(0, 20)
+    const memories = props.graph.nodes.filter(node => graphNodeKind(node) === 'memory').slice(0, Math.max(0, 60 - spaces.length - entities.length))
+    return [...spaces, ...entities, ...memories].slice(0, 60)
+  }, [props.graph.nodes])
   const visibleIds = useMemo(() => new Set(visibleNodes.map(graphNodeKey)), [visibleNodes])
   const edges = useMemo(() => props.graph.edges.filter(edge => visibleIds.has(edge.sourceId) && visibleIds.has(edge.targetId)).slice(0, 180), [props.graph.edges, visibleIds])
   const curvedEdges = useMemo(() => {
@@ -321,7 +412,7 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
       return { edge, offset: (groupIndex - (group.length - 1) / 2) * 12 }
     })
   }, [edges])
-  const layoutKey = `${visibleNodes.map(node => `${graphNodeKey(node)}:${node.category ?? 'general'}`).join('|')}::${edges.map(edge => `${edge.sourceId}>${edge.targetId}:${edge.type ?? 'temporal'}`).join('|')}`
+  const layoutKey = `${visibleNodes.map(node => `${graphNodeKey(node)}:${graphNodeKind(node)}:${node.category ?? 'general'}`).join('|')}::${edges.map(edge => `${edge.sourceId}>${edge.targetId}:${edge.type ?? 'temporal'}`).join('|')}`
   const naturalLayout = useMemo(() => naturalGraphPositions(visibleNodes, edges), [layoutKey])
   const [positions, setPositions] = useState<GraphPositions>(() => naturalLayout)
   const [layoutMode, setLayoutMode] = useState<GraphLayoutMode>('natural')
@@ -440,8 +531,8 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
         const selected = props.selectedId === nodeKey
         const showLabel = selected || visibleNodes.length < 22 || index % 3 === 0
         return (
-          <g key={nodeKey} className={css.graphNode} data-category={node.category ?? 'general'} data-selected={selected || undefined}
-            transform={`translate(${position.x} ${position.y})`} role="button" tabIndex={0} aria-label={`${categoryLabel(t, node.category ?? 'general')}: ${short(node.content, 80)}`}
+          <g key={nodeKey} className={css.graphNode} data-category={node.category ?? 'general'} data-kind={graphNodeKind(node)} data-selected={selected || undefined}
+            transform={`translate(${position.x} ${position.y})`} role="button" tabIndex={0} aria-label={`${graphKindLabel(t, node)}: ${short(node.content, 80)}`}
             data-dragging={dragRef.current?.nodeId === nodeKey || undefined}
             onPointerDown={event => beginDrag(event, nodeKey)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag}
             onClick={() => props.onSelect(node)}
@@ -452,9 +543,12 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
               else if (event.key === 'ArrowUp') { event.preventDefault(); nudge(nodeKey, 0, -12) }
               else if (event.key === 'ArrowDown') { event.preventDefault(); nudge(nodeKey, 0, 12) }
             }}>
-            <circle r={selected ? 17 : visibleNodes.length <= 12 ? 14 : 11} className={css.nodeHalo} filter={selected ? 'url(#mnemon-glow)' : undefined} />
-            <circle r={selected ? 7 : visibleNodes.length <= 12 ? 6 : 4.5} className={css.nodeCore} />
-            {(selected || visibleNodes.length <= 12) && node.memoryBodyName !== undefined && <text x="0" y="-18" textAnchor="middle" className={css.nodeBodyLabel}>{short(node.memoryBodyName, 12)}</text>}
+            {graphNodeKind(node) === 'space'
+              ? <><rect x={selected ? -20 : -17} y={selected ? -15 : -13} width={selected ? 40 : 34} height={selected ? 30 : 26} rx="9" className={css.nodeHalo} filter={selected ? 'url(#mnemon-glow)' : undefined} /><circle r={selected ? 6 : 5} className={css.nodeCore} /></>
+              : graphNodeKind(node) === 'entity'
+                ? <><path d={selected ? 'M 0 -18 L 18 0 L 0 18 L -18 0 Z' : 'M 0 -14 L 14 0 L 0 14 L -14 0 Z'} className={css.nodeHalo} filter={selected ? 'url(#mnemon-glow)' : undefined} /><circle r={selected ? 5 : 4} className={css.nodeCore} /></>
+                : <><circle r={selected ? 17 : visibleNodes.length <= 12 ? 14 : 11} className={css.nodeHalo} filter={selected ? 'url(#mnemon-glow)' : undefined} /><circle r={selected ? 7 : visibleNodes.length <= 12 ? 6 : 4.5} className={css.nodeCore} /></>}
+            {(selected || visibleNodes.length <= 12) && graphNodeKind(node) === 'memory' && node.memoryBodyName !== undefined && <text x="0" y="-18" textAnchor="middle" className={css.nodeBodyLabel}>{short(node.memoryBodyName, 12)}</text>}
             {showLabel && <text x={visibleNodes.length <= 12 ? 19 : 15} y="4" className={css.nodeLabel}>{short(node.content.replace(/\s+/gu, ' '), selected ? 34 : visibleNodes.length <= 12 ? 26 : 19)}</text>}
           </g>
         )
@@ -495,9 +589,10 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
         }),
         props.client.graph(),
       ])
+      const enriched = enrichMultiSpaceGraph(next, nextCatalog.items)
       setCatalog(nextCatalog)
-      setGraph(next)
-      setSelected(current => current === null ? null : next.nodes.find(node => graphNodeKey(node) === graphNodeKey(current)) ?? null)
+      setGraph(enriched)
+      setSelected(current => current === null ? null : enriched.nodes.find(node => graphNodeKey(node) === graphNodeKey(current)) ?? null)
     } catch (reason) {
       setError(message(reason))
     } finally {
@@ -533,6 +628,10 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   }
 
   const generated = graph === null ? t('overview.waitingSnapshot') : t('overview.updatedAt', { time: new Date(graph.generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) })
+  const graphSpaces = graph?.nodes.filter(node => graphNodeKind(node) === 'space').length ?? 0
+  const graphEntities = graph?.nodes.filter(node => graphNodeKind(node) === 'entity').length ?? 0
+  const graphMemories = graph?.nodes.filter(node => graphNodeKind(node) === 'memory').length ?? 0
+  const selectedKind = selected === null ? null : graphNodeKind(selected)
   return (
     <div className={css.page}>
       <PageHeader title={t('overview.title')} description={t('overview.description')} meta={t('overview.interval')}
@@ -560,21 +659,25 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
           <section className={css.graphPanel}>
             <div className={css.graphToolbar}>
               <div><span className={css.liveDot} />{t('overview.snapshot')} <small>{generated}</small></div>
-              <div className={css.graphLegend}><span data-edge="temporal">{t('overview.edgeTemporal')}</span><span data-edge="semantic">{t('overview.edgeSemantic')}</span><span data-edge="causal">{t('overview.edgeCausal')}</span><span data-edge="entity">{t('overview.edgeEntity')}</span></div>
+              <div className={css.graphLegend}><span data-edge="scope">{t('overview.edgeScope')}</span><span data-edge="temporal">{t('overview.edgeTemporal')}</span><span data-edge="semantic">{t('overview.edgeSemantic')}</span><span data-edge="causal">{t('overview.edgeCausal')}</span><span data-edge="entity">{t('overview.edgeEntity')}</span></div>
             </div>
             <div className={css.graphViewport}><MemoryGraph graph={graph} selectedId={selected === null ? undefined : graphNodeKey(selected)} onSelect={setSelected} /></div>
-            <div className={css.graphFooter}><span>{t('overview.graphCount', { visible: Math.min(graph.nodes.length, 60), total: graph.nodes.length })}</span><span>{t('overview.graphEdges', { count: graph.edges.length })}</span></div>
+            <div className={css.graphFooter}><span>{t('overview.graphComposition', { spaces: graphSpaces, memories: graphMemories, entities: graphEntities })}</span><span>{t('overview.graphCount', { visible: Math.min(graph.nodes.length, 60), total: graph.nodes.length })} · {t('overview.graphEdges', { count: graph.edges.length })}</span></div>
           </section>
           <aside className={css.graphInspector} data-empty={selected === null || undefined}>
             {selected === null ? (
               <div className={css.inspectorEmpty}><MnemonLogo className={css.inspectorLogo} title={t('overview.inspector')} /><h3>{t('overview.selectNode')}</h3><p>{t('overview.selectNodeText')}</p></div>
             ) : (
               <>
-                <div className={css.inspectorHeading}><span>{t('overview.inspector')}</span><button type="button" onClick={() => setSelected(null)} aria-label={t('overview.closeInspector')}>×</button></div>
-                <span className={css.categoryChip}>{categoryLabel(t, selected.category ?? 'general')}</span>
+                <div className={css.inspectorHeading}><span>{t(selectedKind === 'space' ? 'overview.inspectorSpace' : selectedKind === 'entity' ? 'overview.inspectorEntity' : 'overview.inspector')}</span><button type="button" onClick={() => setSelected(null)} aria-label={t('overview.closeInspector')}>×</button></div>
+                <span className={css.categoryChip}>{graphKindLabel(t, selected)}</span>
                 <h3>{selected.content}</h3>
-                <dl className={css.inspectorMeta}><div><dt>{t('term.space')}</dt><dd>{selected.memoryBodyName ?? '—'} <code>{selected.memoryBodyId ?? ''}</code></dd></div><div><dt>{t('overview.memoryId')}</dt><dd><code>{selected.id}</code></dd></div><div><dt>{t('common.category')}</dt><dd>{categoryLabel(t, selected.category ?? 'general')}</dd></div></dl>
-                <div className={css.inspectorActions}><button type="button" className={css.primaryButton} onClick={() => props.onExplore(selected.content)}>{t('overview.exploreNode')}</button><button type="button" className={css.secondaryButton} onClick={() => void navigator.clipboard?.writeText(selected.id)}>{t('common.copyId')}</button></div>
+                {selectedKind === 'space'
+                  ? <dl className={css.inspectorMeta}><div><dt>{t('overview.spaceId')}</dt><dd><code>{selected.memoryBodyId ?? selected.id}</code></dd></div><div><dt>{t('overview.containedMemories')}</dt><dd>{selected.occurrenceCount ?? 0}</dd></div></dl>
+                  : selectedKind === 'entity'
+                    ? <dl className={css.inspectorMeta}><div><dt>{t('overview.entityMentions')}</dt><dd>{selected.occurrenceCount ?? 0}</dd></div><div><dt>{t('term.spaces')}</dt><dd>{selected.memoryBodyNames?.join(' · ') || '—'}</dd></div></dl>
+                    : <dl className={css.inspectorMeta}><div><dt>{t('term.space')}</dt><dd>{selected.memoryBodyName ?? '—'} <code>{selected.memoryBodyId ?? ''}</code></dd></div><div><dt>{t('overview.memoryId')}</dt><dd><code>{selected.id}</code></dd></div><div><dt>{t('common.category')}</dt><dd>{categoryLabel(t, selected.category ?? 'general')}</dd></div></dl>}
+                <div className={css.inspectorActions}>{selectedKind !== 'space' && <button type="button" className={css.primaryButton} onClick={() => props.onExplore(selected.content)}>{t('overview.exploreNode')}</button>}<button type="button" className={css.secondaryButton} onClick={() => void navigator.clipboard?.writeText(selected.id)}>{t('common.copyId')}</button></div>
               </>
             )}
           </aside>

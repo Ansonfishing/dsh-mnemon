@@ -153,10 +153,12 @@
 .graphToolbar > div:first-child { display: flex; align-items: center; gap: 7px; }
 .graphToolbar small { color: var(--mn-faint); }
 .liveDot { width: 6px; height: 6px; border-radius: 50%; background: var(--mn-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mn-success) 15%, transparent); }
-.graphLegend { display: flex; gap: 10px; }
+.graphLegend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px 10px; }
 .graphLegend span { display: flex; align-items: center; gap: 4px; }
 .graphLegend span::before { width: 13px; height: 2px; border-radius: 2px; content: ""; background: var(--edge-color); }
 .graphLegend [data-edge="temporal"] { --edge-color: #87909f; }
+.graphLegend [data-edge="scope"] { --edge-color: #708199; }
+.graphLegend [data-edge="scope"]::before { background: repeating-linear-gradient(90deg, var(--edge-color) 0 4px, transparent 4px 7px); }
 .graphLegend [data-edge="semantic"] { --edge-color: #4d7cfe; }
 .graphLegend [data-edge="causal"] { --edge-color: #ef6b5b; }
 .graphLegend [data-edge="entity"] { --edge-color: #22a879; }
@@ -171,6 +173,7 @@
 .graphBackdrop { fill: var(--mn-layer-1); }
 .graphGridLine { stroke: var(--mn-line); stroke-width: .6; opacity: .5; }
 .graphEdge { fill: none; stroke: #87909f; stroke-width: 1; opacity: .32; vector-effect: non-scaling-stroke; }
+.graphEdge[data-edge="scope"] { stroke: #708199; stroke-dasharray: 4 5; opacity: .28; }
 .graphEdge[data-edge="semantic"] { stroke: #4d7cfe; opacity: .48; }
 .graphEdge[data-edge="causal"] { stroke: #ef6b5b; opacity: .52; }
 .graphEdge[data-edge="entity"] { stroke: #22a879; opacity: .52; }
@@ -181,6 +184,8 @@
 .graphNode[data-category="fact"] { --node: #4d7cfe; }
 .graphNode[data-category="insight"] { --node: #19a77d; }
 .graphNode[data-category="context"] { --node: #d8a624; }
+.graphNode[data-kind="space"] { --node: var(--mn-body-accent); }
+.graphNode[data-kind="entity"] { --node: #2b9db9; }
 .nodeHalo { fill: color-mix(in srgb, var(--node) 18%, var(--mn-layer-1)); stroke: color-mix(in srgb, var(--node) 60%, var(--mn-layer-1)); stroke-width: 1.5; transition: r .16s; }
 .nodeCore { fill: var(--node); }
 .nodeLabel { fill: var(--mn-muted); font: 10px var(--mn-code); pointer-events: none; }

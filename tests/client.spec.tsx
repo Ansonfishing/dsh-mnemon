@@ -27,7 +27,7 @@ describe('MnemonView', () => {
       createdAt: '2026-08-13T02:00:00.000Z',
       updatedAt: '2026-08-13T03:00:00.000Z',
       healthy: true,
-      stats: { totalInsights: 12, deletedInsights: 0, edgeCount: 9, oplogCount: 20, dbSizeBytes: 4096, byCategory: {}, topEntities: [] },
+      stats: { totalInsights: 12, deletedInsights: 0, edgeCount: 9, oplogCount: 20, dbSizeBytes: 4096, byCategory: {}, topEntities: [{ entity: 'SQLite', count: 2 }] },
     }
     let secondaryActive = false
     const secondaryBody = {
@@ -37,7 +37,7 @@ describe('MnemonView', () => {
       description: '长期稳定的表达与协作偏好。',
       active: secondaryActive,
       dbPath: '/tmp/mnemon/data/preferences/mnemon.db',
-      stats: { ...body.stats, totalInsights: 1, edgeCount: 0 },
+      stats: { ...body.stats, totalInsights: 1, edgeCount: 0, topEntities: [{ entity: 'DSH', count: 1 }] },
     }
     const status = {
       healthy: true,
@@ -72,7 +72,7 @@ describe('MnemonView', () => {
         },
       },
     }
-    const memory = { id: 'memory-12345678', content: '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], color: '#e74c3c', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-12345678` }
+    const memory = { id: 'memory-12345678', content: '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], entities: ['SQLite'], color: '#e74c3c', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-12345678` }
     const secondaryMemory = { id: 'preference-1', content: '用户偏好简洁中文回答。', category: 'preference', importance: 4, tags: ['style'], color: '#9b59b6', memoryBodyId: secondaryBody.id, memoryBodyName: secondaryBody.name, graphId: `${secondaryBody.id}:preference-1` }
     const call = vi.fn(async (_channel: string, endpoint: string, payload?: Record<string, unknown>) => {
       const bodies = options.withInactiveBody ? [body, { ...secondaryBody, active: secondaryActive }] : [body]
@@ -131,6 +131,12 @@ describe('MnemonView', () => {
     expect(screen.queryByText('LLM-supervised 4-graph persistent memory for AI agents.')).toBeNull()
     expect(screen.getByRole('img', { name: 'Mnemon' })).toBeTruthy()
     await waitFor(() => expect(screen.getByRole('img', { name: /Mnemon 实时记忆图谱/ })).toBeTruthy())
+    expect(screen.getByRole('button', { name: '记忆体: 项目记忆体' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '实体: SQLite' })).toBeTruthy()
+    expect(screen.getByText('1 个空间 · 2 条记忆 · 1 个实体')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '实体: SQLite' }))
+    expect(screen.getByText('实体详情')).toBeTruthy()
+    expect(screen.getByText('索引次数')).toBeTruthy()
     expect(screen.getByRole('toolbar', { name: '图谱布局' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '自然铺开' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '均匀重置' })).toBeTruthy()
@@ -176,7 +182,9 @@ describe('MnemonView', () => {
 
     await waitFor(() => expect(screen.getByRole('switch', { name: '偏好记忆体读取开关' }).getAttribute('aria-checked')).toBe('true'))
     expect(screen.getByRole('button', { name: /偏好: 用户偏好简洁中文回答/ })).toBeTruthy()
-    expect(screen.getByRole('img', { name: /Mnemon 实时记忆图谱，3 个节点/ })).toBeTruthy()
+    expect(screen.getByRole('img', { name: /Mnemon 实时记忆图谱，7 个元素/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '记忆体: 偏好记忆体' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '实体: DSH' })).toBeTruthy()
   })
 
   it('requires inline confirmation before forgetting a recalled memory', async () => {
