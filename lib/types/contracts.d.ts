@@ -96,6 +96,52 @@ export interface ToolDefinition {
     presentCall?: (args: never) => Record<string, unknown>;
     presentResult?: () => Record<string, unknown>;
 }
+export interface HostMessageSource {
+    kind: string;
+    plugin?: string;
+    form?: string;
+    summary?: string;
+}
+export interface HostUserMessage {
+    id: string;
+    role: 'user';
+    content: Array<{
+        type: 'text';
+        text: string;
+    }>;
+    source: HostMessageSource;
+}
+export interface HostSessionEvent {
+    type: string;
+    seq?: number;
+    time?: number;
+    data: Record<string, unknown>;
+}
+export type HostPreStepDecision = {
+    kind: 'reject';
+} | {
+    kind: 'enter';
+    messages: HostUserMessage[];
+};
+export interface HostAgentContext {
+    on(name: string, listener: (...args: never[]) => unknown): () => unknown;
+    effect(callback: () => (() => unknown) | void, label?: string): () => unknown;
+}
+export interface HostAgent {
+    id: string;
+    status: 'idle' | 'running';
+    session: {
+        events: readonly HostSessionEvent[];
+    };
+    ctx: HostAgentContext;
+    followup(message: HostUserMessage): void;
+    steer(message: HostUserMessage): void;
+    inject(message: HostUserMessage): void;
+}
+export interface HostAgentsService {
+    get(id: string): HostAgent | undefined;
+    roots(): HostAgent[];
+}
 export interface HostContextShape {
     tools: {
         register(definition: ToolDefinition): unknown;
@@ -103,8 +149,11 @@ export interface HostContextShape {
     commands: CommandService;
     settings: HostSettingsService;
     connection: HostConnectionHandle;
+    agents: HostAgentsService;
     get(name: string): unknown;
     inject(services: string[], callback: (ctx: HostContextShape) => void): unknown;
+    on(name: string, listener: (...args: never[]) => unknown): () => unknown;
+    effect(callback: () => (() => unknown) | void, label?: string): () => unknown;
 }
 export interface SlotsService {
     inject(name: string, factory: () => unknown): unknown;

@@ -1,4 +1,5 @@
 import type { HostConnectionHandle, HostRpcHandler, RpcResult } from './contracts.ts'
+import type { MnemonLifecycle } from './lifecycle.ts'
 import type { Category, EdgeType, Intent, MnemonService, SearchRequest, Source } from './service.ts'
 
 export const MNEMON_READ_CHANNEL = '/dsh-mnemon-read'
@@ -23,13 +24,18 @@ function failure(error: unknown): RpcResult<unknown> {
   }
 }
 
-export function createReadHandler(service: MnemonService): HostRpcHandler {
+export function createReadHandler(service: MnemonService, lifecycle?: MnemonLifecycle): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
       const payload = object(rawPayload)
       switch (endpoint) {
         case 'status':
-          return success(await service.status())
+          return success({
+            ...await service.status(),
+            ...(lifecycle === undefined ? {} : {
+              lifecycle: lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId)),
+            }),
+          })
         case 'graph':
           return success(await service.graph())
         case 'list':
@@ -67,11 +73,14 @@ export function createReadHandler(service: MnemonService): HostRpcHandler {
   }
 }
 
-export function createWriteHandler(service: MnemonService): HostRpcHandler {
+export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLifecycle): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
       const payload = object(rawPayload)
       switch (endpoint) {
+        case 'supervise':
+          if (lifecycle === undefined) throw new Error('Mnemon lifecycle integration is unavailable')
+          return success(lifecycle.supervise(String(payload.sessionId ?? ''), String(payload.content ?? '')))
         case 'remember':
           return success(await service.remember({
             content: String(payload.content ?? ''),
@@ -101,9 +110,9 @@ export function createWriteHandler(service: MnemonService): HostRpcHandler {
 }
 
 /** Read operations are available to trusted Web hosts; local mutations stay loopback-only. */
-export function registerRpc(connection: HostConnectionHandle, service: MnemonService): void {
-  connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(service), { authority: 'trusted-host' })
+export function registerRpc(connection: HostConnectionHandle, service: MnemonService, lifecycle?: MnemonLifecycle): void {
+  connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(service, lifecycle), { authority: 'trusted-host' })
   if (service.config.writeEnabled) {
-    connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(service), { authority: 'loopback' })
+    connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(service, lifecycle), { authority: 'loopback' })
   }
 }

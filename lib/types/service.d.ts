@@ -1,6 +1,7 @@
 import type { JsonValue } from './contracts.ts';
 import type { ResolvedConfig } from './config.ts';
 import type { MnemonRunner } from './runner.ts';
+import type { LifecycleSnapshot } from './lifecycle.ts';
 export declare const CATEGORIES: readonly ["preference", "decision", "fact", "insight", "context", "general"];
 export type Category = typeof CATEGORIES[number];
 export declare const SOURCES: readonly ["user", "agent", "external"];
@@ -52,6 +53,7 @@ export interface StatusView {
     writeEnabled: boolean;
     timeoutMs: number;
     defaultRecallLimit: number;
+    lifecycle?: LifecycleSnapshot;
     stats?: {
         totalInsights: number;
         deletedInsights: number;

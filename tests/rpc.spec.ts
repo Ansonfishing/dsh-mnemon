@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { resolveConfig } from '../src/config.ts'
 import type { HostConnectionHandle } from '../src/contracts.ts'
+import type { MnemonLifecycle } from '../src/lifecycle.ts'
 import { createReadHandler, createWriteHandler, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL, registerRpc } from '../src/rpc.ts'
 import { MnemonService } from '../src/service.ts'
 
@@ -46,6 +47,28 @@ describe('Mnemon RPC', () => {
     const service = fakeService()
     await createWriteHandler(service)('remember', { content: 'A durable preference' })
     expect(service.remember).toHaveBeenCalledWith(expect.objectContaining({ source: 'user' }))
+  })
+
+  it('routes supervised Tab writeback through the current DSH agent', async () => {
+    const service = fakeService()
+    const lifecycle = {
+      supervise: vi.fn(() => ({ queued: true, sessionId: 'session-1', messageId: 'message-1', agentStatus: 'idle' })),
+    } as unknown as MnemonLifecycle
+    await expect(createWriteHandler(service, lifecycle)('supervise', { sessionId: 'session-1', content: 'A candidate' })).resolves.toMatchObject({ ok: true, value: { queued: true } })
+    expect(lifecycle.supervise).toHaveBeenCalledWith('session-1', 'A candidate')
+    expect(service.remember).not.toHaveBeenCalled()
+  })
+
+  it('adds lifecycle diagnostics to status without changing Mnemon runtime status', async () => {
+    const service = fakeService()
+    const lifecycle = {
+      snapshot: vi.fn(() => ({ enabled: true, activeAgents: 1, sessionAvailable: true })),
+    } as unknown as MnemonLifecycle
+    await expect(createReadHandler(service, lifecycle)('status', { sessionId: 'session-1' })).resolves.toMatchObject({
+      ok: true,
+      value: { healthy: true, lifecycle: { enabled: true, activeAgents: 1, sessionAvailable: true } },
+    })
+    expect(lifecycle.snapshot).toHaveBeenCalledWith('session-1')
   })
 
   it('fences read and write channels with different authorities', () => {

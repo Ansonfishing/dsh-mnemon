@@ -11,8 +11,8 @@ describe('MnemonSettingsCard', () => {
     const unset = vi.fn(async () => {})
     const snapshot = {
       status: 'ready' as const,
-      value: { timeoutMs: 10000, defaultRecallLimit: 10, routingGuidance: true, tabEnabled: true, writeEnabled: true },
-      base: { timeoutMs: 10000, defaultRecallLimit: 10, routingGuidance: true, tabEnabled: true, writeEnabled: true },
+      value: { timeoutMs: 10000, defaultRecallLimit: 10, routingGuidance: true, lifecycleEnabled: true, recallMode: 'guided' as const, writebackMode: 'guided' as const, tabEnabled: true, writeEnabled: true },
+      base: { timeoutMs: 10000, defaultRecallLimit: 10, routingGuidance: true, lifecycleEnabled: true, recallMode: 'guided' as const, writebackMode: 'guided' as const, tabEnabled: true, writeEnabled: true },
       user: {},
       revision: 0,
       writable: true,

@@ -21,6 +21,12 @@ export interface Config {
   tabEnabled?: boolean
   /** Allow remember/link/forget mutations. Recall and status remain available when false. */
   writeEnabled?: boolean
+  /** Enable DSH agent lifecycle integration (Prime, recall cue, and writeback checkpoint). */
+  lifecycleEnabled?: boolean
+  /** Recall behavior at the first step of each DSH turn. */
+  recallMode?: 'guided' | 'off'
+  /** Writeback behavior immediately before a DSH turn closes. */
+  writebackMode?: 'guided' | 'off'
 }
 
 export const Config: z<Config> = z.object({
@@ -32,6 +38,9 @@ export const Config: z<Config> = z.object({
   routingGuidance: z.boolean().default(true),
   tabEnabled: z.boolean().default(true),
   writeEnabled: z.boolean().default(true),
+  lifecycleEnabled: z.boolean().default(true),
+  recallMode: z.union(['guided', 'off'] as const).default('guided'),
+  writebackMode: z.union(['guided', 'off'] as const).default('guided'),
 })
 
 export interface ResolvedConfig {
@@ -43,6 +52,9 @@ export interface ResolvedConfig {
   routingGuidance: boolean
   tabEnabled: boolean
   writeEnabled: boolean
+  lifecycleEnabled: boolean
+  recallMode: 'guided' | 'off'
+  writebackMode: 'guided' | 'off'
 }
 
 function optionalText(value: string | undefined): string | undefined {
@@ -66,5 +78,8 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     routingGuidance: config.routingGuidance ?? true,
     tabEnabled: config.tabEnabled ?? true,
     writeEnabled: config.writeEnabled ?? true,
+    lifecycleEnabled: config.lifecycleEnabled ?? true,
+    recallMode: config.recallMode ?? 'guided',
+    writebackMode: config.writebackMode ?? 'guided',
   }
 }

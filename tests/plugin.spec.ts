@@ -17,6 +17,7 @@ function context() {
   }
   const registrations: unknown[] = []
   const commands: unknown[] = []
+  const listeners: unknown[] = []
   const ctx = {
     tools: { register: vi.fn((tool: unknown) => { tools.push(tool) }) },
     commands: { register: vi.fn((command: unknown) => { commands.push(command) }) },
@@ -27,12 +28,15 @@ function context() {
       }),
     },
     connection,
+    agents: { get: vi.fn(), roots: vi.fn(() => []) },
     get: vi.fn((name: string) => name === 'systemPrompt'
       ? { section: (section: unknown) => { sections.push(section) } }
       : undefined),
     inject: vi.fn((_services: string[], callback: (value: unknown) => void) => { callback(ctx) }),
+    on: vi.fn((...args: unknown[]) => { listeners.push(args); return () => {} }),
+    effect: vi.fn((callback: () => unknown) => { callback(); return () => {} }),
   }
-  return { ctx, tools, sections, channels, registrations, commands }
+  return { ctx, tools, sections, channels, registrations, commands, listeners }
 }
 
 describe('dsh-mnemon plugin composition', () => {

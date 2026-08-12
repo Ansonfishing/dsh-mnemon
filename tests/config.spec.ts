@@ -11,6 +11,9 @@ describe('Mnemon config and resolution', () => {
       timeoutMs: 10_000,
       defaultRecallLimit: 10,
       routingGuidance: true,
+      lifecycleEnabled: true,
+      recallMode: 'guided',
+      writebackMode: 'guided',
       tabEnabled: true,
       writeEnabled: true,
     })

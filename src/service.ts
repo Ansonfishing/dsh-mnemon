@@ -1,6 +1,7 @@
 import type { JsonValue } from './contracts.ts'
 import type { ResolvedConfig } from './config.ts'
 import type { MnemonRunner } from './runner.ts'
+import type { LifecycleSnapshot } from './lifecycle.ts'
 
 export const CATEGORIES = ['preference', 'decision', 'fact', 'insight', 'context', 'general'] as const
 export type Category = typeof CATEGORIES[number]
@@ -57,6 +58,7 @@ export interface StatusView {
   writeEnabled: boolean
   timeoutMs: number
   defaultRecallLimit: number
+  lifecycle?: LifecycleSnapshot
   stats?: {
     totalInsights: number
     deletedInsights: number

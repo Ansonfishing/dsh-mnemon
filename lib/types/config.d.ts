@@ -18,6 +18,12 @@ export interface Config {
     tabEnabled?: boolean;
     /** Allow remember/link/forget mutations. Recall and status remain available when false. */
     writeEnabled?: boolean;
+    /** Enable DSH agent lifecycle integration (Prime, recall cue, and writeback checkpoint). */
+    lifecycleEnabled?: boolean;
+    /** Recall behavior at the first step of each DSH turn. */
+    recallMode?: 'guided' | 'off';
+    /** Writeback behavior immediately before a DSH turn closes. */
+    writebackMode?: 'guided' | 'off';
 }
 export declare const Config: z<Config>;
 export interface ResolvedConfig {
@@ -29,6 +35,9 @@ export interface ResolvedConfig {
     routingGuidance: boolean;
     tabEnabled: boolean;
     writeEnabled: boolean;
+    lifecycleEnabled: boolean;
+    recallMode: 'guided' | 'off';
+    writebackMode: 'guided' | 'off';
 }
 export declare function resolveConfig(config?: Config): ResolvedConfig;
 //# sourceMappingURL=config.d.ts.map
