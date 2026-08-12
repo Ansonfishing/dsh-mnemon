@@ -1,4 +1,5 @@
 import type { HostContextShape, ToolDefinition, ToolExecution } from './contracts.ts'
+import type { RuntimeMemoryController, RuntimeMemoryImportance, RuntimeMemoryTarget } from './runtime-memory.ts'
 import { isSubagent, MnemonSubagentCoordinator } from './subagent.ts'
 import {
   CATEGORIES,
@@ -32,7 +33,7 @@ function requireAgent(exec: ToolExecution) {
 }
 
 /** Root calls delegate to a bounded child; memory-worker calls reach the deterministic service. */
-export function registerTools(ctx: HostContextShape, service: MnemonService, coordinator: MnemonSubagentCoordinator): void {
+export function registerTools(ctx: HostContextShape, service: MnemonService, coordinator: MnemonSubagentCoordinator, runtimeMemory: RuntimeMemoryController): void {
   ctx.tools.register(definition({
     name: 'mnemon_memory_bodies',
     description: 'List the global Mnemon Memory Space catalog, including each space id, name, description, activation state, database path, and statistics. Read only. Use this before choosing a write target, or when the Prime summary is insufficient. Recall may only read active spaces; writes may target any space.',
@@ -108,8 +109,34 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
   if (!service.config.writeEnabled) return
 
   ctx.tools.register(definition({
+    name: 'mnemon_runtime_memory',
+    description: 'Maintain compact hot memory that is injected into future turns. Use proactively for durable user corrections, preferences, stable environment facts, project conventions, and reusable lessons. target=user is only for who the user is; target=memory is for project/environment/decisions/lessons. Skip temporary progress, completed-work logs, raw dumps, secrets, and rediscoverable facts. Use replace instead of duplicating an existing entry. This tool is the only supported writer for runtime MEMORY.md and USER.md.',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['add', 'replace', 'remove'], description: 'add a new entry, replace one uniquely matched entry, or remove one uniquely matched entry.' },
+        target: { type: 'string', enum: ['memory', 'user'], description: 'user for user identity/preferences; memory for project, environment, decisions, and lessons.' },
+        content: { type: 'string', description: 'Compact entry content. Required for add and replace.' },
+        old_text: { type: 'string', description: 'Unique substring of the existing entry. Required for replace and remove.' },
+        importance: { type: 'string', enum: ['critical', 'normal', 'low'], description: 'critical for explicit must/always/never rules; low for transient facts; normal by default.' },
+      },
+      required: ['action', 'target'],
+    },
+    output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
+    execute: (args: { action: 'add' | 'replace' | 'remove'; target: RuntimeMemoryTarget; content?: string; old_text?: string; importance?: RuntimeMemoryImportance }) => runtimeMemory.mutate({
+      action: args.action,
+      target: args.target,
+      ...(args.content === undefined ? {} : { content: args.content }),
+      ...(args.old_text === undefined ? {} : { oldText: args.old_text }),
+      ...(args.importance === undefined ? {} : { importance: args.importance }),
+    }),
+    presentCall: (args: { action: string; target: string }) => ({ card: 'generic', title: `${args.action} runtime ${args.target} memory`, kind: 'edit' }),
+    presentResult: () => ({ card: 'generic', title: 'Runtime memory updated' }),
+  } as never))
+
+  ctx.tools.register(definition({
     name: 'mnemon_remember',
-    description: 'Store one durable insight in a selected Mnemon Memory Space. Choose the narrowest existing space whose description owns the knowledge; search that space first. If several spaces are active, memoryBodyId is required. Writing to an inactive space activates it. Do not dump transcripts, temporary progress, routine observations, or repository-obvious facts.',
+    description: 'Archive one durable insight in a selected Mnemon Memory Space. Ordinary new hot memory belongs in mnemon_runtime_memory; use direct archival only for explicit long-term persistence or runtime capacity migration. Choose the narrowest existing space, search it first, and do not dump transcripts, temporary progress, routine observations, or repository-obvious facts.',
     parameters: {
       type: 'object',
       properties: {

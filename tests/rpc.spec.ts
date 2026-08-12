@@ -3,6 +3,7 @@ import { resolveConfig } from '../src/config.ts'
 import type { HostConnectionHandle } from '../src/contracts.ts'
 import type { MnemonLifecycle } from '../src/lifecycle.ts'
 import { createReadHandler, createWriteHandler, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL, registerRpc } from '../src/rpc.ts'
+import type { RuntimeMemoryController } from '../src/runtime-memory.ts'
 import { MnemonService } from '../src/service.ts'
 
 function fakeService(writeEnabled = true): MnemonService {
@@ -24,6 +25,16 @@ function fakeService(writeEnabled = true): MnemonService {
 }
 
 describe('Mnemon RPC', () => {
+  it('exposes runtime snapshots and routes hot-memory writes through its controller', async () => {
+    const runtimeMemory = {
+      snapshot: vi.fn(() => ({ entries: [], targets: {} })),
+      mutate: vi.fn(async () => ({ success: true, message: 'Entry added.', target: 'user', entryCount: 1, usage: { used: 5, limit: 4096 }, added: 'hello' })),
+    } as unknown as RuntimeMemoryController
+    await expect(createReadHandler(fakeService(), undefined, runtimeMemory)('runtime-memory', {})).resolves.toMatchObject({ ok: true, value: { entries: [] } })
+    await expect(createWriteHandler(fakeService(), undefined, runtimeMemory)('runtime-memory', { action: 'add', target: 'user', content: 'hello', importance: 'normal' })).resolves.toMatchObject({ ok: true, value: { added: 'hello' } })
+    expect(runtimeMemory.mutate).toHaveBeenCalledWith({ action: 'add', target: 'user', content: 'hello', importance: 'normal' })
+  })
+
   it('dispatches read operations and rejects unknown endpoints', async () => {
     const service = fakeService()
     await expect(createReadHandler(service)('search', { query: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { query: 'SQLite' } })

@@ -3,6 +3,7 @@ import type { HostAgent, HostContextShape, HostSubagentsService, ToolDefinition 
 import type { MnemonService } from '../src/service.ts'
 import { assertDshOutputSchema, MnemonSubagentCoordinator } from '../src/subagent.ts'
 import { registerTools } from '../src/tools.ts'
+import type { RuntimeMemoryController } from '../src/runtime-memory.ts'
 
 const capabilities = { outputSchema: true, depthLimit: true, toolFilter: true, persona: true }
 
@@ -108,7 +109,7 @@ describe('Mnemon memory subagent coordinator', () => {
       action: 'skipped',
     })
     expect(host.start).toHaveBeenCalledWith('fork', expect.objectContaining({
-      toolFilter: { allow: ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related', 'mnemon_remember', 'mnemon_forget'] },
+      toolFilter: { allow: ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related', 'mnemon_runtime_memory'] },
       persona: expect.stringContaining('idle checkpoint reviewer'),
       prompt: [expect.objectContaining({ text: expect.stringContaining('complete inherited parent-agent checkpoint') })],
     }))
@@ -143,7 +144,8 @@ describe('Mnemon root/child tool split', () => {
     const coordinator = {
       recall: vi.fn(async () => ({ query: 'x', mode: 'smart', results: [], delegation: { runId: 'child', provider: 'spawn', summary: '', selectedMemoryBodyIds: [] } })),
     } as unknown as MnemonSubagentCoordinator
-    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, memoryService, coordinator)
+    const runtimeMemory = { mutate: vi.fn() } as unknown as RuntimeMemoryController
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, memoryService, coordinator, runtimeMemory)
     const recall = registered.find(tool => tool.name === 'mnemon_recall')!
     const schemas = registered.flatMap(tool => [tool.parameters, tool.output?.schema]).filter(Boolean)
     for (const schema of schemas) {
@@ -151,6 +153,10 @@ describe('Mnemon root/child tool split', () => {
       expect(serialized).not.toMatch(/"(?:maxItems|minItems|minimum|maximum)":/)
     }
     const signal = new AbortController().signal
+
+    const hotMemory = registered.find(tool => tool.name === 'mnemon_runtime_memory')!
+    await hotMemory.execute({ action: 'add', target: 'user', content: 'Prefers concise replies', importance: 'critical' } as never, { agent: parent(), signal })
+    expect(runtimeMemory.mutate).toHaveBeenCalledWith({ action: 'add', target: 'user', content: 'Prefers concise replies', importance: 'critical' })
 
     await recall.execute({ query: 'root query' } as never, { agent: parent(), signal })
     expect(coordinator.recall).toHaveBeenCalledOnce()

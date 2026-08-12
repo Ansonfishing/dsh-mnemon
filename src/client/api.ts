@@ -1,6 +1,7 @@
 import type { ClientConnectionHandle } from '../contracts.ts'
 import { MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from '../rpc.ts'
 import type { MemoryBody } from '../memory-bodies.ts'
+import type { RuntimeMemoryImportance, RuntimeMemoryMutationResult, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts'
 import type { EntityView, Insight, MemoryBodyCatalog, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts'
 
 export interface SearchResponse {
@@ -27,6 +28,20 @@ export class MnemonClient {
 
   status(): Promise<StatusView> {
     return this.call(MNEMON_READ_CHANNEL, 'status', this.sessionId === undefined ? {} : { sessionId: this.sessionId })
+  }
+
+  runtimeMemory(): Promise<RuntimeMemorySnapshot> {
+    return this.call(MNEMON_READ_CHANNEL, 'runtime-memory', {})
+  }
+
+  mutateRuntimeMemory(request: {
+    action: 'add' | 'replace' | 'remove'
+    target: RuntimeMemoryTarget
+    content?: string
+    old_text?: string
+    importance?: RuntimeMemoryImportance
+  }): Promise<RuntimeMemoryMutationResult> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'runtime-memory', request)
   }
 
   bodies(): Promise<MemoryBodyCatalog> {

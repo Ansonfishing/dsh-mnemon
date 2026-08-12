@@ -1,9 +1,23 @@
-import { readFileSync } from 'node:fs'
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apply } from '../src/index.ts'
 
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
   dsh: { client: { inject: string[]; platform: string } }
+}
+
+const directories: string[] = []
+
+afterEach(() => {
+  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
+})
+
+function dataDir(): string {
+  const directory = mkdtempSync(join(tmpdir(), 'dsh-mnemon-plugin-'))
+  directories.push(directory)
+  return directory
 }
 
 function context() {
@@ -58,12 +72,13 @@ describe('dsh-mnemon plugin composition', () => {
 
   it('registers the full tool surface, guidance, and split RPC channels', () => {
     const fixture = context()
-    apply(fixture.ctx as never, { cliPath: '/fake/mnemon' })
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
     expect(fixture.tools.map(tool => (tool as { name: string }).name)).toEqual([
       'mnemon_memory_bodies',
       'mnemon_recall',
       'mnemon_related',
       'mnemon_status',
+      'mnemon_runtime_memory',
       'mnemon_remember',
       'mnemon_link',
       'mnemon_forget',
@@ -75,7 +90,10 @@ describe('dsh-mnemon plugin composition', () => {
       expect.objectContaining({ output: expect.objectContaining({ schema: { type: 'object', additionalProperties: true } }) }),
     ]))
     expect(fixture.tools.every(tool => (tool as { output: { schema: { type: string } } }).output.schema.type !== 'json')).toBe(true)
-    expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:routing' })])
+    expect(fixture.sections).toEqual([
+      expect.objectContaining({ name: 'mnemon:routing' }),
+      expect.objectContaining({ name: 'mnemon:runtime-memory', text: expect.any(Function) }),
+    ])
     const guidance = (fixture.sections[0] as { text: string }).text
     expect(guidance).toContain('call mnemon_recall')
     expect(guidance.length).toBeLessThan(320)
@@ -89,7 +107,7 @@ describe('dsh-mnemon plugin composition', () => {
 
   it('keeps recall/status available while hiding all mutation surfaces in read-only mode', () => {
     const fixture = context()
-    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', writeEnabled: false })
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), writeEnabled: false })
     expect(fixture.tools.map(tool => (tool as { name: string }).name)).toEqual([
       'mnemon_memory_bodies',
       'mnemon_recall',
@@ -97,12 +115,13 @@ describe('dsh-mnemon plugin composition', () => {
       'mnemon_status',
     ])
     expect(fixture.channels).toHaveLength(2)
+    expect(fixture.sections).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'mnemon:runtime-memory' })]))
   })
 
   it('can disable both guidance and the Web tab independently', () => {
     const fixture = context()
-    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', routingGuidance: false, tabEnabled: false })
-    expect(fixture.sections).toHaveLength(0)
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), routingGuidance: false, tabEnabled: false })
+    expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:runtime-memory' })])
     expect(fixture.channels).toHaveLength(1)
   })
 })

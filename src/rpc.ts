@@ -1,5 +1,6 @@
 import type { HostConnectionHandle, HostRpcHandler, RpcResult } from './contracts.ts'
 import type { MnemonLifecycle } from './lifecycle.ts'
+import type { RuntimeMemoryController, RuntimeMemoryImportance, RuntimeMemoryTarget } from './runtime-memory.ts'
 import type { Category, EdgeType, Intent, MnemonService, SearchRequest, Source } from './service.ts'
 
 export const MNEMON_READ_CHANNEL = '/dsh-mnemon-read'
@@ -24,11 +25,14 @@ function failure(error: unknown): RpcResult<unknown> {
   }
 }
 
-export function createReadHandler(service: MnemonService, lifecycle?: MnemonLifecycle): HostRpcHandler {
+export function createReadHandler(service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
       const payload = object(rawPayload)
       switch (endpoint) {
+        case 'runtime-memory':
+          if (runtimeMemory === undefined) throw new Error('runtime memory is unavailable')
+          return success(runtimeMemory.snapshot())
         case 'status':
           return success({
             ...await service.status(),
@@ -93,11 +97,20 @@ export function createReadHandler(service: MnemonService, lifecycle?: MnemonLife
   }
 }
 
-export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLifecycle): HostRpcHandler {
+export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
       const payload = object(rawPayload)
       switch (endpoint) {
+        case 'runtime-memory':
+          if (runtimeMemory === undefined) throw new Error('runtime memory is unavailable')
+          return success(await runtimeMemory.mutate({
+            action: String(payload.action ?? '') as 'add' | 'replace' | 'remove',
+            target: String(payload.target ?? '') as RuntimeMemoryTarget,
+            ...(payload.content === undefined ? {} : { content: String(payload.content) }),
+            ...(payload.old_text === undefined ? {} : { oldText: String(payload.old_text) }),
+            ...(payload.importance === undefined ? {} : { importance: String(payload.importance) as RuntimeMemoryImportance }),
+          }))
         case 'supervise':
           if (lifecycle === undefined) throw new Error('Mnemon lifecycle integration is unavailable')
           return success(await lifecycle.supervise(String(payload.sessionId ?? ''), String(payload.content ?? '')))
@@ -147,9 +160,9 @@ export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLif
 }
 
 /** Read operations are available to trusted Web hosts; local mutations stay loopback-only. */
-export function registerRpc(connection: HostConnectionHandle, service: MnemonService, lifecycle?: MnemonLifecycle): void {
-  connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(service, lifecycle), { authority: 'trusted-host' })
+export function registerRpc(connection: HostConnectionHandle, service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController): void {
+  connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(service, lifecycle, runtimeMemory), { authority: 'trusted-host' })
   if (service.config.writeEnabled) {
-    connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(service, lifecycle), { authority: 'loopback' })
+    connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(service, lifecycle, runtimeMemory), { authority: 'loopback' })
   }
 }

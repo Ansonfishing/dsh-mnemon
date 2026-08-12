@@ -11,7 +11,7 @@ const WRITE_TOOLS = [
   'mnemon_memory_body_update',
   'mnemon_memory_body_merge',
 ]
-const REVIEW_TOOLS = [...READ_TOOLS, 'mnemon_remember', 'mnemon_forget']
+const REVIEW_TOOLS = [...READ_TOOLS, 'mnemon_runtime_memory']
 
 const INSIGHT_SCHEMA = {
   type: 'object',
@@ -40,7 +40,7 @@ const WRITE_SCHEMA = {
   type: 'object',
   properties: {
     summary: { type: 'string' },
-    action: { type: 'string', enum: ['stored', 'updated', 'skipped', 'forgotten', 'linked', 'created', 'merged', 'failed'] },
+    action: { type: 'string', enum: ['stored', 'updated', 'added', 'replaced', 'removed', 'skipped', 'forgotten', 'linked', 'created', 'merged', 'failed'] },
     memoryBodyIds: { type: 'array', items: { type: 'string' } },
   },
   required: ['summary', 'action', 'memoryBodyIds'],
@@ -197,13 +197,13 @@ export class MnemonSubagentCoordinator {
 
   async review(parent: HostAgent, signal: AbortSignal): Promise<DelegatedWriteResult> {
     const catalog = await this.service.bodies(signal)
-    const prompt = `Review the complete inherited parent-agent checkpoint after a sustained idle period. This is a conservative maintenance pass, not a continuation of the user's task.
+    const prompt = `Review the complete inherited parent-agent checkpoint after a sustained idle period. This is a conservative hot-memory maintenance pass, not a continuation of the user's task.
 
 Only new, explicit, durable assertions authored by the live user may be remembered. Questions, one-turn formatting requests, assistant answers, reasoning, tool output, recalled Mnemon content, translations, aliases, summaries, and inferred preferences are not new user assertions. Do not manufacture a memory merely to improve recall.
 
-You may forget an exact existing insight only when the user explicitly asked to forget it, or when the checkpoint contains direct user-authored evidence that the insight is obsolete or wrong. Never forget something merely because it was not mentioned recently.
+Use mnemon_runtime_memory for every mutation. Choose target=user only for identity, preferences, habits, role, communication style, or pet peeves. Choose target=memory for stable project, environment, decisions, conventions, tool quirks, and reusable lessons. Prefer replace for corrections and remove only when the checkpoint contains direct user-authored evidence that a hot-memory entry is obsolete or wrong. Never remove something merely because it was not mentioned recently.
 
-Use Mnemon recall only to verify a qualifying candidate or an exact forget target. If no safe mutation is needed, call no mutation tool and submit action="skipped" with memoryBodyIds=[]. Perform at most one remember or forget operation, then submit the structured result.
+Use Mnemon recall only when durable history is necessary to verify a qualifying candidate; do not archive directly to a Memory Space in this pass. If no safe mutation is needed, call no mutation tool and submit action="skipped" with memoryBodyIds=[]. Perform at most one add, replace, or remove operation, then submit the structured result.
 
 catalog_json: ${JSON.stringify(catalog.items)}`
     const { provider, runId, result } = await this.delegate(parent, 'review', 'Mnemon idle checkpoint review', prompt, REVIEW_TOOLS, WRITE_SCHEMA, signal, 'fork')

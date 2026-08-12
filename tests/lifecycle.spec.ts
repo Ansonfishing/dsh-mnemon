@@ -97,7 +97,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     if (decision.kind !== 'enter') throw new Error('unexpected rejection')
     expect(decision.messages).toHaveLength(2)
     expect(decision.messages[1]?.source).toMatchObject({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'instructions' })
-    expect(decision.messages[1]?.content[0]?.text).toBe('[MNEMON] Call mnemon_recall only when prior durable context matters; call mnemon_remember only for new, explicit, reusable user information. Otherwise call neither.')
+    expect(decision.messages[1]?.content[0]?.text).toBe('[MNEMON] Call mnemon_recall only when prior durable context matters; use mnemon_runtime_memory only for new, explicit, reusable information. Otherwise call neither.')
     expect(value.coordinator.recall).not.toHaveBeenCalled()
     expect(value.service.status).not.toHaveBeenCalled()
 
@@ -147,7 +147,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     const rememberOnly = fixture(resolveConfig({ recallMode: 'off', writebackMode: 'guided' }))
     const rememberDecision = await rememberOnly.preStep([userMessage()], 1)
     if (rememberDecision.kind !== 'enter') throw new Error('unexpected rejection')
-    expect(rememberDecision.messages[1]?.content[0]?.text).toContain('mnemon_remember')
+    expect(rememberDecision.messages[1]?.content[0]?.text).toContain('mnemon_runtime_memory')
     expect(rememberDecision.messages[1]?.content[0]?.text).not.toContain('mnemon_recall')
   })
 
