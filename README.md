@@ -2,64 +2,81 @@
 
 > **LLM-supervised 4-graph persistent memory for AI agents.**
 
-DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https://github.com/mnemon-dev/mnemon) 接入 DSH：Agent 通过原生工具按需召回和沉淀跨会话知识，用户通过 `/mnemon` 命令和会话「记忆」Tab 管理本地记忆图谱。
+DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https://github.com/mnemon-dev/mnemon) 接入 DSH，并在 Mnemon 原生命名 Store 之上提供“记忆体”模型：每个记忆体都有稳定的 `id`、名称、路由说明、激活状态和独立 `.db`，DSH 记忆子 Agent 负责跨记忆体选择、召回、查重与写入。
 
-Mnemon 采用 **LLM-supervised** 模式：宿主 LLM 判断何时召回、什么值得记住以及何时遗忘；本地单一二进制负责存储、四图索引、检索、衰减和去重。`dsh-mnemon` 将这一分工映射到 DSH 原生扩展点，不引入第二个 LLM、不要求额外 API Key，也不会在每轮机械召回或把整库塞入上下文。
+主 Agent 不需要接收完整目录、原始检索过程或写回推理。插件在 DSH 的正式生命周期扩展点中创建有界的 `spawn` 子 Agent，只把精简证据或结构化回执交还主上下文；存储、四图索引、衰减和去重仍由本地 Mnemon CLI 确定性执行。
 
-## 定位
+## 记忆体模型
 
-| 层 | 职责 |
-|---|---|
-| DSH Agent | 在 lifecycle gate 中判断是否 `recall / remember / link / forget` |
-| `dsh-mnemon` | 注册工具、命令、设置、WebUI 与 Agent 生命周期编排，校验输入并控制权限与超时 |
-| Mnemon CLI | 执行确定性的 SQLite 存储、四图索引、意图感知召回、衰减与去重 |
-| DSH 用户 | 在「记忆」Tab 总览、检索、审阅与维护，并在「状态」页选择 Store 与读写策略 |
-
-当前用户指令与仓库事实始终高于可能过时的历史记忆。记忆是可复核的辅助证据，不是自动覆盖当前事实的真相源。
-
-## 功能
-
-- **DSH 原生工具**
-  - `mnemon_recall`：图增强召回、关键词检索或基础匹配；
-  - `mnemon_related`：沿 temporal / semantic / causal / entity 边遍历关联记忆；
-  - `mnemon_remember`：写入一条持久洞察，保留 Mnemon 自带的重复/冲突判断；
-  - `mnemon_link`：在两条已确认的记忆之间建立类型化关系；
-  - `mnemon_forget`：按精确 ID 软删除；
-  - `mnemon_status`：查看 CLI、store 和数据库健康状态。
-- **DSH 原生生命周期编排**：首次模型请求前 Prime Store 状态；每个用户 turn 首步进入 Recall Gate；turn 结束前至多进入一次 Writeback Gate。Hook 只保证判断发生在正确边界，不会机械读写。
-- **受监督沉淀调度**：记忆 Tab 的默认写入通过 `agent.followup()` 排入当前 DSH 会话，由正在使用的 LLM 查重、判断、提炼、分类并调用 `mnemon_remember`；不引入第二个模型。
-- **DSH 原生命令**：`/mnemon status`、`recall`、`related`、`remember`、`forget` 直接通过命令面板执行，不经过模型。
-- **会话「记忆」Tab**
-  - 「总览」：每 15 秒同步 Mnemon active graph，以自然力导向布局呈现 temporal / semantic / causal / entity 关系；支持平滑重排、节点拖拽、键盘微调、自然铺开、均匀重置和节点检查；
-  - 「检索」：三种检索模式、分类过滤、结果卡片、关联图检查器、复制 ID、卡片内软删除确认；
-  - 「实体」：列出高频实体，并通过 ENTITY intent 聚合其跨图上下文；
-  - 「沉淀」：默认把用户候选内容交给当前 DSH LLM 监督写回；折叠的「人工高级写入」允许指定分类、重要性、实体和标签后直接调用 Mnemon；
-  - 「记忆库」：无副作用枚举 active memory，支持筛选、查阅、复制、基于旧内容新建和软删除；
-  - 「状态」：按健康概览、Prime / Recall / Writeback 生命周期、快速诊断、引擎存储和折叠配置分层展示，并提供会话绑定、监督请求、工具调用与失败计数。
-- **Tab 内原生配置**：在「记忆 → 状态」编辑配置，写入 `.dsh/settings.yaml` 并在重启后生效；无需前往 DSH 的「设置 → 插件配置」。
-- **全局主题联动**：界面只使用 DSH design token，跟随 DSH 全局明暗模式，不维护插件私有主题开关。
-- **命名 store 与数据隔离**：支持 Mnemon 的 `--store` / `MNEMON_STORE` / active store 优先级。
-- **安全边界**：所有 CLI 调用使用参数数组并禁用 shell；远程可信 Web 页面可读，本地记忆写入 RPC 仅允许 loopback 页面；`writeEnabled: false` 可整体切成只读。
-- **版本兼容**：同时解析 Mnemon 0.1.2 的嵌套 recall 结果和当前上游的紧凑结果。
-
-## 架构
+一个 Mnemon `.db` 对应一个隔离的记忆体数据面，`dsh-mnemon` 为它补充可维护的目录元数据：
 
 ```text
-DSH turn ── pre-step / stopping ─┐
-DSH Agent ── native tools ───────┤
-DSH Chat  ── /mnemon command ────┼── dsh-mnemon host ── mnemon CLI ── ~/.mnemon/data/<store>/
-DSH Web   ── 「记忆」Tab ───────┤                  remember / link / recall / forget
-             监督沉淀 ─ followup ┤
-             状态与配置 ─────────┘                  ~/.dsh/settings.yaml
+<dataDir>/
+└── data/
+    ├── .dsh-memory-bodies.json       # id / name / description / active
+    ├── project/
+    │   └── mnemon.db                 # project 记忆体
+    ├── preferences/
+    │   └── mnemon.db                 # preferences 记忆体
+    └── research/
+        └── mnemon.db                 # research 记忆体
 ```
 
-浏览器不直接启动进程、不接触数据库，也不保存任何密钥或特殊权限。Host 半区统一解析配置、校验输入、设置超时并调用本地 `mnemon` 可执行文件。
+- **读边界**：语义召回只能读取已激活记忆体；子 Agent 根据名称和 description 选择一个或多个目标，也可以有意执行跨记忆体召回。
+- **写边界**：写入可选择任意记忆体；向未激活记忆体写入后会自动激活。
+- **新建**：只有稳定知识形成独立、反复使用且现有目录无法容纳的范围时，写入子 Agent 才应创建新记忆体。
+- **合并**：子 Agent 可将来源记忆体导入目标记忆体；这是非破坏性合并，来源 `.db` 不会被删除。
+- **兼容迁移**：插件会发现既有 `<dataDir>/data/<store>/mnemon.db` 并登记到目录，不移动或重建数据库。
+- **人工控制**：“记忆体”总览提供激活开关和空白记忆体创建入口；开关只改变读取范围。
 
-生命周期编排完全使用 DSH Agent 已有扩展点：`agent/pre-step` 在模型取上下文前加入 Prime / Recall 判断，`agent/turn-stopping` 在一次 turn 真正关闭前加入可去重的 Writeback 判断，`agent.followup()` 接收 WebUI 的受监督沉淀请求。它不是 Mnemon daemon，也不做定时推送；记忆仍由当前 DSH LLM 按需拉取和写入。
+## DSH 原生监督架构
 
-## 前置条件
+| 阶段 | DSH 扩展点 | 记忆子 Agent 的职责 | 主 Agent 得到什么 |
+|---|---|---|---|
+| 任务开始 | `agent/pre-step` | 读取激活目录、选择记忆体、调用 recall/related、去重压缩 | 当前 step 可用的少量带来源证据 |
+| 显式工具/命令 | `ctx.subagents.start('spawn', …)` | 在受限 Mnemon 工具集合内完成一次语义操作 | 结构化召回结果或写入回执 |
+| 任务结束 | `agent/turn-stopping` | 检查当前 turn 的有界事件窗口，判断是否值得沉淀并完成副作用 | 不追加长解释，不强制主 Agent 再跑一步 |
+| WebUI 沉淀 | 写 RPC → `spawn` | 选择记忆体、查重、提炼、写入，必要时创建或合并 | 可审计的 action、目标记忆体和摘要 |
 
-先安装 Mnemon。macOS 推荐使用官方 Homebrew Cask：
+`spawn` 子 Agent 使用全新的隔离上下文，并通过 persona、工具白名单、结构化输出和 `maxDepth: 1` 限制职责。根 Agent 调用 `mnemon_recall` / `mnemon_remember` 等工具时会先进入子 Agent；同名工具在记忆子 Agent 内才直接访问 MnemonService，因此不会递归委派。
+
+Prime 只向主上下文注入记忆体数量和聚合计数。当前用户指令与仓库事实始终高于历史记忆；召回内容是可复核的辅助证据，不是自动覆盖当前事实的真相源。
+
+## 能力
+
+### 模型工具
+
+- `mnemon_memory_bodies`：读取全局记忆体目录、激活状态和统计；
+- `mnemon_recall`：从一个或多个激活记忆体执行图增强、关键词或基础召回；
+- `mnemon_related`：沿 temporal / semantic / causal / entity 边遍历关联记忆；
+- `mnemon_remember`：选择记忆体并沉淀一条持久洞察；
+- `mnemon_link`：在同一记忆体内建立类型化关系；
+- `mnemon_forget`：按记忆体和精确 ID 软删除；
+- `mnemon_memory_body_create` / `update` / `merge`：创建、维护或非破坏性合并记忆体；
+- `mnemon_status`：查看 CLI、目录、聚合数据库和子 Agent 健康状态。
+
+根 Agent 发起的语义召回和写操作全部由记忆子 Agent 处理。总览图、内容列表、状态读取和人工激活开关属于确定性管理操作，不消耗 LLM 上下文。
+
+### 会话「记忆体」Tab
+
+- **总览**：管理全局记忆体目录和激活开关；每 15 秒聚合所有激活记忆体的四图快照；支持流畅力导向动画、节点拖拽、键盘微调、自然铺开、均匀重置和节点检查。
+- **检索**：三种召回模式、分类过滤、跨记忆体来源标记、关联图查阅、复制 ID 和软删除确认。
+- **实体**：列出高频实体，并用隔离 Recall Worker 聚合实体的跨图上下文。
+- **沉淀**：默认直接调度记忆子 Agent；人工高级选项可约束目标记忆体、分类、重要性、实体和标签，但不会绕过查重与监督。
+- **内容**：无副作用浏览已激活记忆体，支持筛选、复制、基于旧内容新建和软删除。
+- **状态**：只展示 Mnemon 引擎、记忆体目录、Recall/Write Worker、会话绑定、阶段计数和快速诊断，不在页面混入部署配置。
+
+界面使用 DSH design token，跟随 DSH 全局明暗模式，不维护插件私有主题开关。WebUI 不直接启动进程、不接触数据库：Host 侧统一校验输入、控制超时并调用本地 `mnemon`。
+
+### 命令与权限
+
+`/mnemon status`、`recall`、`related`、`remember`、`forget` 注册到 DSH 命令面板。语义命令使用命令所在的 live Agent 作为记忆子 Agent 的 parent；状态读取是确定性的。
+
+远程可信 Web 页面可读，本地记忆写 RPC 仅允许 loopback 页面。`writeEnabled: false` 会关闭模型写工具、写命令和 Web 写通道，召回、目录、状态与可视化仍可用。所有 CLI 调用都使用参数数组并禁用 shell。
+
+## 安装
+
+先安装 Mnemon。macOS 推荐官方 Homebrew Cask：
 
 ```sh
 brew install --cask mnemon-dev/tap/mnemon
@@ -78,15 +95,11 @@ mnemon --version
 mnemon status
 ```
 
-Mnemon 是 local-first 单二进制持久记忆图谱，核心协议是 `remember / link / recall`。它同时维护 temporal、entity、causal、semantic 四类关系；本地嵌入是可选增强，未安装 Ollama 时核心记忆与图召回能力仍可工作。详细安装和设计说明见 [Mnemon 官方仓库](https://github.com/mnemon-dev/mnemon)。
-
-## 安装到 DSH
+再安装 DSH 插件并重启 `dsh web`：
 
 ```sh
 dsh plugin --profile web add "github:dsh-external/dsh-mnemon"
 ```
-
-安装后重启 `dsh web`，再刷新浏览器。包内的 `cordis.patch.yml` 会自动挂载插件、注册 Agent 工具与 `/mnemon` 命令，并启用「记忆」Tab。
 
 本地开发检出可使用：
 
@@ -94,16 +107,17 @@ dsh plugin --profile web add "github:dsh-external/dsh-mnemon"
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
+包内 `cordis.patch.yml` 会挂载 Host 插件、原生工具、命令、生命周期 hook、RPC 和会话「记忆体」Tab。DSH Web/base profile 需提供兼容的 `spawn` subagent provider。
+
 ## 配置
 
-推荐在 DSH Web 的 **记忆 → 状态 → 连接与行为** 中修改。设置会写入 `$DSH_HOME/settings.yaml` 的 `mnemon` 命名空间，并在重启 DSH 后生效；profile 的插件配置作为 base，`settings.yaml` 中的用户值拥有更高优先级。
+记忆体名称、description 和激活状态在「记忆体 → 总览」中维护。进程级连接与行为配置属于部署配置，可写入 `$DSH_HOME/settings.yaml` 的 `mnemon` 命名空间或 profile patch；修改后重启 DSH 生效。
 
 ```yaml
 # ~/.dsh/settings.yaml
 mnemon:
   cliPath: /opt/homebrew/bin/mnemon
   dataDir: ~/.mnemon
-  store: project-alpha
   timeoutMs: 10000
   defaultRecallLimit: 10
   routingGuidance: true
@@ -114,74 +128,32 @@ mnemon:
   writeEnabled: true
 ```
 
-也可以在 profile patch 中提供部署级默认值：
-
-包内默认层：
-
-```yaml
-- insert:
-    - id: mnemon
-      name: dsh-mnemon
-      config:
-        routingGuidance: true
-        lifecycleEnabled: true
-        recallMode: guided
-        writebackMode: guided
-        tabEnabled: true
-        writeEnabled: true
-        timeoutMs: 10000
-        defaultRecallLimit: 10
-```
-
-需要固定 CLI、数据目录或命名 store 时，在 profile 的最终 `cordis.patch.yml` 覆盖：
-
-```yaml
-- id: mnemon
-  config:
-    cliPath: /opt/homebrew/bin/mnemon
-    dataDir: ~/.mnemon
-    store: project-alpha
-    routingGuidance: true
-    lifecycleEnabled: true
-    recallMode: guided
-    writebackMode: guided
-    tabEnabled: true
-    writeEnabled: true
-    timeoutMs: 10000
-    defaultRecallLimit: 10
-```
-
-> DSH 的同 ID 配置覆盖通常会替换整行 `config`，建议把仍需保留的键全部重写。
-
 | 配置 | 默认值 | 说明 |
 |---|---:|---|
-| `cliPath` | 自动发现 | 解析顺序：显式配置 → `MNEMON_CLI_PATH` → `PATH` → 常见安装路径 |
-| `dataDir` | 未覆盖 | 未设置时沿用 `MNEMON_DATA_DIR` 或 Mnemon 默认 `~/.mnemon` |
-| `store` | 未覆盖 | 未设置时沿用 `MNEMON_STORE`、active 文件、最后回退 `default` |
+| `cliPath` | 自动发现 | 显式配置 → `MNEMON_CLI_PATH` → `PATH` → 常见安装路径 |
+| `dataDir` | Mnemon 默认 | 未设置时沿用 `MNEMON_DATA_DIR` 或 `~/.mnemon`；其 `data/` 是全局记忆体目录 |
+| `store` | 未覆盖 | 仅作为首次建目录或发现旧 Store 时的兼容首选项；运行期语义操作由记忆体路由决定 |
 | `timeoutMs` | `10000` | 单次 CLI 调用硬超时，范围 100–120000 ms |
-| `defaultRecallLimit` | `10` | 模型工具和 Tab 的默认召回条数，范围 1–50 |
-| `routingGuidance` | `true` | 在系统提示中说明 Mnemon 的工具路由和记忆边界 |
-| `lifecycleEnabled` | `true` | 启用 DSH Agent Prime / Recall / Writeback 生命周期编排；关闭后仍可手动使用工具和监督沉淀 |
-| `recallMode` | `guided` | `guided` 在每个用户 turn 首步提醒模型判断是否召回；`off` 仅保留主动工具调用 |
-| `writebackMode` | `guided` | `guided` 在 turn 关闭前至多检查一次是否值得沉淀；`off` 仅保留主动或 Tab 监督沉淀 |
-| `tabEnabled` | `true` | 注册 Web `conversation.view`「记忆」Tab 和 RPC |
-| `writeEnabled` | `true` | 注册模型写工具与本地 Web 写通道；关闭后 recall/status 仍可用 |
+| `defaultRecallLimit` | `10` | 工具和 Tab 的默认召回条数，范围 1–50 |
+| `routingGuidance` | `true` | 向主 Agent 提供精简的记忆监督边界说明 |
+| `lifecycleEnabled` | `true` | 启用 Prime、pre-step Recall Worker 和 turn-stopping Write Worker |
+| `recallMode` | `guided` | `guided` 自动运行有界召回子 Agent；`off` 仅保留显式调用 |
+| `writebackMode` | `guided` | `guided` 在 turn 关闭前运行有界写回子 Agent；`off` 仅保留显式或 Tab 沉淀 |
+| `tabEnabled` | `true` | 注册 Web `conversation.view`「记忆体」Tab 和 RPC |
+| `writeEnabled` | `true` | 允许记忆、关系、忘记、记忆体维护与写 RPC |
 
-如果多个 agent 应共享同一记忆池，不设置 `store` 即可使用 Mnemon 当前 active store；如果需要按项目或角色隔离，为各 profile 设置不同的命名 store。
+profile patch 中同 ID 的 `config` 可能整体覆盖默认行；覆盖时应保留仍需启用的键。
 
 ## 推荐使用方式
 
-1. 延续旧任务、询问历史决策、排查已知坑时，让模型做一次聚焦 recall。
-2. 召回内容只作证据：发现它与当前代码或用户指令冲突时，以当前事实为准。
-3. 形成稳定决策、偏好、流程或难得经验后，在「沉淀」中提交候选，让当前 DSH LLM 查重、提炼并决定是否写入。
-4. 临时进度、普通聊天、可直接从仓库读出的事实不写入。
-5. 需要解释关系时，从 recall 返回的完整 ID 调用 `mnemon_related`；不要猜 ID。
-
-这对应 Mnemon 的生命周期判断：任务到来时只问“召回是否可能改变结果”，任务结束时只问“是否产生了稳定、可复用、未来值得检索的知识”。插件通过 DSH 生命周期 gate 保证模型有机会作出判断，最终是否调用记忆工具仍由 DSH Agent 决定。
+1. 用清晰的 name 和 description 划分长期范围，例如“项目决策”“个人偏好”“研究资料”；不要为一次临时任务创建记忆体。
+2. 只激活当前可能影响工作的记忆体，减少无关召回；跨域任务可以同时激活多个。
+3. 延续旧任务、询问历史决策或排查已知坑时，让 Recall Worker 选择相关记忆体并返回证据。
+4. 形成稳定决策、偏好、流程或难得经验后，让 Write Worker 查重、提炼并决定写入位置。
+5. 临时进度、普通聊天和可直接从仓库读取的事实不应沉淀。
+6. 需要解释关系时，从 recall 返回的完整 `memoryBodyId + id` 调用 `mnemon_related`，不要猜 ID。
 
 ## DSH 命令
-
-在会话输入框的“命令”菜单中选择 `/mnemon`，或直接输入：
 
 ```text
 /mnemon status
@@ -191,7 +163,7 @@ mnemon:
 /mnemon forget <完整记忆 ID>
 ```
 
-命令由 DSH command registry 执行并记录 command 生命周期，不会发送给模型。`writeEnabled: false` 时仍可使用 `status` / `recall` / `related`，写入与删除命令会明确拒绝。
+`writeEnabled: false` 时仍可使用 `status` / `recall` / `related`，写入与删除命令会明确拒绝。
 
 ## 开发与验证
 
@@ -208,9 +180,9 @@ pnpm run verify
 
 - `lib/index.js`：DSH Host 插件；
 - `lib/client.js`：自包含浏览器 bundle，仅 external `react` / `react/jsx-runtime`；
-- `lib/types/`：Host 与 Client 类型声明和中间 ESM。
+- `lib/types/`：Host 与 Client 类型声明及中间 ESM。
 
-测试覆盖配置解析、CLI 参数/超时边界、0.1.2 与当前 recall 数据形态、图谱安全解析、无副作用 List、实体查阅、只读模式、RPC 权限划分、Tab 内设置、生命周期 hook、监督调度和六区工作台交互。另使用隔离 Mnemon Store 与独立端口 DSH，通过真实 WebUI 对话验证 Prime / Recall Gate / `mnemon_recall` / Writeback Gate、Tab 发起的 LLM 查重与 `mnemon_remember`、状态计数及最终 CLI recall。
+测试覆盖记忆体目录迁移、独立 Store 路由、激活读边界、写后激活、非破坏性合并、子 Agent 工具隔离、pre-step / turn-stopping hook、RPC 权限、只读模式、多记忆体图谱和六区工作台。发布前还应使用隔离 `MNEMON_DATA_DIR` 和独立端口 DSH，通过真实 WebUI 对话验证跨记忆体召回、写回副作用、沉淀回执、状态计数和最终 CLI recall。
 
 ## 品牌资源
 

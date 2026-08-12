@@ -1,5 +1,5 @@
 # Mount the Mnemon bridge into a DSH profile. The profile's own final patch
-# may replace this config row to select a named store or an explicit binary.
+# may replace this config row to select an explicit binary or data directory.
 - insert:
     - id: mnemon
       name: dsh-mnemon

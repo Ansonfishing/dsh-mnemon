@@ -1,13 +1,16 @@
 {
   "name": "dsh-mnemon",
   "version": "0.1.0",
-  "description": "LLM-supervised 4-graph persistent memory for AI agents, integrated into DeepSeek Harness with native tools, commands, settings, and WebUI.",
+  "description": "DSH memory-body plugin for Mnemon: subagent-supervised recall and writeback across isolated persistent 4-graph stores.",
   "keywords": [
     "deepseek-harness",
     "dsh",
     "mnemon",
     "agent-memory",
     "persistent-memory",
+    "memory-body",
+    "multi-memory",
+    "subagent",
     "llm-memory",
     "knowledge-graph",
     "ai-agent",

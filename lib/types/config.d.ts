@@ -6,7 +6,7 @@ export interface Config {
     cliPath?: string;
     /** Mnemon base directory. Omit to preserve MNEMON_DATA_DIR / Mnemon's ~/.mnemon default. */
     dataDir?: string;
-    /** Named store forced on every call. Omit to preserve MNEMON_STORE / the active-store file. */
+    /** Legacy store hint used to bootstrap or discover the initial memory body. */
     store?: string;
     /** Hard deadline for one CLI process. */
     timeoutMs?: number;
