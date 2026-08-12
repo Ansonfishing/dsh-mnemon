@@ -424,8 +424,8 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
       <rect width={GRAPH_WIDTH} height={GRAPH_HEIGHT} className={css.graphBackdrop} />
       <rect width={GRAPH_WIDTH} height={GRAPH_HEIGHT} fill="url(#mnemon-grid)" />
       {curvedEdges.map(({ edge, offset }, index) => {
-        const source = positions.get(edge.sourceId)!
-        const target = positions.get(edge.targetId)!
+        const source = positions.get(edge.sourceId) ?? naturalLayout.get(edge.sourceId) ?? { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 }
+        const target = positions.get(edge.targetId) ?? naturalLayout.get(edge.targetId) ?? { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 }
         const dx = target.x - source.x
         const dy = target.y - source.y
         const distance = Math.max(1, Math.hypot(dx, dy))
@@ -436,7 +436,7 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
       })}
       {visibleNodes.map((node, index) => {
         const nodeKey = graphNodeKey(node)
-        const position = positions.get(nodeKey)!
+        const position = positions.get(nodeKey) ?? naturalLayout.get(nodeKey) ?? { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 }
         const selected = props.selectedId === nodeKey
         const showLabel = selected || visibleNodes.length < 22 || index % 3 === 0
         return (
@@ -546,7 +546,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
         <div className={css.bodyGrid}>
           {catalog?.items.map((body, index) => (
             <article key={body.id} className={css.bodyCard} data-active={body.active || undefined} data-healthy={body.healthy || undefined} title={body.error} style={{ '--mn-body-accent': `hsl(${(hash(body.id) + index * 29) % 360} 66% 58%)` } as CSSProperties}>
-              <div className={css.bodyCardTop}><span className={css.bodySignal} /><div><strong>{body.name}</strong><code>{body.id}</code><small className={css.bodyHealth}>{body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small></div><button type="button" role="switch" aria-checked={body.active} aria-label={t('overview.toggleAria', { name: body.name })} disabled={!props.writeEnabled || changing === body.id} onClick={() => void toggle(body)}><i />{changing === body.id ? t('overview.toggling') : body.active ? t('common.active') : t('common.inactive')}</button></div>
+              <div className={css.bodyCardTop}><span className={css.bodySignal} /><div><strong>{body.name}</strong><code>{body.id}</code><small className={css.bodyHealth}>{body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small></div><button type="button" className={css.bodySwitch} role="switch" aria-checked={body.active} aria-label={t('overview.toggleAria', { name: body.name })} disabled={!props.writeEnabled || changing === body.id} onClick={() => void toggle(body)}><span className={css.bodySwitchTrack} aria-hidden="true"><i /></span><span>{changing === body.id ? t('overview.toggling') : body.active ? t('common.active') : t('common.inactive')}</span></button></div>
               <p>{body.description || t('overview.noDescription')}</p>
               <footer><span>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></footer>
             </article>

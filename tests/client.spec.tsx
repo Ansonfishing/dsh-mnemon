@@ -17,7 +17,7 @@ describe('MnemonView', () => {
     unset: async () => {},
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection() {
+  function createConnection(options: { withInactiveBody?: boolean } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -28,6 +28,16 @@ describe('MnemonView', () => {
       updatedAt: '2026-08-13T03:00:00.000Z',
       healthy: true,
       stats: { totalInsights: 12, deletedInsights: 0, edgeCount: 9, oplogCount: 20, dbSizeBytes: 4096, byCategory: {}, topEntities: [] },
+    }
+    let secondaryActive = false
+    const secondaryBody = {
+      ...body,
+      id: 'preferences',
+      name: '偏好记忆体',
+      description: '长期稳定的表达与协作偏好。',
+      active: secondaryActive,
+      dbPath: '/tmp/mnemon/data/preferences/mnemon.db',
+      stats: { ...body.stats, totalInsights: 1, edgeCount: 0 },
     }
     const status = {
       healthy: true,
@@ -40,7 +50,7 @@ describe('MnemonView', () => {
       timeoutMs: 10000,
       defaultRecallLimit: 10,
       memoryBodyDirectory: '/tmp/mnemon/data',
-      memoryBodies: [body],
+      memoryBodies: options.withInactiveBody ? [body, secondaryBody] : [body],
       stats: { totalInsights: 12, deletedInsights: 0, edgeCount: 9, oplogCount: 20, dbSizeBytes: 4096, byCategory: {}, topEntities: [] },
       lifecycle: {
         enabled: true,
@@ -63,13 +73,15 @@ describe('MnemonView', () => {
       },
     }
     const memory = { id: 'memory-12345678', content: '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], color: '#e74c3c', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-12345678` }
+    const secondaryMemory = { id: 'preference-1', content: '用户偏好简洁中文回答。', category: 'preference', importance: 4, tags: ['style'], color: '#9b59b6', memoryBodyId: secondaryBody.id, memoryBodyName: secondaryBody.name, graphId: `${secondaryBody.id}:preference-1` }
     const call = vi.fn(async (_channel: string, endpoint: string, payload?: Record<string, unknown>) => {
-      if (endpoint === 'status') return { ok: true, value: status }
-      if (endpoint === 'bodies') return { ok: true, value: { items: [body], total: 1, activeCount: 1, directory: '/tmp/mnemon/data', generatedAt: '2026-08-13T03:00:00.000Z' } }
+      const bodies = options.withInactiveBody ? [body, { ...secondaryBody, active: secondaryActive }] : [body]
+      if (endpoint === 'status') return { ok: true, value: { ...status, memoryBodies: bodies } }
+      if (endpoint === 'bodies') return { ok: true, value: { items: bodies, total: bodies.length, activeCount: bodies.filter(item => item.active).length, directory: '/tmp/mnemon/data', generatedAt: '2026-08-13T03:00:00.000Z' } }
       if (endpoint === 'graph') return {
         ok: true,
         value: {
-          nodes: [memory, { id: 'memory-graph-2', content: 'Mnemon 使用四图持久记忆。', category: 'fact', color: '#3498db', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-graph-2` }],
+          nodes: [memory, { id: 'memory-graph-2', content: 'Mnemon 使用四图持久记忆。', category: 'fact', color: '#3498db', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-graph-2` }, ...(secondaryActive ? [secondaryMemory] : [])],
           edges: [{ sourceId: `${body.id}:${memory.id}`, targetId: `${body.id}:memory-graph-2`, label: 'backbone', color: '#aaaaaa', type: 'temporal' }],
           generatedAt: '2026-08-13T03:00:00.000Z',
         },
@@ -88,7 +100,10 @@ describe('MnemonView', () => {
       if (endpoint === 'supervise') return { ok: true, value: { delegated: true, sessionId: 'session-1', runId: 'child-1', provider: 'spawn', summary: '已提炼并写入项目交付约束。', action: 'stored', memoryBodyIds: ['project'] } }
       if (endpoint === 'remember') return { ok: true, value: { delegated: true, runId: 'child-2', provider: 'spawn', summary: '已按高级约束写入。', action: 'stored', memoryBodyIds: ['project'] } }
       if (endpoint === 'forget') return { ok: true, value: { action: 'forgotten' } }
-      if (endpoint === 'body-update') return { ok: true, value: { ...body, active: payload?.active as boolean } }
+      if (endpoint === 'body-update') {
+        if (payload?.memoryBodyId === secondaryBody.id) secondaryActive = payload.active as boolean
+        return { ok: true, value: { ...(payload?.memoryBodyId === secondaryBody.id ? secondaryBody : body), active: payload?.active as boolean } }
+      }
       if (endpoint === 'body-create') return { ok: true, value: { ...body, id: 'new-body', name: String(payload?.name ?? '') } }
       return { ok: false, error: { code: 'unexpected', message: endpoint } }
     })
@@ -141,6 +156,19 @@ describe('MnemonView', () => {
     expect(screen.getByRole('heading', { name: '子 Agent 生命周期' })).toBeTruthy()
     expect(screen.getByText('召回处理')).toBeTruthy()
     expect(screen.getByText('/mnemon status')).toBeTruthy()
+  })
+
+  it('activates an additional memory space without crashing the live graph', async () => {
+    const { connection } = createConnection({ withInactiveBody: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+
+    const toggle = await screen.findByRole('switch', { name: '偏好记忆体读取开关' })
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(toggle)
+
+    await waitFor(() => expect(screen.getByRole('switch', { name: '偏好记忆体读取开关' }).getAttribute('aria-checked')).toBe('true'))
+    expect(screen.getByRole('button', { name: /偏好: 用户偏好简洁中文回答/ })).toBeTruthy()
+    expect(screen.getByRole('img', { name: /Mnemon 实时记忆图谱，3 个节点/ })).toBeTruthy()
   })
 
   it('requires inline confirmation before forgetting a recalled memory', async () => {
