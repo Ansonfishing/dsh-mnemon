@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveConfig } from '../src/config.ts'
 import type {
   HostAgent,
@@ -59,7 +59,8 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
   const coordinator = {
     recall: vi.fn(async (_agent, request) => ({ query: request.query, mode: 'smart', results: [], delegation: { runId: 'recall-child', provider: 'spawn', summary: '', selectedMemoryBodyIds: [] } })),
     write: vi.fn(async () => ({ delegated: true, runId: 'write-child', provider: 'spawn', summary: 'No durable memory', action: 'skipped', memoryBodyIds: [] })),
-    snapshot: vi.fn(() => ({ recalls: 0, writes: 0, failures: 0 })),
+    review: vi.fn(async () => ({ delegated: true, runId: 'review-child', provider: 'fork', summary: 'No durable change', action: 'skipped', memoryBodyIds: [] })),
+    snapshot: vi.fn(() => ({ recalls: 0, writes: 0, answers: 0, reviews: 0, failures: 0 })),
   } as unknown as MnemonSubagentCoordinator
   const ctx = {
     agents: { get: (id: string) => id === agent.id ? agent : undefined, roots: () => [agent] },
@@ -81,12 +82,13 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
     if (listener === undefined) throw new Error('turn-stopping listener missing')
     await listener({ agent, turn, signal: new AbortController().signal })
   }
-
-  return { agent, events, followup, steer, lifecycle, service, coordinator, preStep, turnStopping, stop }
+  return { agent, agentListeners, events, followup, steer, lifecycle, service, coordinator, preStep, turnStopping, stop }
 }
 
+afterEach(() => vi.useRealTimers())
+
 describe('Mnemon DSH lifecycle integration', () => {
-  it('adds a short optional reminder without forcing recall for an ordinary turn', async () => {
+  it('adds a short optional reminder without forcing recall or remember for an ordinary turn', async () => {
     const value = fixture()
     const prompt = userMessage('Aster 发布前需要检查哪些事项？')
     const decision = await value.preStep([prompt], 1)
@@ -95,7 +97,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     if (decision.kind !== 'enter') throw new Error('unexpected rejection')
     expect(decision.messages).toHaveLength(2)
     expect(decision.messages[1]?.source).toMatchObject({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'instructions' })
-    expect(decision.messages[1]?.content[0]?.text).toBe('[MNEMON] Decide whether this turn needs durable context. If yes, call mnemon_recall with a focused query; otherwise continue.')
+    expect(decision.messages[1]?.content[0]?.text).toBe('[MNEMON] Call mnemon_recall only when prior durable context matters; call mnemon_remember only for new, explicit, reusable user information. Otherwise call neither.')
     expect(value.coordinator.recall).not.toHaveBeenCalled()
     expect(value.service.status).not.toHaveBeenCalled()
 
@@ -103,43 +105,50 @@ describe('Mnemon DSH lifecycle integration', () => {
     if (second.kind !== 'enter') throw new Error('unexpected rejection')
     expect(second.messages).toHaveLength(2)
     expect(value.coordinator.recall).not.toHaveBeenCalled()
-    expect(value.lifecycle.snapshot('session-1').counters).toMatchObject({ primes: 1, recallCues: 2 })
+    expect(value.lifecycle.snapshot('session-1').counters).toMatchObject({ primes: 1, recallCues: 2, writebackCues: 2 })
   })
 
-  it('automatically evaluates an ordinary durable project statement before its turn closes', async () => {
-    const value = fixture()
-    const prompt = userMessage('从本周起，Aster 发布前必须完成备份恢复演练。这是长期稳定流程。')
-    value.events.push(
-      { type: 'turn/start', data: { turn: 1 } },
-      { type: 'user/message', data: prompt as unknown as Record<string, unknown> },
-      { type: 'assistant/message', data: { turn: 1, step: 1 } },
-    )
-
-    await value.turnStopping(1)
+  it('debounces a full-checkpoint review until the completed turn stays idle', async () => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    value.events.push({ type: 'turn/end', data: { turn: 1 } })
     await value.turnStopping(1)
 
-    expect(value.steer).not.toHaveBeenCalled()
-    expect(value.coordinator.write).toHaveBeenCalledTimes(1)
-    expect(value.coordinator.write).toHaveBeenCalledWith(value.agent, 'turn-writeback', expect.objectContaining({
-      turn: 1,
-      events: expect.arrayContaining([expect.objectContaining({ type: 'user/message' })]),
-    }), expect.any(AbortSignal))
-    expect(value.lifecycle.snapshot('session-1').counters.writebackChecks).toBe(1)
-  })
-
-  it('does not add a writeback checkpoint after the model already remembered', async () => {
-    const value = fixture()
-    const prompt = userMessage()
-    value.events.push(
-      { type: 'turn/start', data: { turn: 1 } },
-      { type: 'user/message', data: prompt as unknown as Record<string, unknown> },
-      { type: 'tool/call', data: { turn: 1, step: 1, name: 'mnemon_remember' } },
-    )
-
-    await value.turnStopping(1)
-    expect(value.steer).not.toHaveBeenCalled()
+    expect(value.coordinator.review).not.toHaveBeenCalled()
+    expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewPending: true, reviewRunning: false })
+    await vi.advanceTimersByTimeAsync(4_999)
+    expect(value.coordinator.review).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(value.coordinator.review).toHaveBeenCalledWith(value.agent, expect.any(AbortSignal))
     expect(value.coordinator.write).not.toHaveBeenCalled()
-    expect(value.lifecycle.snapshot('session-1').current?.memoryToolCalls).toBe(1)
+    expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewPending: false, lastReviewAction: 'skipped' })
+  })
+
+  it('cancels a pending idle review when a new turn begins', async () => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    value.events.push({ type: 'turn/end', data: { turn: 1 } })
+    await value.turnStopping(1)
+    await vi.advanceTimersByTimeAsync(4_000)
+    await value.preStep([userMessage('A new turn arrived')], 2)
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    expect(value.coordinator.review).not.toHaveBeenCalled()
+    expect(value.lifecycle.snapshot('session-1').current?.idleReviewPending).toBe(false)
+  })
+
+  it('can cue recall and remember independently', async () => {
+    const recallOnly = fixture(resolveConfig({ recallMode: 'guided', writebackMode: 'off' }))
+    const recallDecision = await recallOnly.preStep([userMessage()], 1)
+    if (recallDecision.kind !== 'enter') throw new Error('unexpected rejection')
+    expect(recallDecision.messages[1]?.content[0]?.text).toContain('mnemon_recall')
+    expect(recallDecision.messages[1]?.content[0]?.text).not.toContain('mnemon_remember')
+
+    const rememberOnly = fixture(resolveConfig({ recallMode: 'off', writebackMode: 'guided' }))
+    const rememberDecision = await rememberOnly.preStep([userMessage()], 1)
+    if (rememberDecision.kind !== 'enter') throw new Error('unexpected rejection')
+    expect(rememberDecision.messages[1]?.content[0]?.text).toContain('mnemon_remember')
+    expect(rememberDecision.messages[1]?.content[0]?.text).not.toContain('mnemon_recall')
   })
 
   it('delegates memory-tab candidates directly to an isolated memory subagent', async () => {
@@ -157,7 +166,6 @@ describe('Mnemon DSH lifecycle integration', () => {
     const prompt = userMessage()
     const decision = await value.preStep([prompt], 1)
     expect(decision).toEqual({ kind: 'enter', messages: [prompt] })
-    await value.turnStopping(1)
     expect(value.steer).not.toHaveBeenCalled()
     await expect(value.lifecycle.supervise('session-1', 'Durable preference')).resolves.toMatchObject({ delegated: true })
   })

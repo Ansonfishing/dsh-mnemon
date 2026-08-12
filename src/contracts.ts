@@ -144,6 +144,7 @@ export interface HostSubagentRun {
 }
 
 export interface HostSubagentProvider {
+  inheritsParentContext?: boolean
   capabilities: { outputSchema: boolean; depthLimit: boolean; toolFilter: boolean; persona: boolean }
 }
 

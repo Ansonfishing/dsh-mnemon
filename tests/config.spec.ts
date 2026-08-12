@@ -14,6 +14,7 @@ describe('Mnemon config and resolution', () => {
       lifecycleEnabled: true,
       recallMode: 'guided',
       writebackMode: 'guided',
+      idleReviewMs: 30_000,
       tabEnabled: true,
       writeEnabled: true,
     })

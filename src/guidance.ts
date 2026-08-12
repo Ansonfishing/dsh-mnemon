@@ -1,7 +1,7 @@
 import type { HostContextShape } from './contracts.ts'
 
 export const GUIDANCE_SECTION_NAME = 'mnemon:routing'
-export const ROUTING_GUIDANCE = 'Decide whether durable context could materially improve the turn. If so, call mnemon_recall with a focused query; otherwise continue without recalling. Treat returned evidence as fallible, and trust a memory write only after its tool receipt confirms it.'
+export const ROUTING_GUIDANCE = 'Use Mnemon only by need: call mnemon_recall when prior durable context may matter, and call mnemon_remember only for new, explicit, reusable user information. Otherwise call neither. Treat recall as fallible and writes as complete only after a tool receipt.'
 
 export function registerGuidance(ctx: HostContextShape): void {
   const systemPrompt = ctx.get('systemPrompt') as {

@@ -36,12 +36,12 @@ function service(): MnemonService {
   } as unknown as MnemonService
 }
 
-function subagents(structured: unknown, stopReason = 'completed') {
+function subagents(structured: unknown, stopReason = 'completed', providers = ['spawn']) {
   const dispose = vi.fn(async () => {})
   const start = vi.fn(async () => ({ id: 'child-run-1', result: Promise.resolve({ output: [], structured, stopReason }), dispose }))
   const value = {
-    list: vi.fn(() => ['spawn']),
-    getProvider: vi.fn(() => ({ capabilities })),
+    list: vi.fn(() => providers),
+    getProvider: vi.fn((name: string) => providers.includes(name) ? { capabilities, inheritsParentContext: name === 'fork' } : undefined),
     start,
   } as unknown as HostSubagentsService
   return { value, start, dispose }
@@ -96,6 +96,23 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
       toolFilter: { allow: expect.arrayContaining(['mnemon_recall', 'mnemon_remember', 'mnemon_memory_body_create', 'mnemon_memory_body_merge']) },
     }))
+  })
+
+  it('reviews a completed full-context checkpoint through fork with a maintenance-only tool set', async () => {
+    const host = subagents({ summary: 'No mutation needed.', action: 'skipped', memoryBodyIds: [] }, 'completed', ['spawn', 'fork'])
+    const coordinator = new MnemonSubagentCoordinator(host.value, service())
+
+    await expect(coordinator.review(parent(), new AbortController().signal)).resolves.toMatchObject({
+      delegated: true,
+      provider: 'fork',
+      action: 'skipped',
+    })
+    expect(host.start).toHaveBeenCalledWith('fork', expect.objectContaining({
+      toolFilter: { allow: ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related', 'mnemon_remember', 'mnemon_forget'] },
+      persona: expect.stringContaining('idle checkpoint reviewer'),
+      prompt: [expect.objectContaining({ text: expect.stringContaining('complete inherited parent-agent checkpoint') })],
+    }))
+    expect(coordinator.snapshot()).toMatchObject({ reviews: 1, writes: 0, lastOperation: 'review' })
   })
 
   it('answers from pre-recalled evidence without granting any Mnemon retrieval tools', async () => {

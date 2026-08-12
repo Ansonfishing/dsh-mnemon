@@ -1,7 +1,7 @@
 import z from 'schemastery'
-import { DEFAULT_RECALL_LIMIT, DEFAULT_TIMEOUT_MS } from './config-values.ts'
+import { DEFAULT_IDLE_REVIEW_MS, DEFAULT_RECALL_LIMIT, DEFAULT_TIMEOUT_MS } from './config-values.ts'
 
-export { DEFAULT_RECALL_LIMIT, DEFAULT_TIMEOUT_MS } from './config-values.ts'
+export { DEFAULT_IDLE_REVIEW_MS, DEFAULT_RECALL_LIMIT, DEFAULT_TIMEOUT_MS } from './config-values.ts'
 
 /** User-facing configuration mounted from the DSH profile patch. */
 export interface Config {
@@ -21,12 +21,14 @@ export interface Config {
   tabEnabled?: boolean
   /** Allow remember/link/forget mutations. Recall and status remain available when false. */
   writeEnabled?: boolean
-  /** Enable DSH agent lifecycle integration (Prime, recall cue, and writeback checkpoint). */
+  /** Enable DSH agent lifecycle integration (Prime plus recall/remember cues). */
   lifecycleEnabled?: boolean
   /** Recall behavior at the first step of each DSH turn. */
   recallMode?: 'guided' | 'off'
-  /** Writeback behavior immediately before a DSH turn closes. */
+  /** Enable the short remember cue and the debounced full-checkpoint idle review. */
   writebackMode?: 'guided' | 'off'
+  /** Continuous root-agent idle time before a full-checkpoint memory review starts. */
+  idleReviewMs?: number
 }
 
 export const Config: z<Config> = z.object({
@@ -41,6 +43,7 @@ export const Config: z<Config> = z.object({
   lifecycleEnabled: z.boolean().default(true),
   recallMode: z.union(['guided', 'off'] as const).default('guided'),
   writebackMode: z.union(['guided', 'off'] as const).default('guided'),
+  idleReviewMs: z.number().step(1).min(5_000).max(600_000).default(DEFAULT_IDLE_REVIEW_MS),
 })
 
 export interface ResolvedConfig {
@@ -55,6 +58,7 @@ export interface ResolvedConfig {
   lifecycleEnabled: boolean
   recallMode: 'guided' | 'off'
   writebackMode: 'guided' | 'off'
+  idleReviewMs: number
 }
 
 function optionalText(value: string | undefined): string | undefined {
@@ -81,5 +85,6 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     lifecycleEnabled: config.lifecycleEnabled ?? true,
     recallMode: config.recallMode ?? 'guided',
     writebackMode: config.writebackMode ?? 'guided',
+    idleReviewMs: config.idleReviewMs ?? DEFAULT_IDLE_REVIEW_MS,
   }
 }
