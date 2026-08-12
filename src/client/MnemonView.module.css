@@ -117,7 +117,7 @@
 .bodyDirectoryEmpty > span { font-size: 28px; opacity: .6; }
 .bodyDirectoryEmpty strong { display: block; color: var(--mn-text); }
 .bodyDirectoryEmpty p { margin: 3px 0 0; font-size: 10px; }
-.bodyCard { --mn-body-accent: var(--mn-faint); min-width: 0; padding: 9px 10px; border: 1px solid var(--mn-line); border-radius: 9px; background: var(--mn-layer-1); opacity: .7; transition: opacity .18s, border-color .18s; }
+.bodyCard { --mn-body-accent: var(--mn-success); min-width: 0; padding: 9px 10px; border: 1px solid var(--mn-line); border-radius: 9px; background: var(--mn-layer-1); opacity: .7; transition: opacity .18s, border-color .18s; }
 .bodyCard[data-active] { border-color: color-mix(in srgb, var(--mn-body-accent) 42%, var(--mn-line)); opacity: 1; box-shadow: inset 0 1px 0 color-mix(in srgb, var(--mn-body-accent) 10%, transparent); }
 .bodyCardTop { display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .bodySignal { width: 7px; height: 7px; border-radius: 50%; background: var(--mn-faint); }
