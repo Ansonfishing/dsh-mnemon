@@ -85,6 +85,18 @@ describe('MnemonView', () => {
     expect(screen.getByText('LLM-supervised 4-graph persistent memory for AI agents.')).toBeTruthy()
     expect(screen.getByRole('img', { name: 'Mnemon' })).toBeTruthy()
     await waitFor(() => expect(screen.getByRole('img', { name: /Mnemon 实时记忆图谱/ })).toBeTruthy())
+    expect(screen.getByRole('toolbar', { name: '图谱布局' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '自然铺开' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '均匀重置' })).toBeTruthy()
+
+    const graphNode = screen.getByRole('button', { name: /决策: 项目选择 SQLite/ })
+    const naturalPosition = graphNode.getAttribute('transform')
+    fireEvent.click(screen.getByRole('button', { name: '均匀重置' }))
+    await waitFor(() => expect(graphNode.getAttribute('transform')).not.toBe(naturalPosition))
+    expect(screen.getByRole('status', { name: '布局状态：均匀布局' })).toBeTruthy()
+
+    fireEvent.keyDown(graphNode, { key: 'ArrowRight' })
+    expect(screen.getByRole('status', { name: '布局状态：自定义布局' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: /检索 意图增强召回/ }))
     expect(screen.getByRole('heading', { name: '检索记忆' })).toBeTruthy()

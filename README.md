@@ -30,7 +30,7 @@ Mnemon 采用 **LLM-supervised** 模式：宿主 LLM 判断何时召回、什么
 - **受监督沉淀调度**：记忆 Tab 的默认写入通过 `agent.followup()` 排入当前 DSH 会话，由正在使用的 LLM 查重、判断、提炼、分类并调用 `mnemon_remember`；不引入第二个模型。
 - **DSH 原生命令**：`/mnemon status`、`recall`、`related`、`remember`、`forget` 直接通过命令面板执行，不经过模型。
 - **会话「记忆」Tab**
-  - 「总览」：每 15 秒从 Mnemon active graph 同步一次实时节点和 temporal / semantic / causal / entity 关系，支持节点检查；
+  - 「总览」：每 15 秒同步 Mnemon active graph，以自然力导向布局呈现 temporal / semantic / causal / entity 关系；支持平滑重排、节点拖拽、键盘微调、自然铺开、均匀重置和节点检查；
   - 「检索」：三种检索模式、分类过滤、结果卡片、关联图检查器、复制 ID、卡片内软删除确认；
   - 「实体」：列出高频实体，并通过 ENTITY intent 聚合其跨图上下文；
   - 「沉淀」：默认把用户候选内容交给当前 DSH LLM 监督写回；折叠的「人工高级写入」允许指定分类、重要性、实体和标签后直接调用 Mnemon；

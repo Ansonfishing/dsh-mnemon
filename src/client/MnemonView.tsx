@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts'
 import type { Config } from '../config.ts'
 import {
@@ -130,14 +130,15 @@ function InsightCard(props: {
   )
 }
 
-const GRAPH_ANCHORS: Record<string, [number, number]> = {
-  preference: [160, 145],
-  decision: [405, 110],
-  fact: [705, 145],
-  insight: [770, 390],
-  context: [500, 425],
-  general: [205, 390],
-}
+const GRAPH_WIDTH = 930
+const GRAPH_HEIGHT = 520
+const GRAPH_MARGIN_X = 58
+const GRAPH_MARGIN_Y = 58
+const CATEGORY_ORDER = ['preference', 'decision', 'fact', 'insight', 'context', 'general']
+
+interface GraphPosition { x: number; y: number }
+type GraphPositions = Map<string, GraphPosition>
+type GraphLayoutMode = 'natural' | 'uniform' | 'custom'
 
 function hash(value: string): number {
   let result = 2166136261
@@ -145,43 +146,272 @@ function hash(value: string): number {
   return result >>> 0
 }
 
-function graphPositions(nodes: MemoryGraphNode[]): Map<string, { x: number; y: number }> {
-  const positions = new Map<string, { x: number; y: number }>()
+function activeCategoryAnchors(grouped: Map<string, MemoryGraphNode[]>): Map<string, GraphPosition> {
+  const categories = [...grouped.keys()].sort((left, right) => {
+    const leftIndex = CATEGORY_ORDER.indexOf(left)
+    const rightIndex = CATEGORY_ORDER.indexOf(right)
+    return (leftIndex < 0 ? CATEGORY_ORDER.length : leftIndex) - (rightIndex < 0 ? CATEGORY_ORDER.length : rightIndex)
+  })
+  const anchors = new Map<string, GraphPosition>()
+  if (categories.length === 1) {
+    anchors.set(categories[0]!, { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 })
+    return anchors
+  }
+  categories.forEach((category, index) => {
+    const angle = -Math.PI / 2 + (index / categories.length) * Math.PI * 2
+    anchors.set(category, {
+      x: GRAPH_WIDTH / 2 + Math.cos(angle) * Math.min(250, 115 + categories.length * 23),
+      y: GRAPH_HEIGHT / 2 + Math.sin(angle) * Math.min(165, 78 + categories.length * 15),
+    })
+  })
+  return anchors
+}
+
+function clampGraphPosition(position: GraphPosition): GraphPosition {
+  return {
+    x: Math.min(GRAPH_WIDTH - GRAPH_MARGIN_X, Math.max(GRAPH_MARGIN_X, position.x)),
+    y: Math.min(GRAPH_HEIGHT - GRAPH_MARGIN_Y, Math.max(GRAPH_MARGIN_Y, position.y)),
+  }
+}
+
+function naturalGraphPositions(nodes: MemoryGraphNode[], edges: MemoryGraphSnapshot['edges']): GraphPositions {
+  const positions: GraphPositions = new Map()
   const grouped = new Map<string, MemoryGraphNode[]>()
   for (const node of nodes) {
     const category = node.category ?? 'general'
     grouped.set(category, [...(grouped.get(category) ?? []), node])
   }
+  const anchors = activeCategoryAnchors(grouped)
   for (const [category, items] of grouped) {
-    const [anchorX, anchorY] = GRAPH_ANCHORS[category] ?? GRAPH_ANCHORS.general!
+    const anchor = anchors.get(category) ?? { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 }
     items.forEach((node, index) => {
       const seed = hash(node.id)
-      const angle = (index / Math.max(items.length, 1)) * Math.PI * 2 + (seed % 31) / 31
-      const ring = index === 0 ? 0 : 38 + Math.floor((index - 1) / 7) * 28
-      const jitter = (seed % 17) - 8
-      positions.set(node.id, { x: anchorX + Math.cos(angle) * (ring + jitter), y: anchorY + Math.sin(angle) * (ring + jitter) })
+      const angle = index * 2.399963 + ((seed % 37) / 37) * .4
+      const radius = items.length === 1 ? 0 : 24 + Math.sqrt(index + 1) * 35
+      positions.set(node.id, clampGraphPosition({ x: anchor.x + Math.cos(angle) * radius, y: anchor.y + Math.sin(angle) * radius }))
     })
+  }
+
+  const velocities = new Map(nodes.map(node => [node.id, { x: 0, y: 0 }]))
+  const visibleIds = new Set(nodes.map(node => node.id))
+  const visibleEdges = edges.filter(edge => visibleIds.has(edge.sourceId) && visibleIds.has(edge.targetId))
+  for (let iteration = 0; iteration < 150; iteration += 1) {
+    const cooling = 1 - iteration / 180
+    for (let leftIndex = 0; leftIndex < nodes.length; leftIndex += 1) {
+      const left = nodes[leftIndex]!
+      const leftPosition = positions.get(left.id)!
+      const leftVelocity = velocities.get(left.id)!
+      for (let rightIndex = leftIndex + 1; rightIndex < nodes.length; rightIndex += 1) {
+        const right = nodes[rightIndex]!
+        const rightPosition = positions.get(right.id)!
+        const rightVelocity = velocities.get(right.id)!
+        let dx = leftPosition.x - rightPosition.x
+        let dy = leftPosition.y - rightPosition.y
+        if (dx === 0 && dy === 0) { dx = ((hash(left.id) % 13) - 6) || 1; dy = ((hash(right.id) % 11) - 5) || -1 }
+        const distanceSquared = Math.max(100, dx * dx + dy * dy)
+        const distance = Math.sqrt(distanceSquared)
+        const repulsion = Math.min(9, 18_000 / distanceSquared) * cooling
+        const collision = distance < 66 ? (66 - distance) * .08 : 0
+        const force = repulsion + collision
+        const forceX = (dx / distance) * force
+        const forceY = (dy / distance) * force
+        leftVelocity.x += forceX; leftVelocity.y += forceY
+        rightVelocity.x -= forceX; rightVelocity.y -= forceY
+      }
+    }
+    for (const edge of visibleEdges) {
+      const source = positions.get(edge.sourceId)!
+      const target = positions.get(edge.targetId)!
+      const sourceVelocity = velocities.get(edge.sourceId)!
+      const targetVelocity = velocities.get(edge.targetId)!
+      const dx = target.x - source.x
+      const dy = target.y - source.y
+      const distance = Math.max(1, Math.hypot(dx, dy))
+      const sparseScale = nodes.length <= 3 ? 2 : nodes.length <= 8 ? 1.45 : 1
+      const desired = (edge.type === 'entity' ? 94 : edge.type === 'semantic' ? 118 : 106) * sparseScale
+      const spring = (distance - desired) * .018 * cooling
+      const forceX = (dx / distance) * spring
+      const forceY = (dy / distance) * spring
+      sourceVelocity.x += forceX; sourceVelocity.y += forceY
+      targetVelocity.x -= forceX; targetVelocity.y -= forceY
+    }
+    for (const node of nodes) {
+      const position = positions.get(node.id)!
+      const velocity = velocities.get(node.id)!
+      const anchor = anchors.get(node.category ?? 'general') ?? { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 }
+      velocity.x += (anchor.x - position.x) * .0035 * cooling + (GRAPH_WIDTH / 2 - position.x) * .0008
+      velocity.y += (anchor.y - position.y) * .0035 * cooling + (GRAPH_HEIGHT / 2 - position.y) * .0008
+      velocity.x = Math.max(-12, Math.min(12, velocity.x * .76))
+      velocity.y = Math.max(-12, Math.min(12, velocity.y * .76))
+      positions.set(node.id, clampGraphPosition({ x: position.x + velocity.x, y: position.y + velocity.y }))
+    }
   }
   return positions
 }
 
+function uniformGraphPositions(nodes: MemoryGraphNode[]): GraphPositions {
+  const positions: GraphPositions = new Map()
+  const ordered = [...nodes].sort((left, right) => {
+    const categoryDifference = CATEGORY_ORDER.indexOf(left.category ?? 'general') - CATEGORY_ORDER.indexOf(right.category ?? 'general')
+    return categoryDifference === 0 ? left.id.localeCompare(right.id) : categoryDifference
+  })
+  const columns = Math.max(1, Math.ceil(Math.sqrt(ordered.length * 1.65)))
+  const rows = Math.max(1, Math.ceil(ordered.length / columns))
+  const cellWidth = (GRAPH_WIDTH - GRAPH_MARGIN_X * 2) / columns
+  const cellHeight = (GRAPH_HEIGHT - GRAPH_MARGIN_Y * 2) / rows
+  ordered.forEach((node, index) => {
+    const row = Math.floor(index / columns)
+    const column = index % columns
+    const rowLength = Math.min(columns, ordered.length - row * columns)
+    const rowOffset = (columns - rowLength) * cellWidth / 2
+    positions.set(node.id, {
+      x: GRAPH_MARGIN_X + rowOffset + cellWidth * (column + .5),
+      y: GRAPH_MARGIN_Y + cellHeight * (row + .5),
+    })
+  })
+  return positions
+}
+
+function graphPoint(svg: SVGSVGElement, clientX: number, clientY: number): GraphPosition {
+  const matrix = svg.getScreenCTM?.()
+  if (matrix !== null && matrix !== undefined && typeof svg.createSVGPoint === 'function') {
+    const point = svg.createSVGPoint()
+    point.x = clientX; point.y = clientY
+    return clampGraphPosition(point.matrixTransform(matrix.inverse()))
+  }
+  const bounds = svg.getBoundingClientRect()
+  const width = bounds.width || GRAPH_WIDTH
+  const height = bounds.height || GRAPH_HEIGHT
+  return clampGraphPosition({ x: (clientX - bounds.left) * GRAPH_WIDTH / width, y: (clientY - bounds.top) * GRAPH_HEIGHT / height })
+}
+
 function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | undefined; onSelect: (node: MemoryGraphNode) => void }): JSX.Element {
-  const visibleNodes = props.graph.nodes.slice(0, 60)
-  const positions = graphPositions(visibleNodes)
-  const visibleIds = new Set(visibleNodes.map(node => node.id))
-  const edges = props.graph.edges.filter(edge => visibleIds.has(edge.sourceId) && visibleIds.has(edge.targetId)).slice(0, 180)
+  const visibleNodes = useMemo(() => props.graph.nodes.slice(0, 60), [props.graph.nodes])
+  const visibleIds = useMemo(() => new Set(visibleNodes.map(node => node.id)), [visibleNodes])
+  const edges = useMemo(() => props.graph.edges.filter(edge => visibleIds.has(edge.sourceId) && visibleIds.has(edge.targetId)).slice(0, 180), [props.graph.edges, visibleIds])
+  const curvedEdges = useMemo(() => {
+    const groups = new Map<string, number[]>()
+    edges.forEach((edge, index) => {
+      const key = [edge.sourceId, edge.targetId].sort().join('::')
+      groups.set(key, [...(groups.get(key) ?? []), index])
+    })
+    return edges.map((edge, index) => {
+      const key = [edge.sourceId, edge.targetId].sort().join('::')
+      const group = groups.get(key) ?? [index]
+      const groupIndex = group.indexOf(index)
+      return { edge, offset: (groupIndex - (group.length - 1) / 2) * 12 }
+    })
+  }, [edges])
+  const layoutKey = `${visibleNodes.map(node => `${node.id}:${node.category ?? 'general'}`).join('|')}::${edges.map(edge => `${edge.sourceId}>${edge.targetId}:${edge.type ?? 'temporal'}`).join('|')}`
+  const naturalLayout = useMemo(() => naturalGraphPositions(visibleNodes, edges), [layoutKey])
+  const [positions, setPositions] = useState<GraphPositions>(() => naturalLayout)
+  const [layoutMode, setLayoutMode] = useState<GraphLayoutMode>('natural')
+  const positionsRef = useRef(positions)
+  const animationRef = useRef<number | null>(null)
+  const dragRef = useRef<{ nodeId: string; pointerId: number; moved: boolean } | null>(null)
+  const suppressClickRef = useRef(false)
+
+  const commitPositions = useCallback((next: GraphPositions) => {
+    positionsRef.current = next
+    setPositions(next)
+  }, [])
+
+  const cancelAnimation = useCallback(() => {
+    if (animationRef.current !== null && typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(animationRef.current)
+    animationRef.current = null
+  }, [])
+
+  const animateTo = useCallback((target: GraphPositions, mode: Exclude<GraphLayoutMode, 'custom'>) => {
+    cancelAnimation()
+    setLayoutMode(mode)
+    if (typeof window.requestAnimationFrame !== 'function') { commitPositions(target); return }
+    const start = new Map(positionsRef.current)
+    const startedAt = performance.now()
+    const tick = (time: number) => {
+      const progress = Math.min(1, (time - startedAt) / 620)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      const next: GraphPositions = new Map()
+      for (const [id, destination] of target) {
+        const origin = start.get(id) ?? { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 }
+        next.set(id, { x: origin.x + (destination.x - origin.x) * eased, y: origin.y + (destination.y - origin.y) * eased })
+      }
+      commitPositions(next)
+      if (progress < 1) animationRef.current = window.requestAnimationFrame(tick)
+      else animationRef.current = null
+    }
+    animationRef.current = window.requestAnimationFrame(tick)
+  }, [cancelAnimation, commitPositions])
+
+  useEffect(() => { animateTo(naturalLayout, 'natural') }, [layoutKey])
+  useEffect(() => () => cancelAnimation(), [cancelAnimation])
+
+  const beginDrag = (event: ReactPointerEvent<SVGGElement>, nodeId: string) => {
+    event.preventDefault()
+    cancelAnimation()
+    dragRef.current = { nodeId, pointerId: event.pointerId, moved: false }
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+  const moveDrag = (event: ReactPointerEvent<SVGGElement>) => {
+    const drag = dragRef.current
+    const svg = event.currentTarget.ownerSVGElement
+    if (drag === null || svg === null || drag.pointerId !== event.pointerId) return
+    drag.moved = true
+    const point = graphPoint(svg, event.clientX, event.clientY)
+    const next = new Map(positionsRef.current)
+    next.set(drag.nodeId, point)
+    commitPositions(next)
+    setLayoutMode('custom')
+  }
+  const endDrag = (event: ReactPointerEvent<SVGGElement>) => {
+    const drag = dragRef.current
+    if (drag === null || drag.pointerId !== event.pointerId) return
+    const svg = event.currentTarget.ownerSVGElement
+    if (drag.moved && svg !== null) {
+      const next = new Map(positionsRef.current)
+      next.set(drag.nodeId, graphPoint(svg, event.clientX, event.clientY))
+      commitPositions(next)
+    }
+    suppressClickRef.current = drag.moved
+    dragRef.current = null
+    event.currentTarget.releasePointerCapture?.(event.pointerId)
+  }
+  const cancelDrag = (event: ReactPointerEvent<SVGGElement>) => {
+    if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null
+  }
+  const nudge = (nodeId: string, dx: number, dy: number) => {
+    cancelAnimation()
+    const current = positionsRef.current.get(nodeId)
+    if (current === undefined) return
+    const next = new Map(positionsRef.current)
+    next.set(nodeId, clampGraphPosition({ x: current.x + dx, y: current.y + dy }))
+    commitPositions(next)
+    setLayoutMode('custom')
+  }
+  const layoutLabel = layoutMode === 'natural' ? '自然布局' : layoutMode === 'uniform' ? '均匀布局' : '自定义布局'
   return (
-    <svg className={css.graphSvg} viewBox="0 0 930 520" role="img" aria-label={`Mnemon 实时记忆图谱，${props.graph.nodes.length} 个节点，${props.graph.edges.length} 条连接`}>
+    <>
+      <div className={css.graphCanvasControls} role="toolbar" aria-label="图谱布局">
+        <span role="status" aria-label={`布局状态：${layoutLabel}`}><i />{layoutLabel} · 可拖拽</span>
+        <button type="button" data-active={layoutMode === 'natural' || undefined} onClick={() => animateTo(naturalGraphPositions(visibleNodes, edges), 'natural')}>自然铺开</button>
+        <button type="button" data-active={layoutMode === 'uniform' || undefined} onClick={() => animateTo(uniformGraphPositions(visibleNodes), 'uniform')}>均匀重置</button>
+      </div>
+      <svg className={css.graphSvg} viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`} role="img" data-layout={layoutMode} data-density={visibleNodes.length <= 12 ? 'sparse' : 'dense'} aria-label={`Mnemon 实时记忆图谱，${props.graph.nodes.length} 个节点，${props.graph.edges.length} 条连接`}>
       <defs>
         <pattern id="mnemon-grid" width="26" height="26" patternUnits="userSpaceOnUse"><path d="M 26 0 L 0 0 0 26" className={css.graphGridLine} fill="none" /></pattern>
         <filter id="mnemon-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="4" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
       </defs>
-      <rect width="930" height="520" className={css.graphBackdrop} />
-      <rect width="930" height="520" fill="url(#mnemon-grid)" />
-      {edges.map((edge, index) => {
+      <rect width={GRAPH_WIDTH} height={GRAPH_HEIGHT} className={css.graphBackdrop} />
+      <rect width={GRAPH_WIDTH} height={GRAPH_HEIGHT} fill="url(#mnemon-grid)" />
+      {curvedEdges.map(({ edge, offset }, index) => {
         const source = positions.get(edge.sourceId)!
         const target = positions.get(edge.targetId)!
-        return <line key={`${edge.sourceId}-${edge.targetId}-${index}`} x1={source.x} y1={source.y} x2={target.x} y2={target.y} className={css.graphEdge} data-edge={edge.type ?? 'temporal'} />
+        const dx = target.x - source.x
+        const dy = target.y - source.y
+        const distance = Math.max(1, Math.hypot(dx, dy))
+        const direction = edge.sourceId.localeCompare(edge.targetId) <= 0 ? 1 : -1
+        const controlX = (source.x + target.x) / 2 - (dy / distance) * offset * direction
+        const controlY = (source.y + target.y) / 2 + (dx / distance) * offset * direction
+        return <path key={`${edge.sourceId}-${edge.targetId}-${index}`} d={`M ${source.x} ${source.y} Q ${controlX} ${controlY} ${target.x} ${target.y}`} className={css.graphEdge} data-edge={edge.type ?? 'temporal'} />
       })}
       {visibleNodes.map((node, index) => {
         const position = positions.get(node.id)!
@@ -190,14 +420,24 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
         return (
           <g key={node.id} className={css.graphNode} data-category={node.category ?? 'general'} data-selected={selected || undefined}
             transform={`translate(${position.x} ${position.y})`} role="button" tabIndex={0} aria-label={`${CATEGORY_LABELS[node.category ?? 'general'] ?? node.category}: ${short(node.content, 80)}`}
-            onClick={() => props.onSelect(node)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') props.onSelect(node) }}>
-            <circle r={selected ? 15 : 11} className={css.nodeHalo} filter={selected ? 'url(#mnemon-glow)' : undefined} />
-            <circle r={selected ? 6 : 4.5} className={css.nodeCore} />
-            {showLabel && <text x="15" y="4" className={css.nodeLabel}>{short(node.content.replace(/\s+/gu, ' '), selected ? 34 : 19)}</text>}
+            data-dragging={dragRef.current?.nodeId === node.id || undefined}
+            onPointerDown={event => beginDrag(event, node.id)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag}
+            onClick={() => { if (suppressClickRef.current) { suppressClickRef.current = false; return }; props.onSelect(node) }}
+            onKeyDown={event => {
+              if (event.key === 'Enter' || event.key === ' ') props.onSelect(node)
+              else if (event.key === 'ArrowLeft') { event.preventDefault(); nudge(node.id, -12, 0) }
+              else if (event.key === 'ArrowRight') { event.preventDefault(); nudge(node.id, 12, 0) }
+              else if (event.key === 'ArrowUp') { event.preventDefault(); nudge(node.id, 0, -12) }
+              else if (event.key === 'ArrowDown') { event.preventDefault(); nudge(node.id, 0, 12) }
+            }}>
+            <circle r={selected ? 17 : visibleNodes.length <= 12 ? 14 : 11} className={css.nodeHalo} filter={selected ? 'url(#mnemon-glow)' : undefined} />
+            <circle r={selected ? 7 : visibleNodes.length <= 12 ? 6 : 4.5} className={css.nodeCore} />
+            {showLabel && <text x={visibleNodes.length <= 12 ? 19 : 15} y="4" className={css.nodeLabel}>{short(node.content.replace(/\s+/gu, ' '), selected ? 34 : visibleNodes.length <= 12 ? 26 : 19)}</text>}
           </g>
         )
       })}
-    </svg>
+      </svg>
+    </>
   )
 }
 

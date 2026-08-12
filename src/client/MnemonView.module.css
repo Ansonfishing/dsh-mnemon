@@ -122,15 +122,22 @@
 .graphLegend [data-edge="semantic"] { --edge-color: #4d7cfe; }
 .graphLegend [data-edge="causal"] { --edge-color: #ef6b5b; }
 .graphLegend [data-edge="entity"] { --edge-color: #22a879; }
-.graphViewport { min-height: 480px; overflow: hidden; background: radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--mn-accent) 6%, transparent), transparent 47%); }
-.graphSvg { display: block; width: 100%; height: auto; min-height: 480px; }
+.graphViewport { position: relative; min-height: 480px; overflow: hidden; background: radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--mn-accent) 6%, transparent), transparent 47%); }
+.graphCanvasControls { position: absolute; z-index: 2; top: 10px; right: 10px; display: flex; align-items: center; gap: 5px; padding: 4px; border: 1px solid var(--mn-line); border-radius: 9px; background: color-mix(in srgb, var(--mn-layer-1) 88%, transparent); box-shadow: 0 6px 18px color-mix(in srgb, var(--mn-text) 7%, transparent); backdrop-filter: blur(10px); }
+.graphCanvasControls span { display: flex; align-items: center; gap: 5px; padding: 0 6px; color: var(--mn-faint); font: 9px var(--mn-code); }
+.graphCanvasControls span i { width: 5px; height: 5px; border-radius: 50%; background: var(--mn-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mn-accent) 12%, transparent); }
+.graphCanvasControls button { min-height: 26px; border: 1px solid transparent; border-radius: 6px; padding: 0 8px; color: var(--mn-muted); background: transparent; font-size: 9px; cursor: pointer; }
+.graphCanvasControls button:hover, .graphCanvasControls button[data-active] { border-color: var(--mn-line); color: var(--mn-text); background: var(--mn-hover); }
+.graphCanvasControls button[data-active] { color: var(--mn-accent); }
+.graphSvg { display: block; width: 100%; height: auto; min-height: 480px; touch-action: none; user-select: none; }
 .graphBackdrop { fill: var(--mn-layer-1); }
 .graphGridLine { stroke: var(--mn-line); stroke-width: .6; opacity: .5; }
-.graphEdge { stroke: #87909f; stroke-width: 1; opacity: .32; }
+.graphEdge { fill: none; stroke: #87909f; stroke-width: 1; opacity: .32; vector-effect: non-scaling-stroke; }
 .graphEdge[data-edge="semantic"] { stroke: #4d7cfe; opacity: .48; }
 .graphEdge[data-edge="causal"] { stroke: #ef6b5b; opacity: .52; }
 .graphEdge[data-edge="entity"] { stroke: #22a879; opacity: .52; }
-.graphNode { --node: #8290a8; outline: none; cursor: pointer; }
+.graphNode { --node: #8290a8; outline: none; cursor: grab; }
+.graphNode[data-dragging] { cursor: grabbing; }
 .graphNode[data-category="decision"] { --node: #ef8354; }
 .graphNode[data-category="preference"] { --node: #a879e1; }
 .graphNode[data-category="fact"] { --node: #4d7cfe; }
@@ -139,6 +146,7 @@
 .nodeHalo { fill: color-mix(in srgb, var(--node) 18%, var(--mn-layer-1)); stroke: color-mix(in srgb, var(--node) 60%, var(--mn-layer-1)); stroke-width: 1.5; transition: r .16s; }
 .nodeCore { fill: var(--node); }
 .nodeLabel { fill: var(--mn-muted); font: 10px var(--mn-code); pointer-events: none; }
+.graphSvg[data-density="sparse"] .nodeLabel { font-size: 12px; }
 .graphNode:hover .nodeHalo, .graphNode:focus .nodeHalo, .graphNode[data-selected] .nodeHalo { fill: color-mix(in srgb, var(--node) 28%, var(--mn-layer-1)); stroke: var(--node); }
 .graphNode[data-selected] .nodeLabel { fill: var(--mn-text); font-weight: 650; }
 .graphFooter { min-height: 38px; border-top: 1px solid var(--mn-line); color: var(--mn-faint); }
@@ -336,6 +344,8 @@
   .searchControls select { width: 100%; min-width: 0; }
   .listToolbar { grid-template-columns: 1fr; }
   .graphViewport, .graphSvg { min-height: 390px; }
+  .graphCanvasControls { right: 7px; top: 7px; }
+  .graphCanvasControls span { display: none; }
   .healthStrip, .lifecycleFlow, .runtimeDetails dl { grid-template-columns: 1fr; }
   .healthStrip article, .lifecycleFlow article { border-right: 0; border-bottom: 1px solid var(--mn-line); }
   .healthStrip article:last-child, .lifecycleFlow article:last-child { border-bottom: 0; }
