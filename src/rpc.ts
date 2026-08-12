@@ -104,13 +104,17 @@ export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLif
       switch (endpoint) {
         case 'runtime-memory':
           if (runtimeMemory === undefined) throw new Error('runtime memory is unavailable')
-          return success(await runtimeMemory.mutate({
+          {
+            const request = {
             action: String(payload.action ?? '') as 'add' | 'replace' | 'remove',
             target: String(payload.target ?? '') as RuntimeMemoryTarget,
             ...(payload.content === undefined ? {} : { content: String(payload.content) }),
             ...(payload.old_text === undefined ? {} : { oldText: String(payload.old_text) }),
             ...(payload.importance === undefined ? {} : { importance: String(payload.importance) as RuntimeMemoryImportance }),
-          }))
+            }
+            const sessionId = String(payload.sessionId ?? '').trim()
+            return success(lifecycle === undefined || sessionId === '' ? await runtimeMemory.mutate(request) : await lifecycle.runtime(sessionId, request))
+          }
         case 'supervise':
           if (lifecycle === undefined) throw new Error('Mnemon lifecycle integration is unavailable')
           return success(await lifecycle.supervise(String(payload.sessionId ?? ''), String(payload.content ?? '')))

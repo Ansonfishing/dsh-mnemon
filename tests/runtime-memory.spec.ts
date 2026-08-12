@@ -119,4 +119,27 @@ describe('RuntimeMemoryController', () => {
     expect(context).toContain('MEMORY [0/10240 bytes]\n(empty)')
     expect(context).not.toContain(controller.sourcePath)
   })
+
+  it('applies a compacted target only to the exact reviewed revision', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Project uses pnpm.' })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'pnpm manages workspace dependencies.' })
+    const reviewed = controller.snapshot()
+
+    await controller.compactTarget(reviewed.revision, 'memory', [{ content: 'Project uses pnpm for workspace dependency management.', importance: 'normal' }])
+    expect(controller.snapshot().entries).toEqual([
+      expect.objectContaining({ target: 'memory', content: 'Project uses pnpm for workspace dependency management.', importance: 'normal' }),
+    ])
+    expect(readFileSync(controller.memoryPath, 'utf8')).toBe('Project uses pnpm for workspace dependency management.\n')
+  })
+
+  it('never overwrites a concurrent mutation with an obsolete compaction plan', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'user', content: 'User prefers concise replies.' })
+    const reviewed = controller.snapshot()
+    await controller.mutate({ action: 'add', target: 'user', content: 'User prefers Chinese.' })
+
+    await expect(controller.compactTarget(reviewed.revision, 'user', [{ content: 'User prefers concise Chinese replies.', importance: 'critical' }])).rejects.toThrow('changed while archival')
+    expect(controller.snapshot().entries.map(entry => entry.content)).toEqual(['User prefers concise replies.', 'User prefers Chinese.'])
+  })
 })

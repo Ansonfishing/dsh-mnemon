@@ -33,6 +33,10 @@ describe('Mnemon RPC', () => {
     await expect(createReadHandler(fakeService(), undefined, runtimeMemory)('runtime-memory', {})).resolves.toMatchObject({ ok: true, value: { entries: [] } })
     await expect(createWriteHandler(fakeService(), undefined, runtimeMemory)('runtime-memory', { action: 'add', target: 'user', content: 'hello', importance: 'normal' })).resolves.toMatchObject({ ok: true, value: { added: 'hello' } })
     expect(runtimeMemory.mutate).toHaveBeenCalledWith({ action: 'add', target: 'user', content: 'hello', importance: 'normal' })
+
+    const lifecycle = { runtime: vi.fn(async () => ({ success: true, message: 'Entry added after archival.', target: 'memory', entryCount: 2, usage: { used: 20, limit: 10240 }, added: 'world' })) } as unknown as MnemonLifecycle
+    await expect(createWriteHandler(fakeService(), lifecycle, runtimeMemory)('runtime-memory', { sessionId: 'session-1', action: 'add', target: 'memory', content: 'world' })).resolves.toMatchObject({ ok: true, value: { added: 'world' } })
+    expect(lifecycle.runtime).toHaveBeenCalledWith('session-1', { action: 'add', target: 'memory', content: 'world' })
   })
 
   it('dispatches read operations and rejects unknown endpoints', async () => {

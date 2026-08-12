@@ -41,7 +41,7 @@ export class MnemonClient {
     old_text?: string
     importance?: RuntimeMemoryImportance
   }): Promise<RuntimeMemoryMutationResult> {
-    return this.call(MNEMON_WRITE_CHANNEL, 'runtime-memory', request)
+    return this.call(MNEMON_WRITE_CHANNEL, 'runtime-memory', { ...request, sessionId: this.sessionId })
   }
 
   bodies(): Promise<MemoryBodyCatalog> {

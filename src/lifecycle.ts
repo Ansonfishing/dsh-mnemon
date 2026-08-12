@@ -7,6 +7,7 @@ import type {
   HostUserMessage,
 } from './contracts.ts'
 import type { Insight, RememberRequest, SearchRequest } from './service.ts'
+import type { RuntimeMemoryMutation } from './runtime-memory.ts'
 import { MnemonSubagentCoordinator, type DelegatedWriteResult, type SubagentCounters } from './subagent.ts'
 
 export const MNEMON_PLUGIN_SOURCE = 'dsh-mnemon'
@@ -313,6 +314,10 @@ export class MnemonLifecycle {
 
   remember(sessionId: string, request: RememberRequest, signal = new AbortController().signal) {
     return this.coordinator.remember(this.liveAgent(sessionId), request, signal)
+  }
+
+  runtime(sessionId: string, request: RuntimeMemoryMutation, signal = new AbortController().signal) {
+    return this.coordinator.runtime(this.liveAgent(sessionId), request, signal)
   }
 
   mutate(sessionId: string, operation: string, request: unknown, signal = new AbortController().signal) {

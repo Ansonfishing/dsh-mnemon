@@ -9,6 +9,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { basename, join } from 'node:path'
 import type { MnemonRunner } from './runner.ts'
 
@@ -52,9 +53,15 @@ export interface RuntimeMemoryTargetView extends RuntimeMemoryUsage {
 export interface RuntimeMemorySnapshot {
   directory: string
   sourcePath: string
+  revision: string
   generatedAt: string
   entries: RuntimeMemoryEntry[]
   targets: Record<RuntimeMemoryTarget, RuntimeMemoryTargetView>
+}
+
+export interface RuntimeMemoryCompactedEntry {
+  content: string
+  importance: RuntimeMemoryImportance
 }
 
 export interface RuntimeMemoryMutation {
@@ -74,6 +81,7 @@ export type RuntimeMemoryMutationResult = {
   added?: string
   replaced?: { from: string; to: string }
   removed?: string
+  maintenance?: { runId: string; provider: string; summary: string; memoryBodyIds: string[] }
 }
 
 export class RuntimeMemoryCapacityError extends Error {
@@ -85,6 +93,13 @@ export class RuntimeMemoryCapacityError extends Error {
   ) {
     super(`Would exceed ${target} runtime memory capacity: ${projected} bytes (current ${used}, limit ${limit}). Archive and compact runtime memory before retrying.`)
     this.name = 'RuntimeMemoryCapacityError'
+  }
+}
+
+export class RuntimeMemoryConflictError extends Error {
+  constructor() {
+    super('runtime memory changed while archival was running; no compacted data was applied')
+    this.name = 'RuntimeMemoryConflictError'
   }
 }
 
@@ -132,6 +147,10 @@ function markdown(entries: readonly RuntimeMemoryEntry[], target: RuntimeMemoryT
   return content === '' ? '' : `${content}\n`
 }
 
+function revision(file: RuntimeMemoryFile): string {
+  return createHash('sha256').update(JSON.stringify(file)).digest('hex')
+}
+
 function sleepSync(milliseconds: number): void {
   const buffer = new Int32Array(new SharedArrayBuffer(4))
   Atomics.wait(buffer, 0, 0, milliseconds)
@@ -168,6 +187,7 @@ export class RuntimeMemoryController {
     return {
       directory: this.directory,
       sourcePath: this.sourcePath,
+      revision: revision(file),
       generatedAt: this.now().toISOString(),
       entries,
       targets: {
@@ -186,6 +206,7 @@ export class RuntimeMemoryController {
         snapshot: {
           directory: this.directory,
           sourcePath: this.sourcePath,
+          revision: revision(file),
           generatedAt: this.now().toISOString(),
           entries,
           targets: {
@@ -215,6 +236,39 @@ ${memory || '(empty)'}`
 
   mutate(request: RuntimeMemoryMutation): Promise<RuntimeMemoryMutationResult> {
     const operation = this.queue.then(() => this.withLock(() => this.mutateLocked(request)))
+    this.queue = operation.catch(() => undefined)
+    return operation
+  }
+
+  /** Apply an LLM-produced compaction only to the exact snapshot it reviewed. */
+  compactTarget(expectedRevision: string, target: RuntimeMemoryTarget, compacted: RuntimeMemoryCompactedEntry[]): Promise<RuntimeMemorySnapshot> {
+    const operation = this.queue.then(() => this.withLock(() => {
+      const file = this.readSource()
+      if (revision(file) !== expectedRevision) throw new RuntimeMemoryConflictError()
+      const now = this.now().toISOString()
+      const existing = file.entries.filter(entry => entry.target === target)
+      const seen = new Set<string>()
+      const replacements = compacted.map((entry): RuntimeMemoryEntry => {
+        const content = normalizeContent(entry.content, 'compacted content')
+        if (!isImportance(entry.importance)) throw new Error('compacted importance must be critical, normal, or low')
+        if (seen.has(content)) throw new Error('compacted runtime memory contains duplicate entries')
+        seen.add(content)
+        const unchanged = existing.find(current => current.content === content)
+        return {
+          content,
+          created_at: unchanged?.created_at ?? now,
+          updated_at: unchanged?.updated_at ?? now,
+          target,
+          importance: entry.importance,
+        }
+      })
+      const entries = [...file.entries.filter(entry => entry.target !== target), ...replacements]
+      const used = byteCount(entries, target)
+      const limit = RUNTIME_MEMORY_LIMITS[target]
+      if (used > limit) throw new RuntimeMemoryCapacityError(target, byteCount(file.entries, target), used, limit)
+      this.persist({ version: RUNTIME_MEMORY_VERSION, entries })
+      return this.snapshotUnlocked({ version: RUNTIME_MEMORY_VERSION, entries })
+    }))
     this.queue = operation.catch(() => undefined)
     return operation
   }
@@ -298,6 +352,21 @@ ${memory || '(empty)'}`
       used: byteCount(entries, target),
       limit: RUNTIME_MEMORY_LIMITS[target],
       markdownPath: target === 'memory' ? this.memoryPath : this.userPath,
+    }
+  }
+
+  private snapshotUnlocked(file: RuntimeMemoryFile): RuntimeMemorySnapshot {
+    const entries = file.entries.map(entry => ({ ...entry }))
+    return {
+      directory: this.directory,
+      sourcePath: this.sourcePath,
+      revision: revision(file),
+      generatedAt: this.now().toISOString(),
+      entries,
+      targets: {
+        memory: this.targetView(entries, 'memory'),
+        user: this.targetView(entries, 'user'),
+      },
     }
   }
 

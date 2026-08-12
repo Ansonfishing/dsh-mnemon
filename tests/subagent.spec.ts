@@ -3,7 +3,7 @@ import type { HostAgent, HostContextShape, HostSubagentsService, ToolDefinition 
 import type { MnemonService } from '../src/service.ts'
 import { assertDshOutputSchema, MnemonSubagentCoordinator } from '../src/subagent.ts'
 import { registerTools } from '../src/tools.ts'
-import type { RuntimeMemoryController } from '../src/runtime-memory.ts'
+import { RuntimeMemoryCapacityError, type RuntimeMemoryController } from '../src/runtime-memory.ts'
 
 const capabilities = { outputSchema: true, depthLimit: true, toolFilter: true, persona: true }
 
@@ -128,6 +128,38 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(coordinator.snapshot().answers).toBe(1)
   })
 
+  it('archives before compacting and retrying a capacity-blocked runtime write', async () => {
+    const host = subagents({
+      summary: 'Archived and compacted hot memory.',
+      action: 'archived',
+      memoryBodyIds: ['project'],
+      compactedEntries: [{ content: 'Project uses pnpm.', importance: 'normal' }],
+    })
+    const runtime = {
+      mutate: vi.fn()
+        .mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', 10_200, 10_300, 10_240))
+        .mockResolvedValueOnce({ success: true, message: 'Entry added.', target: 'memory', entryCount: 2, usage: { used: 120, limit: 10_240 }, added: 'New durable fact.' }),
+      snapshot: vi.fn(() => ({
+        revision: 'reviewed-revision',
+        entries: [{ content: 'Project uses pnpm and has a long history.', created_at: 'now', updated_at: 'now', target: 'memory', importance: 'normal' }],
+        targets: { memory: { target: 'memory', entryCount: 1, used: 10_200, limit: 10_240, markdownPath: '/tmp/MEMORY.md' } },
+      })),
+      compactTarget: vi.fn(async () => ({})),
+    } as unknown as RuntimeMemoryController
+    const coordinator = new MnemonSubagentCoordinator(host.value, service(), runtime)
+    await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: 'New durable fact.' }, new AbortController().signal)).resolves.toMatchObject({
+      added: 'New durable fact.',
+      maintenance: { provider: 'spawn', memoryBodyIds: ['project'] },
+    })
+    expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
+      toolFilter: { allow: ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_remember', 'mnemon_memory_body_create'] },
+      prompt: [expect.objectContaining({ text: expect.stringContaining('never compact first') })],
+    }))
+    expect(runtime.compactTarget).toHaveBeenCalledWith('reviewed-revision', 'memory', [{ content: 'Project uses pnpm.', importance: 'normal' }])
+    expect(runtime.mutate).toHaveBeenCalledTimes(2)
+    expect(coordinator.snapshot()).toMatchObject({ migrations: 1, lastOperation: 'migration' })
+  })
+
   it('disposes failed child runs and reports a hard error instead of falling back to direct memory access', async () => {
     const host = subagents(undefined, 'error')
     const coordinator = new MnemonSubagentCoordinator(host.value, service())
@@ -143,6 +175,7 @@ describe('Mnemon root/child tool split', () => {
     const memoryService = service()
     const coordinator = {
       recall: vi.fn(async () => ({ query: 'x', mode: 'smart', results: [], delegation: { runId: 'child', provider: 'spawn', summary: '', selectedMemoryBodyIds: [] } })),
+      runtime: vi.fn(async () => ({ success: true, message: 'Entry added.', target: 'user', entryCount: 1, usage: { used: 20, limit: 4096 } })),
     } as unknown as MnemonSubagentCoordinator
     const runtimeMemory = { mutate: vi.fn() } as unknown as RuntimeMemoryController
     registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, memoryService, coordinator, runtimeMemory)
@@ -156,7 +189,9 @@ describe('Mnemon root/child tool split', () => {
 
     const hotMemory = registered.find(tool => tool.name === 'mnemon_runtime_memory')!
     await hotMemory.execute({ action: 'add', target: 'user', content: 'Prefers concise replies', importance: 'critical' } as never, { agent: parent(), signal })
-    expect(runtimeMemory.mutate).toHaveBeenCalledWith({ action: 'add', target: 'user', content: 'Prefers concise replies', importance: 'critical' })
+    expect(coordinator.runtime).toHaveBeenCalledWith(parent(), { action: 'add', target: 'user', content: 'Prefers concise replies', importance: 'critical' }, signal)
+    await hotMemory.execute({ action: 'add', target: 'memory', content: 'Child fact' } as never, { agent: parent('subagent'), signal })
+    expect(runtimeMemory.mutate).toHaveBeenCalledWith({ action: 'add', target: 'memory', content: 'Child fact' })
 
     await recall.execute({ query: 'root query' } as never, { agent: parent(), signal })
     expect(coordinator.recall).toHaveBeenCalledOnce()

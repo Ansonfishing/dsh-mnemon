@@ -123,13 +123,16 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
       required: ['action', 'target'],
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    execute: (args: { action: 'add' | 'replace' | 'remove'; target: RuntimeMemoryTarget; content?: string; old_text?: string; importance?: RuntimeMemoryImportance }) => runtimeMemory.mutate({
-      action: args.action,
-      target: args.target,
-      ...(args.content === undefined ? {} : { content: args.content }),
-      ...(args.old_text === undefined ? {} : { oldText: args.old_text }),
-      ...(args.importance === undefined ? {} : { importance: args.importance }),
-    }),
+    execute: (args: { action: 'add' | 'replace' | 'remove'; target: RuntimeMemoryTarget; content?: string; old_text?: string; importance?: RuntimeMemoryImportance }, exec: ToolExecution) => {
+      const request = {
+        action: args.action,
+        target: args.target,
+        ...(args.content === undefined ? {} : { content: args.content }),
+        ...(args.old_text === undefined ? {} : { oldText: args.old_text }),
+        ...(args.importance === undefined ? {} : { importance: args.importance }),
+      }
+      return isSubagent(exec.agent) ? runtimeMemory.mutate(request) : coordinator.runtime(requireAgent(exec), request, exec.signal)
+    },
     presentCall: (args: { action: string; target: string }) => ({ card: 'generic', title: `${args.action} runtime ${args.target} memory`, kind: 'edit' }),
     presentResult: () => ({ card: 'generic', title: 'Runtime memory updated' }),
   } as never))
