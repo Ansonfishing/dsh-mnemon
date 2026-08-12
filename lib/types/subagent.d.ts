@@ -6,9 +6,10 @@ export interface SubagentCounters {
     recalls: number;
     writes: number;
     answers: number;
+    reviews: number;
     failures: number;
     lastRunId?: string;
-    lastOperation?: 'recall' | 'write';
+    lastOperation?: 'recall' | 'write' | 'review';
     lastAt?: string;
 }
 export interface DelegatedRecallResult {
@@ -52,6 +53,7 @@ export declare class MnemonSubagentCoordinator {
     remember(parent: HostAgent, request: RememberRequest, signal: AbortSignal): Promise<DelegatedWriteResult>;
     answer(parent: HostAgent, query: string, evidence: Insight[], signal: AbortSignal): Promise<DelegatedAnswerResult>;
     write(parent: HostAgent, operation: string, request: unknown, signal: AbortSignal): Promise<DelegatedWriteResult>;
+    review(parent: HostAgent, signal: AbortSignal): Promise<DelegatedWriteResult>;
     private recallResult;
     private delegate;
     private provider;

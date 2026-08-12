@@ -1,3 +1,4 @@
 export declare const DEFAULT_TIMEOUT_MS = 10000;
 export declare const DEFAULT_RECALL_LIMIT = 10;
+export declare const DEFAULT_IDLE_REVIEW_MS = 30000;
 //# sourceMappingURL=config-values.d.ts.map

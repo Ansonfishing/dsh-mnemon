@@ -1,5 +1,5 @@
 import z from 'schemastery';
-export { DEFAULT_RECALL_LIMIT, DEFAULT_TIMEOUT_MS } from './config-values.ts';
+export { DEFAULT_IDLE_REVIEW_MS, DEFAULT_RECALL_LIMIT, DEFAULT_TIMEOUT_MS } from './config-values.ts';
 /** User-facing configuration mounted from the DSH profile patch. */
 export interface Config {
     /** Explicit `mnemon` executable. Omit to resolve MNEMON_CLI_PATH, PATH, then common install locations. */
@@ -18,12 +18,14 @@ export interface Config {
     tabEnabled?: boolean;
     /** Allow remember/link/forget mutations. Recall and status remain available when false. */
     writeEnabled?: boolean;
-    /** Enable DSH agent lifecycle integration (Prime, recall cue, and writeback checkpoint). */
+    /** Enable DSH agent lifecycle integration (Prime plus recall/remember cues). */
     lifecycleEnabled?: boolean;
     /** Recall behavior at the first step of each DSH turn. */
     recallMode?: 'guided' | 'off';
-    /** Writeback behavior immediately before a DSH turn closes. */
+    /** Enable the short remember cue and the debounced full-checkpoint idle review. */
     writebackMode?: 'guided' | 'off';
+    /** Continuous root-agent idle time before a full-checkpoint memory review starts. */
+    idleReviewMs?: number;
 }
 export declare const Config: z<Config>;
 export interface ResolvedConfig {
@@ -38,6 +40,7 @@ export interface ResolvedConfig {
     lifecycleEnabled: boolean;
     recallMode: 'guided' | 'off';
     writebackMode: 'guided' | 'off';
+    idleReviewMs: number;
 }
 export declare function resolveConfig(config?: Config): ResolvedConfig;
 //# sourceMappingURL=config.d.ts.map

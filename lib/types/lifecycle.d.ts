@@ -3,11 +3,11 @@ import type { HostContextShape } from './contracts.ts';
 import type { Insight, RememberRequest, SearchRequest } from './service.ts';
 import { MnemonSubagentCoordinator, type DelegatedWriteResult, type SubagentCounters } from './subagent.ts';
 export declare const MNEMON_PLUGIN_SOURCE = "dsh-mnemon";
-export type LifecyclePhase = 'idle' | 'prime' | 'recall' | 'writeback' | 'supervised' | 'error';
+export type LifecyclePhase = 'idle' | 'prime' | 'recall' | 'writeback' | 'review' | 'supervised' | 'error';
 export interface LifecycleCounters {
     primes: number;
     recallCues: number;
-    writebackChecks: number;
+    writebackCues: number;
     supervisedRequests: number;
     failures: number;
 }
@@ -16,9 +16,13 @@ export interface LifecycleAgentSnapshot {
     status: 'idle' | 'running';
     startSource: 'startup' | 'resume' | 'clear' | 'compact' | 'adopted';
     primePending: boolean;
-    checkedTurns: number;
+    guidedTurns: number;
     memoryToolCalls: number;
+    idleReviewPending: boolean;
+    reviewRunning: boolean;
     lastPhase: LifecyclePhase;
+    lastReviewAt?: string;
+    lastReviewAction?: string;
     lastAt?: string;
     lastError?: string;
 }
@@ -26,6 +30,7 @@ export interface LifecycleSnapshot {
     enabled: boolean;
     recallMode: ResolvedConfig['recallMode'];
     writebackMode: ResolvedConfig['writebackMode'];
+    idleReviewMs: number;
     activeAgents: number;
     sessionAvailable: boolean;
     counters: LifecycleCounters;

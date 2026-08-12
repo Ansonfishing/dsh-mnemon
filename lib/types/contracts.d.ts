@@ -168,6 +168,7 @@ export interface HostSubagentRun {
     dispose(): Promise<void>;
 }
 export interface HostSubagentProvider {
+    inheritsParentContext?: boolean;
     capabilities: {
         outputSchema: boolean;
         depthLimit: boolean;

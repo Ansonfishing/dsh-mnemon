@@ -92,13 +92,17 @@ export interface StatusView {
 export interface MemoryGraphNode extends Insight {
     color: string;
     graphId?: string;
+    kind?: 'memory' | 'entity' | 'space';
+    memoryBodyIds?: string[];
+    memoryBodyNames?: string[];
+    occurrenceCount?: number;
 }
 export interface MemoryGraphEdge {
     sourceId: string;
     targetId: string;
     label: string;
     color: string;
-    type?: EdgeType;
+    type?: EdgeType | 'scope';
 }
 export interface MemoryGraphSnapshot {
     nodes: MemoryGraphNode[];
