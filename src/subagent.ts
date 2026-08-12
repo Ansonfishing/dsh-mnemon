@@ -28,7 +28,9 @@ const RECALL_SCHEMA = {
   properties: {
     summary: { type: 'string' },
     selectedMemoryBodyIds: { type: 'array', items: { type: 'string' } },
-    results: { type: 'array', items: INSIGHT_SCHEMA, maxItems: 12 },
+    // DSH subagent structured output intentionally supports a compact JSON Schema subset.
+    // Enforce the result cap in the worker prompt and the host parser, not with maxItems.
+    results: { type: 'array', items: INSIGHT_SCHEMA },
   },
   required: ['summary', 'selectedMemoryBodyIds', 'results'],
 } as const
@@ -139,7 +141,7 @@ export class MnemonSubagentCoordinator {
   private recallResult(query: string, mode: string, provider: string, runId: string, result: HostSubagentResult): DelegatedRecallResult {
     const value = object(result.structured)
     const selectedMemoryBodyIds = strings(value.selectedMemoryBodyIds)
-    const results = Array.isArray(value.results) ? value.results.map(insight).filter((entry): entry is Insight => entry !== undefined) : []
+    const results = Array.isArray(value.results) ? value.results.map(insight).filter((entry): entry is Insight => entry !== undefined).slice(0, 12) : []
     const summary = typeof value.summary === 'string' ? value.summary : ''
     return { query, mode, results, ...(summary === '' ? {} : { hint: summary }), delegation: { runId, provider, summary, selectedMemoryBodyIds } }
   }

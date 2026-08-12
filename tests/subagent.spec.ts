@@ -67,6 +67,8 @@ describe('Mnemon memory subagent coordinator', () => {
       outputSchema: expect.objectContaining({ type: 'object' }),
       persona: expect.stringContaining('bounded memory worker'),
     }))
+    const startCall = host.start.mock.calls[0] as unknown as [string, { outputSchema: unknown }]
+    expect(JSON.stringify(startCall[1].outputSchema)).not.toContain('maxItems')
     expect(host.dispose).toHaveBeenCalledOnce()
   })
 
