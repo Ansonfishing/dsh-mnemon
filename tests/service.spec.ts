@@ -81,7 +81,7 @@ describe('MnemonService', () => {
       expect.objectContaining({ id: 'm2', category: 'fact', content: 'Four graph memory' }),
       expect.objectContaining({ id: 'm1', category: 'decision' }),
     ])
-    expect(graph.edges).toEqual([expect.objectContaining({ sourceId: 'm1', targetId: 'm2', type: 'temporal', label: 'backbone' })])
+    expect(graph.edges).toEqual([expect.objectContaining({ sourceId: 'work:m1', targetId: 'work:m2', type: 'temporal', label: 'backbone' })])
     expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['viz', '--format', 'html']), expect.anything())
   })
 
@@ -149,5 +149,25 @@ describe('MnemonService', () => {
       expect.objectContaining({ id: 'm3', depth: 1 }),
     ])
     await expect(service.related('m1', 9)).rejects.toThrow('1..5')
+  })
+
+  it('aggregates reads across active memory bodies and activates a write target', async () => {
+    const { service, process } = fixture()
+    await service.createBody({ id: 'research', name: '研究记忆体', description: 'Research decisions', active: true })
+
+    const result = await service.search({ query: 'database choice' })
+    expect(result.results).toHaveLength(2)
+    expect(result.results.map(item => item.memoryBodyId)).toEqual(['work', 'research'])
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--store', 'research', 'recall']), expect.anything())
+
+    service.updateBody('research', { active: false })
+    await service.remember({ memoryBodyId: 'research', content: 'Durable cross-body write.' })
+    expect(service.memoryBodies.get('research').active).toBe(true)
+  })
+
+  it('rejects explicit reads from an inactive memory body', async () => {
+    const { service } = fixture()
+    await service.createBody({ id: 'archive', name: '归档记忆体' })
+    await expect(service.search({ query: 'anything', memoryBodyIds: ['archive'] })).rejects.toThrow('not active')
   })
 })

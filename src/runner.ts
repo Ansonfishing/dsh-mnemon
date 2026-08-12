@@ -64,8 +64,8 @@ export interface MnemonRunner {
   readonly command: string
   readonly commandFound: boolean
   readonly config: ResolvedConfig
-  runJson(args: readonly string[], options?: { signal?: AbortSignal; globalFlags?: boolean }): Promise<JsonValue>
-  runText(args: readonly string[], options?: { signal?: AbortSignal; globalFlags?: boolean }): Promise<string>
+  runJson(args: readonly string[], options?: { signal?: AbortSignal; globalFlags?: boolean; store?: string }): Promise<JsonValue>
+  runText(args: readonly string[], options?: { signal?: AbortSignal; globalFlags?: boolean; store?: string }): Promise<string>
   effectiveDataDir(): string
   effectiveStore(): string
 }
@@ -78,18 +78,19 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
   // racing that migration and surfacing a transient SQLITE_BUSY error.
   let processQueue: Promise<void> = Promise.resolve()
 
-  const globalArgs = (): string[] => {
+  const globalArgs = (store?: string): string[] => {
     const args: string[] = []
     if (config.dataDir !== undefined) args.push('--data-dir', expandHome(config.dataDir))
-    if (config.store !== undefined) args.push('--store', config.store)
+    if (store !== undefined) args.push('--store', store)
+    else if (config.store !== undefined) args.push('--store', config.store)
     return args
   }
   const launch = async (
     args: readonly string[],
-    options: { signal?: AbortSignal; globalFlags?: boolean } = {},
+    options: { signal?: AbortSignal; globalFlags?: boolean; store?: string } = {},
   ): Promise<string> => {
     if (options.signal?.aborted === true) throw new MnemonCliError(`mnemon command aborted: ${String(options.signal.reason ?? 'cancelled')}`)
-    const argv = options.globalFlags === false ? [...args] : [...globalArgs(), ...args]
+    const argv = options.globalFlags === false ? [...args] : [...globalArgs(options.store), ...args]
     const processOptions: ProcessOptions = {
       timeoutMs: config.timeoutMs,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -112,7 +113,7 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
 
   const execute = (
     args: readonly string[],
-    options: { signal?: AbortSignal; globalFlags?: boolean } = {},
+    options: { signal?: AbortSignal; globalFlags?: boolean; store?: string } = {},
   ): Promise<string> => {
     const result = processQueue.then(() => launch(args, options))
     processQueue = result.then(() => undefined, () => undefined)

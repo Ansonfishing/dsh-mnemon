@@ -15,10 +15,12 @@ export interface MnemonRunner {
     runJson(args: readonly string[], options?: {
         signal?: AbortSignal;
         globalFlags?: boolean;
+        store?: string;
     }): Promise<JsonValue>;
     runText(args: readonly string[], options?: {
         signal?: AbortSignal;
         globalFlags?: boolean;
+        store?: string;
     }): Promise<string>;
     effectiveDataDir(): string;
     effectiveStore(): string;
