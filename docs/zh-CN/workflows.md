@@ -98,7 +98,7 @@ structured receipt
 
 新建 Memory Space 的 ID 由 Host 生成。向 inactive 目标写入成功后会激活它。来源数据库的合并是非破坏性的。
 
-运行时 `add` / `replace` / `remove` 和 Document `create` / `update` 不需要模型做存储 I/O；它们通过 coordinator 进入确定性控制层。容量维护和冷归档才启动专用 worker。
+运行时 `add` / `replace` / `remove` 和 Document `create` / `update` 不需要模型做存储 I/O；它们通过 coordinator 进入确定性控制层。容量维护和归档才启动专用 worker。
 
 ## Runtime add：正常路径
 
@@ -183,7 +183,7 @@ worker persona 要求每条已提交 entry 都被长期表示或验证为重复�
 
 如果长期写入成功后发生 revision 冲突，热记忆会保留，长期层可能同时已有副本。插件优先避免丢失，不尝试跨数据库和文件系统回滚已完成的 Mnemon 写入。
 
-## Documents 创建、更新和冷归档
+## Documents 创建、更新和归档
 
 ```text
 create/update request

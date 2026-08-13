@@ -2,7 +2,7 @@
 
 **简体中文** | [English](./README.en.md)
 
-> **[Mnemon](https://github.com/mnemon-dev/mnemon) 与 DSH 的深度集成，为 DSH 提供完备的记忆体能力。**
+> **[Mnemon](https://github.com/mnemon-dev/mnemon) 与 DSH 的深度集成，为 DSH 提供完备的记忆系统能力。**
 
 `dsh-mnemon` 是 DeepSeek Harness（DSH）的本地 Mnemon 记忆插件。它把每轮可见的运行时热记忆、可直接阅读的项目档案（Documents）和按需召回的长期记忆体（Memory Spaces）组织成一个受监督、可检索、可维护的三层体系。
 
@@ -49,7 +49,7 @@
               spawn：仅召回 active 空间 -------> 有界证据
 ```
 
-[![Mnemon 记忆体总览：多记忆体目录、激活状态与实时关系图](./docs/zh-CN/assets/screenshots/overview-memory-graph.png)](./docs/zh-CN/project-overview.md)
+[![Mnemon 记忆体页：多记忆体目录、激活状态与实时关系图](./docs/zh-CN/assets/screenshots/overview-memory-graph.png)](./docs/zh-CN/project-overview.md)
 
 *多记忆体目录、激活状态与实时关系图。点击图片阅读[完整项目介绍](./docs/zh-CN/project-overview.md)。*
 
@@ -96,7 +96,7 @@ dsh --profile web
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
-打开 DSH 的“设置 -> 插件配置 -> Mnemon”选择存储范围，再进入会话的“记忆体”Tab 创建或激活记忆体。配置重启后生效；切换范围不会自动迁移、合并或删除旧数据。
+打开 DSH 的“设置 -> 插件配置 -> Mnemon”选择存储范围，再进入会话的“记忆系统”Tab 创建或激活记忆体。配置重启后生效；切换范围不会自动迁移、合并或删除旧数据。
 
 ## 最小配置
 
@@ -115,7 +115,7 @@ mnemon:
 
 ## 使用入口
 
-Web 工作台提供总览、运行时、档案、检索、实体、沉淀、内容和状态八个页面，主要界面随 DSH 全局语言在中文与英文间切换。
+Web 工作台提供状态、运行时、记忆体、档案、沉淀、检索、实体、内容八个页面，分为三组：「状态」独立成第一组；「运行时、记忆体、档案」对应三层存储；「沉淀、检索、实体、内容」为读写工具。主要界面随 DSH 全局语言在中文与英文间切换。
 
 常用命令：
 
@@ -127,7 +127,7 @@ Web 工作台提供总览、运行时、档案、检索、实体、沉淀、内�
 /mnemon forget <完整记忆 ID>
 ```
 
-推荐的查询顺序是：热记忆 -> active Documents -> 已激活记忆体 -> 命中记录指向的冷归档原文。不要把临时进度、原始日志、秘密或可直接从仓库重新获得的普通事实写入长期记忆。
+推荐的查询顺序是：热记忆 -> active Documents -> 已激活记忆体 -> 命中记录指向的归档原文。不要把临时进度、原始日志、秘密或可直接从仓库重新获得的普通事实写入长期记忆。
 
 ## 文档
 

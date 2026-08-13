@@ -90,9 +90,9 @@ Settings are written to `$DSH_HOME/settings.yaml` and take effect after restarti
 
 ## 5. Create Your First Memory Space
 
-Open the “Memory” tab in any session:
+Open the “Memory System” tab in any session:
 
-1. Open “Overview.”
+1. Open the “Memory Spaces” page.
 2. Create a narrowly scoped Memory Space, such as “Project Decisions.”
 3. Its description should explain what belongs there and which tasks should recall it.
 4. Enable its read toggle, or let the plugin activate it automatically after the first write.
@@ -115,9 +115,9 @@ Then submit a stable, self-contained item that will remain useful in the future 
 
 Finally, check that:
 
-- “Overview” shows the active Memory Space and graph;
+- the “Memory Spaces” page shows the active Memory Space and graph;
 - “Content” shows the new item and its Memory Space;
-- CLI, Memory Space catalog, and subagent status are all healthy under “Status”;
+- CLI, runtime memory, Memory Space catalog, and subagent status are all healthy under “Status”;
 - the recall result includes a complete `memoryBodyId` and memory ID.
 
 ## 7. Recommended First Real Conversation

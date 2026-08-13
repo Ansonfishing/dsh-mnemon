@@ -49,7 +49,7 @@ Reusable knowledge produced by current work
               spawn: recall active spaces only -> bounded evidence
 ```
 
-[![Mnemon Memory overview with the multi-space catalog, activation state, and live relationship graph](./docs/zh-CN/assets/screenshots/overview-memory-graph.png)](./docs/en/project-overview.md)
+[![Mnemon Memory Spaces page with the multi-space catalog, activation state, and live relationship graph](./docs/zh-CN/assets/screenshots/overview-memory-graph.png)](./docs/en/project-overview.md)
 
 *Memory Space catalog, activation state, and live relationship graph. Select the image for the [complete project overview](./docs/en/project-overview.md).*
 
@@ -96,7 +96,7 @@ For a local checkout, use an absolute path:
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
-Open “Settings -> Plugin Configuration -> Mnemon” to select a storage scope, then create or activate a Memory Space in the conversation's “Memory” tab. Configuration applies after restart. Changing the scope never migrates, merges, or deletes old data automatically.
+Open “Settings -> Plugin Configuration -> Mnemon” to select a storage scope, then create or activate a Memory Space in the conversation's “Memory System” tab. Configuration applies after restart. Changing the scope never migrates, merges, or deletes old data automatically.
 
 ## Minimal configuration
 
@@ -115,7 +115,7 @@ See the [configuration reference](./docs/en/configuration.md) for every option, 
 
 ## Entry points
 
-The Web workspace contains Overview, Runtime, Documents, Recall, Entities, Distill, Content, and Status pages. Its main interface follows DSH's global Chinese/English locale.
+The Web workspace contains Status, Runtime, Memory Spaces, Documents, Distill, Recall, Entities, and Content pages in three divider-separated groups: “Status” stands alone; “Runtime, Memory Spaces, Documents” cover the three storage tiers; “Distill, Recall, Entities, Content” are the read/write tools. Its main interface follows DSH's global Chinese/English locale.
 
 Common commands:
 
@@ -127,7 +127,7 @@ Common commands:
 /mnemon forget <full memory ID>
 ```
 
-The recommended lookup order is: hot memory -> active Documents -> active Memory Spaces -> the cold archived original referenced by a hit. Do not persist temporary progress, raw logs, secrets, or ordinary facts that can be recovered directly from the repository.
+The recommended lookup order is: hot memory -> active Documents -> active Memory Spaces -> the archived original referenced by a hit. Do not persist temporary progress, raw logs, secrets, or ordinary facts that can be recovered directly from the repository.
 
 ## Documentation
 

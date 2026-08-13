@@ -98,7 +98,7 @@ structured receipt
 
 The Host generates IDs for new Memory Spaces. A successful write to an inactive target activates it. Merging a source database is non-destructive.
 
-Runtime `add` / `replace` / `remove` and Document `create` / `update` do not need a model to perform storage I/O; they enter the deterministic control layer through the coordinator. Only capacity maintenance and cold archiving start dedicated workers.
+Runtime `add` / `replace` / `remove` and Document `create` / `update` do not need a model to perform storage I/O; they enter the deterministic control layer through the coordinator. Only capacity maintenance and archiving start dedicated workers.
 
 ## Runtime add: Normal Path
 
@@ -183,7 +183,7 @@ The worker persona requires every committed entry to be represented in long-term
 
 If a revision conflict occurs after a successful long-term write, the hot memory is preserved while the long-term layer may also contain a copy. The plugin prioritizes preventing data loss and does not attempt to roll back a completed Mnemon write across the database and file system.
 
-## Document Creation, Update, and Cold Archiving
+## Document Creation, Update, and Archiving
 
 ```text
 create/update request

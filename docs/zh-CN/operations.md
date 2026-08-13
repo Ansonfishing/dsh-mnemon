@@ -35,7 +35,7 @@ mnemon --version
 - 等待锁默认最多 5 秒；锁超过 30 秒才被视为 stale。
 - 写入使用临时文件和 rename。
 - Runtime 用 revision 阻止过期压缩覆盖并发修改。
-- Document 冷归档用数字 revision 阻止移动已被更新的 active 原文。
+- Document 归档用数字 revision 阻止移动已被更新的 active 原文。
 - `sourcePaths` 不能逃出发起会话工作区，也不能指向受管 Documents 目录。
 
 ### Web
@@ -106,7 +106,7 @@ no implicit delete
 | Mnemon 不可用 | 运行 `command -v mnemon`、`mnemon --version`；设置 `MNEMON_CLI_PATH` 或 `cliPath` 后重启 |
 | 状态正常但召回为空 | 检查是否有 active Memory Space、当前 `storageScope`、DSH 启动 cwd 和查询是否足够聚焦 |
 | `memoryBodyId is required...` | active 数量不是恰好 1；让 worker 或调用方显式选择目标 |
-| `memory body is not active for reading` | 在总览激活目标；写入 inactive 可以，但读取不行 |
+| `memory body is not active for reading` | 在记忆体页激活目标；写入 inactive 可以，但读取不行 |
 | subagent provider 错误 | 普通任务需要完整隔离能力；后台审查另需 `fork + inheritsParentContext` |
 | 设置保存后无变化 | 所有选项重启后生效 |
 | custom 目录被拒绝 | 使用绝对路径、`~` 或 `~/...` |

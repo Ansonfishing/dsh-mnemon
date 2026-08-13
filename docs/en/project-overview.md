@@ -8,7 +8,7 @@ It separates what must be visible every turn, project knowledge that should rema
 
 The central goal is to give an Agent long-term continuity while keeping the current task authoritative, context compact, writes auditable, and original data protected when maintenance fails.
 
-[![Mnemon Memory overview showing the Memory Space catalog, activation state, and live multi-space relationship graph](../zh-CN/assets/screenshots/overview-memory-graph.png)](../zh-CN/assets/screenshots/overview-memory-graph.png)
+[![Mnemon Memory Spaces page showing the Memory Space catalog, activation state, and live multi-space relationship graph](../zh-CN/assets/screenshots/overview-memory-graph.png)](../zh-CN/assets/screenshots/overview-memory-graph.png)
 
 *The overview brings the Memory Space catalog, activation state, statistics, and live multi-space graph into one workspace. Select the image for its original resolution. The screenshot uses the Chinese locale; the workspace also supports English.*
 
@@ -30,7 +30,7 @@ To satisfy immediate visibility, complete reading, and durable recall together, 
 
 ## Architecture at a Glance
 
-DSH provides the root Agent and extension surfaces, `dsh-mnemon` owns three-tier control, routing, and safety boundaries, and [Mnemon](https://github.com/mnemon-dev/mnemon) supplies the Memory Space capabilities for the durable tier. The plugin manages Runtime projections and Document originals; durable Memory Spaces and cold archive references are stored and retrieved through Mnemon.
+DSH provides the root Agent and extension surfaces, `dsh-mnemon` owns three-tier control, routing, and safety boundaries, and [Mnemon](https://github.com/mnemon-dev/mnemon) supplies the Memory Space capabilities for the durable tier. The plugin manages Runtime projections and Document originals; durable Memory Spaces and archive references are stored and retrieved through Mnemon.
 
 [![dsh-mnemon runtime architecture connecting DSH Web, the root Agent, the supervised control layer, and three local storage tiers](./assets/project-architecture.svg)](./assets/project-architecture.svg)
 
@@ -55,7 +55,7 @@ Through the system prompt, dynamically injected `USER.md` / `MEMORY.md`, lifecyc
 |---|---|
 | Revisit earlier work, find historical evidence, or recover an exact old detail | Search active Documents first, then use `mnemon_recall` / `mnemon_related` when needed |
 | Remember a preference or stable convention, or correct old information | `mnemon_runtime_memory` with `add` / `replace` / `remove` |
-| Preserve a complete design, investigation, procedure, or handoff | Search Documents, then create or update a managed Document; cold-archive when needed |
+| Preserve a complete design, investigation, procedure, or handoff | Search Documents, then create or update a managed Document; archive when needed |
 | Retain durable facts or decisions, create relations, forget content, or adjust a Memory Space | Let a bounded worker deduplicate and route before using Memory Space write or maintenance capabilities |
 
 Even without the literal words “remember this,” an explicit new reusable fact can justify proactive hot-memory writeback. After completed work reaches the activity-score gate and the root Agent remains idle, a `fork` background review can also conservatively inspect hot memory and project Documents. See [Lifecycle and Core Workflows](./workflows.md) and the [Interface Reference](./interfaces.md) for the complete prompting strategy, gates, and tool permissions.
@@ -146,7 +146,7 @@ The plugin separates semantic judgment from system guarantees:
 
 Durable recall, semantic writes, and capacity maintenance use isolated `spawn` workers. Background review uses a checkpoint-inheriting `fork` worker only after a completed turn crosses the activity-score gate and the root Agent remains idle. A new turn cancels pending or active review. Worker context, tools, and output remain bounded while the Host retains deterministic validation; see the workflow guide for complete provider requirements and review boundaries.
 
-See [Lifecycle and Core Workflows](./workflows.md) for recall, writes, capacity maintenance, cold archiving, and the scoring formula.
+See [Lifecycle and Core Workflows](./workflows.md) for recall, writes, capacity maintenance, archiving, and the scoring formula.
 
 When the user explicitly asks to retain stable information, the root Agent selects structured tools by content type and writes individual items while the Host continues to validate the target, capacity, and revision. The final response reports what was actually stored instead of treating internal reasoning as persistence.
 
@@ -170,18 +170,18 @@ These workflows can be initiated proactively through Agent tools and can also be
 
 ### Web Workspace
 
-The conversation's “Memory” tab contains eight pages:
+The conversation's “Memory System” tab contains eight pages in three divider-separated groups: “Status” stands alone; “Runtime, Memory Spaces, Documents” cover the three storage tiers; “Distill, Recall, Entities, Content” are the read/write tools:
 
 | Page | Primary purpose |
 |---|---|
-| Overview | Memory Space catalog, activation controls, and a live multi-space graph |
+| Status | CLI, runtime hot memory, storage scope, lifecycle, and subagent diagnostics |
 | Runtime | USER / MEMORY hot context, capacity, and deterministic maintenance |
-| Documents | Search, read, edit, and cold-archive managed Documents |
+| Memory Spaces | Memory Space catalog, activation controls, and a live multi-space graph |
+| Documents | Search, read, edit, and archive managed Documents |
+| Distill | Give a candidate to a bounded worker for deduplication, routing, and writing |
 | Recall | Direct recall, related traversal, and evidence-only Agent search |
 | Entities | Frequent entities and their cross-graph context |
-| Distill | Give a candidate to a bounded worker for deduplication, routing, and writing |
 | Content | Browse, copy, clone, or soft-delete durable memories |
-| Status | CLI, storage scope, lifecycle, and subagent diagnostics |
 
 The primary Web workspace and settings card support Chinese and English and follow DSH's global light/dark theme. Commands, tool cards, and some backend diagnostics are not yet fully internationalized.
 

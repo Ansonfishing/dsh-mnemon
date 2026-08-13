@@ -49,7 +49,7 @@ root Agent calls mnemon_recall
   -> structured evidence returns to root Agent
 ```
 
-长期语义写入、关系、软删除以及记忆体创建/更新/合并采用相同模式。运行时记忆和 Documents 的普通变更先经过 coordinator，但通常由确定性控制层直接提交；只有容量维护或冷归档需要额外 worker。
+长期语义写入、关系、软删除以及记忆体创建/更新/合并采用相同模式。运行时记忆和 Documents 的普通变更先经过 coordinator，但通常由确定性控制层直接提交；只有容量维护或归档需要额外 worker。
 
 ## 两类子 Agent
 
@@ -63,7 +63,7 @@ root Agent calls mnemon_recall
 - `maxDepth: 1`；
 - 可取消的 signal 和有界 token 预算。
 
-它用于召回、长期语义写入、证据限定问答、热记忆整理和 Document 冷归档。
+它用于召回、长期语义写入、证据限定问答、热记忆整理和 Document 归档。
 
 ### `fork`
 

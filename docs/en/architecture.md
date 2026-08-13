@@ -49,7 +49,7 @@ root Agent calls mnemon_recall
   -> structured evidence returns to root Agent
 ```
 
-Long-term semantic writes, relationships, soft deletion, and Memory Space creation, updates, and merges use the same pattern. Ordinary Runtime Memory and Document mutations first pass through the coordinator but are usually committed directly by the deterministic control layer; only capacity maintenance or cold archiving requires an additional worker.
+Long-term semantic writes, relationships, soft deletion, and Memory Space creation, updates, and merges use the same pattern. Ordinary Runtime Memory and Document mutations first pass through the coordinator but are usually committed directly by the deterministic control layer; only capacity maintenance or archiving requires an additional worker.
 
 ## Two Types of Subagent
 
@@ -63,7 +63,7 @@ Long-term semantic writes, relationships, soft deletion, and Memory Space creati
 - `maxDepth: 1`;
 - a cancellable signal and bounded token budget.
 
-It is used for recall, long-term semantic writes, evidence-bound answers, hot-memory maintenance, and Document cold archiving.
+It is used for recall, long-term semantic writes, evidence-bound answers, hot-memory maintenance, and Document archiving.
 
 ### `fork`
 

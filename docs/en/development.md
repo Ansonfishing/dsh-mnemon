@@ -103,7 +103,7 @@ Recommended scenarios:
 4. Explicit distillation: the worker deduplicates, selects a scope, and writes content that can be recalled again.
 5. Multiple spaces: reads cover only active spaces; writing to an inactive space activates it automatically afterward.
 6. Runtime: USER / MEMORY add, replace, remove, and projection consistency.
-7. Documents: create, retrieve, update, manually cold-archive, and leave original project files unchanged.
+7. Documents: create, retrieve, update, manually archive, and leave original project files unchanged.
 8. Score-based review: light tasks do not trigger it; after reaching the threshold it waits for idle; a new turn can cancel it while preserving the watermark.
 9. Read-only: write tools, write commands, and write RPC are rejected while reads remain available.
 10. Status and browser console: no unhandled errors or warnings.

@@ -10,7 +10,7 @@
 2. [快速开始](./getting-started.md)：安装、首次配置与基本验证。
 3. [架构设计](./architecture.md)：DSH Host、Web Client、控制层、子 Agent 与 Mnemon CLI 的边界。
 4. [存储与三层记忆模型](./storage-model.md)：Runtime、Documents、Memory Spaces 的语义和目录结构。
-5. [生命周期与核心流程](./workflows.md)：召回、写入、后台审查、容量整理和冷归档。
+5. [生命周期与核心流程](./workflows.md)：召回、写入、后台审查、容量整理和归档。
 6. [配置参考](./configuration.md)：全部配置、默认值、优先级和 provider 要求。
 7. [WebUI、工具、命令与 RPC](./interfaces.md)：所有用户与模型入口。
 8. [运维、安全与故障排查](./operations.md)：锁、权限、备份、恢复和已知限制。
@@ -25,7 +25,7 @@
 | 运行时热记忆 | Runtime Memory / hot memory | 每轮直接注入的紧凑用户画像和工作记忆 |
 | 项目档案 | Project Documents | 由插件托管的完整 Markdown 项目知识 |
 | 活跃档案 | Active Document | 参与默认近场检索的档案 |
-| 冷归档 | Cold archive | 已建立长期索引、不计 active 容量的原文 |
+| 归档 | Archive | 已建立长期索引、不计 active 容量的原文 |
 | 沉淀 | Distill / supervised writeback | 经 LLM 判断、查重和路由后的持久写入 |
 | 召回 | Recall | 从已激活记忆体读取历史证据 |
 

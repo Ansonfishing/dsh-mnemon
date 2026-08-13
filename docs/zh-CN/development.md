@@ -103,7 +103,7 @@ local link installation
 4. 显式沉淀：worker 查重、选择范围并可被再次召回。
 5. 多空间：读取只覆盖 active，写入 inactive 后自动激活。
 6. Runtime：USER / MEMORY add、replace、remove 和投影一致。
-7. Documents：创建、检索、更新、人工冷归档和原项目文件不变。
+7. Documents：创建、检索、更新、人工归档和原项目文件不变。
 8. 评分审查：轻任务不触发；达标后等待 idle；新 turn 能取消并保留水位。
 9. 只读：写工具、写命令和写 RPC 被拒绝，读取仍可用。
 10. 状态和浏览器控制台：无未处理错误或警告。

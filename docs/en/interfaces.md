@@ -4,18 +4,18 @@
 
 ## Web Workspace
 
-The main Web interface follows DSH's global language and light/dark theme.
+The main Web interface follows DSH's global language and light/dark theme. The top navigation is split into three divider-separated groups: “Status” stands alone; “Runtime, Memory Spaces, Documents” cover the three storage tiers; “Distill, Recall, Entities, Content” are the read/write tools. The “Status” page opens by default.
 
 | Page | Purpose | Call Boundary |
 |---|---|---|
-| Overview | Memory Space directory, activation switches, a live multi-space graph, and node inspection | Deterministic RPC reads; switches use write RPC |
+| Status | Diagnostics for the CLI, runtime hot memory, storage scope, Memory Spaces, Documents, lifecycle, and workers | Aggregated reads |
 | Runtime | Inspect and maintain USER / MEMORY hot memory and capacity | Regular mutations are deterministic; capacity maintenance may start a worker |
-| Documents | Search, read, create, update, and cold-archive Documents | Search/edit operations use the control layer; cold archiving starts a worker |
+| Memory Spaces | Memory Space directory, activation switches, a live multi-space graph, and node inspection | Deterministic RPC reads; switches use write RPC |
+| Documents | Search, read, create, update, and archive Documents | Search/edit operations use the control layer; archiving starts a worker |
+| Distill | Let a memory worker select scope, deduplicate, and write; supports advanced constraints | `spawn` semantic write |
 | Recall | Direct smart / keyword / basic retrieval; optional evidence-bounded Agent answers | Direct service reads; Agent answers use a worker with no tools |
 | Entities | Frequent entities and entity-related context | Direct service reads |
-| Distill | Let a memory worker select scope, deduplicate, and write; supports advanced constraints | `spawn` semantic write |
 | Content | Browse active Memory Spaces without recall side effects, copy or clone content, or soft-delete it | Graph reads; deletion uses a worker |
-| Status | Diagnostics for the CLI, storage scope, Memory Spaces, Documents, lifecycle, and workers | Aggregated reads |
 
 The graph synchronizes every 15 seconds and can also be refreshed manually. Natural layout, uniform reset, dragging, and keyboard adjustments affect only client-side presentation and do not modify Mnemon data.
 

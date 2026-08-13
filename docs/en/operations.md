@@ -35,7 +35,7 @@ The serial queue does not replace coordination across DSH processes. When multip
 - Lock acquisition waits up to 5 seconds by default; a lock is considered stale only after 30 seconds.
 - Writes use temporary files and rename.
 - Runtime uses a revision to prevent stale compaction from overwriting concurrent changes.
-- Document cold archiving uses a numeric revision to prevent moving active source text that has since been updated.
+- Document archiving uses a numeric revision to prevent moving active source text that has since been updated.
 - `sourcePaths` cannot escape the initiating session's workspace or point into the managed Documents directory.
 
 ### Web
