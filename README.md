@@ -2,19 +2,52 @@
 
 **简体中文** | [English](./README.en.md)
 
-> **LLM-supervised 4-graph persistent memory for AI agents.**
+> **[Mnemon](https://github.com/mnemon-dev/mnemon) 与 DSH 的深度集成，为 DSH 提供完备的记忆体能力。**
 
 `dsh-mnemon` 是 DeepSeek Harness（DSH）的本地 Mnemon 记忆插件。它把每轮可见的运行时热记忆、可直接阅读的项目档案（Documents）和按需召回的长期记忆体（Memory Spaces）组织成一个受监督、可检索、可维护的三层体系。
 
-Mnemon 继续负责本地 SQLite 存储、四类关系图和确定性检索；DSH 负责提示词接入、生命周期、子 Agent 编排、WebUI、命令与权限边界。当前用户指令和仓库事实始终高于历史记忆。
+插件把 Mnemon 的长期记忆体能力接入 DSH，并补充 Runtime Memory、Documents、生命周期、受限子 Agent、WebUI、命令和权限边界。当前用户指令和仓库事实始终高于历史记忆。
+
+> **What's more?** 更多 DSH Native 能力支持正在路上。**Memory to View.**
 
 ## 三层记忆
 
-| 层级 | 适合保存 | 如何进入上下文 |
-|---|---|---|
-| 运行时热记忆 | 用户偏好、稳定约定、环境事实、常用经验 | `USER.md` / `MEMORY.md` 每轮注入 |
-| 项目档案 | 设计、调查、流程、架构理由、交接材料 | 先对 active Documents 做确定性检索 |
-| 记忆体 | 跨会话的长期事实、决策、实体与关系 | 从已激活 Memory Spaces 按需召回 |
+| 层级 | 适合保存 | 如何记住 | 如何进入上下文 |
+|---|---|---|---|
+| 运行时热记忆 | 用户偏好、稳定约定、环境事实、常用经验 | 显式操作或合格的后台审查更新 `memories.json`，再生成 `USER.md` / `MEMORY.md` 投影 | 每轮直接注入 |
+| 项目档案 | 设计、调查、流程、架构理由、交接材料 | 创建或更新受管 Markdown 与 `index.json`；整理容量时先建立 Mnemon 冷引用，再迁移原文 | 先检索 active Documents，再按需读取全文 |
+| 记忆体 | 跨会话的长期事实、决策、实体与关系 | 受限 `spawn` worker 选择最窄空间并查重，通过 Mnemon `remember` / `link` 写入四图 | 只从已激活 Memory Spaces 按需召回 |
+
+```text
+当前任务产生的可复用信息
+          |
+          +-- 短小、稳定、每轮常用
+          |      主 Agent / 合格的 fork 审查
+          |                 |
+          |      add | replace | remove
+          |                 v
+          |      memories.json（权威源）
+          |                 |
+          |      USER.md + MEMORY.md ----------> 每轮 prompt
+          |
+          +-- 完整设计、调查、流程与交接
+          |      主 Agent / 合格的 fork 审查
+          |                 |
+          |          create | update
+          |                 v
+          |      index.json + active/*.md ------> 检索后按需全文
+          |                 |
+          |      Mnemon 冷引用 -> archived/*.md（容量整理）
+          |
+          `-- 跨会话事实、决策、实体与关系
+                    主 Agent
+                       |
+              spawn：选空间 / 查重 / 写入
+                       v
+              Mnemon CLI -> <space>/mnemon.db
+                       |
+              spawn：仅召回 active 空间 -------> 有界证据
+```
 
 [![Mnemon 记忆体总览：多记忆体目录、激活状态与实时关系图](./docs/zh-CN/assets/screenshots/overview-memory-graph.png)](./docs/zh-CN/project-overview.md)
 
@@ -22,6 +55,7 @@ Mnemon 继续负责本地 SQLite 存储、四类关系图和确定性检索；DS
 
 ## 核心能力
 
+- 主动记忆路由：内置 Prompt、生命周期提示与工具说明会启发 LLM 按需调用全部读写能力；用户明确要求回顾、记住、修改、忘记或建档时，会自动选择对应层级和操作。
 - 统一的 `global`、`workspace` 或 `custom` 存储范围，覆盖三层数据。
 - 多记忆体目录：每个记忆体拥有稳定 ID、名称、路由说明、激活状态和独立 `mnemon.db`。
 - 受限子 Agent：长期召回与语义写入使用隔离的 `spawn` worker；后台审查使用继承已完成 checkpoint 的 `fork` worker。
@@ -120,4 +154,4 @@ pnpm run verify
 
 ## License
 
-BSD-3-Clause。Mnemon 品牌与标志归上游项目所有；本项目仅用于说明集成关系。
+BSD-3-Clause。

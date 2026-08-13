@@ -6,7 +6,7 @@
 
 ## 建议阅读路径
 
-1. [项目介绍](./project-overview.md)：项目定位、三层模型、总体架构、监督边界与适用场景。
+1. [项目介绍](./project-overview.md)：项目定位、Mnemon 与 DSH 的集成边界、三层模型、总体架构与适用场景。
 2. [快速开始](./getting-started.md)：安装、首次配置与基本验证。
 3. [架构设计](./architecture.md)：DSH Host、Web Client、控制层、子 Agent 与 Mnemon CLI 的边界。
 4. [存储与三层记忆模型](./storage-model.md)：Runtime、Documents、Memory Spaces 的语义和目录结构。

@@ -1,7 +1,7 @@
 {
   "name": "dsh-mnemon",
   "version": "0.1.0",
-  "description": "Three-tier DSH memory for Mnemon: hot runtime context, managed project Documents, and subagent-supervised persistent 4-graph Memory Spaces.",
+  "description": "Deep integration of Mnemon and DeepSeek Harness, providing DSH with complete local-first three-tier memory: Runtime Memory, searchable Documents, and supervised Memory Spaces.",
   "keywords": [
     "deepseek-harness",
     "dsh",

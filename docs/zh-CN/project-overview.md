@@ -2,7 +2,9 @@
 
 **简体中文** | [English](../en/project-overview.md) | [文档中心](./README.md)
 
-`dsh-mnemon` 是 DeepSeek Harness（DSH）的本地 Mnemon 记忆插件。它不试图用一个数据库解决所有上下文问题，而是把“每轮必须知道的内容”“需要完整阅读的项目知识”和“跨会话按需召回的长期历史”放在三个职责清晰的层级中，再由 DSH 提供监督、路由、生命周期和用户界面。
+> **`dsh-mnemon` 是 [Mnemon](https://github.com/mnemon-dev/mnemon) 与 DSH 的深度集成插件，为 DSH 提供完备的记忆体能力。**
+
+它把“每轮必须知道的内容”“需要完整阅读的项目知识”和“跨会话按需召回的长期历史”分别放在三个职责清晰的层级中，再由 DSH 提供路由、生命周期、受限子 Agent 和用户界面。
 
 项目的核心目标是：让 Agent 获得长期连续性，同时保持当前任务优先、上下文紧凑、写入可审计、失败时不丢原始数据。
 
@@ -12,9 +14,9 @@
 
 ## 为什么需要它
 
-仅依赖当前对话上下文时，Agent 很难稳定延续用户偏好、项目约定和历史决策；把全部历史直接塞入 prompt，又会造成上下文膨胀、过期信息干扰和成本增加。单一长期数据库同样无法兼顾以下需求：
+仅依赖当前对话上下文时，Agent 很难稳定延续用户偏好、项目约定和历史决策；把全部历史直接塞入 prompt，又会造成上下文膨胀、过期信息干扰和成本增加。单一记忆层级同样无法兼顾以下需求：
 
-| 需求 | 直接使用单一存储的问题 | dsh-mnemon 的处理方式 |
+| 需求 | 单一记忆层级的局限 | dsh-mnemon 的处理方式 |
 |---|---|---|
 | 下一轮立即知道稳定偏好和约定 | 每次检索会增加延迟，且可能漏召回 | Runtime Memory 每轮注入紧凑投影 |
 | 快速阅读完整设计、调查或流程 | 拆成碎片后会失去叙事结构 | Documents 保留可检索的 Markdown 原文 |
@@ -22,17 +24,13 @@
 | 长文不常用但仍需追溯 | 永久保留在热层会持续占用容量 | 先建立长期冷引用，再迁移原文 |
 | 让模型判断价值又不把安全交给模型 | LLM 输出无法承担路径、并发和事务保证 | LLM 负责语义判断，Host 负责硬边界 |
 
-## 项目定位
+无论命中哪一层，当前用户指令、实时工具结果和仓库事实始终高于历史记忆。插件提供的是可复核证据与连续性，不允许旧内容覆盖当前事实。
 
-`dsh-mnemon` 是集成与监督层，不是新的记忆数据库：
-
-- **DSH** 提供主 Agent、生命周期事件、工具、命令、设置、Web 扩展点和 subagent provider；
-- **dsh-mnemon** 提供三层记忆控制面、路由提示、容量维护、并发屏障、权限边界和双语工作台；
-- **Mnemon CLI** 提供本地 SQLite Store、四类关系图、确定性检索、关系遍历和长期写入。
-
-当前用户指令、实时工具结果和仓库事实始终高于历史记忆。插件的职责是提供可复核证据，而不是让历史内容覆盖当前事实。
+为同时满足即时可见、完整阅读与长期召回三类需求，插件在 DSH 与本地存储之间建立了一套分层、受监督的记忆架构。
 
 ## 总体架构
+
+DSH 提供主 Agent 与扩展入口，`dsh-mnemon` 负责三层控制、路由和安全边界，[Mnemon](https://github.com/mnemon-dev/mnemon) 则为长期 Memory Spaces 提供记忆体能力。Runtime 投影与 Documents 原文由插件管理；长期记忆体和归档冷引用通过 Mnemon 保存和检索。
 
 [![dsh-mnemon 运行时架构：DSH Web、主 Agent、监督控制层与三层本地存储](./assets/project-architecture.svg)](./assets/project-architecture.svg)
 
@@ -41,9 +39,26 @@
 1. **交互边界**：用户通过 DSH 对话、`/mnemon` 命令、模型工具和 Web 工作台使用记忆能力。
 2. **监督边界**：生命周期只提供短提示；长期召回、语义写入和维护任务在受限子 Agent 中执行。
 3. **确定性控制边界**：Host 校验输入、路径、权限、revision、UTF-8 容量、锁、超时和进程参数。
-4. **本地数据边界**：Runtime、Documents 和 Memory Spaces 统一位于选定的 `storageRoot`，无需远程记忆服务。
+4. **本地数据边界**：Runtime、Documents 和 Memory Spaces 统一位于选定的 `storageRoot`；记忆持久化不依赖远程记忆服务。
 
 更细的模块分工、root/worker 双路径和 RPC 信任边界见[架构设计](./architecture.md)。
+
+架构边界决定谁可以执行操作，内置 Prompt 决定 LLM 何时主动使用能力，三层模型则决定信息以什么粒度保存、何时进入上下文。
+
+## 内置 Prompt 与主动记忆
+
+插件通过系统 Prompt、动态注入的最新 `USER.md` / `MEMORY.md`、生命周期提示与工具说明，把 Runtime Memory、Documents、Memory Spaces、关系和目录维护等全部读写能力呈现给 LLM，启发它在当前任务可能受益时主动调用相应能力，而不是等待用户逐个指定工具。
+
+“主动”不等于每轮无条件读写：当前任务始终优先；无需记忆时继续工作；任何写入都必须以有效工具回执为完成依据。当用户明确表达意图时，LLM 会按信息的粒度和目标选择不同路径：
+
+| 用户意图或任务信号 | 优先调用的能力 |
+|---|---|
+| 回顾过去、寻找历史依据、补齐精确旧细节 | 先检索 active Documents，再按需 `mnemon_recall` / `mnemon_related` |
+| 记住偏好、稳定约定或纠正旧信息 | `mnemon_runtime_memory` 的 `add` / `replace` / `remove` |
+| 保存完整设计、调查、流程或交接材料 | `mnemon_document_search` 后创建或更新受管 Document，必要时执行冷归档 |
+| 长期沉淀事实或决策、建立关系、忘记内容、调整记忆体 | 由受限 worker 查重和路由后调用 Memory Space 写入与维护能力 |
+
+即使用户没有逐字要求“记住”，明确且可复用的新事实也可以触发主动热记忆写入；当已完成工作达到活动评分门槛且主 Agent 保持空闲时，`fork` 后台审查还会保守检查热记忆与项目档案。完整提示策略、生命周期门槛和工具权限见[生命周期与核心流程](./workflows.md)与[接口参考](./interfaces.md)。
 
 ## 三层记忆模型
 
@@ -88,7 +103,11 @@ Mnemon 长期层保留 `temporal`、`semantic`、`causal` 和 `entity` 四类关
 
 完整目录、容量和权威源说明见[存储与三层记忆模型](./storage-model.md)。
 
-## 一次请求如何使用记忆
+三层并非彼此孤立的仓库，而是组成了一条由近到远、按需扩展的查询路径；信息也可以在明确写入或受控维护时，以适合其频率和粒度的形式沉淀下来。
+
+## 从当前请求到长期沉淀
+
+### 读取：由近到远，按需升级
 
 插件遵循由近到远的查询梯度：
 
@@ -106,7 +125,13 @@ Web 的直接检索走确定性服务；“Agent 查询”则先完成相同检�
 
 *“Agent 查询”把证据限定在本次命中范围内，同时保留来源记忆 ID 和原始召回条目，方便核验答案。*
 
-## 写入与维护如何被监督
+真实会话中，主 Agent 可以先检查记忆体目录和项目档案，再从已激活空间召回；若当前任务确需访问 inactive 空间，也可以在受控流程中临时激活，并在读取后恢复原状态。工具轨迹让检索次序、空间选择和来源都可观察。
+
+[![DSH 会话中的记忆召回：档案检索、多记忆体召回与状态恢复](./assets/screenshots/conversation-recall.png)](./assets/screenshots/conversation-recall.png)
+
+### 写入：语义判断与系统保证分离
+
+读取路径解决何时使用记忆；写入路径还需要约束谁来判断、谁来落盘，以及失败时如何保护原始数据。
 
 插件把语义判断与系统保证分开：
 
@@ -119,13 +144,15 @@ Web 的直接检索走确定性服务；“Agent 查询”则先完成相同检�
 | 判断复杂工作是否形成项目档案 | 文件锁、临时文件、rename 和 revision fence |
 | 在 persona 范围内保守维护 | UTF-8 容量计算和失败时保留原数据 |
 
-普通长期召回与语义写入优先使用名为 `spawn` 的隔离 provider；评分后台审查严格要求名为 `fork`、且 `inheritsParentContext=true` 的 provider。两类 provider 都必须支持 `outputSchema`、`toolFilter`、`persona` 和 `depthLimit`。
-
-后台审查只在已完成 turn 的确定性活动评分达到门槛、主 Agent 持续空闲后启动。新 turn 会取消等待或运行中的 review，并保留进程内活动水位。当前 review 只能维护热记忆和至多一份 Document，不直接使用长期 `remember` / `forget` 工具；“至多一次”是 persona 约束，不是 Host mutation counter。
+长期召回、语义写入与容量维护使用隔离的 `spawn` worker；后台审查只在已完成 turn 达到活动评分门槛、主 Agent 持续空闲后使用继承 checkpoint 的 `fork` worker。新 turn 会取消等待或运行中的审查。worker 的上下文、工具和输出均受限，Host 继续负责确定性校验；完整 provider 要求和审查边界见工作流文档。
 
 召回、写入、容量维护、冷归档和评分公式详见[生命周期与核心流程](./workflows.md)。
 
-## 端到端示例：保存一项架构决策
+当用户明确要求记住稳定内容时，主 Agent 会根据内容类型使用结构化工具逐条写入，Host 继续负责目标、容量和 revision 校验。最终回复说明真正写入的内容，而不是把内部推理当作持久化结果。
+
+[![DSH 会话中的记忆写回：结构化 Runtime Memory 工具调用与写入回执](./assets/screenshots/conversation-writeback.png)](./assets/screenshots/conversation-writeback.png)
+
+### 三层协同示例：保存一项架构决策
 
 假设一次复杂任务确认了“所有外部 CLI 必须使用参数数组启动并禁止 shell”，同时产出完整的威胁分析和迁移说明：
 
@@ -137,15 +164,7 @@ Web 的直接检索走确定性服务；“Agent 查询”则先完成相同检�
 
 同一知识因此可以按使用频率和叙事粒度在不同层保留互补表达，而不是把整份文档复制到每轮 prompt，或把一个短规则强行扩展成长记录。
 
-## 实际会话中的召回与写回
-
-用户要求回顾过去思考时，主 Agent 可以先检查记忆体目录和项目档案，再从已激活空间召回；若确需访问 inactive 空间，可在受控流程中临时激活并在读取后恢复原状态。工具轨迹让检索次序、空间选择和来源都可观察。
-
-[![DSH 会话中的记忆召回：档案检索、多记忆体召回与状态恢复](./assets/screenshots/conversation-recall.png)](./assets/screenshots/conversation-recall.png)
-
-当用户明确要求记住稳定内容时，主 Agent 使用结构化 Runtime Memory 工具逐条写入，Host 继续负责目标、容量和 revision 校验。最终回复会说明实际写入了什么，而不是把内部推理当作持久化结果。
-
-[![DSH 会话中的记忆写回：结构化 Runtime Memory 工具调用与写入回执](./assets/screenshots/conversation-writeback.png)](./assets/screenshots/conversation-writeback.png)
+这些流程既能由 Agent 工具主动完成，也可以在 DSH 的记忆体工作台中查看、核验和维护。
 
 ## 用户与集成入口
 
@@ -190,6 +209,8 @@ Web RPC 是 DSH Host 与插件客户端之间的内部桥：读通道要求 `tru
 
 ## 本地优先与可靠性设计
 
+在可见性之外，插件还通过确定性边界约束路径、容量、并发与失败恢复。
+
 - **本地数据**：SQLite、registry、Runtime JSON 和 Documents 都位于用户选定的根目录。
 - **无 shell 执行**：Mnemon CLI 使用 `spawn(command, args, { shell: false })`。
 - **有界进程**：单次调用有超时、取消和 2 MiB stdout + stderr 上限。
@@ -202,7 +223,7 @@ Web RPC 是 DSH Host 与插件客户端之间的内部桥：读通道要求 `tru
 
 “本地优先”描述的是持久化位置和 CLI 执行方式，并不保证被选中的内容永远不离开设备。若 DSH 的主模型或 subagent provider 运行在远端，相关 prompt、候选内容或召回证据仍可能发送给该 provider；数据处理边界取决于实际 DSH 模型配置。
 
-## 适用场景
+## 适用范围与版本状态
 
 `dsh-mnemon` 适合：
 
@@ -214,17 +235,7 @@ Web RPC 是 DSH Host 与插件客户端之间的内部桥：读通道要求 `tru
 
 它不适合把秘密、原始日志、短期进度或可从仓库直接重建的普通事实批量写入长期存储，也不应被当作事实源、权限系统、备份系统或主动通知守护进程。
 
-## 当前限制
-
-- `writeEnabled=false` 是功能只读，不是只读文件系统保证；读取仍可能修复投影、更新 Document LRU 或触发上游 migration。
-- `tabEnabled=false` 当前只停止 Host Mnemon 数据 RPC，客户端 Tab 仍可能出现。
-- 后台审查水位只保存在 Host 进程内，重启后不会恢复未处理活动。
-- `global` / `custom` 范围下 Documents 可能跨工作区共享，尚无独立 workspace ownership。
-- 冷引用提示中的计划路径在非 workspace scope 下可能与真实绝对位置不同。
-- 项目尚未发布正式的 DSH、Mnemon、Node 和数据格式兼容矩阵。
-- 真实 DSH + Mnemon WebUI E2E 仍以发布前人工验证为主。
-
-这些缺口及优先级记录在 [Roadmap](./roadmap.md)。
+当前版本处于早期 Beta 阶段，仍在持续优化和迭代中；部分后续能力与演进计划见 [Roadmap](./roadmap.md)。
 
 ## 继续阅读
 

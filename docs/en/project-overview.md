@@ -2,7 +2,9 @@
 
 [简体中文](../zh-CN/project-overview.md) | **English** | [Documentation Center](./README.md)
 
-`dsh-mnemon` is a local Mnemon memory plugin for DeepSeek Harness (DSH). Instead of forcing every context problem into one database, it separates what must be visible every turn, project knowledge that should remain readable as a whole, and long-term history recalled across sessions. DSH then supplies supervision, routing, lifecycle integration, and the user interface.
+> **`dsh-mnemon` deeply integrates [Mnemon](https://github.com/mnemon-dev/mnemon) with DSH, giving DSH comprehensive memory capabilities.**
+
+It separates what must be visible every turn, project knowledge that should remain readable as a whole, and long-term history recalled across sessions into three clear tiers. DSH then supplies routing, lifecycle integration, bounded subagents, and the user interface.
 
 The central goal is to give an Agent long-term continuity while keeping the current task authoritative, context compact, writes auditable, and original data protected when maintenance fails.
 
@@ -12,9 +14,9 @@ The central goal is to give an Agent long-term continuity while keeping the curr
 
 ## Why It Exists
 
-With only the current conversation, an Agent cannot reliably carry forward user preferences, project conventions, and historical decisions. Injecting the entire history into every prompt causes context growth, stale-information interference, and additional cost. A single long-term database also cannot satisfy all of these needs well:
+With only the current conversation, an Agent cannot reliably carry forward user preferences, project conventions, and historical decisions. Injecting the entire history into every prompt causes context growth, stale-information interference, and additional cost. One memory tier also cannot satisfy all of these needs well:
 
-| Need | Problem with a single store | dsh-mnemon approach |
+| Need | Limit of one memory tier | dsh-mnemon approach |
 |---|---|---|
 | Make stable preferences and conventions available next turn | Retrieval adds latency and can miss | Runtime Memory injects compact projections every turn |
 | Read a complete design, investigation, or procedure quickly | Fragmentation destroys narrative structure | Documents preserve searchable Markdown originals |
@@ -22,17 +24,13 @@ With only the current conversation, an Agent cannot reliably carry forward user 
 | Keep infrequently used long-form material traceable | Keeping it hot consumes capacity forever | Create a durable cold reference before moving the original |
 | Let a model judge value without delegating system safety | LLM output cannot guarantee paths, concurrency, or transactions | The LLM owns semantic judgment; the Host owns hard boundaries |
 
-## Positioning
+Whichever tier produces a hit, current user instructions, live tool results, and repository facts always take precedence over historical memory. The plugin supplies reviewable evidence and continuity; it does not let old content override current facts.
 
-`dsh-mnemon` is an integration and supervision layer, not a new memory database:
-
-- **DSH** provides the root Agent, lifecycle events, tools, commands, settings, Web extension points, and subagent providers.
-- **dsh-mnemon** provides the three-tier control plane, routing guidance, capacity maintenance, concurrency barriers, permission boundaries, and bilingual workspace.
-- **The Mnemon CLI** provides local SQLite Stores, four relationship graphs, deterministic retrieval, relationship traversal, and durable writes.
-
-Current user instructions, live tool results, and repository facts always take precedence over historical memory. The plugin supplies reviewable evidence; it does not let old content override current facts.
+To satisfy immediate visibility, complete reading, and durable recall together, the plugin establishes a layered, supervised memory architecture between DSH and local persistence.
 
 ## Architecture at a Glance
+
+DSH provides the root Agent and extension surfaces, `dsh-mnemon` owns three-tier control, routing, and safety boundaries, and [Mnemon](https://github.com/mnemon-dev/mnemon) supplies the Memory Space capabilities for the durable tier. The plugin manages Runtime projections and Document originals; durable Memory Spaces and cold archive references are stored and retrieved through Mnemon.
 
 [![dsh-mnemon runtime architecture connecting DSH Web, the root Agent, the supervised control layer, and three local storage tiers](./assets/project-architecture.svg)](./assets/project-architecture.svg)
 
@@ -41,9 +39,26 @@ The architecture has four useful boundaries:
 1. **Interaction boundary**: users reach memory through DSH conversations, `/mnemon` commands, model tools, and the Web workspace.
 2. **Supervision boundary**: lifecycle hooks provide only short cues; durable recall, semantic writes, and maintenance run in bounded subagents.
 3. **Deterministic control boundary**: the Host validates inputs, paths, permissions, revisions, UTF-8 capacity, locks, timeouts, and process arguments.
-4. **Local data boundary**: Runtime, Documents, and Memory Spaces share the selected `storageRoot`; no remote memory service is required.
+4. **Local data boundary**: Runtime, Documents, and Memory Spaces share the selected `storageRoot`; memory persistence does not depend on a remote memory service.
 
 See [Architecture](./architecture.md) for detailed module ownership, root/worker dual paths, and RPC trust boundaries.
+
+Architecture boundaries determine who may execute an operation, the built-in prompt determines when the LLM should use a capability proactively, and the three-tier model determines the granularity of retained information and when it reaches context.
+
+## Built-in Prompt and Proactive Memory
+
+Through the system prompt, dynamically injected `USER.md` / `MEMORY.md`, lifecycle cues, and tool descriptions, the plugin presents every read and write capability across Runtime Memory, Documents, Memory Spaces, relationships, and directory maintenance. This encourages the LLM to invoke the relevant capability whenever the current task may benefit instead of waiting for the user to name individual tools.
+
+“Proactive” does not mean unconditional reads and writes on every turn. The current task remains authoritative, work continues without a memory call when none is useful, and a write is complete only with a valid tool receipt. When the user states an explicit intent, the LLM selects a path by information granularity and goal:
+
+| User intent or task signal | Preferred capability |
+|---|---|
+| Revisit earlier work, find historical evidence, or recover an exact old detail | Search active Documents first, then use `mnemon_recall` / `mnemon_related` when needed |
+| Remember a preference or stable convention, or correct old information | `mnemon_runtime_memory` with `add` / `replace` / `remove` |
+| Preserve a complete design, investigation, procedure, or handoff | Search Documents, then create or update a managed Document; cold-archive when needed |
+| Retain durable facts or decisions, create relations, forget content, or adjust a Memory Space | Let a bounded worker deduplicate and route before using Memory Space write or maintenance capabilities |
+
+Even without the literal words “remember this,” an explicit new reusable fact can justify proactive hot-memory writeback. After completed work reaches the activity-score gate and the root Agent remains idle, a `fork` background review can also conservatively inspect hot memory and project Documents. See [Lifecycle and Core Workflows](./workflows.md) and the [Interface Reference](./interfaces.md) for the complete prompting strategy, gates, and tool permissions.
 
 ## The Three-Tier Memory Model
 
@@ -88,7 +103,11 @@ The long-term layer retains `temporal`, `semantic`, `causal`, and `entity` relat
 
 See [Storage and the Three-Tier Memory Model](./storage-model.md) for directory layouts, capacity details, and data authorities.
 
-## How One Request Uses Memory
+The tiers are not isolated repositories. Together they form a near-to-far lookup path that expands only when needed, while explicit writes and controlled maintenance retain information at the appropriate frequency and granularity.
+
+## From the Current Request to Durable Retention
+
+### Read: Start Near and Escalate Only When Needed
 
 The plugin follows a near-to-far lookup gradient:
 
@@ -106,7 +125,13 @@ Direct Web search uses the deterministic service. “Agent search” performs th
 
 *Agent search restricts evidence to the current hits while retaining source memory IDs and raw recall entries so the answer remains reviewable.*
 
-## How Writes and Maintenance Are Supervised
+In a real conversation, the root Agent can inspect the Memory Space catalog and project Documents before recalling from active spaces. If the current task genuinely needs an inactive space, a controlled workflow can activate it temporarily and restore its prior state after reading. The tool trace keeps lookup order, space selection, and provenance observable.
+
+[![Memory recall in a DSH conversation with Document search, multi-space recall, and state restoration](../zh-CN/assets/screenshots/conversation-recall.png)](../zh-CN/assets/screenshots/conversation-recall.png)
+
+### Write: Separate Semantic Judgment from System Guarantees
+
+The read path determines when memory is useful. The write path must also define who judges value, who persists data, and how original data is protected when an operation fails.
 
 The plugin separates semantic judgment from system guarantees:
 
@@ -119,13 +144,15 @@ The plugin separates semantic judgment from system guarantees:
 | Decide whether complex work produced a reusable Document | File locks, temporary files, rename, and revision fences |
 | Perform conservative maintenance within its persona | UTF-8 capacity accounting and preservation on failure |
 
-Regular durable recall and semantic writes prefer an isolated provider named `spawn`. Score-based background review strictly requires a provider named `fork` with `inheritsParentContext=true`. Both paths require `outputSchema`, `toolFilter`, `persona`, and `depthLimit` support.
-
-Background review starts only after deterministic activity scoring over completed turns reaches its threshold and the root Agent remains idle. A new turn cancels a pending or running review while retaining the in-process activity watermark. The current review can maintain hot memory and at most one Document; it cannot directly call durable `remember` / `forget` tools. “At most one” is a persona constraint, not a Host-side mutation counter.
+Durable recall, semantic writes, and capacity maintenance use isolated `spawn` workers. Background review uses a checkpoint-inheriting `fork` worker only after a completed turn crosses the activity-score gate and the root Agent remains idle. A new turn cancels pending or active review. Worker context, tools, and output remain bounded while the Host retains deterministic validation; see the workflow guide for complete provider requirements and review boundaries.
 
 See [Lifecycle and Core Workflows](./workflows.md) for recall, writes, capacity maintenance, cold archiving, and the scoring formula.
 
-## End-to-End Example: Retaining an Architecture Decision
+When the user explicitly asks to retain stable information, the root Agent selects structured tools by content type and writes individual items while the Host continues to validate the target, capacity, and revision. The final response reports what was actually stored instead of treating internal reasoning as persistence.
+
+[![Memory writeback in a DSH conversation with structured Runtime Memory tool calls and receipts](../zh-CN/assets/screenshots/conversation-writeback.png)](../zh-CN/assets/screenshots/conversation-writeback.png)
+
+### Three-Tier Example: Retaining an Architecture Decision
 
 Suppose a substantial task establishes that “every external CLI must be launched with an argument array and without a shell,” and also produces a complete threat analysis and migration guide:
 
@@ -137,15 +164,7 @@ Suppose a substantial task establishes that “every external CLI must be launch
 
 The same knowledge can therefore retain complementary expressions at different frequencies and narrative granularity, without copying the entire Document into every prompt or stretching one short rule into a long record.
 
-## Recall and Writeback in a Real Conversation
-
-When a user asks to revisit earlier thinking, the root Agent can inspect the Memory Space catalog and project Documents before recalling from active spaces. If an inactive space is genuinely needed, a controlled workflow can activate it temporarily and restore its prior state after reading. The tool trace makes lookup order, space selection, and provenance observable.
-
-[![Memory recall in a DSH conversation with Document search, multi-space recall, and state restoration](../zh-CN/assets/screenshots/conversation-recall.png)](../zh-CN/assets/screenshots/conversation-recall.png)
-
-When a user explicitly asks to retain stable information, the root Agent writes individual items through structured Runtime Memory tools while the Host continues to validate the target, capacity, and revision. The final response reports what was actually stored instead of treating internal reasoning as persistence.
-
-[![Memory writeback in a DSH conversation with structured Runtime Memory tool calls and receipts](../zh-CN/assets/screenshots/conversation-writeback.png)](../zh-CN/assets/screenshots/conversation-writeback.png)
+These workflows can be initiated proactively through Agent tools and can also be inspected, verified, and maintained in DSH's Memory workspace.
 
 ## User and Integration Surfaces
 
@@ -190,6 +209,8 @@ Web RPC is an internal bridge between the DSH Host and the plugin client: reads 
 
 ## Local-First Reliability Design
 
+Beyond visibility, deterministic boundaries constrain paths, capacity, concurrency, and failure recovery.
+
 - **Local data**: SQLite, the registry, Runtime JSON, and Documents live under the user-selected root.
 - **No-shell execution**: the Mnemon CLI uses `spawn(command, args, { shell: false })`.
 - **Bounded processes**: each call has a timeout, cancellation, and a 2 MiB combined stdout + stderr limit.
@@ -202,7 +223,7 @@ These boundaries are not a secret scanner or a complete backup system. There is 
 
 “Local-first” describes persistence location and CLI execution. It does not guarantee that selected content never leaves the device. If the DSH root model or subagent provider runs remotely, relevant prompts, candidates, or recalled evidence may still be sent to that provider; the actual data-processing boundary depends on the configured DSH model providers.
 
-## Good Fits
+## Scope and Version Status
 
 `dsh-mnemon` is useful when:
 
@@ -214,17 +235,7 @@ These boundaries are not a secret scanner or a complete backup system. There is 
 
 It is not intended for bulk persistence of secrets, raw logs, short-lived progress, or ordinary facts that can be reconstructed from the repository. It should not be treated as the source of truth, an authorization system, a backup system, or a proactive notification daemon.
 
-## Current Limitations
-
-- `writeEnabled=false` is feature-level read-only behavior, not a read-only-filesystem guarantee; reads may still repair projections, update Document LRU metadata, or trigger upstream migrations.
-- `tabEnabled=false` currently stops Host Mnemon data RPC only; the client Tab may still appear.
-- Background-review watermarks exist only in Host process memory and do not survive restart.
-- Under `global` / `custom`, Documents may be shared across workspaces without separate workspace ownership.
-- The planned cold-reference path in the worker prompt can differ from the actual absolute location outside workspace scope.
-- The project does not yet publish a formal compatibility matrix for DSH, Mnemon, Node, and persistent data formats.
-- Real DSH + Mnemon WebUI E2E remains primarily a manual pre-release verification process.
-
-These gaps and priorities are tracked in the [Roadmap](./roadmap.md).
+The current release is an early Beta and continues to evolve. See the [Roadmap](./roadmap.md) for selected planned capabilities and iteration priorities.
 
 ## Continue Reading
 

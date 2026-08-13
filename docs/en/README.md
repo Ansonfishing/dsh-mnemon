@@ -6,7 +6,7 @@ These documents use the current implementation as the source of truth. The root 
 
 ## Recommended Reading Path
 
-1. [Project Overview](./project-overview.md): positioning, the three-tier model, system architecture, supervision boundaries, and good fits.
+1. [Project Overview](./project-overview.md): project positioning, the Mnemon-to-DSH integration boundary, the three-tier model, system architecture, and good fits.
 2. [Getting Started](./getting-started.md): installation, initial configuration, and basic verification.
 3. [Architecture](./architecture.md): boundaries between the DSH Host, Web Client, control layer, subagents, and the Mnemon CLI.
 4. [Storage and the Three-Layer Memory Model](./storage-model.md): semantics and directory layout of Runtime Memory, Documents, and Memory Spaces.

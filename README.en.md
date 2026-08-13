@@ -2,19 +2,52 @@
 
 [简体中文](./README.md) | **English**
 
-> **LLM-supervised 4-graph persistent memory for AI agents.**
+> **A deep integration of [Mnemon](https://github.com/mnemon-dev/mnemon) and DSH that gives DSH comprehensive memory capabilities.**
 
 `dsh-mnemon` is a local Mnemon memory plugin for DeepSeek Harness (DSH). It organizes always-available runtime memory, readable project Documents, and on-demand long-term Memory Spaces into a supervised, searchable, maintainable three-tier system.
 
-Mnemon remains responsible for local SQLite storage, four relationship graphs, and deterministic retrieval. DSH owns prompt integration, lifecycle hooks, subagent orchestration, the WebUI, commands, and permission boundaries. Current user instructions and repository facts always take precedence over historical memory.
+The plugin brings Mnemon's durable Memory Space capabilities into DSH and adds Runtime Memory, Documents, lifecycle integration, bounded subagents, the WebUI, commands, and permission boundaries. Current user instructions and repository facts always take precedence over historical memory.
+
+> **What's more?** More DSH-native capabilities are on the way. **Memory to View.**
 
 ## Three memory tiers
 
-| Tier | What belongs here | How it reaches context |
-|---|---|---|
-| Runtime Memory | User preferences, stable conventions, environment facts, frequently used lessons | `USER.md` / `MEMORY.md` are injected every turn |
-| Project Documents | Designs, investigations, procedures, rationale, and handoffs | Deterministic search over active Documents first |
-| Memory Spaces | Cross-session facts, decisions, entities, and relationships | Recalled on demand from active Memory Spaces |
+| Tier | What belongs here | How it is retained | How it reaches context |
+|---|---|---|---|
+| Runtime Memory | User preferences, stable conventions, environment facts, frequently used lessons | Explicit operations or an eligible background review update `memories.json`, then generate `USER.md` / `MEMORY.md` projections | Injected directly every turn |
+| Project Documents | Designs, investigations, procedures, rationale, and handoffs | Create or update managed Markdown and `index.json`; capacity maintenance creates a Mnemon cold reference before moving the original | Search active Documents first, then read full text on demand |
+| Memory Spaces | Cross-session facts, decisions, entities, and relationships | A bounded `spawn` worker selects the narrowest space, checks duplicates, and writes four-graph memory through Mnemon `remember` / `link` | Recalled on demand from active Memory Spaces only |
+
+```text
+Reusable knowledge produced by current work
+          |
+          +-- Compact, stable, useful every turn
+          |      root Agent / eligible fork review
+          |                 |
+          |      add | replace | remove
+          |                 v
+          |      memories.json (source of truth)
+          |                 |
+          |      USER.md + MEMORY.md ----------> every prompt
+          |
+          +-- Complete designs, research, procedures, handoffs
+          |      root Agent / eligible fork review
+          |                 |
+          |          create | update
+          |                 v
+          |      index.json + active/*.md ------> full text after search
+          |                 |
+          |      Mnemon cold reference -> archived/*.md (maintenance)
+          |
+          `-- Cross-session facts, decisions, entities, relations
+                    root Agent
+                       |
+              spawn: route / deduplicate / write
+                       v
+              Mnemon CLI -> <space>/mnemon.db
+                       |
+              spawn: recall active spaces only -> bounded evidence
+```
 
 [![Mnemon Memory overview with the multi-space catalog, activation state, and live relationship graph](./docs/zh-CN/assets/screenshots/overview-memory-graph.png)](./docs/en/project-overview.md)
 
@@ -22,6 +55,7 @@ Mnemon remains responsible for local SQLite storage, four relationship graphs, a
 
 ## Highlights
 
+- Proactive memory routing: built-in prompts, lifecycle cues, and tool descriptions encourage the LLM to use every read/write surface when useful; explicit requests to revisit, retain, correct, forget, or document are routed to the matching tier and operation.
 - One `global`, `workspace`, or `custom` storage scope for all three tiers.
 - A Memory Space directory in which each space has a stable ID, name, routing description, activation state, and its own `mnemon.db`.
 - Bounded subagents: isolated `spawn` workers handle durable recall and semantic writes; a `fork` worker inherits a completed checkpoint for background review.
@@ -120,4 +154,4 @@ pnpm run verify
 
 ## License
 
-BSD-3-Clause. The Mnemon name and logo belong to the upstream project and are used only to identify the integration.
+BSD-3-Clause.
