@@ -333,6 +333,20 @@ describe('MnemonView', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
+  it('resets the shared canvas scroll position when switching pages', async () => {
+    const { connection } = createConnection()
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+
+    await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
+    const canvas = screen.getByTestId('mnemon-canvas')
+    canvas.scrollTop = 900
+    fireEvent.click(screen.getByRole('button', { name: /运行时 热记忆与上下文/ }))
+    expect(canvas.scrollTop).toBe(0)
+    canvas.scrollTop = 900
+    fireEvent.click(screen.getByRole('button', { name: /记忆体 记忆体目录与实时图谱/ }))
+    expect(canvas.scrollTop).toBe(0)
+  })
+
   it('progressively renders long content lists instead of mounting every card', async () => {
     const { connection } = createConnection({ listCount: 60 })
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)

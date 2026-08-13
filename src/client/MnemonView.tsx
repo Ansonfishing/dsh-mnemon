@@ -1512,6 +1512,25 @@ function MnemonWorkspace({ connection, sessionId }: MnemonViewProps): JSX.Elemen
   const t = useT()
   const client = useMemo(() => new MnemonClient(connection, sessionId), [connection, sessionId])
   const [page, setPage] = useState<Page>('status')
+  const canvasRef = useRef<HTMLElement | null>(null)
+
+  /** Pages share one scroll container; drop any carried-over offset so each tab opens at its top. */
+  const resetViewportScroll = useCallback(() => {
+    const canvas = canvasRef.current
+    if (canvas !== null) canvas.scrollTop = 0
+    let node: HTMLElement | null = canvas?.parentElement ?? null
+    while (node !== null && node !== document.body && node !== document.documentElement) {
+      if (node.scrollTop > 0) node.scrollTop = 0
+      node = node.parentElement
+    }
+  }, [])
+
+  useEffect(() => { resetViewportScroll() }, [page, resetViewportScroll])
+  useEffect(() => {
+    // DSH's resident scrollport may restore a stale offset when this view remounts; clear it after layout.
+    const frame = window.requestAnimationFrame(() => resetViewportScroll())
+    return () => window.cancelAnimationFrame(frame)
+  }, [resetViewportScroll])
   const [status, setStatus] = useState<StatusView | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
   const [statusError, setStatusError] = useState<string | null>(null)
@@ -1546,7 +1565,7 @@ function MnemonWorkspace({ connection, sessionId }: MnemonViewProps): JSX.Elemen
       {(statusError !== null || status?.healthy === false) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
       <div className={css.workspace}>
         <div className={css.topNavigation}><nav className={css.nav} aria-label={t('nav.aria')}>{PAGE_NAV.map((group, groupIndex) => <Fragment key={group.aria}><div className={css.navGroup} role="group" aria-label={t(group.aria)}>{group.entries.map(item => <button key={item.id} type="button" aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><span className={css.navGlyph} aria-hidden="true">{item.glyph}</span><span><strong>{t(item.label)}</strong><small>{t(item.detail)}</small></span></button>)}</div>{groupIndex < PAGE_NAV.length - 1 && <span className={css.navGroupDivider} aria-hidden="true" />}</Fragment>)}</nav><div className={css.spaceSummary}><span>{t('sidebar.activeSpaces')}</span><code>{catalogKnown ? `${activeBodies} / ${memoryBodies.length}` : '— / —'}</code><small>{writeEnabled ? t('common.agentSupervised') : t('common.readOnly')}</small></div></div>
-        <section className={css.canvas}>
+        <section className={css.canvas} ref={canvasRef} data-testid="mnemon-canvas">
           {page === 'overview' && <OverviewPage client={client} revision={revision} writeEnabled={writeEnabled} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onExplore={explore} />}
           {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}
           {page === 'documents' && <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} />}
