@@ -116,8 +116,9 @@ function isImportance(value: unknown): value is RuntimeMemoryImportance {
 }
 
 function normalizeContent(value: string | undefined, field: string): string {
-  const content = value?.trim() ?? ''
+  const content = value?.trim().replace(/\s+/gu, ' ') ?? ''
   if (content === '') throw new Error(`${field} is required`)
+  if (content.includes('§')) throw new Error(`${field} must not contain the reserved § entry delimiter`)
   const bytes = Buffer.byteLength(content, 'utf8')
   if (bytes > MAX_ENTRY_BYTES) throw new Error(`${field} is too large (${bytes} bytes; max ${MAX_ENTRY_BYTES})`)
   return content
@@ -126,8 +127,8 @@ function normalizeContent(value: string | undefined, field: string): string {
 function parseEntry(value: unknown): RuntimeMemoryEntry | undefined {
   if (!isRecord(value) || typeof value.content !== 'string' || !isTarget(value.target) || !isImportance(value.importance)) return undefined
   if (typeof value.created_at !== 'string' || typeof value.updated_at !== 'string') return undefined
-  const content = value.content.trim()
-  if (content === '') return undefined
+  const content = value.content.trim().replace(/\s+/gu, ' ')
+  if (content === '' || content.includes('§')) return undefined
   return {
     content,
     created_at: value.created_at,

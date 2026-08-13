@@ -55,6 +55,17 @@ describe('RuntimeMemoryController', () => {
     expect(existsSync(join(root, '.memories.lock'))).toBe(false)
   })
 
+  it('projects one-line entries separated by a standalone section sign', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'memory', content: '第一条\n  测试' })
+    await controller.mutate({ action: 'add', target: 'memory', content: '第二条\t测试' })
+
+    expect(controller.snapshot().entries.map(entry => entry.content)).toEqual(['第一条 测试', '第二条 测试'])
+    expect(readFileSync(controller.memoryPath, 'utf8')).toBe('第一条 测试\n§\n第二条 测试\n')
+    expect(RUNTIME_ENTRY_DELIMITER).toBe('\n§\n')
+    await expect(controller.mutate({ action: 'add', target: 'memory', content: '不能包含 § 分隔符' })).rejects.toThrow('reserved § entry delimiter')
+  })
+
   it('supports unique-substring replace and remove while preserving creation time', async () => {
     const { controller } = fixture()
     await controller.mutate({ action: 'add', target: 'memory', content: 'Use TypeScript for plugin code' })

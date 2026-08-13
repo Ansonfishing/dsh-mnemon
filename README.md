@@ -19,6 +19,8 @@ DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https:/
 
 `memories.json` 的每条 entry 包含 `content`、`created_at`、`updated_at`、`target` 和 `importance`。`target=user` 用于身份、角色、习惯与表达偏好；`target=memory` 用于项目、环境、决策、约定和可复用经验。`importance` 为 `critical` / `normal` / `low`。
 
+两个 Markdown 投影与 QoderWork 的纯文本格式一致：每条记忆归一为单行，条目之间由单独占一行的 `§`（U+00A7）分隔，例如 `第一条\n§\n第二条\n`。`§` 是保留字符，不能出现在条目正文中。
+
 - **单一事实源**：LLM、WebUI 和 RPC 都不能直接维护 Markdown；控制层在一次受锁保护的事务中原子写 JSON 并重新投影两个 Markdown。
 - **并发控制**：进程内操作按队列串行，跨实例使用文件锁；容量迁移期间使用快照 revision，过期压缩结果绝不会覆盖并发写入。
 - **上下文接入**：`mnemon:runtime-memory` system prompt section 在每次 prompt 组装时读取受控投影，采用从 QoderWork memory protocol 裁剪后的保存、跳过、分类和重要性规则。
