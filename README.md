@@ -12,9 +12,9 @@
 
 ## 实机演示
 
-[![dsh-mnemon 记忆系统实机演示：状态、运行时记忆、多记忆体图谱、档案、检索、实体与监督写回](./docs/assets/dsh-mnemon-memory-system-demo-poster.jpg)](./docs/assets/dsh-mnemon-memory-system-demo.mp4)
+![dsh-mnemon 记忆系统实机演示：状态、运行时记忆、多记忆体图谱、档案、检索、实体与监督写回](./docs/assets/dsh-mnemon-memory-system-demo.gif)
 
-**▶ [播放 77 秒完整演示](./docs/assets/dsh-mnemon-memory-system-demo.mp4)** — 实际操作状态、运行时记忆、多记忆体实时图谱、项目档案、图增强检索、实体聚合、监督写回与内容维护。
+**README 内直接播放的 77 秒完整演示** — 实际操作状态、运行时记忆、多记忆体实时图谱、项目档案、图增强检索、实体聚合、监督写回与内容维护。也可[下载高清 MP4](./docs/assets/dsh-mnemon-memory-system-demo.mp4)。
 
 ## 三层记忆
 
