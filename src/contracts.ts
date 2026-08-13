@@ -117,7 +117,7 @@ export interface HostAgent {
   status: 'idle' | 'running'
   options?: { provider?: string; model?: string; maxTokens?: number }
   session: {
-    header?: { origin?: 'subagent'; delegationDepth?: number }
+    header?: { origin?: 'subagent'; delegationDepth?: number; cwd?: string }
     events: readonly HostSessionEvent[]
   }
   ctx: HostAgentContext
@@ -139,6 +139,7 @@ export interface HostSubagentResult {
 
 export interface HostSubagentRun {
   id: string
+  localAgent?: HostAgent
   result: Promise<HostSubagentResult>
   dispose(): Promise<void>
 }
