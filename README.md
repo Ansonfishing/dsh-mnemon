@@ -25,7 +25,7 @@ DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https:/
 - **并发控制**：进程内操作按队列串行，跨实例使用文件锁；容量迁移期间使用快照 revision，过期压缩结果绝不会覆盖并发写入。
 - **上下文接入**：`mnemon:runtime-memory` system prompt section 在每次 prompt 组装时读取受控投影，采用从 QoderWork memory protocol 裁剪后的保存、跳过、分类和重要性规则。
 - **容量边界**：`USER.md` 为 4 KiB，`MEMORY.md` 为 10 KiB，均按 UTF-8 字节计算。
-- **先归档后压缩**：新增内容触发容量上限时，插件先启动隔离子 Agent，把现有热记忆写入或查重确认到 Mnemon 记忆体；全部归档成功后，子 Agent 给出语义压缩候选，Host 再按重要性与 UTF-8 安全水位确定性装箱并重试原写入。模型不承担精确字节计算；归档失败或 revision 冲突时，原热记忆保持不变。
+- **分层容量整理**：`USER.md` 只在本地由无工具权限的隔离子 Agent 保守合并，Host 要求每个原条目恰好被一个压缩候选覆盖，用户偏好不会进入 Mnemon 记忆体；`MEMORY.md` 才执行“先归档后压缩”，并可把不同语义簇路由到多个既有或新建记忆体。全部归档成功后，Host 再按重要性与 UTF-8 安全水位确定性装箱并重试原写入。模型不承担精确字节计算；归档失败、覆盖不完整或 revision 冲突时，原热记忆保持不变。
 
 ## 记忆体模型
 
@@ -45,7 +45,7 @@ DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https:/
 
 - **读边界**：语义召回只能读取已激活记忆体；子 Agent 根据名称和 description 选择一个或多个目标，也可以有意执行跨记忆体召回。
 - **写边界**：写入可选择任意记忆体；向未激活记忆体写入后会自动激活。
-- **新建**：只有稳定知识形成独立、反复使用且现有目录无法容纳的范围时，写入子 Agent 才应创建新记忆体。
+- **新建**：只有稳定知识形成独立、反复使用且现有目录无法容纳的范围时，写入子 Agent 才应创建新记忆体；子 Agent 提供有主题意义的名称和精确路由描述，Host 生成不可由模型指定的 UUID。
 - **合并**：子 Agent 可将来源记忆体导入目标记忆体；这是非破坏性合并，来源 `.db` 不会被删除。
 - **兼容迁移**：插件会发现既有 `<dataDir>/data/<store>/mnemon.db` 并登记到目录，不移动或重建数据库。
 - **人工控制**：“记忆体”总览提供激活开关和空白记忆体创建入口；开关只改变读取范围。
@@ -58,7 +58,8 @@ DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https:/
 | 每轮开始 | `agent/pre-step` | 只注入一句按需 recall / runtime-memory 提醒，不读取目录、不执行记忆工具 | 主模型自行判断是否发起召回或维护热记忆 |
 | 显式工具/命令 | `ctx.subagents.start('spawn', …)` | 在受限 Mnemon 工具集合内完成一次语义操作 | 结构化召回结果或写入回执 |
 | turn 结束并持续空闲 | `agent/turn-stopping` → debounce → `fork` | 继承截至最新 `turn/end` 的完整主 Agent checkpoint，保守判断是否需要一次 add / replace / remove 热记忆 | 不注入复核推理，不唤醒主 Agent；新 turn 会取消复核 |
-| 热记忆达到容量 | 控制层 → `spawn` → revision barrier | 先向 Mnemon 记忆体归档，再返回压缩后的热记忆 | 迁移回执；失败时不改本地热记忆 |
+| `USER.md` 达到容量 | 控制层 → 无工具 `spawn` → source coverage / revision barrier | 只在本地合并用户画像，不写入记忆体 | 本地整理回执；覆盖不完整时不改数据 |
+| `MEMORY.md` 达到容量 | 控制层 → 受限 `spawn` → revision barrier | 按语义簇向一个或多个 Mnemon 记忆体归档，再返回压缩候选 | 归档回执；失败时不改本地热记忆 |
 | WebUI 沉淀 | 写 RPC → `spawn` | 选择记忆体、查重、提炼、写入，必要时创建或合并 | 可审计的 action、目标记忆体和摘要 |
 
 `spawn` 子 Agent 使用全新的隔离上下文；空闲审查则要求 DSH 的 `fork` provider，并只继承已经完成的 turn checkpoint。两者都通过 persona、工具白名单、结构化输出和 `maxDepth: 1` 限制职责。根 Agent 调用 `mnemon_recall` / `mnemon_remember` 等工具时会先进入子 Agent；同名工具在记忆子 Agent 内才直接访问 MnemonService，因此不会递归委派。
@@ -70,7 +71,7 @@ Prime 只初始化路由状态；pre-step 提示保持为一句短语，不注�
 ### 模型工具
 
 - `mnemon_memory_bodies`：读取全局记忆体目录、激活状态和统计；
-- `mnemon_runtime_memory`：维护每轮注入的 USER / MEMORY 热记忆；支持 `add`、`replace`、`remove`，容量压力时自动先归档再压缩；
+- `mnemon_runtime_memory`：维护每轮注入的 USER / MEMORY 热记忆；支持 `add`、`replace`、`remove`；USER 容量压力只做本地画像整理，MEMORY 容量压力才归档到一个或多个记忆体；
 - `mnemon_recall`：从一个或多个激活记忆体执行图增强、关键词或基础召回；
 - `mnemon_related`：沿 temporal / semantic / causal / entity 边遍历关联记忆；
 - `mnemon_remember`：选择记忆体并沉淀一条持久洞察；

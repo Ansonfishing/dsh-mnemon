@@ -153,7 +153,7 @@ describe('Mnemon memory subagent coordinator', () => {
     const coordinator = new MnemonSubagentCoordinator(host.value, runtime)
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: 'New durable fact.' }, new AbortController().signal)).resolves.toMatchObject({
       added: 'New durable fact.',
-      maintenance: { provider: 'spawn', memoryBodyIds: ['project'] },
+      maintenance: { kind: 'mnemon-archive', provider: 'spawn', memoryBodyIds: ['project'] },
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
       toolFilter: { allow: ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_remember', 'mnemon_memory_body_create'] },
@@ -162,10 +162,81 @@ describe('Mnemon memory subagent coordinator', () => {
     }))
     const migrationPrompt = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }> }])[1].prompt[0]!.text
     expect(migrationPrompt).toContain('Pending add — do not archive')
+    expect(migrationPrompt).toContain('Route each semantic cluster independently')
+    expect(migrationPrompt).toContain('the host generates its UUID, so never propose an id')
+    expect(migrationPrompt).toContain('USER.md preferences are outside this task and must never be archived')
     expect(migrationPrompt).not.toMatch(/catalog_json|runtime_entries_json|pending_mutation_json|current_usage_json|created_at|markdownPath|dbPath/)
     expect(runtime.compactTarget).toHaveBeenCalledWith('reviewed-revision', 'memory', [{ content: 'Project uses pnpm.', importance: 'normal' }], 7_143)
     expect(runtime.mutate).toHaveBeenCalledTimes(2)
     expect(coordinator.snapshot()).toMatchObject({ migrations: 1, lastOperation: 'migration' })
+  })
+
+  it('compacts USER.md locally with complete source coverage and never grants Mnemon tools', async () => {
+    const host = subagents({
+      summary: 'Merged two compatible profile preferences locally.',
+      action: 'compacted',
+      compactedEntries: [{
+        content: 'User prefers concise Chinese release notes with blockers first.',
+        importance: 'critical',
+        sourceIndexes: [1, 2],
+      }],
+    })
+    const runtime = {
+      mutate: vi.fn()
+        .mockRejectedValueOnce(new RuntimeMemoryCapacityError('user', 4_090, 4_180, 4_096))
+        .mockResolvedValueOnce({ success: true, message: 'Entry added.', target: 'user', entryCount: 2, usage: { used: 180, limit: 4_096 }, added: 'User prefers direct answers.' }),
+      snapshot: vi.fn(() => ({
+        revision: 'user-revision',
+        entries: [
+          { content: 'User prefers concise Chinese release notes.', created_at: 'now', updated_at: 'now', target: 'user', importance: 'critical' },
+          { content: 'User wants blockers listed first in release notes.', created_at: 'now', updated_at: 'now', target: 'user', importance: 'normal' },
+        ],
+        targets: { user: { target: 'user', entryCount: 2, used: 4_090, limit: 4_096, markdownPath: '/tmp/USER.md' } },
+      })),
+      compactTarget: vi.fn(async () => ({})),
+    } as unknown as RuntimeMemoryController
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtime)
+
+    await expect(coordinator.runtime(parent(), { action: 'add', target: 'user', content: 'User prefers direct answers.' }, new AbortController().signal)).resolves.toMatchObject({
+      added: 'User prefers direct answers.',
+      maintenance: { kind: 'local-compaction', memoryBodyIds: [] },
+    })
+    expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
+      toolFilter: { allow: [] },
+      agentOptions: { maxTokens: 4_096 },
+      persona: expect.stringContaining('local USER.md compactor'),
+    }))
+    const compactionPrompt = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }> }])[1].prompt[0]!.text
+    expect(compactionPrompt).toContain('do not retrieve from or write to Mnemon Memory Spaces')
+    expect(compactionPrompt).toContain('Every source number must appear exactly once')
+    expect(compactionPrompt).toContain('Pending add — do not include yet')
+    expect(runtime.compactTarget).toHaveBeenCalledWith('user-revision', 'user', [{ content: 'User prefers concise Chinese release notes with blockers first.', importance: 'critical' }], expect.any(Number))
+    expect(runtime.mutate).toHaveBeenCalledTimes(2)
+    expect(coordinator.snapshot()).toMatchObject({ compactions: 1, migrations: 0, lastOperation: 'compaction' })
+  })
+
+  it('rejects a USER.md compaction that omits any committed source entry', async () => {
+    const host = subagents({
+      summary: 'Incomplete candidate.',
+      action: 'compacted',
+      compactedEntries: [{ content: 'Only first preference.', importance: 'normal', sourceIndexes: [1] }],
+    })
+    const runtime = {
+      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('user', 4_090, 4_180, 4_096)),
+      snapshot: vi.fn(() => ({
+        revision: 'user-revision',
+        entries: [
+          { content: 'First preference.', target: 'user', importance: 'normal' },
+          { content: 'Second preference.', target: 'user', importance: 'normal' },
+        ],
+        targets: { user: { used: 4_090, limit: 4_096 } },
+      })),
+      compactTarget: vi.fn(async () => ({})),
+    } as unknown as RuntimeMemoryController
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtime)
+
+    await expect(coordinator.runtime(parent(), { action: 'add', target: 'user', content: 'Pending preference.' }, new AbortController().signal)).rejects.toThrow('omitted committed entries')
+    expect(runtime.compactTarget).not.toHaveBeenCalled()
   })
 
   it('disposes failed child runs and reports a hard error instead of falling back to direct memory access', async () => {

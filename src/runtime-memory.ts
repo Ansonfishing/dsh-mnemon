@@ -81,7 +81,13 @@ export type RuntimeMemoryMutationResult = {
   added?: string
   replaced?: { from: string; to: string }
   removed?: string
-  maintenance?: { runId: string; provider: string; summary: string; memoryBodyIds: string[] }
+  maintenance?: {
+    kind: 'local-compaction' | 'mnemon-archive'
+    runId: string
+    provider: string
+    summary: string
+    memoryBodyIds: string[]
+  }
 }
 
 export class RuntimeMemoryCapacityError extends Error {
@@ -237,7 +243,7 @@ WRITE PROTOCOL
 - Before writing, compare against the entries below. Use action="add" only for a new independent fact. Use action="replace" with a short unique old_text when correcting, consolidating, or making an existing entry more precise. Use action="remove" with a short unique old_text only when the user withdraws it or there is direct evidence that it is obsolete or wrong; absence from recent conversation is not evidence.
 - Choose target="user" only for the user profile and target="memory" only for project/environment knowledge. Use importance="critical" for explicit must/always/never rules or strong preferences, "low" for transient or one-time facts that are still worth keeping, and "normal" otherwise.
 - Entries are separated by a standalone §. old_text must uniquely identify one entry. Tool receipts are sufficient; do not echo either complete file after a successful mutation.
-- If an add reaches capacity, the tool owns the transaction: it archives committed hot entries into durable Mnemon Memory Spaces, compacts only after archival succeeds, verifies that no concurrent revision was overwritten, then retries the add. Never evade the limit with direct file edits.
+- If USER.md reaches capacity, the tool conservatively consolidates the local profile without sending preferences to Mnemon Memory Spaces. If MEMORY.md reaches capacity, the tool archives committed working memories into one or more semantically appropriate Memory Spaces, compacts only after archival succeeds, verifies that no concurrent revision was overwritten, then retries the add. Never evade either limit with direct file edits.
 
 Contents of USER.md (user profile; ${userUsage.used}/${userUsage.limit} UTF-8 bytes)
 <runtime-memory-file name="USER.md">
