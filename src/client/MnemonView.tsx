@@ -111,6 +111,27 @@ function EmptyState(props: { glyph: string; title: string; children: string }): 
   )
 }
 
+/** Full-text popup for a selected graph node whose inspector preview is clamped. */
+function ContentPreview(props: { node: MemoryGraphNode; kind: string; onClose: () => void }): JSX.Element {
+  const t = useT()
+  const close = useCallback(() => props.onClose(), [props])
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') props.onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [props])
+  const meta = [props.kind, props.node.id, props.node.memoryBodyName].filter((entry): entry is string => entry !== undefined).join(' · ')
+  return (
+    <div className={css.previewOverlay} onPointerDown={event => { if (event.target === event.currentTarget) props.onClose() }}>
+      <div className={css.previewDialog} role="dialog" aria-modal="true" aria-label={t('overview.previewTitle')}>
+        <header className={css.previewHeading}><span>{t('overview.previewTitle')}</span><button type="button" onClick={close} aria-label={t('common.cancel')}>×</button></header>
+        <div className={css.previewMeta}>{meta}</div>
+        <div className={css.previewBody}><p>{props.node.content}</p></div>
+      </div>
+    </div>
+  )
+}
+
 const SAFE_LINK_PATTERN = /^(?:https?:|mailto:|#|\/)/iu
 
 function safeLink(href: string | null | undefined): string | undefined {
@@ -646,6 +667,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [savingBody, setSavingBody] = useState<string | null>(null)
+  const [preview, setPreview] = useState<MemoryGraphNode | null>(null)
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true)
@@ -772,7 +794,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
               <>
                 <div className={css.inspectorHeading}><span>{t(selectedKind === 'space' ? 'overview.inspectorSpace' : selectedKind === 'entity' ? 'overview.inspectorEntity' : 'overview.inspector')}</span><button type="button" onClick={() => setSelected(null)} aria-label={t('overview.closeInspector')}>×</button></div>
                 <span className={css.categoryChip}>{graphKindLabel(t, selected)}</span>
-                <h3>{selected.content}</h3>
+                <div className={css.inspectorTitleRow}><h3 className={css.inspectorTitle}>{selected.content}</h3>{selectedKind === 'memory' && selected.content.length > 140 && <button type="button" className={css.inspectorEye} onClick={() => setPreview(selected)} aria-label={t('overview.previewAria')} title={t('overview.previewAria')}><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M1 8s2.6-4.4 7-4.4S15 8 15 8s-2.6 4.4-7 4.4S1 8 1 8z" fill="none" stroke="currentColor" strokeWidth="1.5" /><circle cx="8" cy="8" r="2.1" fill="currentColor" /></svg></button>}</div>
                 {selectedKind === 'space'
                   ? <dl className={css.inspectorMeta}><div><dt>{t('overview.spaceId')}</dt><dd><code>{selected.memoryBodyId ?? selected.id}</code></dd></div><div><dt>{t('overview.containedMemories')}</dt><dd>{selected.occurrenceCount ?? 0}</dd></div></dl>
                   : selectedKind === 'entity'
@@ -794,6 +816,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
       ) : (
         <div className={css.loadingPanel}>{t('overview.loading')}</div>
       )}
+      {preview !== null && <ContentPreview node={preview} kind={graphKindLabel(t, preview)} onClose={() => setPreview(null)} />}
     </div>
   )
 }

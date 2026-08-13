@@ -117,6 +117,8 @@ export declare const zh: {
     'overview.containedMemories': string;
     'overview.entityMentions': string;
     'overview.exploreNode': string;
+    'overview.previewAria': string;
+    'overview.previewTitle': string;
     'overview.loading': string;
     'runtime.title': string;
     'runtime.description': string;
@@ -640,6 +642,8 @@ export declare const en: {
     'overview.containedMemories': string;
     'overview.entityMentions': string;
     'overview.exploreNode': string;
+    'overview.previewAria': string;
+    'overview.previewTitle': string;
     'overview.loading': string;
     'runtime.title': string;
     'runtime.description': string;

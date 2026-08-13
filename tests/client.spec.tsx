@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClientConnectionHandle } from '../src/contracts.ts'
 import type { ClientSettingsScope } from '../src/contracts.ts'
@@ -17,7 +17,7 @@ describe('MnemonView', () => {
     unset: async () => {},
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { withInactiveBody?: boolean; listCount?: number } = {}) {
+  function createConnection(options: { withInactiveBody?: boolean; listCount?: number; longContent?: boolean } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -89,7 +89,7 @@ describe('MnemonView', () => {
         },
       },
     }
-    const memory = { id: 'memory-12345678', content: '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], entities: ['SQLite'], color: '#e74c3c', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-12345678` }
+    const memory = { id: 'memory-12345678', content: options.longContent === true ? '这是一段非常长的记忆内容，用于验证图谱检查器对超长文本的截断展示，以及全文预览窗口的打开与关闭。'.repeat(6) : '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], entities: ['SQLite'], color: '#e74c3c', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-12345678` }
     const secondaryMemory = { id: 'preference-1', content: '用户偏好简洁中文回答。', category: 'preference', importance: 4, tags: ['style'], entities: ['DSH'], color: '#9b59b6', memoryBodyId: secondaryBody.id, memoryBodyName: secondaryBody.name, graphId: `${secondaryBody.id}:preference-1` }
     let runtimeEntries = [{ content: '用户偏好简洁中文回答。', created_at: '2026-08-13T02:00:00.000Z', updated_at: '2026-08-13T02:00:00.000Z', target: 'user', importance: 'critical' }]
     let documents = [{
@@ -313,6 +313,24 @@ describe('MnemonView', () => {
     expect(screen.getByText('存放架构与交付决策。')).toBeTruthy()
     expect(screen.queryByRole('button', { name: '编辑项目决策空间' })).toBeTruthy()
     expect(call).toHaveBeenCalledWith(expect.anything(), 'body-update', { memoryBodyId: 'project', name: '项目决策空间', description: '存放架构与交付决策。' })
+  })
+
+  it('clamps long node content in the graph inspector and opens a full-text preview', async () => {
+    const { connection } = createConnection({ longContent: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+
+    await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /记忆体 记忆体目录与实时图谱/ }))
+    await waitFor(() => expect(screen.getByRole('img', { name: /Mnemon 实时记忆图谱/ })).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: /^决策: 这是一段非常长的记忆内容/ }))
+    const eye = await screen.findByRole('button', { name: '查看全文' })
+    fireEvent.click(eye)
+
+    const dialog = screen.getByRole('dialog', { name: '内容全文' })
+    expect(dialog.textContent).toContain('全文预览窗口的打开与关闭')
+    fireEvent.click(within(dialog).getByRole('button', { name: '取消' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
   it('progressively renders long content lists instead of mounting every card', async () => {
