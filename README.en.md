@@ -16,32 +16,9 @@ Mnemon remains responsible for local SQLite storage, four relationship graphs, a
 | Project Documents | Designs, investigations, procedures, rationale, and handoffs | Deterministic search over active Documents first |
 | Memory Spaces | Cross-session facts, decisions, entities, and relationships | Recalled on demand from active Memory Spaces |
 
-```text
-                       DSH Agent
-                           |
-             +-------------+-------------+
-             |                           |
-       every-turn context          search on demand
-             |                           |
-             v                           v
-    +-----------------+       +---------------------+
-    | Runtime Memory  | ----> | Active Documents    |
-    | USER / MEMORY   |       | managed Markdown    |
-    +-----------------+       +----------+----------+
-                                         |
-                                  deeper recall
-                                         v
-                              +---------------------+
-                              | Mnemon Memory       |
-                              | Spaces + four graphs|
-                              +----------+----------+
-                                         |
-                                  cold reference
-                                         v
-                              +---------------------+
-                              | Archived Documents  |
-                              +---------------------+
-```
+[![Mnemon Memory overview with the multi-space catalog, activation state, and live relationship graph](./docs/zh-CN/assets/screenshots/overview-memory-graph.png)](./docs/en/project-overview.md)
+
+*Memory Space catalog, activation state, and live relationship graph. Select the image for the [complete project overview](./docs/en/project-overview.md).*
 
 ## Highlights
 

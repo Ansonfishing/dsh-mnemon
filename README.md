@@ -16,32 +16,9 @@ Mnemon 继续负责本地 SQLite 存储、四类关系图和确定性检索；DS
 | 项目档案 | 设计、调查、流程、架构理由、交接材料 | 先对 active Documents 做确定性检索 |
 | 记忆体 | 跨会话的长期事实、决策、实体与关系 | 从已激活 Memory Spaces 按需召回 |
 
-```text
-                       DSH Agent
-                           |
-             +-------------+-------------+
-             |                           |
-       every-turn context          search on demand
-             |                           |
-             v                           v
-    +-----------------+       +---------------------+
-    | Runtime Memory  | ----> | Active Documents    |
-    | USER / MEMORY   |       | managed Markdown    |
-    +-----------------+       +----------+----------+
-                                         |
-                                  deeper recall
-                                         v
-                              +---------------------+
-                              | Mnemon Memory       |
-                              | Spaces + four graphs|
-                              +----------+----------+
-                                         |
-                                  cold reference
-                                         v
-                              +---------------------+
-                              | Archived Documents  |
-                              +---------------------+
-```
+[![Mnemon 记忆体总览：多记忆体目录、激活状态与实时关系图](./docs/zh-CN/assets/screenshots/overview-memory-graph.png)](./docs/zh-CN/project-overview.md)
+
+*多记忆体目录、激活状态与实时关系图。点击图片阅读[完整项目介绍](./docs/zh-CN/project-overview.md)。*
 
 ## 核心能力
 

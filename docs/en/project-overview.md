@@ -6,6 +6,10 @@
 
 The central goal is to give an Agent long-term continuity while keeping the current task authoritative, context compact, writes auditable, and original data protected when maintenance fails.
 
+[![Mnemon Memory overview showing the Memory Space catalog, activation state, and live multi-space relationship graph](../zh-CN/assets/screenshots/overview-memory-graph.png)](../zh-CN/assets/screenshots/overview-memory-graph.png)
+
+*The overview brings the Memory Space catalog, activation state, statistics, and live multi-space graph into one workspace. Select the image for its original resolution. The screenshot uses the Chinese locale; the workspace also supports English.*
+
 ## Why It Exists
 
 With only the current conversation, an Agent cannot reliably carry forward user preferences, project conventions, and historical decisions. Injecting the entire history into every prompt causes context growth, stale-information interference, and additional cost. A single long-term database also cannot satisfy all of these needs well:
@@ -54,6 +58,10 @@ Runtime Memory contains compact, frequently used stable information:
 
 Ordinary `add`, `replace`, and `remove` operations are handled by the deterministic control layer. Maintenance starts only when an `add` overflows: USER is conservatively compacted by a no-tool local worker, while MEMORY is semantically archived by a bounded worker before hot candidates are compacted. An overflowing `replace` is rejected and does not trigger automatic maintenance.
 
+[![Runtime Memory page showing USER and MEMORY hot context, capacity, and edit actions](../zh-CN/assets/screenshots/runtime-memory.png)](../zh-CN/assets/screenshots/runtime-memory.png)
+
+*The Runtime page places the USER and MEMORY projections side by side with their capacity, importance, categories, and per-entry edit controls.*
+
 ### 2. Project Documents: Complete, Readable Project Knowledge
 
 Documents preserve knowledge that is larger than one memory item but still needs fast, complete reading: architecture rationale, investigation findings, operating procedures, incident reviews, and implementation handoffs. Bodies remain Markdown and are searched deterministically by title, description, and content.
@@ -61,6 +69,10 @@ Documents preserve knowledge that is larger than one memory item but still needs
 A body is limited to 2 MiB, and rendered active Documents are limited to 10 MiB in total. When capacity is insufficient or a user archives manually, a bounded worker first writes a Mnemon cold reference containing a summary and SHA-256. The original moves to `archived/` only if its Document revision is still current. This ordering protects the active original, but it is not a rollback-capable distributed transaction across SQLite and the filesystem.
 
 Document sharing follows `storageScope`. Under `global` or `custom`, several workspaces may share one Document index. The live session workspace constrains new `sourcePaths`; it does not create separate ownership.
+
+[![Project Documents page showing the Document list, metadata, and rendered Markdown original](../zh-CN/assets/screenshots/documents-markdown.png)](../zh-CN/assets/screenshots/documents-markdown.png)
+
+*The Documents page preserves both metadata and Markdown structure, combining list selection, search, and complete reading in one view.*
 
 ### 3. Memory Spaces: Isolated Long-Term Recall
 
@@ -89,6 +101,10 @@ The plugin follows a near-to-far lookup gradient:
 When the root Agent calls `mnemon_recall`, the coordinator starts an isolated worker. The worker may only inspect the Memory Space catalog, recall, and traverse related items. It selects active spaces by name and description and returns bounded structured evidence. Raw routing reasoning and the complete catalog do not enter the main conversation.
 
 Direct Web search uses the deterministic service. “Agent search” performs the same retrieval first, then starts a no-Mnemon-tool evidence-only worker that can answer solely from the supplied hits and return only valid citations.
+
+[![Recall page showing an Agent answer, source memory IDs, and raw recall results](../zh-CN/assets/screenshots/recall-agent-answer.png)](../zh-CN/assets/screenshots/recall-agent-answer.png)
+
+*Agent search restricts evidence to the current hits while retaining source memory IDs and raw recall entries so the answer remains reviewable.*
 
 ## How Writes and Maintenance Are Supervised
 
@@ -121,6 +137,16 @@ Suppose a substantial task establishes that “every external CLI must be launch
 
 The same knowledge can therefore retain complementary expressions at different frequencies and narrative granularity, without copying the entire Document into every prompt or stretching one short rule into a long record.
 
+## Recall and Writeback in a Real Conversation
+
+When a user asks to revisit earlier thinking, the root Agent can inspect the Memory Space catalog and project Documents before recalling from active spaces. If an inactive space is genuinely needed, a controlled workflow can activate it temporarily and restore its prior state after reading. The tool trace makes lookup order, space selection, and provenance observable.
+
+[![Memory recall in a DSH conversation with Document search, multi-space recall, and state restoration](../zh-CN/assets/screenshots/conversation-recall.png)](../zh-CN/assets/screenshots/conversation-recall.png)
+
+When a user explicitly asks to retain stable information, the root Agent writes individual items through structured Runtime Memory tools while the Host continues to validate the target, capacity, and revision. The final response reports what was actually stored instead of treating internal reasoning as persistence.
+
+[![Memory writeback in a DSH conversation with structured Runtime Memory tool calls and receipts](../zh-CN/assets/screenshots/conversation-writeback.png)](../zh-CN/assets/screenshots/conversation-writeback.png)
+
 ## User and Integration Surfaces
 
 ### Web Workspace
@@ -139,6 +165,14 @@ The conversation's “Memory” tab contains eight pages:
 | Status | CLI, storage scope, lifecycle, and subagent diagnostics |
 
 The primary Web workspace and settings card support Chinese and English and follow DSH's global light/dark theme. Commands, tool cards, and some backend diagnostics are not yet fully internationalized.
+
+[![Entities page showing frequent entities, hit counts, and entity-linked context](../zh-CN/assets/screenshots/entities-context.png)](../zh-CN/assets/screenshots/entities-context.png)
+
+*The Entities page ranks names by hit count and retains related memories, category, importance, score, and Memory Space provenance on the right.*
+
+[![Content page showing durable-memory filters, tags, relationships, and maintenance actions](../zh-CN/assets/screenshots/memory-content.png)](../zh-CN/assets/screenshots/memory-content.png)
+
+*The Content page supports filtering and inspection, then exposes relationship lookup, create-from-current, ID copy, and soft-delete actions.*
 
 ### Model Tools and Commands
 
