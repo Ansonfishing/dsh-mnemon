@@ -129,13 +129,31 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     async execute(args: { query: string; includeArchived?: boolean; limit?: number }, exec: ToolExecution) {
-      const result = await documents.forAgent(requireAgent(exec)).search(args.query, { ...(args.includeArchived === undefined ? {} : { includeArchived: args.includeArchived }), limit: Math.min(8, args.limit ?? 8) })
+      const controller = documents.forAgent(requireAgent(exec))
+      const result = await controller.search(args.query, { ...(args.includeArchived === undefined ? {} : { includeArchived: args.includeArchived }), limit: Math.min(8, args.limit ?? 8) })
+      const suggestions = result.results.length === 0 && args.query.trim() !== ''
+        ? controller.snapshot().documents
+          .filter(document => args.includeArchived === true || document.status === 'active')
+          .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+          .slice(0, Math.min(5, args.limit ?? 5))
+          .map(document => ({
+            id: document.id,
+            title: document.title,
+            description: document.description,
+            status: document.status,
+            excerpt: document.excerpt,
+          }))
+        : []
       return {
         ...result,
         results: result.results.map(document => ({
           ...document,
           content: document.content.length <= 8_000 ? document.content : `${document.content.slice(0, 8_000)}\n[truncated]`,
         })),
+        ...(suggestions.length === 0 ? {} : {
+          suggestions,
+          suggestionHint: 'No exact same-language match. Retry with distinctive words from a suggested title or description before deep recall.',
+        }),
       }
     },
     presentCall: (args: { query: string }) => ({ card: 'generic', title: 'Search Mnemon Documents', kind: 'search', rawInput: args.query }),

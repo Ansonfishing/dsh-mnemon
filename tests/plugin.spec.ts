@@ -122,6 +122,37 @@ describe('dsh-mnemon plugin composition', () => {
     expect(fixture.sections).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'mnemon:runtime-memory' })]))
   })
 
+  it('offers compact recent-document suggestions when a cross-language query has no exact match', async () => {
+    const fixture = context()
+    const workspace = dataDir()
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
+    const tools = fixture.tools as Array<{
+      name: string
+      execute: (args: unknown, execution: unknown) => Promise<unknown>
+    }>
+    const agent = {
+      id: 'document-worker',
+      options: {},
+      session: { header: { origin: 'subagent', cwd: workspace }, events: [] },
+    }
+    const execution = { agent, signal: new AbortController().signal }
+    await tools.find(tool => tool.name === 'mnemon_document_manage')!.execute({
+      action: 'create',
+      title: 'Cold Archive Transaction Contract',
+      description: 'Write-ahead archival ordering and recovery invariants.',
+      content: 'Land the durable cold reference before moving the managed original.',
+    }, execution)
+
+    const result = await tools.find(tool => tool.name === 'mnemon_document_search')!.execute({
+      query: '冷归档不变量',
+    }, execution) as { total: number; results: unknown[]; suggestions: Array<{ title: string }>; suggestionHint: string }
+
+    expect(result.total).toBe(0)
+    expect(result.results).toEqual([])
+    expect(result.suggestions).toEqual([expect.objectContaining({ title: 'Cold Archive Transaction Contract' })])
+    expect(result.suggestionHint).toContain('Retry')
+  })
+
   it('can disable both guidance and the Web tab independently', () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), routingGuidance: false, tabEnabled: false })

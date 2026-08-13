@@ -97,7 +97,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     if (decision.kind !== 'enter') throw new Error('unexpected rejection')
     expect(decision.messages).toHaveLength(2)
     expect(decision.messages[1]?.source).toMatchObject({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'instructions' })
-    expect(decision.messages[1]?.content[0]?.text).toBe('[MNEMON] Call mnemon_recall when prior durable context matters or hot memory lacks an exact historical detail—never infer the missing rule; use mnemon_runtime_memory only for new, explicit, reusable information. Otherwise call neither.')
+    expect(decision.messages[1]?.content[0]?.text).toBe('[MNEMON] Search active Documents for substantial project knowledge before deep recall; call mnemon_recall only when durable history or an exact prior detail matters, and use mnemon_runtime_memory only for new explicit reusable facts. Otherwise call none.')
     expect(value.coordinator.recall).not.toHaveBeenCalled()
     expect(value.service.status).not.toHaveBeenCalled()
 
