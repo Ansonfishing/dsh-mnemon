@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import Markdown from 'markdown-to-jsx'
 import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts'
 import type { Config } from '../config.ts'
@@ -32,15 +32,34 @@ export interface MnemonViewProps {
 
 type Page = 'overview' | 'runtime' | 'documents' | 'explore' | 'entities' | 'remember' | 'list' | 'status'
 
-const PAGE_NAV: Array<{ id: Page; label: MnemonKey; detail: MnemonKey; glyph: string }> = [
-  { id: 'overview', label: 'nav.overview', detail: 'nav.overview.detail', glyph: '◇' },
-  { id: 'runtime', label: 'nav.runtime', detail: 'nav.runtime.detail', glyph: '◫' },
-  { id: 'documents', label: 'nav.documents', detail: 'nav.documents.detail', glyph: '▤' },
-  { id: 'explore', label: 'nav.search', detail: 'nav.search.detail', glyph: '⌕' },
-  { id: 'entities', label: 'nav.entities', detail: 'nav.entities.detail', glyph: '◎' },
-  { id: 'remember', label: 'nav.remember', detail: 'nav.remember.detail', glyph: '+' },
-  { id: 'list', label: 'nav.content', detail: 'nav.content.detail', glyph: '≡' },
-  { id: 'status', label: 'nav.status', detail: 'nav.status.detail', glyph: '⌘' },
+type NavEntry = { id: Page; label: MnemonKey; detail: MnemonKey; glyph: string }
+type NavGroup = { aria: MnemonKey; entries: NavEntry[] }
+
+/** 系统 → 三层存储 → 读写工具；组间以分隔线呈现。 */
+const PAGE_NAV: NavGroup[] = [
+  {
+    aria: 'nav.group.system',
+    entries: [
+      { id: 'status', label: 'nav.status', detail: 'nav.status.detail', glyph: '⌘' },
+    ],
+  },
+  {
+    aria: 'nav.group.storage',
+    entries: [
+      { id: 'runtime', label: 'nav.runtime', detail: 'nav.runtime.detail', glyph: '◫' },
+      { id: 'overview', label: 'nav.bodies', detail: 'nav.bodies.detail', glyph: '◇' },
+      { id: 'documents', label: 'nav.documents', detail: 'nav.documents.detail', glyph: '▤' },
+    ],
+  },
+  {
+    aria: 'nav.group.tools',
+    entries: [
+      { id: 'remember', label: 'nav.remember', detail: 'nav.remember.detail', glyph: '+' },
+      { id: 'explore', label: 'nav.search', detail: 'nav.search.detail', glyph: '⌕' },
+      { id: 'entities', label: 'nav.entities', detail: 'nav.entities.detail', glyph: '◎' },
+      { id: 'list', label: 'nav.content', detail: 'nav.content.detail', glyph: '≡' },
+    ],
+  },
 ]
 
 const CATEGORY_KEYS: Record<string, MnemonKey> = {
@@ -1241,12 +1260,16 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
   const storage = status?.storage
   const selectedScopeKind = storage?.activeKind ?? 'global'
   const selectedScope = storage?.scopes.find(scope => scope.kind === selectedScopeKind)
+  const runtimeArea = selectedScope?.areas.find(area => area.kind === 'runtime')
+  const runtimeUserEntries = runtimeArea === undefined ? 0 : Number(runtimeArea.details.userEntries ?? 0)
+  const runtimeMemoryEntries = runtimeArea === undefined ? 0 : Number(runtimeArea.details.memoryEntries ?? 0)
   return (
     <div className={css.page}>
       <PageHeader title={t('status.title')} description={t('status.description')} meta={status === null && props.loading ? t('common.loading') : status?.healthy === true && lifecycle?.sessionAvailable === true ? t('status.nominal') : t('status.checkRequired')} action={<button type="button" className={css.secondaryButton} disabled={props.loading} onClick={props.onRefresh}>{props.loading ? t('status.rechecking') : t('status.recheck')}</button>} />
 
       <section className={css.healthStrip} aria-label={t('status.aria')}>
         <article><span className={`${css.healthIndicator} ${status === null ? css.healthMuted : status.healthy ? css.healthGood : css.healthBad}`} /><div><small>{t('status.engine')}</small><strong>{status === null ? t('status.engineChecking') : status.healthy ? t('status.engineConnected') : t('status.engineUnavailable')}</strong><p>{status?.version === undefined ? t('status.versionWaiting') : `CLI ${status.version}`}</p></div></article>
+        <article><span className={`${css.healthIndicator} ${runtimeArea === undefined ? css.healthMuted : runtimeArea.status === 'invalid' ? css.healthBad : css.healthGood}`} /><div><small>{t('status.runtime')}</small><strong>{runtimeArea === undefined ? t('status.runtimeWaiting') : t('status.runtimeRatio', { user: runtimeUserEntries, memory: runtimeMemoryEntries })}</strong><p>{runtimeArea === undefined ? t('status.runtimeWaitingDetail') : t('status.runtimeBytes', { bytes: humanBytes(runtimeArea.bytes) })}</p></div></article>
         <article><span className={`${css.healthIndicator} ${activeBodies > 0 ? css.healthGood : css.healthMuted}`} /><div><small>{t('status.spaces')}</small><strong>{catalogKnown ? t('status.activeRatio', { active: activeBodies, total: memoryBodies.length }) : t('status.directoryUnsynced')}</strong><p>{t('status.activeMemories', { count: status?.stats?.totalInsights ?? 0 })}</p></div></article>
         <article><span className={`${css.healthIndicator} ${documents === undefined ? css.healthMuted : css.healthGood}`} /><div><small>{t('status.documents')}</small><strong>{documents === undefined ? t('status.documentsWaiting') : t('status.documentRatio', { active: documents.activeCount, archived: documents.archivedCount })}</strong><p>{documents === undefined ? t('status.documentsSession') : t('status.documentUsage', { used: humanBytes(documents.activeBytes), limit: humanBytes(documents.limitBytes) })}</p></div></article>
         <article><span className={`${css.healthIndicator} ${lifecycle === undefined ? css.healthMuted : lifecycle.sessionAvailable ? css.healthGood : css.healthBad}`} /><div><small>{t('status.router')}</small><strong>{lifecycle === undefined ? t('status.routerChecking') : lifecycle.sessionAvailable ? t('status.routerReady') : t('status.sessionMissing')}</strong><p>{workers === undefined ? t('status.orchestrationWaiting') : t('status.workerSummary', { recalls: workers.recalls, reviews: workers.reviews ?? 0, writes: workers.writes, failures: workers.failures ?? 0 })}</p></div></article>
@@ -1435,7 +1458,7 @@ export function MnemonView(props: MnemonViewProps): JSX.Element {
 function MnemonWorkspace({ connection, sessionId }: MnemonViewProps): JSX.Element {
   const t = useT()
   const client = useMemo(() => new MnemonClient(connection, sessionId), [connection, sessionId])
-  const [page, setPage] = useState<Page>('overview')
+  const [page, setPage] = useState<Page>('status')
   const [status, setStatus] = useState<StatusView | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
   const [statusError, setStatusError] = useState<string | null>(null)
@@ -1469,7 +1492,7 @@ function MnemonWorkspace({ connection, sessionId }: MnemonViewProps): JSX.Elemen
       </header>
       {(statusError !== null || status?.healthy === false) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
       <div className={css.workspace}>
-        <div className={css.topNavigation}><nav className={css.nav} aria-label={t('nav.aria')}>{PAGE_NAV.map(item => <button key={item.id} type="button" aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><span className={css.navGlyph} aria-hidden="true">{item.glyph}</span><span><strong>{t(item.label)}</strong><small>{t(item.detail)}</small></span></button>)}</nav><div className={css.spaceSummary}><span>{t('sidebar.activeSpaces')}</span><code>{catalogKnown ? `${activeBodies} / ${memoryBodies.length}` : '— / —'}</code><small>{writeEnabled ? t('common.agentSupervised') : t('common.readOnly')}</small></div></div>
+        <div className={css.topNavigation}><nav className={css.nav} aria-label={t('nav.aria')}>{PAGE_NAV.map((group, groupIndex) => <Fragment key={group.aria}><div className={css.navGroup} role="group" aria-label={t(group.aria)}>{group.entries.map(item => <button key={item.id} type="button" aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><span className={css.navGlyph} aria-hidden="true">{item.glyph}</span><span><strong>{t(item.label)}</strong><small>{t(item.detail)}</small></span></button>)}</div>{groupIndex < PAGE_NAV.length - 1 && <span className={css.navGroupDivider} aria-hidden="true" />}</Fragment>)}</nav><div className={css.spaceSummary}><span>{t('sidebar.activeSpaces')}</span><code>{catalogKnown ? `${activeBodies} / ${memoryBodies.length}` : '— / —'}</code><small>{writeEnabled ? t('common.agentSupervised') : t('common.readOnly')}</small></div></div>
         <section className={css.canvas}>
           {page === 'overview' && <OverviewPage client={client} revision={revision} writeEnabled={writeEnabled} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onExplore={explore} />}
           {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}

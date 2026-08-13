@@ -193,9 +193,10 @@ describe('MnemonView', () => {
     const { connection } = createConnection()
     const { container } = render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
     await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
-    expect(screen.getByRole('heading', { name: '记忆体总览' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /记忆体 记忆体目录与实时图谱/ }))
+    expect(screen.getByRole('heading', { name: '记忆体' })).toBeTruthy()
     expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy()
-    expect(screen.getAllByText('项目记忆体').length).toBeGreaterThan(0)
+    await waitFor(() => expect(screen.getAllByText('项目记忆体').length).toBeGreaterThan(0))
     expect(screen.getByRole('switch', { name: '项目记忆体读取开关' }).getAttribute('aria-checked')).toBe('true')
     expect(screen.getByText('12')).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Mnemon', level: 1 })).toBeTruthy()
@@ -238,7 +239,7 @@ describe('MnemonView', () => {
     fireEvent.click(screen.getByRole('button', { name: /检索 意图增强召回/ }))
     expect(screen.getByRole('heading', { name: '检索记忆' })).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: /档案 项目知识与冷归档/ }))
+    fireEvent.click(screen.getByRole('button', { name: /档案 项目知识与归档/ }))
     expect(screen.getByRole('heading', { name: '项目档案' })).toBeTruthy()
     await waitFor(() => expect(screen.getByText('发布验证清单')).toBeTruthy())
     const documentReader = screen.getByRole('region', { name: '档案阅读器' })
@@ -277,6 +278,8 @@ describe('MnemonView', () => {
     const { connection } = createConnection({ withInactiveBody: true })
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
+    await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /记忆体 记忆体目录与实时图谱/ }))
     const toggle = await screen.findByRole('switch', { name: '偏好记忆体读取开关' })
     expect(toggle.getAttribute('aria-checked')).toBe('false')
     fireEvent.click(toggle)
@@ -343,7 +346,7 @@ describe('MnemonView', () => {
     const { connection, call } = createConnection()
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
     await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
-    fireEvent.click(screen.getByRole('button', { name: /档案 项目知识与冷归档/ }))
+    fireEvent.click(screen.getByRole('button', { name: /档案 项目知识与归档/ }))
     await waitFor(() => expect(screen.getByText('发布验证清单')).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: '新建档案' }))
@@ -406,6 +409,7 @@ describe('MnemonView', () => {
     })
     render(<MnemonView connection={{ rpc: { call } } as unknown as ClientConnectionHandle} settingsScope={settingsScope} sessionId="session-1" />)
 
+    fireEvent.click(screen.getByRole('button', { name: /记忆体 记忆体目录与实时图谱/ }))
     await waitFor(() => expect(screen.getAllByRole('heading', { name: '还没有记忆体' })).toHaveLength(1))
     expect(screen.queryByRole('alert')).toBeNull()
     expect(screen.getByText('0 / 0')).toBeTruthy()
@@ -436,7 +440,8 @@ describe('MnemonView', () => {
     render(<MnemonView connection={{ rpc: { call } } as unknown as ClientConnectionHandle} settingsScope={settingsScope} sessionId="session-1" />)
 
     await waitFor(() => expect(screen.getByText('已连接 · 目录待同步')).toBeTruthy())
-    expect(screen.getAllByText('记忆体目录尚未同步').length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: /记忆体 记忆体目录与实时图谱/ }))
+    await waitFor(() => expect(screen.getAllByText('记忆体目录尚未同步').length).toBeGreaterThan(0))
     expect(screen.queryByRole('alert')).toBeNull()
     expect(screen.queryByText('0 / 0')).toBeNull()
     expect(screen.getByText('2')).toBeTruthy()
@@ -447,11 +452,12 @@ describe('MnemonView', () => {
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" t={translateEn} />)
 
     await waitFor(() => expect(screen.getByText('Connected · 1 active')).toBeTruthy())
-    expect(screen.getByRole('heading', { name: 'Memory Overview' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Memory Spaces Directory and live graph/ }))
+    expect(screen.getByRole('heading', { name: 'Memory Spaces' })).toBeTruthy()
     expect(screen.getByRole('region', { name: 'Memory Space Directory' })).toBeTruthy()
     expect(screen.getByRole('navigation', { name: 'Mnemon pages' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Recall Intent-aware retrieval/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Documents Project knowledge and cold archive/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Documents Project knowledge and archive/ })).toBeTruthy()
     expect(screen.queryByText('PERSISTENT AGENT MEMORY')).toBeNull()
     expect(screen.queryByText(/Memory Bod(y|ies)/i)).toBeNull()
 

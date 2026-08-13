@@ -30,9 +30,9 @@ describe('Mnemon Web client composition', () => {
     const settingsInject = slots.find(options => options.name === 'settings.plugin.item')?.inject as (() => { t: (key: keyof typeof zh) => string }) | undefined
     expect(settingsInject?.().t('config.scope')).toBe('存储范围')
     const label = slotOptions?.label as () => string
-    expect(label()).toBe('记忆体')
+    expect(label()).toBe('记忆系统')
     active = 'en'
-    expect(label()).toBe('Memory')
+    expect(label()).toBe('Memory System')
     expect(settingsInject?.().t('config.scope')).toBe('Storage scope')
   })
 })
