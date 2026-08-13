@@ -14,8 +14,6 @@ The plugin brings Mnemon's durable Memory Space capabilities into DSH and adds R
 
 ![dsh-mnemon memory system walkthrough covering status, Runtime Memory, the multi-space graph, Documents, recall, entities, and supervised writeback](./docs/assets/dsh-mnemon-memory-system-demo.gif)
 
-**Complete 77-second walkthrough playing directly in the README** — A real interaction with status, Runtime Memory, the live multi-space graph, Project Documents, graph-enhanced recall, entity aggregation, supervised writeback, and content maintenance. You can also [download the high-resolution MP4](./docs/assets/dsh-mnemon-memory-system-demo.mp4).
-
 ## Three memory tiers
 
 | Tier | What belongs here | How it is retained | How it reaches context |
