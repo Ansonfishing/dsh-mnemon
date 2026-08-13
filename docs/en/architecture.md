@@ -12,41 +12,9 @@
 
 ## Component Diagram
 
-```text
-+---------------------------- DSH Web Client ----------------------------+
-| Memory workspace                     Plugin settings                   |
-| MnemonView.tsx                       MnemonSettingsCard.tsx             |
-+-------------+-------------------------+----------------+----------------+
-              | read RPC                | write RPC      | settings RPC
-              | trusted-host            | loopback       | loopback
-              v                         v                v
-+----------------------------- DSH Host Plugin ---------------------------+
-| index.ts::apply                                                          |
-|                                                                          |
-| Settings  Commands  Native Tools  Prompt Sections  Lifecycle  RPC        |
-|    |         |           |              |             |        |         |
-|    +---------+-----------+--------------+-------------+--------+         |
-|                                  |                                       |
-|                     MnemonSubagentCoordinator                            |
-|                       |                       |                           |
-|              spawn bounded worker        fork review worker              |
-|                       |                       |                           |
-|                       +-----------+-----------+                           |
-|                                   |                                       |
-| RuntimeMemoryController   DocumentManager   MemoryBodyRegistry            |
-|                                   |                                       |
-|                             MnemonService                                 |
-|                                   |                                       |
-|                             MnemonRunner                                  |
-+-----------------------------------+---------------------------------------+
-                                    |
-                                    | argv, shell=false, serialized
-                                    v
-                           local mnemon CLI
-                                    |
-                                    v
-                  <storageRoot>/data/<space-id>/mnemon.db
-```
+[![dsh-mnemon runtime architecture](./assets/project-architecture.svg)](./assets/project-architecture.svg)
+
+Solid lines show deterministic data or control paths; purple dashed lines show LLM-supervised paths. Runtime Memory and Documents use managed files directly. Only Memory Spaces call the local Mnemon CLI through `MnemonRunner`. Click the image to open the original SVG.
 
 ## Host Composition Root
 

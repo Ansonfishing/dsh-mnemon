@@ -6,15 +6,16 @@
 
 ## 建议阅读路径
 
-1. [快速开始](./getting-started.md)：安装、首次配置与基本验证。
-2. [架构设计](./architecture.md)：DSH Host、Web Client、控制层、子 Agent 与 Mnemon CLI 的边界。
-3. [存储与三层记忆模型](./storage-model.md)：Runtime、Documents、Memory Spaces 的语义和目录结构。
-4. [生命周期与核心流程](./workflows.md)：召回、写入、后台审查、容量整理和冷归档。
-5. [配置参考](./configuration.md)：全部配置、默认值、优先级和 provider 要求。
-6. [WebUI、工具、命令与 RPC](./interfaces.md)：所有用户与模型入口。
-7. [运维、安全与故障排查](./operations.md)：锁、权限、备份、恢复和已知限制。
-8. [开发与验证](./development.md)：模块结构、测试、构建和发布检查。
-9. [Roadmap](./roadmap.md)：尚未完成的可靠性、运维和国际化工作。
+1. [项目介绍](./project-overview.md)：项目定位、三层模型、总体架构、监督边界与适用场景。
+2. [快速开始](./getting-started.md)：安装、首次配置与基本验证。
+3. [架构设计](./architecture.md)：DSH Host、Web Client、控制层、子 Agent 与 Mnemon CLI 的边界。
+4. [存储与三层记忆模型](./storage-model.md)：Runtime、Documents、Memory Spaces 的语义和目录结构。
+5. [生命周期与核心流程](./workflows.md)：召回、写入、后台审查、容量整理和冷归档。
+6. [配置参考](./configuration.md)：全部配置、默认值、优先级和 provider 要求。
+7. [WebUI、工具、命令与 RPC](./interfaces.md)：所有用户与模型入口。
+8. [运维、安全与故障排查](./operations.md)：锁、权限、备份、恢复和已知限制。
+9. [开发与验证](./development.md)：模块结构、测试、构建和发布检查。
+10. [Roadmap](./roadmap.md)：尚未完成的可靠性、运维和国际化工作。
 
 ## 术语
 

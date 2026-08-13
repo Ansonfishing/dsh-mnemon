@@ -141,7 +141,7 @@ There is currently no formal schema-migration framework, so persistent formats m
 - update both languages;
 - keep commands, configuration keys, paths, and code symbols exactly the same;
 - cross-link corresponding language pages with relative paths;
-- use ASCII for diagrams; do not introduce Mermaid or binary diagrams in this iteration;
+- prefer accessible SVGs with no scripts or external resources for architecture overviews; keep directory trees, commands, formulas, and short protocols as copyable `text` / ASCII;
 - keep only summaries in the root READMEs and place details on one authoritative docs page.
 
 When the Web locale changes, the Chinese key set remains the type source of truth. The English dictionary must satisfy `Record<MnemonKey, string>` and preserve the same placeholders.

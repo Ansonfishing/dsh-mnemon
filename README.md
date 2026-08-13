@@ -121,6 +121,7 @@ Web 工作台提供总览、运行时、档案、检索、实体、沉淀、内�
 ## 文档
 
 - [文档中心](./docs/zh-CN/README.md)
+- [项目介绍](./docs/zh-CN/project-overview.md)
 - [快速开始](./docs/zh-CN/getting-started.md)
 - [架构设计](./docs/zh-CN/architecture.md)
 - [存储与三层记忆模型](./docs/zh-CN/storage-model.md)

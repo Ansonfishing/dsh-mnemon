@@ -121,6 +121,7 @@ The recommended lookup order is: hot memory -> active Documents -> active Memory
 ## Documentation
 
 - [Documentation hub](./docs/en/README.md)
+- [Project overview](./docs/en/project-overview.md)
 - [Getting started](./docs/en/getting-started.md)
 - [Architecture](./docs/en/architecture.md)
 - [Storage and three-tier memory model](./docs/en/storage-model.md)

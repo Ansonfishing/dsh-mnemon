@@ -141,7 +141,7 @@ Runtime、Documents 和 Memory Space registry 都带版本字段或固定结构�
 - 同步两种语言；
 - 保持命令、配置键、路径和代码符号完全一致；
 - 使用相对路径互链对应语言页面；
-- 图统一用 ASCII，本轮不引入 Mermaid 或二进制图；
+- 架构总览优先使用可访问、无脚本和无外部资源的 SVG；目录树、命令、公式与短协议仍使用可复制的 `text` / ASCII；
 - 根 README 只保留摘要，把细节放到单一权威 docs 页面。
 
 Web locale 变更时，中文键集合仍是类型事实源；英文词典必须满足 `Record<MnemonKey, string>`，并保持占位符一致。

@@ -12,41 +12,9 @@
 
 ## 组件图
 
-```text
-+---------------------------- DSH Web Client ----------------------------+
-| Memory workspace                     Plugin settings                   |
-| MnemonView.tsx                       MnemonSettingsCard.tsx             |
-+-------------+-------------------------+----------------+----------------+
-              | read RPC                | write RPC      | settings RPC
-              | trusted-host            | loopback       | loopback
-              v                         v                v
-+----------------------------- DSH Host Plugin ---------------------------+
-| index.ts::apply                                                          |
-|                                                                          |
-| Settings  Commands  Native Tools  Prompt Sections  Lifecycle  RPC        |
-|    |         |           |              |             |        |         |
-|    +---------+-----------+--------------+-------------+--------+         |
-|                                  |                                       |
-|                     MnemonSubagentCoordinator                            |
-|                       |                       |                           |
-|              spawn bounded worker        fork review worker              |
-|                       |                       |                           |
-|                       +-----------+-----------+                           |
-|                                   |                                       |
-| RuntimeMemoryController   DocumentManager   MemoryBodyRegistry            |
-|                                   |                                       |
-|                             MnemonService                                 |
-|                                   |                                       |
-|                             MnemonRunner                                  |
-+-----------------------------------+---------------------------------------+
-                                    |
-                                    | argv, shell=false, serialized
-                                    v
-                           local mnemon CLI
-                                    |
-                                    v
-                  <storageRoot>/data/<space-id>/mnemon.db
-```
+[![dsh-mnemon 运行时架构](./assets/project-architecture.svg)](./assets/project-architecture.svg)
+
+图中实线表示确定性数据或控制路径，紫色虚线表示 LLM 监督路径。Runtime Memory 和 Documents 直接使用受管文件；只有 Memory Spaces 通过 `MnemonRunner` 调用本地 Mnemon CLI。点击图片可以查看原始 SVG。
 
 ## Host 组合根
 

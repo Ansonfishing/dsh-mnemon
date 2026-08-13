@@ -6,15 +6,16 @@ These documents use the current implementation as the source of truth. The root 
 
 ## Recommended Reading Path
 
-1. [Getting Started](./getting-started.md): installation, initial configuration, and basic verification.
-2. [Architecture](./architecture.md): boundaries between the DSH Host, Web Client, control layer, subagents, and the Mnemon CLI.
-3. [Storage and the Three-Layer Memory Model](./storage-model.md): semantics and directory layout of Runtime Memory, Documents, and Memory Spaces.
-4. [Lifecycle and Core Workflows](./workflows.md): recall, writes, background review, capacity maintenance, and cold archiving.
-5. [Configuration Reference](./configuration.md): all settings, defaults, precedence, and provider requirements.
-6. [WebUI, Tools, Commands, and RPC](./interfaces.md): all user-facing and model-facing entry points.
-7. [Operations, Security, and Troubleshooting](./operations.md): locks, permissions, backup, recovery, and known limitations.
-8. [Development and Verification](./development.md): module structure, tests, builds, and release checks.
-9. [Roadmap](./roadmap.md): unfinished reliability, operations, and internationalization work.
+1. [Project Overview](./project-overview.md): positioning, the three-tier model, system architecture, supervision boundaries, and good fits.
+2. [Getting Started](./getting-started.md): installation, initial configuration, and basic verification.
+3. [Architecture](./architecture.md): boundaries between the DSH Host, Web Client, control layer, subagents, and the Mnemon CLI.
+4. [Storage and the Three-Layer Memory Model](./storage-model.md): semantics and directory layout of Runtime Memory, Documents, and Memory Spaces.
+5. [Lifecycle and Core Workflows](./workflows.md): recall, writes, background review, capacity maintenance, and cold archiving.
+6. [Configuration Reference](./configuration.md): all settings, defaults, precedence, and provider requirements.
+7. [WebUI, Tools, Commands, and RPC](./interfaces.md): all user-facing and model-facing entry points.
+8. [Operations, Security, and Troubleshooting](./operations.md): locks, permissions, backup, recovery, and known limitations.
+9. [Development and Verification](./development.md): module structure, tests, builds, and release checks.
+10. [Roadmap](./roadmap.md): unfinished reliability, operations, and internationalization work.
 
 ## Terminology
 
