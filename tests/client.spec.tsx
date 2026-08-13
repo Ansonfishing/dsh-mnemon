@@ -17,7 +17,7 @@ describe('MnemonView', () => {
     unset: async () => {},
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { withInactiveBody?: boolean } = {}) {
+  function createConnection(options: { withInactiveBody?: boolean; listCount?: number } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -97,7 +97,7 @@ describe('MnemonView', () => {
       relativePath: '.mnemon/documents/active/release-document-1234.md', sourcePaths: ['package.json'], sessionIds: ['session-1'],
       createdAt: '2026-08-13T02:00:00.000Z', updatedAt: '2026-08-13T02:00:00.000Z', lastAccessedAt: '2026-08-13T02:00:00.000Z',
       revision: 1, contentHash: 'a'.repeat(64), sizeBytes: 640, memoryBodyIds: [] as string[], healthy: true, excerpt: '发布前运行 typecheck、单元测试与真实 WebUI E2E。',
-      content: '# 发布验证\n\n发布前运行 typecheck、单元测试与真实 WebUI E2E。',
+      content: '# 发布验证\n\n发布前运行 **typecheck**、单元测试与真实 WebUI E2E。\n\n- 检查构建产物\n- 检查真实页面\n\n[架构说明](https://example.com/architecture)\n\n[不安全链接](javascript:alert(1))',
     }]
     const call = vi.fn(async (_channel: string, endpoint: string, payload?: Record<string, unknown>) => {
       const bodies = options.withInactiveBody ? [body, { ...secondaryBody, active: secondaryActive }] : [body]
@@ -152,7 +152,12 @@ describe('MnemonView', () => {
           generatedAt: '2026-08-13T03:00:00.000Z',
         },
       }
-      if (endpoint === 'list') return { ok: true, value: { items: [memory], total: 1, generatedAt: '2026-08-13T03:00:00.000Z' } }
+      if (endpoint === 'list') {
+        const items = options.listCount === undefined
+          ? [memory]
+          : Array.from({ length: options.listCount }, (_, index) => ({ ...memory, id: `memory-${index + 1}`, graphId: `${body.id}:memory-${index + 1}`, content: `记忆条目 ${index + 1}` }))
+        return { ok: true, value: { items, total: items.length, generatedAt: '2026-08-13T03:00:00.000Z' } }
+      }
       if (endpoint === 'entities') return { ok: true, value: { items: [{ entity: 'SQLite', count: 2 }], insights: [] } }
       if (endpoint === 'search') return {
         ok: true,
@@ -236,7 +241,13 @@ describe('MnemonView', () => {
     fireEvent.click(screen.getByRole('button', { name: /档案 项目知识与冷归档/ }))
     expect(screen.getByRole('heading', { name: '项目档案' })).toBeTruthy()
     await waitFor(() => expect(screen.getByText('发布验证清单')).toBeTruthy())
-    await waitFor(() => expect(screen.getByRole('region', { name: '档案阅读器' }).querySelector('pre')?.textContent).toContain('发布前运行 typecheck、单元测试与真实 WebUI E2E。'))
+    const documentReader = screen.getByRole('region', { name: '档案阅读器' })
+    await waitFor(() => expect(documentReader.querySelector('h1')?.textContent).toBe('发布验证'))
+    expect(documentReader.querySelector('strong')?.textContent).toBe('typecheck')
+    expect(documentReader.querySelectorAll('li')).toHaveLength(2)
+    expect(documentReader.querySelector('a[href="https://example.com/architecture"]')?.getAttribute('target')).toBe('_blank')
+    expect(documentReader.querySelector('a[href^="javascript:"]')).toBeNull()
+    expect(documentReader.querySelector('pre')).toBeNull()
     expect(screen.getByText('640 B / 10.0 MB')).toBeTruthy()
     expect(screen.getByText('`.mnemon/documents/index.json` 是控制面事实源；active 总量固定不超过 10 MB，archived 不计入上限，项目源文件不会被修改。')).toBeTruthy()
 
@@ -275,6 +286,21 @@ describe('MnemonView', () => {
     expect(screen.getByRole('img', { name: /Mnemon 实时记忆图谱，7 个元素/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: '记忆体: 偏好记忆体' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '实体: DSH' })).toBeTruthy()
+  })
+
+  it('progressively renders long content lists instead of mounting every card', async () => {
+    const { connection } = createConnection({ listCount: 60 })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: /内容 浏览与维护/ }))
+    await waitFor(() => expect(screen.getByText('当前显示 48 / 60')).toBeTruthy())
+    expect(screen.getByText('记忆条目 48')).toBeTruthy()
+    expect(screen.queryByText('记忆条目 49')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '再显示 12 条' }))
+    expect(screen.getByText('当前显示 60 / 60')).toBeTruthy()
+    expect(screen.getByText('记忆条目 60')).toBeTruthy()
   })
 
   it('requires inline confirmation before forgetting a recalled memory', async () => {

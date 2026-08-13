@@ -81,6 +81,7 @@
     "verify": "pnpm run typecheck && pnpm run test && pnpm run build"
   },
   "dependencies": {
+    "markdown-to-jsx": "^7.7.17",
     "schemastery": "^3.18.0"
   },
   "peerDependencies": {
