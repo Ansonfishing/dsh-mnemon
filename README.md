@@ -1,305 +1,145 @@
 # dsh-mnemon
 
+**简体中文** | [English](./README.en.md)
+
 > **LLM-supervised 4-graph persistent memory for AI agents.**
 
-DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https://github.com/mnemon-dev/mnemon) 接入 DSH，并提供三个梯度：每轮直接进入上下文的运行时热记忆、可检索的项目档案（Documents），以及建立在 Mnemon 原生命名 Store 上的长期“记忆体”。每个记忆体都有稳定的 `id`、名称、路由说明、激活状态和独立 `.db`，DSH 记忆子 Agent 负责跨记忆体选择、召回、查重、归档与容量迁移。
+`dsh-mnemon` 是 DeepSeek Harness（DSH）的本地 Mnemon 记忆插件。它把每轮可见的运行时热记忆、可直接阅读的项目档案（Documents）和按需召回的长期记忆体（Memory Spaces）组织成一个受监督、可检索、可维护的三层体系。
 
-主 Agent 不需要接收完整记忆体目录、原始检索过程或归档推理。新出现的稳定信息通常通过确定性的运行时控制层写入热记忆；复杂且可复用的项目产物进入受控 Documents；主模型按需调用的长期召回与归档使用有界 `spawn` 子 Agent。每个已完成 turn 都按 QoderWork 的原始参数累计活动分；只有达到门槛并继续空闲后，插件才使用一个 `fork` 子 Agent 继承主 Agent 的完整已完成 checkpoint，同时保守判断是否维护热记忆、以及是否创建或修订一份项目档案。只有精简证据或结构化回执会回到主上下文；长期存储、四图索引、衰减和去重仍由本地 Mnemon CLI 确定性执行。
+Mnemon 继续负责本地 SQLite 存储、四类关系图和确定性检索；DSH 负责提示词接入、生命周期、子 Agent 编排、WebUI、命令与权限边界。当前用户指令和仓库事实始终高于历史记忆。
 
-## 统一存储域
+## 三层记忆
 
-插件在 DSH「设置 → 插件配置 → Mnemon」中只要求选择一个存储范围；该设置是运行时热记忆、Documents、记忆体和后台状态共同的目录边界，修改后重启 DSH 生效：
-
-- **全局**：使用 `MNEMON_DATA_DIR` 或 `~/.mnemon`，在工作区之间共享；
-- **工作区**：使用启动 DSH 时工作目录下的 `.mnemon`；
-- **自定义**：使用一个绝对路径或以 `~/` 开头的目录。
-
-统一目录结构如下；状态页按这个根展示真实路径、数量、占用和健康状态：
+| 层级 | 适合保存 | 如何进入上下文 |
+|---|---|---|
+| 运行时热记忆 | 用户偏好、稳定约定、环境事实、常用经验 | `USER.md` / `MEMORY.md` 每轮注入 |
+| 项目档案 | 设计、调查、流程、架构理由、交接材料 | 先对 active Documents 做确定性检索 |
+| 记忆体 | 跨会话的长期事实、决策、实体与关系 | 从已激活 Memory Spaces 按需召回 |
 
 ```text
-<storageRoot>/
-├── runtime/          # memories.json、USER.md、MEMORY.md
-├── data/             # 记忆体目录、各自 mnemon.db
-├── documents/        # index.json、active、archived
-└── state/            # 后台审阅水位等可恢复状态（尚在 Roadmap）
+                       DSH Agent
+                           |
+             +-------------+-------------+
+             |                           |
+       every-turn context          search on demand
+             |                           |
+             v                           v
+    +-----------------+       +---------------------+
+    | Runtime Memory  | ----> | Active Documents    |
+    | USER / MEMORY   |       | managed Markdown    |
+    +-----------------+       +----------+----------+
+                                         |
+                                  deeper recall
+                                         v
+                              +---------------------+
+                              | Mnemon Memory       |
+                              | Spaces + four graphs|
+                              +----------+----------+
+                                         |
+                                  cold reference
+                                         v
+                              +---------------------+
+                              | Archived Documents  |
+                              +---------------------+
 ```
 
-切换存储范围不会自动迁移、合并或删除旧目录。需要保留旧数据时，应先备份并显式迁移；仅查看状态也不会改变 Agent 写入目标。
+## 核心能力
 
-## 运行时热记忆
+- 统一的 `global`、`workspace` 或 `custom` 存储范围，覆盖三层数据。
+- 多记忆体目录：每个记忆体拥有稳定 ID、名称、路由说明、激活状态和独立 `mnemon.db`。
+- 受限子 Agent：长期召回与语义写入使用隔离的 `spawn` worker；后台审查使用继承已完成 checkpoint 的 `fork` worker。
+- 可靠容量维护：USER 热记忆在本地保守合并，MEMORY 热记忆先归档再压缩，Documents 先建立冷索引再迁移；revision 冲突时保留原数据。
+- DSH 原生体验：模型工具、`/mnemon` 命令、双语 Web 工作台、全局明暗主题和诊断状态页。
+- 本地优先：CLI 以参数数组启动且禁用 shell；数据库和文档不需要远程记忆服务。
 
-运行时控制层是 `USER.md`、`MEMORY.md` 和所有 `add` / `replace` / `remove` 操作的唯一文件入口：
+## 前置条件
 
-```text
-<storageRoot>/runtime/
-├── memories.json     # 唯一事实源
-├── USER.md           # target=user 的确定性投影
-└── MEMORY.md         # target=memory 的确定性投影
-```
+- 可用的 DSH Web profile。
+- 本地 `mnemon` CLI。
+- 支持 `outputSchema`、`toolFilter`、`persona` 和 `depthLimit` 的子 Agent provider。常规语义操作优先使用 `spawn`；默认后台审查还需要名为 `fork`、可继承父上下文的 provider。
 
-`memories.json` 的每条 entry 包含 `content`、`created_at`、`updated_at`、`target` 和 `importance`。`target=user` 用于身份、角色、习惯与表达偏好；`target=memory` 用于项目、环境、决策、约定和可复用经验。`importance` 为 `critical` / `normal` / `low`。
+## 快速开始
 
-两个 Markdown 投影与 QoderWork 的纯文本格式一致：每条记忆归一为单行，条目之间由单独占一行的 `§`（U+00A7）分隔，例如 `第一条\n§\n第二条\n`。`§` 是保留字符，不能出现在条目正文中。
-
-- **单一事实源**：LLM、WebUI 和 RPC 都不能直接维护 Markdown；控制层在一次受锁保护的事务中原子写 JSON 并重新投影两个 Markdown。
-- **并发控制**：进程内操作按队列串行，跨实例使用文件锁；容量迁移期间使用快照 revision，过期压缩结果绝不会覆盖并发写入。
-- **上下文接入**：`mnemon:runtime-memory` system prompt section 在每次 prompt 组装时读取受控投影，采用从 QoderWork memory protocol 裁剪后的保存、跳过、分类和重要性规则。
-- **容量边界**：`USER.md` 为 4 KiB，`MEMORY.md` 为 10 KiB，均按 UTF-8 字节计算。
-- **分层容量整理**：`USER.md` 只在本地由无工具权限的隔离子 Agent 保守合并，Host 要求每个原条目恰好被一个压缩候选覆盖，用户偏好不会进入 Mnemon 记忆体；`MEMORY.md` 才执行“先归档后压缩”，并可把不同语义簇路由到多个既有或新建记忆体。全部归档成功后，Host 再按重要性与 UTF-8 安全水位确定性装箱并重试原写入。模型不承担精确字节计算；归档失败、覆盖不完整或 revision 冲突时，原热记忆保持不变。
-
-## 项目档案（Documents）
-
-Documents 是热记忆和 Mnemon 记忆体之间的项目知识层。它保存设计、调查、操作流程、架构理由和交接记录等“比一条记忆更完整、又需要快速阅读”的内容；用户画像不会进入这里。
-
-```text
-<storageRoot>/documents/
-├── index.json       # 元数据、状态、修订与哈希的唯一事实源
-├── active/          # 参与近场检索，所有托管 Markdown 合计不超过 10 MiB
-└── archived/        # 冷归档原文，不计入 active 容量
-```
-
-- **托管副本**：Documents 只写入当前存储域的 `documents/`；frontmatter 记录 UUID、标题、检索说明、时间、哈希、来源路径、会话与记忆体引用。`sourcePaths` 只允许指向当前会话工作区，原项目文件从不被修改。
-- **控制面与并发**：所有创建、修订、搜索和迁移经由统一控制层；进程内串行、跨实例加锁、索引原子替换，归档使用 document revision 防止覆盖并发修订。
-- **近场检索**：`mnemon_document_search` 默认只读 active，按标题、description 和正文确定性排名；模型应先查热记忆与 Documents，仍缺少历史细节时再进入 Mnemon 深召回。
-- **评分沉淀**：活动评分达到门槛且主 Agent 持续空闲后，同一个完整 checkpoint `fork` reviewer 在复杂工作确实形成可复用项目知识时，最多创建或修订一份档案；普通聊天、常规编辑、原始日志和用户偏好会被跳过。
-- **先索引后迁移**：active 按真实 UTF-8 Markdown 字节硬限制为 10 MiB。容量不足或人工归档时，选择最久未访问的档案，由受限 `spawn` worker 先向恰当 Mnemon 记忆体写入摘要、冷路径和内容 SHA-256；只有结构化成功回执返回后，原文才移入 `archived/`。失败或 revision 冲突时 active 原文保持不变。
-
-完整查询梯度是：运行时热记忆 → active Documents → 激活 Mnemon 记忆体 → Mnemon 结果指向的 archived 原文。
-
-## 记忆体模型
-
-一个 Mnemon `.db` 对应一个隔离的记忆体数据面，`dsh-mnemon` 为它补充可维护的目录元数据：
-
-```text
-<storageRoot>/
-└── data/
-    ├── .dsh-memory-bodies.json       # id / name / description / active
-    ├── project/
-    │   └── mnemon.db                 # project 记忆体
-    ├── preferences/
-    │   └── mnemon.db                 # preferences 记忆体
-    └── research/
-        └── mnemon.db                 # research 记忆体
-```
-
-- **读边界**：语义召回只能读取已激活记忆体；子 Agent 根据名称和 description 选择一个或多个目标，也可以有意执行跨记忆体召回。
-- **写边界**：写入可选择任意记忆体；向未激活记忆体写入后会自动激活。
-- **新建**：只有稳定知识形成独立、反复使用且现有目录无法容纳的范围时，写入子 Agent 才应创建新记忆体；子 Agent 提供有主题意义的名称和精确路由描述，Host 生成不可由模型指定的 UUID。
-- **合并**：子 Agent 可将来源记忆体导入目标记忆体；这是非破坏性合并，来源 `.db` 不会被删除。
-- **兼容迁移**：插件会发现既有 `<storageRoot>/data/<store>/mnemon.db` 并登记到目录，不移动或重建数据库。
-- **人工控制**：“记忆体”总览提供激活开关和空白记忆体创建入口；开关只改变读取范围。
-
-## DSH 原生监督架构
-
-| 阶段 | DSH 扩展点 | 记忆子 Agent 的职责 | 主 Agent 得到什么 |
-|---|---|---|---|
-| 每次 prompt 组装 | `systemPrompt.section()` | 动态投影 `USER.md` / `MEMORY.md` 与热记忆协议 | 当前紧凑热记忆 |
-| 每轮开始 | `agent/pre-step` | 只注入一句按需 recall / runtime-memory 提醒，不读取目录、不执行记忆工具 | 主模型自行判断是否发起召回或维护热记忆 |
-| 显式工具/命令 | `ctx.subagents.start('spawn', …)` | 在受限 Mnemon 工具集合内完成一次语义操作 | 结构化召回结果或写入回执 |
-| turn 活动累计达标并持续空闲 | `agent/turn-stopping` → score → debounce → `fork` | 继承截至最新 `turn/end` 的完整主 Agent checkpoint，保守判断是否维护一次热记忆，并在复杂工作形成可复用产物时最多维护一份 Document | 不注入复核推理，不唤醒主 Agent；新 turn 会取消等待或运行中的复核 |
-| `USER.md` 达到容量 | 控制层 → 无工具 `spawn` → source coverage / revision barrier | 只在本地合并用户画像，不写入记忆体 | 本地整理回执；覆盖不完整时不改数据 |
-| `MEMORY.md` 达到容量 | 控制层 → 受限 `spawn` → revision barrier | 按语义簇向一个或多个 Mnemon 记忆体归档，再返回压缩候选 | 归档回执；失败时不改本地热记忆 |
-| Documents 达到容量或人工归档 | LRU 预检 → 受限 `spawn` → document revision barrier | 先在 Mnemon 写入摘要、精确冷路径和哈希 | 成功后才移动原文；失败或冲突时保留 active |
-| WebUI 沉淀 | 写 RPC → `spawn` | 选择记忆体、查重、提炼、写入，必要时创建或合并 | 可审计的 action、目标记忆体和摘要 |
-
-`spawn` 子 Agent 使用全新的隔离上下文；后台审查则要求 DSH 的 `fork` provider，并只继承已经完成的 turn checkpoint。两者都通过预定义 persona、工具白名单、结构化输出和 `maxDepth: 1` 限制职责。职责、边界与操作协议位于子 Agent 的 system persona，query 只携带本次动作和最小必要数据；容量维护时，已提交的 `MEMORY.md` / `USER.md` 以只读 system 快照提供，不再把整份热记忆、路径或 JSON 协议重复塞进 query。根 Agent 调用 `mnemon_recall` / `mnemon_remember` 等工具时会先进入子 Agent；同名工具在记忆子 Agent 内才直接访问 MnemonService，因此不会递归委派。
-
-后台审查的确定性门槛直接采用 QoderWork 0.9.12 的原始默认参数，不依赖模型提供方是否报告 token usage：累计用户输入每 50 字符计 1 分、最多 3 分；每个 turn 计 1 分；每 5 次已完成工具调用计 1 分、最多 2 分；累计使用 3 种工具计 1 分、4 种及以上计 2 分。总分达到 5 后才进入 `idleReviewMs` 空闲等待。Review 成功结束（包括判断无需写入）后分数清零；新 turn 会取消当前等待或运行中的 Review，但保留并继续累计尚未处理的活动。
-
-Prime 只初始化路由状态；pre-step 提示保持为一句短语，不注入目录、计数或记忆内容。主模型决定需要持久上下文时才调用 `mnemon_recall`，随后根工具用隔离子 Agent 选择记忆体并返回可复核证据。当前用户指令与仓库事实始终高于历史记忆。
-
-## 能力
-
-### 模型工具
-
-- `mnemon_memory_bodies`：读取全局记忆体目录、激活状态和统计；
-- `mnemon_runtime_memory`：维护每轮注入的 USER / MEMORY 热记忆；支持 `add`、`replace`、`remove`；USER 容量压力只做本地画像整理，MEMORY 容量压力才归档到一个或多个记忆体；
-- `mnemon_document_search`：确定性检索当前工作区的 active Documents；只在沿已知冷引用深查时显式包含 archived；
-- `mnemon_document_manage`：经统一控制层创建、修订或归档项目档案；冷归档必须先完成 Mnemon 索引；
-- `mnemon_recall`：从一个或多个激活记忆体执行图增强、关键词或基础召回；
-- `mnemon_related`：沿 temporal / semantic / causal / entity 边遍历关联记忆；
-- `mnemon_remember`：选择记忆体并沉淀一条持久洞察；
-- `mnemon_link`：在同一记忆体内建立类型化关系；
-- `mnemon_forget`：按记忆体和精确 ID 软删除；
-- `mnemon_memory_body_create` / `update` / `merge`：创建、维护或非破坏性合并记忆体；
-- `mnemon_status`：查看 CLI、目录、聚合数据库和子 Agent 健康状态。
-
-根 Agent 发起的语义召回和写操作全部由记忆子 Agent 处理。总览图、内容列表、状态读取和人工激活开关属于确定性管理操作，不消耗 LLM 上下文。
-
-### 会话「记忆体」Tab
-
-- 中文界面使用“记忆体”，英文界面使用更贴近独立持久上下文边界的 **Memory Space**；Tab 和所有功能文案跟随 DSH 全局语言设置即时切换。Mnemon 品牌名与官方 slogan 保持原文。
-- 总览、运行时、档案、检索、实体、沉淀、内容和状态采用上边缘二级导航，给实时图谱与内容列表保留完整横向空间。
-- **总览**：管理全局记忆体目录和激活开关；每 15 秒聚合所有激活记忆体的四图快照；支持流畅力导向动画、节点拖拽、键盘微调、自然铺开、均匀重置和节点检查。
-- **运行时**：展示 USER / MEMORY 两类热记忆、UTF-8 容量、重要级别与更新时间；支持添加、编辑和确认移除，并在容量迁移后显示目标记忆体回执。
-- **档案**：展示 active / archived 双目录、真实 10 MiB 容量、来源路径、修订、哈希和 Mnemon 冷索引回执；支持确定性检索、阅读、创建、编辑和确认归档。
-- **检索**：三种直连召回模式、分类过滤、跨记忆体来源标记、关联图查阅、复制 ID 和软删除确认；可选 Agent 查询先确定性召回，再由无 Mnemon 工具权限的隔离 Agent 只基于命中证据生成顶部答案。
-- **实体**：列出高频实体，并由 MnemonService 直连聚合实体的跨图上下文，不启动 Recall Worker。
-- **沉淀**：默认直接调度记忆子 Agent；人工高级选项可约束目标记忆体、分类、重要性、实体和标签，但不会绕过查重与监督。
-- **内容**：无副作用浏览已激活记忆体，支持筛选、复制、基于旧内容新建和软删除。
-- **状态**：用对齐的摘要卡展示 Mnemon 引擎、记忆体、Documents 和子 Agent；存储域卡按当前根展开四类数据；动画流转图实时描绘对话、LLM 监督层、热记忆、档案、记忆体和 Agent 上下文之间的路径，并展示审查评分与各层数量。部署配置只在 DSH 插件配置页修改。
-
-界面使用 DSH design token，跟随 DSH 全局明暗模式，不维护插件私有主题开关。WebUI 不直接启动进程、不接触数据库：Host 侧统一校验输入、控制超时并调用本地 `mnemon`。
-
-### 命令与权限
-
-`/mnemon status`、`recall`、`related`、`remember`、`forget` 注册到 DSH 命令面板。语义命令使用命令所在的 live Agent 作为记忆子 Agent 的 parent；状态读取是确定性的。
-
-远程可信 Web 页面可读，本地记忆写 RPC 仅允许 loopback 页面。`writeEnabled: false` 会关闭模型写工具、写命令和 Web 写通道，召回、目录、状态与可视化仍可用。所有 CLI 调用都使用参数数组并禁用 shell。
-
-## 安装
-
-先安装 Mnemon。macOS 推荐官方 Homebrew Cask：
+安装 Mnemon：
 
 ```sh
+# macOS
 brew install --cask mnemon-dev/tap/mnemon
-```
 
-macOS / Linux 也可以通过 Go 安装：
-
-```sh
+# macOS / Linux，也可通过 Go 安装
 go install github.com/mnemon-dev/mnemon@latest
-```
 
-确认命令可用：
-
-```sh
 mnemon --version
-mnemon status
 ```
 
-再安装 DSH 插件并重启 `dsh web`：
+安装插件并重启 DSH Web profile：
 
 ```sh
 dsh plugin --profile web add "github:dsh-external/dsh-mnemon"
+dsh --profile web
 ```
 
-本地开发检出可使用：
+本地开发检出使用绝对路径：
 
 ```sh
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
-包内 `cordis.patch.yml` 会挂载 Host 插件、原生工具、命令、生命周期 hook、RPC 和会话「记忆体」Tab。DSH Web/base profile 需提供兼容的 `spawn` subagent provider。
+打开 DSH 的“设置 -> 插件配置 -> Mnemon”选择存储范围，再进入会话的“记忆体”Tab 创建或激活记忆体。配置重启后生效；切换范围不会自动迁移、合并或删除旧数据。
 
-## 配置
+## 最小配置
 
-记忆体名称、description 和激活状态在「记忆体 → 总览」中维护。DSH「设置 → 插件配置 → Mnemon」只呈现统一存储范围这一项（选择自定义时再填写目录）；其他进程级选项仍可在 `$DSH_HOME/settings.yaml` 的 `mnemon` 命名空间中维护。修改后重启 DSH 生效。
+配置位于 `$DSH_HOME/settings.yaml`（默认通常为 `~/.dsh/settings.yaml`）：
 
 ```yaml
-# ~/.dsh/settings.yaml
 mnemon:
   storageScope: global # global | workspace | custom
-  cliPath: /opt/homebrew/bin/mnemon
-  # dataDir: ~/mnemon-data # 仅 storageScope=custom 时需要
-  timeoutMs: 10000
-  defaultRecallLimit: 10
-  routingGuidance: true
-  lifecycleEnabled: true
-  recallMode: guided
-  writebackMode: guided
-  idleReviewMs: 30000
-  tabEnabled: true
-  writeEnabled: true
 ```
 
-| 配置 | 默认值 | 说明 |
-|---|---:|---|
-| `storageScope` | `global` | 唯一的主存储选择：`global`、`workspace` 或 `custom`；统一控制 runtime、documents、data 和 state |
-| `cliPath` | 自动发现 | 显式配置 → `MNEMON_CLI_PATH` → `PATH` → 常见安装路径 |
-| `dataDir` | 未设置 | 仅 `storageScope: custom` 时必填，必须为绝对路径或以 `~/` 开头 |
-| `store` | 未覆盖 | 仅作为首次建目录或发现旧 Store 时的兼容首选项；运行期语义操作由记忆体路由决定 |
-| `timeoutMs` | `10000` | 单次 CLI 调用硬超时，范围 100–120000 ms |
-| `defaultRecallLimit` | `10` | 工具和 Tab 的默认召回条数，范围 1–50 |
-| `routingGuidance` | `true` | 向主 Agent 提供精简的记忆监督边界说明 |
-| `lifecycleEnabled` | `true` | 启用 Prime 状态、pre-step 短提醒和 turn 结束后的评分审查调度 |
-| `recallMode` | `guided` | `guided` 注入按需召回短提醒；`off` 不注入提醒，仍保留显式工具调用 |
-| `writebackMode` | `guided` | `guided` 注入按需沉淀短提醒，并在活动评分达到 5 且持续空闲后运行完整 checkpoint 审查；`off` 仅保留显式或 Tab 沉淀 |
-| `idleReviewMs` | `30000` | 活动评分达标后连续空闲多久才启动 `fork` 审查，范围 5000–600000 ms；新 turn 会取消等待或运行中的审查 |
-| `tabEnabled` | `true` | 注册 Web `conversation.view`「记忆体」Tab 和 RPC |
-| `writeEnabled` | `true` | 允许记忆、关系、忘记、记忆体维护与写 RPC |
+- `global`：`MNEMON_DATA_DIR`，未设置时为 `~/.mnemon`。
+- `workspace`：启动 DSH Host 时工作目录下的 `.mnemon`。
+- `custom`：`dataDir` 指定的绝对路径或 `~/...` 路径。
 
-profile patch 中同 ID 的 `config` 可能整体覆盖默认行；覆盖时应保留仍需启用的键。
+完整配置、覆盖优先级和只读模式见[配置参考](./docs/zh-CN/configuration.md)。
 
-## 推荐使用方式
+## 使用入口
 
-1. 用清晰的 name 和 description 划分长期范围，例如“项目决策”“个人偏好”“研究资料”；不要为一次临时任务创建记忆体。
-2. 只激活当前可能影响工作的记忆体，减少无关召回；跨域任务可以同时激活多个。
-3. 用户偏好与高频项目事实优先写入运行时热记忆，让它们在下一任务立即可用；用户偏好始终留在 USER，不进入 Documents 或 Mnemon 记忆体。
-4. 设计、研究、流程和交接等完整产物进入 active Documents；查询项目记录时先检索 Documents，再按需深召回。
-5. 延续旧任务、询问历史决策或排查已知坑时，让 Recall Worker 选择相关长期记忆体并返回证据；需要完整原文时沿命中记录的 archived 路径读取。
-6. 明确需要长期四图归档时使用“沉淀”，常规运行中由容量迁移把已确认热记忆或冷档案索引送入 Mnemon；评分后台审查只作为保守兜底。
-7. 临时进度、普通聊天和可直接从仓库读取的事实不应写入热记忆、Documents 或长期记忆体。
-8. 需要解释关系时，从 recall 返回的完整 `memoryBodyId + id` 调用 `mnemon_related`，不要猜 ID。
+Web 工作台提供总览、运行时、档案、检索、实体、沉淀、内容和状态八个页面，主要界面随 DSH 全局语言在中文与英文间切换。
 
-## DSH 命令
+常用命令：
 
 ```text
 /mnemon status
-/mnemon recall 为什么选择 SQLite
+/mnemon recall <查询>
 /mnemon related <完整记忆 ID>
-/mnemon remember 一条稳定、可复用、自包含的记忆
+/mnemon remember <稳定、自包含的长期洞察>
 /mnemon forget <完整记忆 ID>
 ```
 
-`writeEnabled: false` 时仍可使用 `status` / `recall` / `related`，写入与删除命令会明确拒绝。
+推荐的查询顺序是：热记忆 -> active Documents -> 已激活记忆体 -> 命中记录指向的冷归档原文。不要把临时进度、原始日志、秘密或可直接从仓库重新获得的普通事实写入长期记忆。
 
-## 开发与验证
+## 文档
+
+- [文档中心](./docs/zh-CN/README.md)
+- [快速开始](./docs/zh-CN/getting-started.md)
+- [架构设计](./docs/zh-CN/architecture.md)
+- [存储与三层记忆模型](./docs/zh-CN/storage-model.md)
+- [生命周期与核心流程](./docs/zh-CN/workflows.md)
+- [配置参考](./docs/zh-CN/configuration.md)
+- [WebUI、工具、命令与 RPC](./docs/zh-CN/interfaces.md)
+- [运维、安全与故障排查](./docs/zh-CN/operations.md)
+- [开发与验证](./docs/zh-CN/development.md)
+- [Roadmap](./docs/zh-CN/roadmap.md)
+
+## 开发
 
 ```sh
 pnpm install
-pnpm run typecheck
-pnpm test
-pnpm run build
-# 或一次完成
 pnpm run verify
 ```
 
-构建产物会写入并提交到 `lib/`：
-
-- `lib/index.js`：DSH Host 插件；
-- `lib/client.js`：自包含浏览器 bundle，仅 external `react` / `react/jsx-runtime`；
-- `lib/types/`：Host 与 Client 类型声明及中间 ESM。
-
-测试覆盖运行时 JSON/Markdown 一致性、并发锁、UTF-8 容量、过期压缩拒绝、先归档后压缩的事务顺序、Documents 路径隔离、frontmatter、索引检索、LRU 容量预检、先建立 Mnemon 冷索引再移动、document revision 冲突保护、记忆体目录迁移、独立 Store 路由、激活读边界、写后激活、非破坏性合并、子 Agent 工具隔离、pre-step 仅提醒、QoderWork 原始活动评分、达标后的空闲 debounce、完整 checkpoint `fork` 审查与新 turn 取消、WebUI 运行时与 Documents CRUD、直连检索、证据限定 Agent 问答、RPC 权限、只读模式、多记忆体图谱和八区工作台。发布前还应使用隔离 `MNEMON_DATA_DIR`、隔离工作区和独立端口 DSH，通过真实 WebUI 对话验证模型自主写入热记忆、复杂对话达标后自动形成 Document、新任务先查 active Documents、容量冷迁移、历史问题自主召回、后台复核、跨记忆体读取、状态计数和最终 CLI recall。
-
-## Roadmap / TODO
-
-当前版本已经具备运行时热记忆、项目档案和多记忆体长期存储的完整日常闭环。下面的工作不再扩展主要产品形态，而是把现有闭环推进到可长期无人值守的 production-complete 状态。
-
-### P0 · 可靠性与可恢复调度
-
-- [ ] **持久化后台 Review 水位**：按根 Session 保存累计字符数、turn 数、已完成工具调用量、工具集合、最近处理 checkpoint 和评分版本；DSH 重启或 Session resume 后恢复尚未审阅的活动，成功回执后原子清零。
-- [ ] **为 Review 增加幂等 checkpoint**：使用已完成事件边界或稳定摘要标识一次审阅输入，确保进程重启、超时重试和重复 hook 不会重复生成档案或重复写入热记忆。
-- [ ] **失败退避、熔断和人工重试**：后台子 Agent 失败后进行有上限的指数退避；连续失败达到阈值后暂停该 Session，状态页展示原因并提供明确的重新审阅入口。新 turn 到来时不得丢失未处理水位。
-- [ ] **确定性敏感信息防线**：在 LLM admission 之外，对热记忆、Document 和 Mnemon 写入增加宿主侧秘密/凭据模式检测、大小限制和可审计拒绝回执；默认不得持久化原始工具大输出。
-- [ ] **自动化真实 WebUI E2E**：把当前人工流程固化为隔离 `DSH_HOME`、`MNEMON_DATA_DIR`、工作区和端口的可重复测试，至少覆盖“轻对话不触发”“复杂对话达标后生成档案”“新 turn 取消 Review”“失败后不产生半写入”，并纳入发布前检查。
-
-### P1 · 长期维护与数据运维
-
-- [ ] **跨 Session AutoDream**：增加独立于逐 turn Review 的长期整理器，参考 QoderWork 默认门槛（距上次整理 24 小时、至少 5 个新 Session、扫描节流 10 分钟），通过受限 worker 复核跨会话重复、漂移和可合并知识。
-- [ ] **Mnemon GC / forget 审阅**：定期生成衰减、矛盾、过时内容和孤立关系候选；先展示证据与来源，再由受限子 Agent 或用户确认执行 `forget`，禁止无回执的批量自动删除。
-- [ ] **一致性备份与恢复**：为记忆体目录、`.db`、记忆体 catalog、`memories.json`、运行时 Markdown 投影、Documents index 和 active/archive 原文提供一致快照、校验、导出和恢复流程。
-- [ ] **修复与重建工具**：检测损坏 JSON、丢失 Markdown 投影、Document 孤儿文件、缺失 `.db`、catalog/磁盘不一致和未完成迁移；能从控制面事实源安全重建派生文件，并明确列出不可自动修复项。
-- [ ] **升级兼容矩阵**：记录并测试受支持的 DSH、Mnemon CLI 和数据格式版本；为 catalog、运行时控制面和 Documents index 提供显式 schema migration 与回滚说明。
-
-### P2 · 可观测性、体验与发布工程
-
-- [ ] **后台审阅历史**：在状态页展示最近的评分明细、checkpoint、等待/运行/重试/熔断状态、耗时、子 Agent 回执以及产生的热记忆、档案和记忆体变更，不把长推理注入主对话。
-- [ ] **完整国际化**：把配置卡、验证错误、确认文案和剩余硬编码中文纳入 DSH locale；同步清理内部仍使用 `idle checkpoint review` 的旧命名，统一为 scored background review。
-- [ ] **扩充多记忆体场景测试**：真实覆盖自动创建具有明确名称与路由描述的新记忆体、一次迁移分流到多个记忆体、写后激活、召回多记忆体、合并、简单边关系、实体图和受控 forget。
-- [ ] **容量与故障注入 E2E**：真实触发 `MEMORY.md` 迁移、`USER.md` 本地压缩、Document 10 MiB LRU 冷归档、revision 冲突、Mnemon CLI 超时/失败以及 DSH 中途重启，验证所有事务保持原数据可恢复。
-- [ ] **发布收口**：确定稳定版本号与变更日志，补充安装/升级/卸载/数据保留说明，建立 release artifact 校验和最小支持策略。
-
-### 当前明确不在范围内
-
-- `daily` 运行时目标暂不实现；当前控制面只维护 `user` 与 `memory`。
-- Mnemon 仍是 pull-based 记忆系统；除评分 Review、容量维护和未来 AutoDream 外，不引入没有明确触达语义的通知/提醒守护进程。
-
-## 品牌资源
-
-WebUI 内嵌的 Mnemon 标志来自 [mnemon-dev/mnemon 的官方 logo.svg](https://github.com/mnemon-dev/mnemon/blob/main/docs/logo/logo.svg)，上游项目采用 Apache-2.0 License。标志仅用于准确说明本插件集成的上游产品。
+`verify` 依次运行 TypeScript 检查、Vitest 测试和生产构建。构建产物写入并提交到 `lib/`；详细发布与真实 WebUI 验证流程见[开发文档](./docs/zh-CN/development.md)。
 
 ## License
 
-BSD-3-Clause
+BSD-3-Clause。Mnemon 品牌与标志归上游项目所有；本项目仅用于说明集成关系。

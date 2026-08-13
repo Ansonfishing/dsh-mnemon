@@ -1,0 +1,41 @@
+# Roadmap
+
+**简体中文** | [English](../en/roadmap.md) | [文档中心](./README.md)
+
+Roadmap 记录当前实现之外的工作，不是已交付能力承诺。优先级以数据安全、可恢复性和可验证性为先。
+
+## P0：可靠性与可恢复调度
+
+- [ ] **持久化后台审查水位**：按 root session 保存活动信号、最近处理 checkpoint、评分版本和运行状态；重启或 resume 后恢复未处理活动。
+- [ ] **幂等 checkpoint**：为一次审查输入建立稳定标识，避免超时、重试或重复 hook 产生重复 Document。
+- [ ] **退避、熔断和人工重试**：连续失败后有上限地退避，状态页展示原因并允许显式恢复。
+- [ ] **确定性敏感信息防线**：在 LLM 准入之外增加秘密/凭据模式检测、大小限制和审计回执。
+- [ ] **自动化真实 WebUI E2E**：隔离 DSH_HOME、storageRoot、workspace 和端口，覆盖轻任务、评分审查、取消和失败无半写入。
+- [ ] **修正 `tabEnabled` 语义**：Host 和 client 使用同一开关，真正注册或移除完整 Tab 能力。
+- [ ] **修正冷引用路径**：所有 storage scope 都写入与实际托管路径一致的可解析引用。
+
+## P1：长期维护与数据运维
+
+- [ ] **跨 session 长期整理**：基于时间和新增 session 数触发独立整理，而不是复用逐 turn 审查。
+- [ ] **Mnemon GC / forget 审阅**：生成衰减、冲突、过时内容和孤立关系候选，展示证据后再执行删除。
+- [ ] **一致性备份与恢复**：为 registry、多个数据库、Runtime 和 Documents 提供统一快照、校验和恢复演练。
+- [ ] **修复与重建工具**：检测损坏 JSON、缺失投影、孤儿 Document、缺失 DB 和 registry/磁盘不一致。
+- [ ] **schema migration**：为 Runtime、Documents index 和 Memory Space registry 增加显式升级与回滚策略。
+- [ ] **兼容矩阵**：记录并自动测试支持的 DSH、Mnemon CLI、Node 和数据格式组合。
+- [ ] **明确 Documents workspace ownership**：在共享 storage scope 中记录来源工作区或提供可配置隔离策略。
+
+## P2：可观测性、体验与发布工程
+
+- [ ] **后台审查历史**：展示最近评分、checkpoint、等待/运行/失败、worker 回执和产生的变更。
+- [ ] **完整国际化**：覆盖命令、工具卡、Host 错误、兼容默认元数据和确认文案。
+- [ ] **多记忆体 E2E**：覆盖自动建空间、跨空间召回、一次迁移分流、多种边、合并和受控 forget。
+- [ ] **容量与故障注入**：真实触发 USER/MEMORY 边界、Document LRU、revision 冲突、CLI 超时和 Host 中途重启。
+- [ ] **文档一致性检查**：相对链接、外链、双语文件镜像、配置键和代码块一致性进入 CI。
+- [ ] **发布收口**：稳定版本号、变更日志、升级/卸载/数据保留指南、artifact 校验和最小支持策略。
+
+## 当前明确不在范围内
+
+- Runtime `daily` target；当前只维护 `user` 和 `memory`。
+- 没有明确触达语义的主动通知守护进程；Mnemon 仍是按需拉取系统。
+- 把内部 RPC 或 `MnemonClient` 宣布为稳定公共 SDK。
+- 自动删除来源 Memory Space 数据库；当前 merge 保留来源文件。
