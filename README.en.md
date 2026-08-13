@@ -1,6 +1,12 @@
-# dsh-mnemon
+<h1 align="center">dsh-mnemon</h1>
 
-[简体中文](./README.md) | **English**
+<p align="center"><a href="./README.md">简体中文</a> | <strong>English</strong></p>
+
+<p align="center">
+  <a href="./docs/en/project-overview.md">
+    <img src="./docs/assets/dsh-mnemon-memory-system-demo-poster.jpg" alt="Mnemon Memory Spaces page with the multi-space catalog, activation state, and live relationship graph" width="720">
+  </a>
+</p>
 
 > **A deep integration of [Mnemon](https://github.com/mnemon-dev/mnemon) and DSH that gives DSH comprehensive memory capabilities.**
 
@@ -52,10 +58,6 @@ Reusable knowledge produced by current work
                        |
               spawn: recall active spaces only -> bounded evidence
 ```
-
-[![Mnemon Memory Spaces page with the multi-space catalog, activation state, and live relationship graph](./docs/assets/dsh-mnemon-memory-system-demo-poster.jpg)](./docs/en/project-overview.md)
-
-*Memory Space catalog, activation state, and live relationship graph. Select the image for the [complete project overview](./docs/en/project-overview.md).*
 
 ## Highlights
 

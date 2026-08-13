@@ -1,6 +1,12 @@
-# dsh-mnemon
+<h1 align="center">dsh-mnemon</h1>
 
-**简体中文** | [English](./README.en.md)
+<p align="center"><strong>简体中文</strong> | <a href="./README.en.md">English</a></p>
+
+<p align="center">
+  <a href="./docs/zh-CN/project-overview.md">
+    <img src="./docs/assets/dsh-mnemon-memory-system-demo-poster.jpg" alt="Mnemon 记忆体页：多记忆体目录、激活状态与实时关系图" width="720">
+  </a>
+</p>
 
 > **[Mnemon](https://github.com/mnemon-dev/mnemon) 与 DSH 的深度集成，为 DSH 提供完备的记忆系统能力。**
 
@@ -52,10 +58,6 @@
                        |
               spawn：仅召回 active 空间 -------> 有界证据
 ```
-
-[![Mnemon 记忆体页：多记忆体目录、激活状态与实时关系图](./docs/assets/dsh-mnemon-memory-system-demo-poster.jpg)](./docs/zh-CN/project-overview.md)
-
-*多记忆体目录、激活状态与实时关系图。点击图片阅读[完整项目介绍](./docs/zh-CN/project-overview.md)。*
 
 ## 核心能力
 
