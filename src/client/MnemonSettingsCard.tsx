@@ -70,7 +70,7 @@ function validation(draft: Draft): string | null {
   const limit = Number(draft.defaultRecallLimit)
   if (!Number.isInteger(limit) || limit < 1 || limit > 50) return '默认召回条数需为 1–50 之间的整数。'
   const idleReview = Number(draft.idleReviewMs)
-  if (!Number.isInteger(idleReview) || idleReview < 5_000 || idleReview > 600_000) return '空闲审查阈值需为 5000–600000 ms 之间的整数。'
+  if (!Number.isInteger(idleReview) || idleReview < 5_000 || idleReview > 600_000) return '审查空闲等待需为 5000–600000 ms 之间的整数。'
   const store = String(draft.store).trim()
   if (store !== '' && !/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(store)) return 'Store 仅支持字母、数字、下划线和连字符。'
   if (!['guided', 'off'].includes(String(draft.recallMode))) return '召回 Hook 模式无效。'
@@ -175,17 +175,17 @@ export function MnemonSettingsCard({ scope }: MnemonSettingsCardProps): JSX.Elem
             <SettingField label="召回 Hook" hint="guided 会在每轮首个模型请求前注入一次召回判断；off 仅保留手动工具。" overridden={fieldMeta('recallMode')} onReset={() => resetField('recallMode')}>
               <select aria-label="Mnemon 召回 Hook" value={String(draft.recallMode)} onChange={event => edit('recallMode', event.target.value)} disabled={!snapshot.writable}><option value="guided">guided · LLM 判断</option><option value="off">off · 关闭</option></select>
             </SettingField>
-            <SettingField label="沉淀 Hook" hint="guided 提醒主模型按需 remember，并在持续空闲后 fork 完整 checkpoint 做一次审查。" overridden={fieldMeta('writebackMode')} onReset={() => resetField('writebackMode')}>
-              <select aria-label="Mnemon 沉淀 Hook" value={String(draft.writebackMode)} onChange={event => edit('writebackMode', event.target.value)} disabled={!snapshot.writable}><option value="guided">guided · 自主判断 + 空闲审查</option><option value="off">off · 关闭</option></select>
+            <SettingField label="沉淀 Hook" hint="guided 提醒主模型按需 remember；后台活动评分达到 5 后，才等待空闲并 fork 完整 checkpoint 审查。" overridden={fieldMeta('writebackMode')} onReset={() => resetField('writebackMode')}>
+              <select aria-label="Mnemon 沉淀 Hook" value={String(draft.writebackMode)} onChange={event => edit('writebackMode', event.target.value)} disabled={!snapshot.writable}><option value="guided">guided · 自主判断 + 评分审查</option><option value="off">off · 关闭</option></select>
             </SettingField>
-            <SettingField label="空闲审查阈值" hint={`根 Agent 连续空闲多久后 fork 完整 checkpoint，默认 ${DEFAULT_IDLE_REVIEW_MS} ms。`} overridden={fieldMeta('idleReviewMs')} onReset={() => resetField('idleReviewMs')}>
-              <input aria-label="Mnemon 空闲审查阈值" type="number" min={5000} max={600000} step={1000} value={String(draft.idleReviewMs)} onChange={event => edit('idleReviewMs', event.target.value)} disabled={!snapshot.writable} />
+            <SettingField label="审查空闲等待" hint={`活动评分达到固定门槛 5 后，根 Agent 继续空闲多久才 fork checkpoint，默认 ${DEFAULT_IDLE_REVIEW_MS} ms。`} overridden={fieldMeta('idleReviewMs')} onReset={() => resetField('idleReviewMs')}>
+              <input aria-label="Mnemon 审查空闲等待" type="number" min={5000} max={600000} step={1000} value={String(draft.idleReviewMs)} onChange={event => edit('idleReviewMs', event.target.value)} disabled={!snapshot.writable} />
             </SettingField>
         </div>
 
         <div className={css.switches}>
             <SettingToggle label="记忆路由指引" hint="指导 Agent 按需召回、审慎写回。" checked={Boolean(draft.routingGuidance)} overridden={fieldMeta('routingGuidance')} disabled={!snapshot.writable} onChange={value => edit('routingGuidance', value)} onReset={() => resetField('routingGuidance')} />
-            <SettingToggle label="生命周期编排" hint="为 DSH 根 Agent 启用 Prime、短提示与空闲 checkpoint 审查。" checked={Boolean(draft.lifecycleEnabled)} overridden={fieldMeta('lifecycleEnabled')} disabled={!snapshot.writable} onChange={value => edit('lifecycleEnabled', value)} onReset={() => resetField('lifecycleEnabled')} />
+            <SettingToggle label="生命周期编排" hint="为 DSH 根 Agent 启用 Prime、短提示与评分 checkpoint 审查。" checked={Boolean(draft.lifecycleEnabled)} overridden={fieldMeta('lifecycleEnabled')} disabled={!snapshot.writable} onChange={value => edit('lifecycleEnabled', value)} onReset={() => resetField('lifecycleEnabled')} />
             <SettingToggle label="会话记忆 Tab" hint="在会话页展示 Mnemon 检索与管理界面。" checked={Boolean(draft.tabEnabled)} overridden={fieldMeta('tabEnabled')} disabled={!snapshot.writable} onChange={value => edit('tabEnabled', value)} onReset={() => resetField('tabEnabled')} />
             <SettingToggle label="允许写入" hint="控制 Agent 与本机 WebUI 的 remember/link/forget 能力。" checked={Boolean(draft.writeEnabled)} overridden={fieldMeta('writeEnabled')} disabled={!snapshot.writable} onChange={value => edit('writeEnabled', value)} onReset={() => resetField('writeEnabled')} />
         </div>

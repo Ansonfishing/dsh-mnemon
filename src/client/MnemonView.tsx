@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts'
 import type { Config } from '../config.ts'
 import type { DocumentRecord, DocumentSnapshot, DocumentView } from '../documents.ts'
+import { QODERWORK_REVIEW_POLICY } from '../review-activity.ts'
 import type { RuntimeMemoryEntry, RuntimeMemoryImportance, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts'
 import {
   CATEGORIES,
@@ -1168,13 +1169,21 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
   const current = lifecycle?.current
   const workers = lifecycle?.subagents
   const documents = status?.documents
+  const reviewActivity = current?.reviewActivity
+  const reviewThreshold = reviewActivity?.threshold ?? QODERWORK_REVIEW_POLICY.reviewThreshold
   const catalogKnown = status?.memoryBodies !== undefined
   const memoryBodies = useMemo(() => status?.memoryBodies ?? [], [status])
   const activeBodies = memoryBodies.filter(body => body.active).length
   const latest = current?.lastAt === undefined ? t('status.noActivity') : new Date(current.lastAt).toLocaleString()
   const phase = current?.lastPhase === undefined || current.lastPhase === 'idle' ? t('status.phaseIdle') : current.lastPhase === 'supervised' ? t('status.phaseSupervised') : current.lastPhase === 'error' ? t('status.phaseError') : current.lastPhase === 'prime' ? t('status.prime') : current.lastPhase === 'recall' ? t('status.recallWorker') : current.lastPhase === 'review' ? t('status.phaseReview') : t('status.writeWorker')
-  const reviewState = current?.reviewRunning === true ? t('status.reviewRunning') : current?.idleReviewPending === true ? t('status.reviewPending') : t('status.reviewIdle')
-  const lastReview = current?.lastReviewAt === undefined ? t('status.noReview') : t('status.reviewAt', { time: new Date(current.lastReviewAt).toLocaleTimeString(), action: current.lastReviewAction ?? '—' })
+  const reviewState = current?.reviewRunning === true
+    ? t('status.reviewRunning')
+    : current?.idleReviewPending === true
+      ? t('status.reviewPending')
+      : reviewActivity?.eligible === true
+        ? t('status.reviewQualified')
+        : t('status.reviewAccumulating')
+  const lastReview = current?.lastReviewAt === undefined ? t('status.noReview') : t('status.reviewAt', { time: new Date(current.lastReviewAt).toLocaleTimeString(), action: current.lastReviewAction ?? '—', score: current.lastReviewScore ?? '—' })
   return (
     <div className={css.page}>
       <PageHeader title={t('status.title')} description={t('status.description')} meta={status?.healthy === true && lifecycle?.sessionAvailable === true ? t('status.nominal') : t('status.checkRequired')} action={<button type="button" className={css.secondaryButton} onClick={props.onRefresh}>{props.loading ? t('status.rechecking') : t('status.recheck')}</button>} />
@@ -1192,9 +1201,9 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
           <div className={css.lifecycleFlow}>
             <article><span>01</span><div><strong>{t('status.prime')}</strong><p>{t('status.primeText')}</p></div><code>{lifecycle?.counters.primes ?? 0}</code></article>
             <article data-disabled={lifecycle?.recallMode === 'off' || undefined}><span>02</span><div><strong>{t('status.recallWorker')}</strong><p>{lifecycle?.recallMode === 'guided' ? t('status.recallText') : t('status.recallOff')}</p></div><code>{workers?.recalls ?? 0}</code></article>
-            <article data-disabled={lifecycle?.writebackMode === 'off' || undefined}><span>03</span><div><strong>{t('status.writeWorker')}</strong><p>{lifecycle?.writebackMode === 'guided' ? t('status.writeText', { seconds: Math.round((lifecycle.idleReviewMs ?? 0) / 1000) }) : t('status.writeOff')}</p></div><code>{workers?.reviews ?? 0}</code></article>
+            <article data-disabled={lifecycle?.writebackMode === 'off' || undefined}><span>03</span><div><strong>{t('status.writeWorker')}</strong><p>{lifecycle?.writebackMode === 'guided' ? t('status.writeText', { threshold: reviewThreshold, seconds: Math.round((lifecycle.idleReviewMs ?? 0) / 1000) }) : t('status.writeOff')}</p></div><code>{workers?.reviews ?? 0}</code></article>
           </div>
-          <div className={css.lifecycleFoot}><span>{t('status.latestPhase')} <strong>{phase}</strong></span><span>{t('status.reviewState')} <strong>{reviewState}</strong></span><span>{t('status.lastReview')} <strong>{lastReview}</strong></span><span>{t('status.reviewDocuments')} <strong>{current?.lastReviewDocumentIds?.length ?? 0}</strong></span><span>{t('status.workerFailures')} <strong>{workers?.failures ?? 0}</strong></span></div>
+          <div className={css.lifecycleFoot}><span>{t('status.activityScore')} <strong>{reviewActivity?.score ?? 0} / {reviewThreshold}</strong></span><span>{t('status.activitySignals')} <strong>{t('status.activitySignalValues', { chars: reviewActivity?.totalUserTextLength ?? 0, turns: reviewActivity?.turnCount ?? 0, tools: reviewActivity?.toolCallCount ?? 0, unique: reviewActivity?.uniqueToolCount ?? 0 })}</strong></span><span>{t('status.reviewState')} <strong>{reviewState}</strong></span><span>{t('status.latestPhase')} <strong>{phase}</strong></span><span>{t('status.lastReview')} <strong>{lastReview}</strong></span><span>{t('status.reviewDocuments')} <strong>{current?.lastReviewDocumentIds?.length ?? 0}</strong></span><span>{t('status.workerFailures')} <strong>{workers?.failures ?? 0}</strong></span></div>
           {current?.lastError !== undefined && <div className={css.inlineError} role="alert">Lifecycle：{current.lastError}</div>}
         </section>
 

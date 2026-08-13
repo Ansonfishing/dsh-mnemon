@@ -4,7 +4,7 @@
 
 DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https://github.com/mnemon-dev/mnemon) 接入 DSH，并提供三个梯度：每轮直接进入上下文的运行时热记忆、当前工作区内可检索的项目档案（Documents），以及建立在 Mnemon 原生命名 Store 上的长期“记忆体”。每个记忆体都有稳定的 `id`、名称、路由说明、激活状态和独立 `.db`，DSH 记忆子 Agent 负责跨记忆体选择、召回、查重、归档与容量迁移。
 
-主 Agent 不需要接收完整记忆体目录、原始检索过程或归档推理。新出现的稳定信息通常通过确定性的运行时控制层写入热记忆；复杂且可复用的项目产物进入受控 Documents；主模型按需调用的长期召回与归档使用有界 `spawn` 子 Agent。当 turn 持续空闲达到阈值时，插件使用一个 `fork` 子 Agent 继承主 Agent 的完整已完成 checkpoint，同时保守判断是否维护热记忆、以及是否创建或修订一份项目档案。只有精简证据或结构化回执会回到主上下文；长期存储、四图索引、衰减和去重仍由本地 Mnemon CLI 确定性执行。
+主 Agent 不需要接收完整记忆体目录、原始检索过程或归档推理。新出现的稳定信息通常通过确定性的运行时控制层写入热记忆；复杂且可复用的项目产物进入受控 Documents；主模型按需调用的长期召回与归档使用有界 `spawn` 子 Agent。每个已完成 turn 都按 QoderWork 的原始参数累计活动分；只有达到门槛并继续空闲后，插件才使用一个 `fork` 子 Agent 继承主 Agent 的完整已完成 checkpoint，同时保守判断是否维护热记忆、以及是否创建或修订一份项目档案。只有精简证据或结构化回执会回到主上下文；长期存储、四图索引、衰减和去重仍由本地 Mnemon CLI 确定性执行。
 
 ## 运行时热记忆
 
@@ -41,7 +41,7 @@ Documents 是热记忆和 Mnemon 记忆体之间的项目知识层。它保存�
 - **托管副本**：Documents 只写入 `.mnemon/documents`；frontmatter 记录 UUID、标题、检索说明、时间、哈希、来源路径、会话与记忆体引用。`sourcePaths` 只允许指向当前工作区，原项目文件从不被修改。
 - **控制面与并发**：所有创建、修订、搜索和迁移经由统一控制层；进程内串行、跨实例加锁、索引原子替换，归档使用 document revision 防止覆盖并发修订。
 - **近场检索**：`mnemon_document_search` 默认只读 active，按标题、description 和正文确定性排名；模型应先查热记忆与 Documents，仍缺少历史细节时再进入 Mnemon 深召回。
-- **空闲沉淀**：同一个完整 checkpoint `fork` reviewer 在复杂 turn 确实形成可复用项目知识时，最多创建或修订一份档案；普通聊天、常规编辑、原始日志和用户偏好会被跳过。
+- **评分沉淀**：活动评分达到门槛且主 Agent 持续空闲后，同一个完整 checkpoint `fork` reviewer 在复杂工作确实形成可复用项目知识时，最多创建或修订一份档案；普通聊天、常规编辑、原始日志和用户偏好会被跳过。
 - **先索引后迁移**：active 按真实 UTF-8 Markdown 字节硬限制为 10 MiB。容量不足或人工归档时，选择最久未访问的档案，由受限 `spawn` worker 先向恰当 Mnemon 记忆体写入摘要、冷路径和内容 SHA-256；只有结构化成功回执返回后，原文才移入 `archived/`。失败或 revision 冲突时 active 原文保持不变。
 
 完整查询梯度是：运行时热记忆 → active Documents → 激活 Mnemon 记忆体 → Mnemon 结果指向的 archived 原文。
@@ -76,13 +76,15 @@ Documents 是热记忆和 Mnemon 记忆体之间的项目知识层。它保存�
 | 每次 prompt 组装 | `systemPrompt.section()` | 动态投影 `USER.md` / `MEMORY.md` 与热记忆协议 | 当前紧凑热记忆 |
 | 每轮开始 | `agent/pre-step` | 只注入一句按需 recall / runtime-memory 提醒，不读取目录、不执行记忆工具 | 主模型自行判断是否发起召回或维护热记忆 |
 | 显式工具/命令 | `ctx.subagents.start('spawn', …)` | 在受限 Mnemon 工具集合内完成一次语义操作 | 结构化召回结果或写入回执 |
-| turn 结束并持续空闲 | `agent/turn-stopping` → debounce → `fork` | 继承截至最新 `turn/end` 的完整主 Agent checkpoint，保守判断是否维护一次热记忆，并在复杂工作形成可复用产物时最多维护一份 Document | 不注入复核推理，不唤醒主 Agent；新 turn 会取消复核 |
+| turn 活动累计达标并持续空闲 | `agent/turn-stopping` → score → debounce → `fork` | 继承截至最新 `turn/end` 的完整主 Agent checkpoint，保守判断是否维护一次热记忆，并在复杂工作形成可复用产物时最多维护一份 Document | 不注入复核推理，不唤醒主 Agent；新 turn 会取消等待或运行中的复核 |
 | `USER.md` 达到容量 | 控制层 → 无工具 `spawn` → source coverage / revision barrier | 只在本地合并用户画像，不写入记忆体 | 本地整理回执；覆盖不完整时不改数据 |
 | `MEMORY.md` 达到容量 | 控制层 → 受限 `spawn` → revision barrier | 按语义簇向一个或多个 Mnemon 记忆体归档，再返回压缩候选 | 归档回执；失败时不改本地热记忆 |
 | Documents 达到容量或人工归档 | LRU 预检 → 受限 `spawn` → document revision barrier | 先在 Mnemon 写入摘要、精确冷路径和哈希 | 成功后才移动原文；失败或冲突时保留 active |
 | WebUI 沉淀 | 写 RPC → `spawn` | 选择记忆体、查重、提炼、写入，必要时创建或合并 | 可审计的 action、目标记忆体和摘要 |
 
-`spawn` 子 Agent 使用全新的隔离上下文；空闲审查则要求 DSH 的 `fork` provider，并只继承已经完成的 turn checkpoint。两者都通过预定义 persona、工具白名单、结构化输出和 `maxDepth: 1` 限制职责。职责、边界与操作协议位于子 Agent 的 system persona，query 只携带本次动作和最小必要数据；容量维护时，已提交的 `MEMORY.md` / `USER.md` 以只读 system 快照提供，不再把整份热记忆、路径或 JSON 协议重复塞进 query。根 Agent 调用 `mnemon_recall` / `mnemon_remember` 等工具时会先进入子 Agent；同名工具在记忆子 Agent 内才直接访问 MnemonService，因此不会递归委派。
+`spawn` 子 Agent 使用全新的隔离上下文；后台审查则要求 DSH 的 `fork` provider，并只继承已经完成的 turn checkpoint。两者都通过预定义 persona、工具白名单、结构化输出和 `maxDepth: 1` 限制职责。职责、边界与操作协议位于子 Agent 的 system persona，query 只携带本次动作和最小必要数据；容量维护时，已提交的 `MEMORY.md` / `USER.md` 以只读 system 快照提供，不再把整份热记忆、路径或 JSON 协议重复塞进 query。根 Agent 调用 `mnemon_recall` / `mnemon_remember` 等工具时会先进入子 Agent；同名工具在记忆子 Agent 内才直接访问 MnemonService，因此不会递归委派。
+
+后台审查的确定性门槛直接采用 QoderWork 0.9.12 的原始默认参数，不依赖模型提供方是否报告 token usage：累计用户输入每 50 字符计 1 分、最多 3 分；每个 turn 计 1 分；每 5 次已完成工具调用计 1 分、最多 2 分；累计使用 3 种工具计 1 分、4 种及以上计 2 分。总分达到 5 后才进入 `idleReviewMs` 空闲等待。Review 成功结束（包括判断无需写入）后分数清零；新 turn 会取消当前等待或运行中的 Review，但保留并继续累计尚未处理的活动。
 
 Prime 只初始化路由状态；pre-step 提示保持为一句短语，不注入目录、计数或记忆内容。主模型决定需要持久上下文时才调用 `mnemon_recall`，随后根工具用隔离子 Agent 选择记忆体并返回可复核证据。当前用户指令与仓库事实始终高于历史记忆。
 
@@ -188,10 +190,10 @@ mnemon:
 | `timeoutMs` | `10000` | 单次 CLI 调用硬超时，范围 100–120000 ms |
 | `defaultRecallLimit` | `10` | 工具和 Tab 的默认召回条数，范围 1–50 |
 | `routingGuidance` | `true` | 向主 Agent 提供精简的记忆监督边界说明 |
-| `lifecycleEnabled` | `true` | 启用 Prime 状态、pre-step 短提醒和 turn 结束后的空闲审查调度 |
+| `lifecycleEnabled` | `true` | 启用 Prime 状态、pre-step 短提醒和 turn 结束后的评分审查调度 |
 | `recallMode` | `guided` | `guided` 注入按需召回短提醒；`off` 不注入提醒，仍保留显式工具调用 |
-| `writebackMode` | `guided` | `guided` 注入按需沉淀短提醒，并在持续空闲后运行完整 checkpoint 审查；`off` 仅保留显式或 Tab 沉淀 |
-| `idleReviewMs` | `30000` | turn 完成后连续空闲多久才启动 `fork` 审查，范围 5000–600000 ms；新 turn 会取消等待或运行中的审查 |
+| `writebackMode` | `guided` | `guided` 注入按需沉淀短提醒，并在活动评分达到 5 且持续空闲后运行完整 checkpoint 审查；`off` 仅保留显式或 Tab 沉淀 |
+| `idleReviewMs` | `30000` | 活动评分达标后连续空闲多久才启动 `fork` 审查，范围 5000–600000 ms；新 turn 会取消等待或运行中的审查 |
 | `tabEnabled` | `true` | 注册 Web `conversation.view`「记忆体」Tab 和 RPC |
 | `writeEnabled` | `true` | 允许记忆、关系、忘记、记忆体维护与写 RPC |
 
@@ -204,7 +206,7 @@ profile patch 中同 ID 的 `config` 可能整体覆盖默认行；覆盖时应�
 3. 用户偏好与高频项目事实优先写入运行时热记忆，让它们在下一任务立即可用；用户偏好始终留在 USER，不进入 Documents 或 Mnemon 记忆体。
 4. 设计、研究、流程和交接等完整产物进入 active Documents；查询项目记录时先检索 Documents，再按需深召回。
 5. 延续旧任务、询问历史决策或排查已知坑时，让 Recall Worker 选择相关长期记忆体并返回证据；需要完整原文时沿命中记录的 archived 路径读取。
-6. 明确需要长期四图归档时使用“沉淀”，常规运行中由容量迁移把已确认热记忆或冷档案索引送入 Mnemon；空闲审查只作为保守兜底。
+6. 明确需要长期四图归档时使用“沉淀”，常规运行中由容量迁移把已确认热记忆或冷档案索引送入 Mnemon；评分后台审查只作为保守兜底。
 7. 临时进度、普通聊天和可直接从仓库读取的事实不应写入热记忆、Documents 或长期记忆体。
 8. 需要解释关系时，从 recall 返回的完整 `memoryBodyId + id` 调用 `mnemon_related`，不要猜 ID。
 
@@ -237,7 +239,7 @@ pnpm run verify
 - `lib/client.js`：自包含浏览器 bundle，仅 external `react` / `react/jsx-runtime`；
 - `lib/types/`：Host 与 Client 类型声明及中间 ESM。
 
-测试覆盖运行时 JSON/Markdown 一致性、并发锁、UTF-8 容量、过期压缩拒绝、先归档后压缩的事务顺序、Documents 路径隔离、frontmatter、索引检索、LRU 容量预检、先建立 Mnemon 冷索引再移动、document revision 冲突保护、记忆体目录迁移、独立 Store 路由、激活读边界、写后激活、非破坏性合并、子 Agent 工具隔离、pre-step 仅提醒、turn 空闲 debounce、完整 checkpoint `fork` 审查与新 turn 取消、WebUI 运行时与 Documents CRUD、直连检索、证据限定 Agent 问答、RPC 权限、只读模式、多记忆体图谱和八区工作台。发布前还应使用隔离 `MNEMON_DATA_DIR`、隔离工作区和独立端口 DSH，通过真实 WebUI 对话验证模型自主写入热记忆、复杂 turn 自动形成 Document、新任务先查 active Documents、容量冷迁移、历史问题自主召回、空闲复核、跨记忆体读取、状态计数和最终 CLI recall。
+测试覆盖运行时 JSON/Markdown 一致性、并发锁、UTF-8 容量、过期压缩拒绝、先归档后压缩的事务顺序、Documents 路径隔离、frontmatter、索引检索、LRU 容量预检、先建立 Mnemon 冷索引再移动、document revision 冲突保护、记忆体目录迁移、独立 Store 路由、激活读边界、写后激活、非破坏性合并、子 Agent 工具隔离、pre-step 仅提醒、QoderWork 原始活动评分、达标后的空闲 debounce、完整 checkpoint `fork` 审查与新 turn 取消、WebUI 运行时与 Documents CRUD、直连检索、证据限定 Agent 问答、RPC 权限、只读模式、多记忆体图谱和八区工作台。发布前还应使用隔离 `MNEMON_DATA_DIR`、隔离工作区和独立端口 DSH，通过真实 WebUI 对话验证模型自主写入热记忆、复杂对话达标后自动形成 Document、新任务先查 active Documents、容量冷迁移、历史问题自主召回、后台复核、跨记忆体读取、状态计数和最终 CLI recall。
 
 ## 品牌资源
 
