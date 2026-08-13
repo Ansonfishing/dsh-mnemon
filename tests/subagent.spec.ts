@@ -1,11 +1,20 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostAgent, HostContextShape, HostSubagentsService, ToolDefinition } from '../src/contracts.ts'
+import { DocumentManager } from '../src/documents.ts'
 import type { MnemonService } from '../src/service.ts'
 import { assertDshOutputSchema, MnemonSubagentCoordinator } from '../src/subagent.ts'
 import { registerTools } from '../src/tools.ts'
 import { RuntimeMemoryCapacityError, type RuntimeMemoryController } from '../src/runtime-memory.ts'
 
 const capabilities = { outputSchema: true, depthLimit: true, toolFilter: true, persona: true }
+const temporaryDirectories: string[] = []
+
+afterEach(() => {
+  for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true, force: true })
+})
 
 function parent(origin?: 'subagent'): HostAgent {
   return {
@@ -112,7 +121,7 @@ describe('Mnemon memory subagent coordinator', () => {
       action: 'skipped',
     })
     expect(host.start).toHaveBeenCalledWith('fork', expect.objectContaining({
-      toolFilter: { allow: ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related', 'mnemon_runtime_memory'] },
+      toolFilter: { allow: ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related', 'mnemon_document_search', 'mnemon_runtime_memory', 'mnemon_document_manage'] },
       persona: expect.stringContaining('idle checkpoint reviewer'),
       prompt: [{ type: 'text', text: 'Review the inherited completed checkpoint now.' }],
     }))
@@ -135,6 +144,30 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(answerCall.persona).toContain('Use SQLite')
     expect(answerCall.prompt[0]!.text).not.toMatch(/query_json|evidence_json/)
     expect(coordinator.snapshot().answers).toBe(1)
+  })
+
+  it('indexes the LRU document in Mnemon before moving it to cold storage', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'dsh-mnemon-document-coordinator-'))
+    temporaryDirectories.push(workspace)
+    const documents = new DocumentManager(1_000)
+    const controller = documents.forWorkspace(workspace)
+    const old = await controller.mutate({ action: 'create', title: 'Old architecture', content: 'a'.repeat(220) })
+    const host = subagents({ summary: 'Archived with exact cold path.', action: 'archived', memoryBodyIds: ['architecture'] })
+    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, documents)
+    const agent = { ...parent(), session: { header: { cwd: workspace }, events: [] } } as HostAgent
+
+    const result = await coordinator.document(agent, { action: 'create', title: 'New architecture', content: 'b'.repeat(220) }, new AbortController().signal)
+    expect(result).toMatchObject({
+      action: 'created',
+      maintenance: { archivedDocumentIds: [old.document.id], memoryBodyIds: ['architecture'] },
+    })
+    expect(controller.get(old.document.id)).toMatchObject({ status: 'archived', archiveSummary: 'Archived with exact cold path.' })
+    expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
+      prompt: [{ type: 'text', text: 'Archive this managed document now.' }],
+      persona: expect.stringContaining(`.mnemon/documents/archived/${old.document.filename}`),
+      toolFilter: { allow: ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_remember', 'mnemon_memory_body_create'] },
+    }))
+    expect(coordinator.snapshot()).toMatchObject({ documentArchives: 1, lastOperation: 'document-archive' })
   })
 
   it('archives before compacting and retrying a capacity-blocked runtime write', async () => {
@@ -275,7 +308,7 @@ describe('Mnemon root/child tool split', () => {
       runtime: vi.fn(async () => ({ success: true, message: 'Entry added.', target: 'user', entryCount: 1, usage: { used: 20, limit: 4096 } })),
     } as unknown as MnemonSubagentCoordinator
     const runtimeMemory = { mutate: vi.fn() } as unknown as RuntimeMemoryController
-    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, memoryService, coordinator, runtimeMemory)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, memoryService, coordinator, runtimeMemory, { forAgent: vi.fn() } as never)
     const recall = registered.find(tool => tool.name === 'mnemon_recall')!
     const schemas = registered.flatMap(tool => [tool.parameters, tool.output?.schema]).filter(Boolean)
     for (const schema of schemas) {

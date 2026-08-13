@@ -84,6 +84,13 @@ export interface DocumentMutationResult {
   snapshot: DocumentSnapshot
 }
 
+export interface DocumentCapacityPlan {
+  projected: number
+  limit: number
+  fits: boolean
+  candidates: DocumentRecord[]
+}
+
 export class DocumentCapacityError extends Error {
   constructor(
     readonly projected: number,
@@ -240,6 +247,49 @@ export class DocumentController {
 
   get(id: string): DocumentView {
     return this.withLock(() => this.view(this.requireDocument(this.readIndex(), id)))
+  }
+
+  capacityPlan(request: DocumentMutation): DocumentCapacityPlan {
+    return this.withLock(() => {
+      const index = this.readIndex()
+      const active = index.documents.filter(record => record.status === 'active')
+      const used = active.reduce((sum, record) => sum + record.sizeBytes, 0)
+      let projected: number
+      let excludeId: string | undefined
+      if (request.action === 'create') {
+        const now = this.now().toISOString()
+        const title = normalizeLine(request.title, 'document title', 160, true)
+        const content = normalizeContent(request.content, true)!
+        const id = crypto.randomUUID()
+        const record: DocumentRecord = {
+          id, title,
+          description: normalizeLine(request.description, 'document description', 600, false),
+          status: 'active', filename: `${slug(title)}-${id.slice(0, 8)}.md`, relativePath: '',
+          sourcePaths: this.normalizeSourcePaths(request.sourcePaths ?? []), sessionIds: unique(request.sessionIds ?? [], 20),
+          createdAt: now, updatedAt: now, lastAccessedAt: now, revision: 1,
+          contentHash: hash(content), sizeBytes: 0, memoryBodyIds: [],
+        }
+        projected = used + Buffer.byteLength(renderDocument(record, content), 'utf8')
+      } else {
+        const current = this.requireDocument(index, request.id)
+        if (current.status !== 'active') throw new Error('archived documents are immutable; create a new active revision instead')
+        const content = normalizeContent(request.content, false) ?? this.readBody(current)
+        const updated: DocumentRecord = {
+          ...current,
+          title: request.title === undefined ? current.title : normalizeLine(request.title, 'document title', 160, true),
+          description: request.description === undefined ? current.description : normalizeLine(request.description, 'document description', 600, false),
+          sourcePaths: request.sourcePaths === undefined ? current.sourcePaths : this.normalizeSourcePaths(request.sourcePaths),
+          sessionIds: request.sessionIds === undefined ? current.sessionIds : unique([...current.sessionIds, ...request.sessionIds], 20),
+          contentHash: hash(content), revision: current.revision + 1,
+        }
+        projected = used - current.sizeBytes + Buffer.byteLength(renderDocument(updated, content), 'utf8')
+        excludeId = current.id
+      }
+      const candidates = active
+        .filter(record => record.id !== excludeId)
+        .sort((left, right) => Date.parse(left.lastAccessedAt) - Date.parse(right.lastAccessedAt) || Date.parse(left.updatedAt) - Date.parse(right.updatedAt))
+      return { projected, limit: this.limitBytes, fits: projected <= this.limitBytes, candidates }
+    })
   }
 
   search(query: string, options: { includeArchived?: boolean; limit?: number } = {}): Promise<DocumentSearchResult> {

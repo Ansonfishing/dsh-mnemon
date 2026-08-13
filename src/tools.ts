@@ -1,4 +1,5 @@
 import type { HostContextShape, ToolDefinition, ToolExecution } from './contracts.ts'
+import type { DocumentManager, DocumentMutation } from './documents.ts'
 import type { RuntimeMemoryController, RuntimeMemoryImportance, RuntimeMemoryTarget } from './runtime-memory.ts'
 import { isSubagent, MnemonSubagentCoordinator } from './subagent.ts'
 import {
@@ -33,7 +34,7 @@ function requireAgent(exec: ToolExecution) {
 }
 
 /** Root calls delegate to a bounded child; memory-worker calls reach the deterministic service. */
-export function registerTools(ctx: HostContextShape, service: MnemonService, coordinator: MnemonSubagentCoordinator, runtimeMemory: RuntimeMemoryController): void {
+export function registerTools(ctx: HostContextShape, service: MnemonService, coordinator: MnemonSubagentCoordinator, runtimeMemory: RuntimeMemoryController, documents: DocumentManager): void {
   ctx.tools.register(definition({
     name: 'mnemon_memory_bodies',
     description: 'List the global Mnemon Memory Space catalog, including each space id, name, description, activation state, database path, and statistics. Read only. Use this before choosing a write target, or when the Prime summary is insufficient. Recall may only read active spaces; writes may target any space.',
@@ -114,7 +115,66 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     presentResult: () => ({ card: 'generic', title: 'Mnemon status checked' }),
   } as never))
 
+  ctx.tools.register(definition({
+    name: 'mnemon_document_search',
+    description: 'Search project-scoped managed Documents before falling back to deep Mnemon recall. Active Documents contain substantial design, research, procedure, and handoff knowledge. Search is deterministic and read only. Cold archives are excluded unless includeArchived is explicitly required by a known archive reference.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Focused natural-language or keyword query. Empty lists recent documents.' },
+        includeArchived: { type: 'boolean', description: 'Include cold archived originals only for explicit deep-reference inspection.' },
+        limit: { type: 'integer', description: 'Maximum results, 1 through 8 for model calls.' },
+      },
+      required: ['query'],
+    },
+    output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
+    async execute(args: { query: string; includeArchived?: boolean; limit?: number }, exec: ToolExecution) {
+      const result = await documents.forAgent(requireAgent(exec)).search(args.query, { ...(args.includeArchived === undefined ? {} : { includeArchived: args.includeArchived }), limit: Math.min(8, args.limit ?? 8) })
+      return {
+        ...result,
+        results: result.results.map(document => ({
+          ...document,
+          content: document.content.length <= 8_000 ? document.content : `${document.content.slice(0, 8_000)}\n[truncated]`,
+        })),
+      }
+    },
+    presentCall: (args: { query: string }) => ({ card: 'generic', title: 'Search Mnemon Documents', kind: 'search', rawInput: args.query }),
+    presentResult: () => ({ card: 'generic', title: 'Mnemon Documents ready' }),
+  } as never))
+
   if (!service.config.writeEnabled) return
+
+  ctx.tools.register(definition({
+    name: 'mnemon_document_manage',
+    description: 'Create or update one managed project Document through the Mnemon Documents control plane. Use for substantial reusable project knowledge, not user-profile preferences, routine progress, raw transcripts, secrets, or small hot-memory facts. Source paths are references inside the workspace and are never edited. Archive is allowed only from a root request and first writes a durable Mnemon cold-reference through an isolated subagent.',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['create', 'update', 'archive'] },
+        id: { type: 'string', description: 'Required for update and archive.' },
+        title: { type: 'string', description: 'Meaningful project-document title. Required for create.' },
+        description: { type: 'string', description: 'Concise routing description.' },
+        content: { type: 'string', description: 'Managed Markdown body. Required for create.' },
+        sourcePaths: { type: 'array', items: { type: 'string' }, description: 'Read-only source paths relative to the workspace.' },
+      },
+      required: ['action'],
+    },
+    output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
+    execute: (args: { action: 'create' | 'update' | 'archive'; id?: string; title?: string; description?: string; content?: string; sourcePaths?: string[] }, exec: ToolExecution) => {
+      const agent = requireAgent(exec)
+      if (args.action === 'archive') {
+        if (isSubagent(agent)) throw new Error('idle document workers cannot cold-archive directly')
+        if (args.id === undefined) throw new Error('document id is required for archive')
+        return coordinator.archiveDocument(agent, args.id, exec.signal)
+      }
+      const request: DocumentMutation = args.action === 'create'
+        ? { action: 'create', title: args.title ?? '', content: args.content ?? '', ...(args.description === undefined ? {} : { description: args.description }), ...(args.sourcePaths === undefined ? {} : { sourcePaths: args.sourcePaths }), sessionIds: [agent.id] }
+        : { action: 'update', id: args.id ?? '', ...(args.title === undefined ? {} : { title: args.title }), ...(args.description === undefined ? {} : { description: args.description }), ...(args.content === undefined ? {} : { content: args.content }), ...(args.sourcePaths === undefined ? {} : { sourcePaths: args.sourcePaths }), sessionIds: [agent.id] }
+      return isSubagent(agent) ? documents.forAgent(agent).mutate(request) : coordinator.document(agent, request, exec.signal)
+    },
+    presentCall: (args: { action: string; title?: string }) => ({ card: 'generic', title: `${args.action} Mnemon Document`, kind: 'edit', ...(args.title === undefined ? {} : { rawInput: args.title }) }),
+    presentResult: () => ({ card: 'generic', title: 'Mnemon Document processed' }),
+  } as never))
 
   ctx.tools.register(definition({
     name: 'mnemon_runtime_memory',

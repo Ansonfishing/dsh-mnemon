@@ -81,6 +81,27 @@ describe('Mnemon RPC', () => {
     expect(service.remember).not.toHaveBeenCalled()
   })
 
+  it('routes project Documents reads and controlled mutations through the bound session', async () => {
+    const service = fakeService()
+    const lifecycle = {
+      documents: vi.fn(() => ({ activeCount: 1, archivedCount: 0, documents: [] })),
+      document: vi.fn(() => ({ id: 'doc-1', content: '# Design' })),
+      searchDocuments: vi.fn(async () => ({ query: 'design', results: [] })),
+      mutateDocument: vi.fn(async () => ({ success: true, action: 'created', document: { id: 'doc-2' } })),
+      archiveDocument: vi.fn(async () => ({ success: true, action: 'archived', document: { id: 'doc-1' } })),
+    } as unknown as MnemonLifecycle
+
+    await expect(createReadHandler(service, lifecycle)('documents', { sessionId: 'session-1' })).resolves.toMatchObject({ ok: true, value: { activeCount: 1 } })
+    await expect(createReadHandler(service, lifecycle)('document', { sessionId: 'session-1', id: 'doc-1' })).resolves.toMatchObject({ ok: true, value: { content: '# Design' } })
+    await expect(createReadHandler(service, lifecycle)('document-search', { sessionId: 'session-1', query: 'design', includeArchived: true })).resolves.toMatchObject({ ok: true, value: { query: 'design' } })
+    await expect(createWriteHandler(service, lifecycle)('document', { sessionId: 'session-1', action: 'create', title: 'Design', content: '# Design', sourcePaths: ['src/index.ts'] })).resolves.toMatchObject({ ok: true, value: { action: 'created' } })
+    await expect(createWriteHandler(service, lifecycle)('document', { sessionId: 'session-1', action: 'archive', id: 'doc-1' })).resolves.toMatchObject({ ok: true, value: { action: 'archived' } })
+
+    expect(lifecycle.searchDocuments).toHaveBeenCalledWith('session-1', 'design', true, undefined)
+    expect(lifecycle.mutateDocument).toHaveBeenCalledWith('session-1', { action: 'create', title: 'Design', content: '# Design', sourcePaths: ['src/index.ts'], sessionIds: ['session-1'] })
+    expect(lifecycle.archiveDocument).toHaveBeenCalledWith('session-1', 'doc-1')
+  })
+
   it('keeps Tab reads deterministic while delegating semantic writes', async () => {
     const service = fakeService()
     const lifecycle = {

@@ -8,6 +8,7 @@ import type {
 } from './contracts.ts'
 import type { Insight, RememberRequest, SearchRequest } from './service.ts'
 import type { RuntimeMemoryMutation } from './runtime-memory.ts'
+import type { DocumentMutation } from './documents.ts'
 import { MnemonSubagentCoordinator, type DelegatedWriteResult, type SubagentCounters } from './subagent.ts'
 
 export const MNEMON_PLUGIN_SOURCE = 'dsh-mnemon'
@@ -34,6 +35,7 @@ export interface LifecycleAgentSnapshot {
   lastPhase: LifecyclePhase
   lastReviewAt?: string
   lastReviewAction?: string
+  lastReviewDocumentIds?: string[]
   lastAt?: string
   lastError?: string
 }
@@ -117,6 +119,7 @@ class MnemonAgentLifecycle {
   private reviewRunning = false
   private lastReviewAt: string | undefined
   private lastReviewAction: string | undefined
+  private lastReviewDocumentIds: string[] | undefined
   private lastPhase: LifecyclePhase = 'idle'
   private lastAt: string | undefined
   private lastError: string | undefined
@@ -161,6 +164,7 @@ class MnemonAgentLifecycle {
       lastPhase: this.lastPhase,
       ...(this.lastReviewAt === undefined ? {} : { lastReviewAt: this.lastReviewAt }),
       ...(this.lastReviewAction === undefined ? {} : { lastReviewAction: this.lastReviewAction }),
+      ...(this.lastReviewDocumentIds === undefined ? {} : { lastReviewDocumentIds: [...this.lastReviewDocumentIds] }),
       ...(this.lastAt === undefined ? {} : { lastAt: this.lastAt }),
       ...(this.lastError === undefined ? {} : { lastError: this.lastError }),
     }
@@ -220,6 +224,7 @@ class MnemonAgentLifecycle {
       const result = await this.coordinator.review(this.agent, controller.signal)
       this.lastReviewAt = new Date().toISOString()
       this.lastReviewAction = result.action
+      this.lastReviewDocumentIds = result.documentIds
       this.mark('review')
     } catch (error) {
       if (!controller.signal.aborted) this.fail(error)
@@ -307,6 +312,26 @@ export class MnemonLifecycle {
 
   runtime(sessionId: string, request: RuntimeMemoryMutation, signal = new AbortController().signal) {
     return this.coordinator.runtime(this.liveAgent(sessionId), request, signal)
+  }
+
+  documents(sessionId: string) {
+    return this.coordinator.documentsSnapshot(this.liveAgent(sessionId))
+  }
+
+  document(sessionId: string, id: string) {
+    return this.coordinator.documentGet(this.liveAgent(sessionId), id)
+  }
+
+  searchDocuments(sessionId: string, query: string, includeArchived = false, limit?: number) {
+    return this.coordinator.documentSearch(this.liveAgent(sessionId), query, includeArchived, limit)
+  }
+
+  mutateDocument(sessionId: string, request: DocumentMutation, signal = new AbortController().signal) {
+    return this.coordinator.document(this.liveAgent(sessionId), request, signal)
+  }
+
+  archiveDocument(sessionId: string, id: string, signal = new AbortController().signal) {
+    return this.coordinator.archiveDocument(this.liveAgent(sessionId), id, signal)
   }
 
   mutate(sessionId: string, operation: string, request: unknown, signal = new AbortController().signal) {

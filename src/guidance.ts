@@ -3,7 +3,7 @@ import type { RuntimeMemoryController } from './runtime-memory.ts'
 
 export const GUIDANCE_SECTION_NAME = 'mnemon:routing'
 export const RUNTIME_MEMORY_SECTION_NAME = 'mnemon:runtime-memory'
-export const ROUTING_GUIDANCE = 'Use Mnemon only by need. Call mnemon_recall when prior durable context may matter, especially if hot memory is only a pointer or lacks an exact requested detail; never infer a missing historical rule. New explicit reusable information normally goes to mnemon_runtime_memory; direct archival is exceptional. A write completes only with a tool receipt.'
+export const ROUTING_GUIDANCE = 'Use memory only by need. For substantial project records, search active Mnemon Documents before deep recall. Call mnemon_recall when durable history may matter or an exact prior detail is missing; never infer a missing historical rule. New explicit reusable facts normally go to mnemon_runtime_memory. A write completes only with a tool receipt.'
 
 function systemPrompt(ctx: HostContextShape): {
   section?: (value: { name: string; order: number; text: string | (() => string) }) => unknown

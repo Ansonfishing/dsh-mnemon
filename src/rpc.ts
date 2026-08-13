@@ -39,12 +39,34 @@ export function createReadHandler(service: MnemonService, lifecycle?: MnemonLife
           if (runtimeMemory === undefined) throw new Error('runtime memory is unavailable')
           return success(runtimeMemory.snapshot())
         case 'status':
+          {
+            const sessionId = payload.sessionId === undefined ? '' : String(payload.sessionId).trim()
+            let documents
+            if (lifecycle !== undefined && sessionId !== '') {
+              try { documents = lifecycle.documents(sessionId) } catch {}
+            }
           return success({
             ...await service.status(),
             ...(lifecycle === undefined ? {} : {
               lifecycle: lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId)),
             }),
+            ...(documents === undefined ? {} : { documents }),
           })
+          }
+        case 'documents':
+          if (lifecycle === undefined) throw new Error('Mnemon Documents require lifecycle integration')
+          return success(lifecycle.documents(String(payload.sessionId ?? '')))
+        case 'document':
+          if (lifecycle === undefined) throw new Error('Mnemon Documents require lifecycle integration')
+          return success(lifecycle.document(String(payload.sessionId ?? ''), String(payload.id ?? '')))
+        case 'document-search':
+          if (lifecycle === undefined) throw new Error('Mnemon Documents require lifecycle integration')
+          return success(await lifecycle.searchDocuments(
+            String(payload.sessionId ?? ''),
+            String(payload.query ?? ''),
+            payload.includeArchived === true,
+            payload.limit === undefined ? undefined : Number(payload.limit),
+          ))
         case 'graph':
           return success(await service.graph(undefined, Array.isArray(payload.memoryBodyIds) ? payload.memoryBodyIds.map(String) : undefined))
         case 'bodies':
@@ -123,6 +145,31 @@ export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLif
         case 'supervise':
           if (lifecycle === undefined) throw new Error('Mnemon lifecycle integration is unavailable')
           return success(await lifecycle.supervise(String(payload.sessionId ?? ''), String(payload.content ?? '')))
+        case 'document':
+          if (lifecycle === undefined) throw new Error('Mnemon Documents require lifecycle integration')
+          {
+            const action = String(payload.action ?? '')
+            const sessionId = String(payload.sessionId ?? '')
+            if (action === 'archive') return success(await lifecycle.archiveDocument(sessionId, String(payload.id ?? '')))
+            if (action === 'create') return success(await lifecycle.mutateDocument(sessionId, {
+              action: 'create',
+              title: String(payload.title ?? ''),
+              content: String(payload.content ?? ''),
+              ...(payload.description === undefined ? {} : { description: String(payload.description) }),
+              ...(Array.isArray(payload.sourcePaths) ? { sourcePaths: payload.sourcePaths.map(String) } : {}),
+              sessionIds: [sessionId],
+            }))
+            if (action === 'update') return success(await lifecycle.mutateDocument(sessionId, {
+              action: 'update',
+              id: String(payload.id ?? ''),
+              ...(payload.title === undefined ? {} : { title: String(payload.title) }),
+              ...(payload.description === undefined ? {} : { description: String(payload.description) }),
+              ...(payload.content === undefined ? {} : { content: String(payload.content) }),
+              ...(Array.isArray(payload.sourcePaths) ? { sourcePaths: payload.sourcePaths.map(String) } : {}),
+              sessionIds: [sessionId],
+            }))
+            return badRequest(`unknown document action: ${action}`)
+          }
         case 'remember':
           {
             const request = {

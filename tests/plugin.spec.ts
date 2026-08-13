@@ -78,6 +78,8 @@ describe('dsh-mnemon plugin composition', () => {
       'mnemon_recall',
       'mnemon_related',
       'mnemon_status',
+      'mnemon_document_search',
+      'mnemon_document_manage',
       'mnemon_runtime_memory',
       'mnemon_remember',
       'mnemon_link',
@@ -114,6 +116,7 @@ describe('dsh-mnemon plugin composition', () => {
       'mnemon_recall',
       'mnemon_related',
       'mnemon_status',
+      'mnemon_document_search',
     ])
     expect(fixture.channels).toHaveLength(2)
     expect(fixture.sections).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'mnemon:runtime-memory' })]))
