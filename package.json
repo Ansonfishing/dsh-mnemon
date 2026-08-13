@@ -33,7 +33,7 @@
   "bugs": {
     "url": "https://github.com/dsh-external/dsh-mnemon/issues"
   },
-  "license": "BSD-3-Clause",
+  "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",

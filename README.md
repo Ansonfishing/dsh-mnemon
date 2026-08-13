@@ -154,4 +154,4 @@ pnpm run verify
 
 ## License
 
-BSD-3-Clause。
+MIT。
