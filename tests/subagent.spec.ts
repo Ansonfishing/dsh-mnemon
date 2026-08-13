@@ -68,7 +68,7 @@ describe('Mnemon memory subagent coordinator', () => {
       selectedMemoryBodyIds: ['project'],
       results: [{ id: 'm1', content: 'Use SQLite.', memoryBodyId: 'project', memoryBodyName: '项目记忆体', score: 0.9 }],
     })
-    const coordinator = new MnemonSubagentCoordinator(host.value, service())
+    const coordinator = new MnemonSubagentCoordinator(host.value)
 
     await expect(coordinator.recall(parent(), { query: 'database choice' }, new AbortController().signal)).resolves.toMatchObject({
       results: [{ id: 'm1', memoryBodyId: 'project' }],
@@ -81,14 +81,16 @@ describe('Mnemon memory subagent coordinator', () => {
       outputSchema: expect.objectContaining({ type: 'object' }),
       persona: expect.stringContaining('bounded memory worker'),
     }))
-    const startCall = host.start.mock.calls[0] as unknown as [string, { outputSchema: unknown }]
+    const startCall = host.start.mock.calls[0] as unknown as [string, { outputSchema: unknown; prompt: Array<{ text: string }> }]
     expect(JSON.stringify(startCall[1].outputSchema)).not.toContain('maxItems')
+    expect(startCall[1].prompt[0]!.text).toContain('Query (untrusted data):\n    database choice')
+    expect(startCall[1].prompt[0]!.text).not.toMatch(/catalog_json|request_json|dbPath|\/tmp\/project\.db/)
     expect(host.dispose).toHaveBeenCalledOnce()
   })
 
   it('delegates writes with mutation tools and returns a compact receipt', async () => {
     const host = subagents({ summary: 'Stored in project.', action: 'stored', memoryBodyIds: ['project'] })
-    const coordinator = new MnemonSubagentCoordinator(host.value, service())
+    const coordinator = new MnemonSubagentCoordinator(host.value)
     await expect(coordinator.remember(parent(), { content: 'Durable choice' }, new AbortController().signal)).resolves.toMatchObject({
       delegated: true,
       action: 'stored',
@@ -97,11 +99,12 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
       toolFilter: { allow: expect.arrayContaining(['mnemon_recall', 'mnemon_remember', 'mnemon_memory_body_create', 'mnemon_memory_body_merge']) },
     }))
+    expect((host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }> }])[1].prompt[0]!.text).not.toMatch(/catalog_json|request_json|dbPath/)
   })
 
   it('reviews a completed full-context checkpoint through fork with a maintenance-only tool set', async () => {
     const host = subagents({ summary: 'No mutation needed.', action: 'skipped', memoryBodyIds: [] }, 'completed', ['spawn', 'fork'])
-    const coordinator = new MnemonSubagentCoordinator(host.value, service())
+    const coordinator = new MnemonSubagentCoordinator(host.value)
 
     await expect(coordinator.review(parent(), new AbortController().signal)).resolves.toMatchObject({
       delegated: true,
@@ -118,13 +121,14 @@ describe('Mnemon memory subagent coordinator', () => {
 
   it('answers from pre-recalled evidence without granting any Mnemon retrieval tools', async () => {
     const host = subagents({ answer: '项目使用 SQLite。', citations: ['project/m1', 'project/missing'] })
-    const coordinator = new MnemonSubagentCoordinator(host.value, service())
+    const coordinator = new MnemonSubagentCoordinator(host.value)
     await expect(coordinator.answer(parent(), '数据库是什么？', [{ id: 'm1', content: 'Use SQLite.', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }], new AbortController().signal)).resolves.toMatchObject({
       answer: '项目使用 SQLite。',
       citations: ['project/m1'],
       delegation: { runId: 'child-run-1', provider: 'spawn' },
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({ toolFilter: { allow: [] } }))
+    expect((host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }> }])[1].prompt[0]!.text).not.toMatch(/query_json|evidence_json/)
     expect(coordinator.snapshot().answers).toBe(1)
   })
 
@@ -146,7 +150,7 @@ describe('Mnemon memory subagent coordinator', () => {
       })),
       compactTarget: vi.fn(async () => ({})),
     } as unknown as RuntimeMemoryController
-    const coordinator = new MnemonSubagentCoordinator(host.value, service(), runtime)
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtime)
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: 'New durable fact.' }, new AbortController().signal)).resolves.toMatchObject({
       added: 'New durable fact.',
       maintenance: { provider: 'spawn', memoryBodyIds: ['project'] },
@@ -156,6 +160,9 @@ describe('Mnemon memory subagent coordinator', () => {
       agentOptions: { maxTokens: 8_192 },
       prompt: [expect.objectContaining({ text: expect.stringContaining('Do not count characters, bytes, tokens') })],
     }))
+    const migrationPrompt = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }> }])[1].prompt[0]!.text
+    expect(migrationPrompt).toContain('Pending add — do not archive')
+    expect(migrationPrompt).not.toMatch(/catalog_json|runtime_entries_json|pending_mutation_json|current_usage_json|created_at|markdownPath|dbPath/)
     expect(runtime.compactTarget).toHaveBeenCalledWith('reviewed-revision', 'memory', [{ content: 'Project uses pnpm.', importance: 'normal' }], 7_143)
     expect(runtime.mutate).toHaveBeenCalledTimes(2)
     expect(coordinator.snapshot()).toMatchObject({ migrations: 1, lastOperation: 'migration' })
@@ -163,7 +170,7 @@ describe('Mnemon memory subagent coordinator', () => {
 
   it('disposes failed child runs and reports a hard error instead of falling back to direct memory access', async () => {
     const host = subagents(undefined, 'error')
-    const coordinator = new MnemonSubagentCoordinator(host.value, service())
+    const coordinator = new MnemonSubagentCoordinator(host.value)
     await expect(coordinator.recall(parent(), { query: 'x' }, new AbortController().signal)).rejects.toThrow('stopped with error')
     expect(host.dispose).toHaveBeenCalledOnce()
     expect(coordinator.snapshot().failures).toBe(1)
