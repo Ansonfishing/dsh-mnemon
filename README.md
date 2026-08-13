@@ -241,6 +241,39 @@ pnpm run verify
 
 测试覆盖运行时 JSON/Markdown 一致性、并发锁、UTF-8 容量、过期压缩拒绝、先归档后压缩的事务顺序、Documents 路径隔离、frontmatter、索引检索、LRU 容量预检、先建立 Mnemon 冷索引再移动、document revision 冲突保护、记忆体目录迁移、独立 Store 路由、激活读边界、写后激活、非破坏性合并、子 Agent 工具隔离、pre-step 仅提醒、QoderWork 原始活动评分、达标后的空闲 debounce、完整 checkpoint `fork` 审查与新 turn 取消、WebUI 运行时与 Documents CRUD、直连检索、证据限定 Agent 问答、RPC 权限、只读模式、多记忆体图谱和八区工作台。发布前还应使用隔离 `MNEMON_DATA_DIR`、隔离工作区和独立端口 DSH，通过真实 WebUI 对话验证模型自主写入热记忆、复杂对话达标后自动形成 Document、新任务先查 active Documents、容量冷迁移、历史问题自主召回、后台复核、跨记忆体读取、状态计数和最终 CLI recall。
 
+## Roadmap / TODO
+
+当前版本已经具备运行时热记忆、项目档案和多记忆体长期存储的完整日常闭环。下面的工作不再扩展主要产品形态，而是把现有闭环推进到可长期无人值守的 production-complete 状态。
+
+### P0 · 可靠性与可恢复调度
+
+- [ ] **持久化后台 Review 水位**：按根 Session 保存累计字符数、turn 数、已完成工具调用量、工具集合、最近处理 checkpoint 和评分版本；DSH 重启或 Session resume 后恢复尚未审阅的活动，成功回执后原子清零。
+- [ ] **为 Review 增加幂等 checkpoint**：使用已完成事件边界或稳定摘要标识一次审阅输入，确保进程重启、超时重试和重复 hook 不会重复生成档案或重复写入热记忆。
+- [ ] **失败退避、熔断和人工重试**：后台子 Agent 失败后进行有上限的指数退避；连续失败达到阈值后暂停该 Session，状态页展示原因并提供明确的重新审阅入口。新 turn 到来时不得丢失未处理水位。
+- [ ] **确定性敏感信息防线**：在 LLM admission 之外，对热记忆、Document 和 Mnemon 写入增加宿主侧秘密/凭据模式检测、大小限制和可审计拒绝回执；默认不得持久化原始工具大输出。
+- [ ] **自动化真实 WebUI E2E**：把当前人工流程固化为隔离 `DSH_HOME`、`MNEMON_DATA_DIR`、工作区和端口的可重复测试，至少覆盖“轻对话不触发”“复杂对话达标后生成档案”“新 turn 取消 Review”“失败后不产生半写入”，并纳入发布前检查。
+
+### P1 · 长期维护与数据运维
+
+- [ ] **跨 Session AutoDream**：增加独立于逐 turn Review 的长期整理器，参考 QoderWork 默认门槛（距上次整理 24 小时、至少 5 个新 Session、扫描节流 10 分钟），通过受限 worker 复核跨会话重复、漂移和可合并知识。
+- [ ] **Mnemon GC / forget 审阅**：定期生成衰减、矛盾、过时内容和孤立关系候选；先展示证据与来源，再由受限子 Agent 或用户确认执行 `forget`，禁止无回执的批量自动删除。
+- [ ] **一致性备份与恢复**：为记忆体目录、`.db`、记忆体 catalog、`memories.json`、运行时 Markdown 投影、Documents index 和 active/archive 原文提供一致快照、校验、导出和恢复流程。
+- [ ] **修复与重建工具**：检测损坏 JSON、丢失 Markdown 投影、Document 孤儿文件、缺失 `.db`、catalog/磁盘不一致和未完成迁移；能从控制面事实源安全重建派生文件，并明确列出不可自动修复项。
+- [ ] **升级兼容矩阵**：记录并测试受支持的 DSH、Mnemon CLI 和数据格式版本；为 catalog、运行时控制面和 Documents index 提供显式 schema migration 与回滚说明。
+
+### P2 · 可观测性、体验与发布工程
+
+- [ ] **后台审阅历史**：在状态页展示最近的评分明细、checkpoint、等待/运行/重试/熔断状态、耗时、子 Agent 回执以及产生的热记忆、档案和记忆体变更，不把长推理注入主对话。
+- [ ] **完整国际化**：把配置卡、验证错误、确认文案和剩余硬编码中文纳入 DSH locale；同步清理内部仍使用 `idle checkpoint review` 的旧命名，统一为 scored background review。
+- [ ] **扩充多记忆体场景测试**：真实覆盖自动创建具有明确名称与路由描述的新记忆体、一次迁移分流到多个记忆体、写后激活、召回多记忆体、合并、简单边关系、实体图和受控 forget。
+- [ ] **容量与故障注入 E2E**：真实触发 `MEMORY.md` 迁移、`USER.md` 本地压缩、Document 10 MiB LRU 冷归档、revision 冲突、Mnemon CLI 超时/失败以及 DSH 中途重启，验证所有事务保持原数据可恢复。
+- [ ] **发布收口**：确定稳定版本号与变更日志，补充安装/升级/卸载/数据保留说明，建立 release artifact 校验和最小支持策略。
+
+### 当前明确不在范围内
+
+- `daily` 运行时目标暂不实现；当前控制面只维护 `user` 与 `memory`。
+- Mnemon 仍是 pull-based 记忆系统；除评分 Review、容量维护和未来 AutoDream 外，不引入没有明确触达语义的通知/提醒守护进程。
+
 ## 品牌资源
 
 WebUI 内嵌的 Mnemon 标志来自 [mnemon-dev/mnemon 的官方 logo.svg](https://github.com/mnemon-dev/mnemon/blob/main/docs/logo/logo.svg)，上游项目采用 Apache-2.0 License。标志仅用于准确说明本插件集成的上游产品。
