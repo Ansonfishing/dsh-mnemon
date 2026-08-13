@@ -10,6 +10,7 @@ import type { Insight, RememberRequest, SearchRequest } from './service.ts'
 import type { RuntimeMemoryMutation } from './runtime-memory.ts'
 import type { DocumentMutation } from './documents.ts'
 import { MnemonSubagentCoordinator, type DelegatedWriteResult, type SubagentCounters } from './subagent.ts'
+import { scoreReviewActivity, type ReviewActivityScore } from './review-activity.ts'
 
 export const MNEMON_PLUGIN_SOURCE = 'dsh-mnemon'
 
@@ -32,9 +33,11 @@ export interface LifecycleAgentSnapshot {
   memoryToolCalls: number
   idleReviewPending: boolean
   reviewRunning: boolean
+  reviewActivity: ReviewActivityScore
   lastPhase: LifecyclePhase
   lastReviewAt?: string
   lastReviewAction?: string
+  lastReviewScore?: number
   lastReviewDocumentIds?: string[]
   lastAt?: string
   lastError?: string
@@ -103,6 +106,21 @@ function memoryToolCalls(events: readonly HostSessionEvent[], turn?: number): nu
     && event.data.name.startsWith('mnemon_')).length
 }
 
+function textLength(messages: readonly HostUserMessage[]): number {
+  return messages
+    .filter(message => message.source.kind === 'user')
+    .map(message => message.content.map(block => block.text).join('\n').trim().length)
+    .reduce((total, length) => total + length, 0)
+}
+
+function completedToolActivity(events: readonly HostSessionEvent[], turn: number): { count: number; names: Set<string> } {
+  const count = events.filter(event => event.type === 'tool/result' && eventTurn(event) === turn).length
+  const names = new Set(events
+    .filter(event => event.type === 'tool/call' && eventTurn(event) === turn && typeof event.data.name === 'string')
+    .map(event => String(event.data.name)))
+  return { count, names }
+}
+
 function guidedReminder(config: ResolvedConfig): string | undefined {
   if (config.recallMode === 'guided' && config.writebackMode === 'guided') return '[MNEMON] Search active Documents for substantial project knowledge before deep recall; call mnemon_recall only when durable history or an exact prior detail matters, and use mnemon_runtime_memory only for new explicit reusable facts. Otherwise call none.'
   if (config.recallMode === 'guided') return '[MNEMON] Search active Documents for substantial project knowledge before deep recall; call mnemon_recall only when durable history or an exact prior detail matters. Otherwise call neither.'
@@ -114,11 +132,18 @@ class MnemonAgentLifecycle {
   private primePending = true
   private startSource: LifecycleAgentSnapshot['startSource']
   private readonly guidedTurns = new Set<number>()
+  private readonly turnActivity = new Map<number, {
+    messageIds: Set<string>
+    userTextLength: number
+    toolCallCount: number
+    toolNames: Set<string>
+  }>()
   private idleReviewTimer: ReturnType<typeof setTimeout> | undefined
   private reviewController: AbortController | undefined
   private reviewRunning = false
   private lastReviewAt: string | undefined
   private lastReviewAction: string | undefined
+  private lastReviewScore: number | undefined
   private lastReviewDocumentIds: string[] | undefined
   private lastPhase: LifecyclePhase = 'idle'
   private lastAt: string | undefined
@@ -138,6 +163,7 @@ class MnemonAgentLifecycle {
     const disposers = [
       this.agent.ctx.on('agent/session-start', ((payload: SessionStartPayload) => {
         this.cancelIdleReview(true)
+        this.turnActivity.clear()
         this.startSource = payload.source
         this.primePending = true
         this.mark('prime')
@@ -161,9 +187,11 @@ class MnemonAgentLifecycle {
       memoryToolCalls: memoryToolCalls(this.agent.session.events),
       idleReviewPending: this.idleReviewTimer !== undefined,
       reviewRunning: this.reviewRunning,
+      reviewActivity: this.reviewActivity(),
       lastPhase: this.lastPhase,
       ...(this.lastReviewAt === undefined ? {} : { lastReviewAt: this.lastReviewAt }),
       ...(this.lastReviewAction === undefined ? {} : { lastReviewAction: this.lastReviewAction }),
+      ...(this.lastReviewScore === undefined ? {} : { lastReviewScore: this.lastReviewScore }),
       ...(this.lastReviewDocumentIds === undefined ? {} : { lastReviewDocumentIds: [...this.lastReviewDocumentIds] }),
       ...(this.lastAt === undefined ? {} : { lastAt: this.lastAt }),
       ...(this.lastError === undefined ? {} : { lastError: this.lastError }),
@@ -178,7 +206,11 @@ class MnemonAgentLifecycle {
   private async preStep(payload: PreStepPayload, next: () => Promise<HostPreStepDecision>): Promise<HostPreStepDecision> {
     if (payload.step === 1) this.cancelIdleReview(true)
     const decision = await next()
-    if (decision.kind === 'reject' || payload.signal.aborted || !this.config.lifecycleEnabled || payload.step !== 1) return decision
+    if (decision.kind === 'reject' || payload.signal.aborted || !this.config.lifecycleEnabled) return decision
+    if (this.config.writeEnabled && this.config.writebackMode === 'guided') {
+      this.recordTurnMessages(payload.turn, decision.messages)
+    }
+    if (payload.step !== 1) return decision
 
     const ownRequest = decision.messages.some(message => {
       const source = sourceOf(message)
@@ -206,25 +238,34 @@ class MnemonAgentLifecycle {
   private scheduleIdleReview(turn: number): void {
     if (!this.config.lifecycleEnabled || !this.config.writeEnabled || this.config.writebackMode !== 'guided') return
     this.cancelIdleReview(true)
+    const activity = this.ensureTurnActivity(turn)
+    const tools = completedToolActivity(this.agent.session.events, turn)
+    activity.toolCallCount = tools.count
+    activity.toolNames = tools.names
+    if (!this.reviewActivity().eligible) return
     this.idleReviewTimer = setTimeout(() => {
       this.idleReviewTimer = undefined
       if (this.agent.status !== 'idle') return
       const completed = this.agent.session.events.some(event => event.type === 'turn/end' && eventTurn(event) === turn)
-      if (!completed) return
+      if (!completed || !this.reviewActivity().eligible) return
       void this.runIdleReview()
     }, this.config.idleReviewMs)
   }
 
   private async runIdleReview(): Promise<void> {
     const controller = new AbortController()
+    const triggeredScore = this.reviewActivity().score
     this.reviewRunning = true
     this.reviewController = controller
     this.mark('review')
     try {
       const result = await this.coordinator.review(this.agent, controller.signal)
+      if (controller.signal.aborted) return
       this.lastReviewAt = new Date().toISOString()
       this.lastReviewAction = result.action
+      this.lastReviewScore = triggeredScore
       this.lastReviewDocumentIds = result.documentIds
+      this.turnActivity.clear()
       this.mark('review')
     } catch (error) {
       if (!controller.signal.aborted) this.fail(error)
@@ -240,6 +281,41 @@ class MnemonAgentLifecycle {
     if (this.idleReviewTimer !== undefined) clearTimeout(this.idleReviewTimer)
     this.idleReviewTimer = undefined
     if (abortRunning) this.reviewController?.abort()
+  }
+
+  private ensureTurnActivity(turn: number) {
+    let activity = this.turnActivity.get(turn)
+    if (activity === undefined) {
+      activity = { messageIds: new Set(), userTextLength: 0, toolCallCount: 0, toolNames: new Set() }
+      this.turnActivity.set(turn, activity)
+    }
+    return activity
+  }
+
+  private recordTurnMessages(turn: number, messages: readonly HostUserMessage[]): void {
+    const activity = this.ensureTurnActivity(turn)
+    for (const message of messages) {
+      if (message.source.kind !== 'user' || activity.messageIds.has(message.id)) continue
+      activity.messageIds.add(message.id)
+      activity.userTextLength += textLength([message])
+    }
+  }
+
+  private reviewActivity(): ReviewActivityScore {
+    const toolNames = new Set<string>()
+    let totalUserTextLength = 0
+    let toolCallCount = 0
+    for (const activity of this.turnActivity.values()) {
+      totalUserTextLength += activity.userTextLength
+      toolCallCount += activity.toolCallCount
+      for (const name of activity.toolNames) toolNames.add(name)
+    }
+    return scoreReviewActivity({
+      totalUserTextLength,
+      turnCount: this.turnActivity.size,
+      toolCallCount,
+      uniqueToolCount: toolNames.size,
+    })
   }
 
   private mark(phase: LifecyclePhase): void {

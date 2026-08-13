@@ -108,33 +108,99 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.lifecycle.snapshot('session-1').counters).toMatchObject({ primes: 1, recallCues: 2, writebackCues: 2 })
   })
 
-  it('debounces a full-checkpoint review until the completed turn stays idle', async () => {
+  it('waits for the QoderWork score threshold, then debounces a full-checkpoint review', async () => {
     vi.useFakeTimers()
     const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    await value.preStep([userMessage('x'.repeat(150))], 1)
     value.events.push({ type: 'turn/end', data: { turn: 1 } })
     await value.turnStopping(1)
 
     expect(value.coordinator.review).not.toHaveBeenCalled()
-    expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewPending: true, reviewRunning: false })
+    expect(value.lifecycle.snapshot('session-1').current).toMatchObject({
+      idleReviewPending: false,
+      reviewActivity: { score: 4, threshold: 5, eligible: false, totalUserTextLength: 150, turnCount: 1 },
+    })
+
+    await value.preStep([userMessage('one more turn')], 2)
+    value.events.push({ type: 'turn/end', data: { turn: 2 } })
+    await value.turnStopping(2)
+
+    expect(value.coordinator.review).not.toHaveBeenCalled()
+    expect(value.lifecycle.snapshot('session-1').current).toMatchObject({
+      idleReviewPending: true,
+      reviewRunning: false,
+      reviewActivity: { score: 5, threshold: 5, eligible: true, turnCount: 2 },
+    })
     await vi.advanceTimersByTimeAsync(4_999)
     expect(value.coordinator.review).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
     expect(value.coordinator.review).toHaveBeenCalledWith(value.agent, expect.any(AbortSignal))
     expect(value.coordinator.write).not.toHaveBeenCalled()
-    expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewPending: false, lastReviewAction: 'skipped' })
+    expect(value.lifecycle.snapshot('session-1').current).toMatchObject({
+      idleReviewPending: false,
+      lastReviewAction: 'skipped',
+      lastReviewScore: 5,
+      reviewActivity: { score: 0, eligible: false, turnCount: 0 },
+    })
   })
 
   it('cancels a pending idle review when a new turn begins', async () => {
     vi.useFakeTimers()
     const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    await value.preStep([userMessage('x'.repeat(150))], 1)
     value.events.push({ type: 'turn/end', data: { turn: 1 } })
     await value.turnStopping(1)
+    await value.preStep([userMessage('threshold turn')], 2)
+    value.events.push({ type: 'turn/end', data: { turn: 2 } })
+    await value.turnStopping(2)
     await vi.advanceTimersByTimeAsync(4_000)
-    await value.preStep([userMessage('A new turn arrived')], 2)
+    await value.preStep([userMessage('A new turn arrived')], 3)
     await vi.advanceTimersByTimeAsync(2_000)
 
     expect(value.coordinator.review).not.toHaveBeenCalled()
     expect(value.lifecycle.snapshot('session-1').current?.idleReviewPending).toBe(false)
+    expect(value.lifecycle.snapshot('session-1').current?.reviewActivity).toMatchObject({ score: 6, turnCount: 3 })
+  })
+
+  it('counts completed tool results and unique tool names with QoderWork weights', async () => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    await value.preStep([userMessage('x'.repeat(100))], 1)
+    const names = ['read', 'read', 'write', 'search', 'read']
+    names.forEach((name, index) => {
+      value.events.push({ type: 'tool/call', data: { turn: 1, step: 1, callId: `call-${index}`, name } })
+      value.events.push({ type: 'tool/result', data: { turn: 1, step: 1, message: { source: { callId: `call-${index}` } } } })
+    })
+    value.events.push({ type: 'turn/end', data: { turn: 1 } })
+    await value.turnStopping(1)
+
+    expect(value.lifecycle.snapshot('session-1').current).toMatchObject({
+      idleReviewPending: true,
+      reviewActivity: {
+        totalUserTextLength: 100,
+        turnCount: 1,
+        toolCallCount: 5,
+        uniqueToolCount: 3,
+        textLengthScore: 2,
+        turnScore: 1,
+        toolCallScore: 1,
+        toolDiversityScore: 1,
+        score: 5,
+      },
+    })
+  })
+
+  it('does not double-score repeated stopping notifications for the same turn', async () => {
+    const value = fixture()
+    await value.preStep([userMessage('short')], 1)
+    await value.turnStopping(1)
+    await value.turnStopping(1)
+
+    expect(value.lifecycle.snapshot('session-1').current?.reviewActivity).toMatchObject({
+      totalUserTextLength: 5,
+      turnCount: 1,
+      score: 1,
+    })
   })
 
   it('can cue recall and remember independently', async () => {
