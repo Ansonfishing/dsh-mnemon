@@ -8,6 +8,7 @@ afterEach(() => vi.unstubAllEnvs())
 describe('Mnemon config and resolution', () => {
   it('materializes conservative defaults', () => {
     expect(resolveConfig({})).toMatchObject({
+      storageScope: 'global',
       timeoutMs: 10_000,
       defaultRecallLimit: 10,
       routingGuidance: true,
@@ -18,6 +19,13 @@ describe('Mnemon config and resolution', () => {
       tabEnabled: true,
       writeEnabled: true,
     })
+  })
+
+  it('resolves the one storage-scope setting and preserves legacy dataDir as custom', () => {
+    expect(resolveConfig({ storageScope: 'workspace' })).toMatchObject({ storageScope: 'workspace' })
+    expect(resolveConfig({ dataDir: '/memory/custom' })).toMatchObject({ storageScope: 'custom', dataDir: '/memory/custom' })
+    expect(() => resolveConfig({ storageScope: 'custom' })).toThrow('dataDir')
+    expect(() => resolveConfig({ storageScope: 'custom', dataDir: 'relative/memory' })).toThrow('absolute')
   })
 
   it('rejects unsafe store names', () => {

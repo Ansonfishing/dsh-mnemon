@@ -4,6 +4,7 @@ import { MemoryBodyRegistry, type CreateMemoryBodyRequest, type MemoryBody, type
 import type { MnemonRunner } from './runner.ts';
 import type { LifecycleSnapshot } from './lifecycle.ts';
 import type { DocumentSnapshot } from './documents.ts';
+import type { StorageScopeCatalog } from './storage-scope.ts';
 export declare const CATEGORIES: readonly ["preference", "decision", "fact", "insight", "context", "general"];
 export type Category = typeof CATEGORIES[number];
 export declare const SOURCES: readonly ["user", "agent", "external"];
@@ -87,6 +88,7 @@ export interface StatusView {
     memoryBodies: MemoryBodyView[];
     lifecycle?: LifecycleSnapshot;
     documents?: DocumentSnapshot;
+    storage?: StorageScopeCatalog;
     stats?: MemoryBodyStats & {
         dbPath?: string;
     };

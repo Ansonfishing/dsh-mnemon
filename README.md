@@ -2,16 +2,36 @@
 
 > **LLM-supervised 4-graph persistent memory for AI agents.**
 
-DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https://github.com/mnemon-dev/mnemon) 接入 DSH，并提供三个梯度：每轮直接进入上下文的运行时热记忆、当前工作区内可检索的项目档案（Documents），以及建立在 Mnemon 原生命名 Store 上的长期“记忆体”。每个记忆体都有稳定的 `id`、名称、路由说明、激活状态和独立 `.db`，DSH 记忆子 Agent 负责跨记忆体选择、召回、查重、归档与容量迁移。
+DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https://github.com/mnemon-dev/mnemon) 接入 DSH，并提供三个梯度：每轮直接进入上下文的运行时热记忆、可检索的项目档案（Documents），以及建立在 Mnemon 原生命名 Store 上的长期“记忆体”。每个记忆体都有稳定的 `id`、名称、路由说明、激活状态和独立 `.db`，DSH 记忆子 Agent 负责跨记忆体选择、召回、查重、归档与容量迁移。
 
 主 Agent 不需要接收完整记忆体目录、原始检索过程或归档推理。新出现的稳定信息通常通过确定性的运行时控制层写入热记忆；复杂且可复用的项目产物进入受控 Documents；主模型按需调用的长期召回与归档使用有界 `spawn` 子 Agent。每个已完成 turn 都按 QoderWork 的原始参数累计活动分；只有达到门槛并继续空闲后，插件才使用一个 `fork` 子 Agent 继承主 Agent 的完整已完成 checkpoint，同时保守判断是否维护热记忆、以及是否创建或修订一份项目档案。只有精简证据或结构化回执会回到主上下文；长期存储、四图索引、衰减和去重仍由本地 Mnemon CLI 确定性执行。
+
+## 统一存储域
+
+插件在 DSH「设置 → 插件配置 → Mnemon」中只要求选择一个存储范围；该设置是运行时热记忆、Documents、记忆体和后台状态共同的目录边界，修改后重启 DSH 生效：
+
+- **全局**：使用 `MNEMON_DATA_DIR` 或 `~/.mnemon`，在工作区之间共享；
+- **工作区**：使用启动 DSH 时工作目录下的 `.mnemon`；
+- **自定义**：使用一个绝对路径或以 `~/` 开头的目录。
+
+统一目录结构如下；状态页按这个根展示真实路径、数量、占用和健康状态：
+
+```text
+<storageRoot>/
+├── runtime/          # memories.json、USER.md、MEMORY.md
+├── data/             # 记忆体目录、各自 mnemon.db
+├── documents/        # index.json、active、archived
+└── state/            # 后台审阅水位等可恢复状态（尚在 Roadmap）
+```
+
+切换存储范围不会自动迁移、合并或删除旧目录。需要保留旧数据时，应先备份并显式迁移；仅查看状态也不会改变 Agent 写入目标。
 
 ## 运行时热记忆
 
 运行时控制层是 `USER.md`、`MEMORY.md` 和所有 `add` / `replace` / `remove` 操作的唯一文件入口：
 
 ```text
-<dataDir>/runtime/
+<storageRoot>/runtime/
 ├── memories.json     # 唯一事实源
 ├── USER.md           # target=user 的确定性投影
 └── MEMORY.md         # target=memory 的确定性投影
@@ -32,13 +52,13 @@ DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https:/
 Documents 是热记忆和 Mnemon 记忆体之间的项目知识层。它保存设计、调查、操作流程、架构理由和交接记录等“比一条记忆更完整、又需要快速阅读”的内容；用户画像不会进入这里。
 
 ```text
-<workspace>/.mnemon/documents/
+<storageRoot>/documents/
 ├── index.json       # 元数据、状态、修订与哈希的唯一事实源
 ├── active/          # 参与近场检索，所有托管 Markdown 合计不超过 10 MiB
 └── archived/        # 冷归档原文，不计入 active 容量
 ```
 
-- **托管副本**：Documents 只写入 `.mnemon/documents`；frontmatter 记录 UUID、标题、检索说明、时间、哈希、来源路径、会话与记忆体引用。`sourcePaths` 只允许指向当前工作区，原项目文件从不被修改。
+- **托管副本**：Documents 只写入当前存储域的 `documents/`；frontmatter 记录 UUID、标题、检索说明、时间、哈希、来源路径、会话与记忆体引用。`sourcePaths` 只允许指向当前会话工作区，原项目文件从不被修改。
 - **控制面与并发**：所有创建、修订、搜索和迁移经由统一控制层；进程内串行、跨实例加锁、索引原子替换，归档使用 document revision 防止覆盖并发修订。
 - **近场检索**：`mnemon_document_search` 默认只读 active，按标题、description 和正文确定性排名；模型应先查热记忆与 Documents，仍缺少历史细节时再进入 Mnemon 深召回。
 - **评分沉淀**：活动评分达到门槛且主 Agent 持续空闲后，同一个完整 checkpoint `fork` reviewer 在复杂工作确实形成可复用项目知识时，最多创建或修订一份档案；普通聊天、常规编辑、原始日志和用户偏好会被跳过。
@@ -51,7 +71,7 @@ Documents 是热记忆和 Mnemon 记忆体之间的项目知识层。它保存�
 一个 Mnemon `.db` 对应一个隔离的记忆体数据面，`dsh-mnemon` 为它补充可维护的目录元数据：
 
 ```text
-<dataDir>/
+<storageRoot>/
 └── data/
     ├── .dsh-memory-bodies.json       # id / name / description / active
     ├── project/
@@ -66,7 +86,7 @@ Documents 是热记忆和 Mnemon 记忆体之间的项目知识层。它保存�
 - **写边界**：写入可选择任意记忆体；向未激活记忆体写入后会自动激活。
 - **新建**：只有稳定知识形成独立、反复使用且现有目录无法容纳的范围时，写入子 Agent 才应创建新记忆体；子 Agent 提供有主题意义的名称和精确路由描述，Host 生成不可由模型指定的 UUID。
 - **合并**：子 Agent 可将来源记忆体导入目标记忆体；这是非破坏性合并，来源 `.db` 不会被删除。
-- **兼容迁移**：插件会发现既有 `<dataDir>/data/<store>/mnemon.db` 并登记到目录，不移动或重建数据库。
+- **兼容迁移**：插件会发现既有 `<storageRoot>/data/<store>/mnemon.db` 并登记到目录，不移动或重建数据库。
 - **人工控制**：“记忆体”总览提供激活开关和空白记忆体创建入口；开关只改变读取范围。
 
 ## DSH 原生监督架构
@@ -117,7 +137,7 @@ Prime 只初始化路由状态；pre-step 提示保持为一句短语，不注�
 - **实体**：列出高频实体，并由 MnemonService 直连聚合实体的跨图上下文，不启动 Recall Worker。
 - **沉淀**：默认直接调度记忆子 Agent；人工高级选项可约束目标记忆体、分类、重要性、实体和标签，但不会绕过查重与监督。
 - **内容**：无副作用浏览已激活记忆体，支持筛选、复制、基于旧内容新建和软删除。
-- **状态**：展示 Mnemon 引擎、记忆体与 Documents 目录、Recall/Write/Archive Worker、会话绑定、阶段计数和快速诊断，不在页面混入部署配置。
+- **状态**：用对齐的摘要卡展示 Mnemon 引擎、记忆体、Documents 和子 Agent；存储域卡按当前根展开四类数据；动画流转图实时描绘对话、LLM 监督层、热记忆、档案、记忆体和 Agent 上下文之间的路径，并展示审查评分与各层数量。部署配置只在 DSH 插件配置页修改。
 
 界面使用 DSH design token，跟随 DSH 全局明暗模式，不维护插件私有主题开关。WebUI 不直接启动进程、不接触数据库：Host 侧统一校验输入、控制超时并调用本地 `mnemon`。
 
@@ -164,13 +184,14 @@ dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 
 ## 配置
 
-记忆体名称、description 和激活状态在「记忆体 → 总览」中维护。进程级连接与行为配置属于部署配置，可写入 `$DSH_HOME/settings.yaml` 的 `mnemon` 命名空间或 profile patch；修改后重启 DSH 生效。
+记忆体名称、description 和激活状态在「记忆体 → 总览」中维护。DSH「设置 → 插件配置 → Mnemon」只呈现统一存储范围这一项（选择自定义时再填写目录）；其他进程级选项仍可在 `$DSH_HOME/settings.yaml` 的 `mnemon` 命名空间中维护。修改后重启 DSH 生效。
 
 ```yaml
 # ~/.dsh/settings.yaml
 mnemon:
+  storageScope: global # global | workspace | custom
   cliPath: /opt/homebrew/bin/mnemon
-  dataDir: ~/.mnemon
+  # dataDir: ~/mnemon-data # 仅 storageScope=custom 时需要
   timeoutMs: 10000
   defaultRecallLimit: 10
   routingGuidance: true
@@ -184,8 +205,9 @@ mnemon:
 
 | 配置 | 默认值 | 说明 |
 |---|---:|---|
+| `storageScope` | `global` | 唯一的主存储选择：`global`、`workspace` 或 `custom`；统一控制 runtime、documents、data 和 state |
 | `cliPath` | 自动发现 | 显式配置 → `MNEMON_CLI_PATH` → `PATH` → 常见安装路径 |
-| `dataDir` | Mnemon 默认 | 未设置时沿用 `MNEMON_DATA_DIR` 或 `~/.mnemon`；`runtime/` 保存热记忆，`data/` 保存全局记忆体目录 |
+| `dataDir` | 未设置 | 仅 `storageScope: custom` 时必填，必须为绝对路径或以 `~/` 开头 |
 | `store` | 未覆盖 | 仅作为首次建目录或发现旧 Store 时的兼容首选项；运行期语义操作由记忆体路由决定 |
 | `timeoutMs` | `10000` | 单次 CLI 调用硬超时，范围 100–120000 ms |
 | `defaultRecallLimit` | `10` | 工具和 Tab 的默认召回条数，范围 1–50 |

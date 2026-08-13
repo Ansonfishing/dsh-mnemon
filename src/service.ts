@@ -12,6 +12,7 @@ import {
 import type { MnemonRunner } from './runner.ts'
 import type { LifecycleSnapshot } from './lifecycle.ts'
 import type { DocumentSnapshot } from './documents.ts'
+import type { StorageScopeCatalog } from './storage-scope.ts'
 
 export const CATEGORIES = ['preference', 'decision', 'fact', 'insight', 'context', 'general'] as const
 export type Category = typeof CATEGORIES[number]
@@ -100,6 +101,7 @@ export interface StatusView {
   memoryBodies: MemoryBodyView[]
   lifecycle?: LifecycleSnapshot
   documents?: DocumentSnapshot
+  storage?: StorageScopeCatalog
   stats?: MemoryBodyStats & { dbPath?: string }
 }
 

@@ -1,4 +1,5 @@
 import type { ClientConnectionHandle, ClientContextShape } from '../contracts.ts'
+import { MnemonSettingsCard } from './MnemonSettingsCard.tsx'
 import { MnemonView } from './MnemonView.tsx'
 import { en, zh, type MnemonKey } from './locales.ts'
 import { MnemonSettingsScope } from './settings.ts'
@@ -24,4 +25,14 @@ export function apply(rawContext: unknown): void {
       t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
     }),
   }, MnemonView as never))
+  ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
+    name: 'settings.plugin.item',
+    id: 'mnemon',
+    order: 30,
+    locale: namespace,
+    inject: (): { scope: MnemonSettingsScope; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+      scope: settings,
+      t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
+    }),
+  }, MnemonSettingsCard as never))
 }

@@ -219,22 +219,27 @@ function parseRecord(value: unknown): DocumentRecord | undefined {
 /** Project-scoped control plane for managed active and cold document copies. */
 export class DocumentController {
   readonly workspaceRoot: string
+  readonly storageRoot: string
   readonly directory: string
   readonly activeDirectory: string
   readonly archivedDirectory: string
   readonly indexPath: string
   readonly lockPath: string
+  private readonly managedRelativePrefix: string
   private queue: Promise<unknown> = Promise.resolve()
 
   constructor(
     workspaceRoot: string,
     readonly limitBytes = DOCUMENTS_ACTIVE_LIMIT_BYTES,
     private readonly now: () => Date = () => new Date(),
+    storageRoot?: string,
   ) {
     this.workspaceRoot = resolve(workspaceRoot)
     if (!existsSync(this.workspaceRoot) || !statSync(this.workspaceRoot).isDirectory()) throw new Error(`document workspace is unavailable: ${this.workspaceRoot}`)
     if (!Number.isSafeInteger(limitBytes) || limitBytes < 1) throw new Error('active document limit must be a positive integer')
-    this.directory = join(this.workspaceRoot, '.mnemon', 'documents')
+    this.storageRoot = storageRoot === undefined ? join(this.workspaceRoot, '.mnemon') : resolve(storageRoot)
+    this.managedRelativePrefix = storageRoot === undefined ? ['.mnemon', 'documents'].join('/') : 'documents'
+    this.directory = join(this.storageRoot, 'documents')
     this.activeDirectory = join(this.directory, 'active')
     this.archivedDirectory = join(this.directory, 'archived')
     this.indexPath = join(this.directory, 'index.json')
@@ -479,17 +484,21 @@ export class DocumentController {
       const absolute = resolve(this.workspaceRoot, value)
       const workspaceRelative = relative(this.workspaceRoot, absolute)
       if (workspaceRelative === '..' || workspaceRelative.startsWith(`..${sep}`) || isAbsolute(workspaceRelative)) throw new Error(`source path must stay inside the workspace: ${value}`)
-      if (workspaceRelative === join('.mnemon', 'documents') || workspaceRelative.startsWith(`${join('.mnemon', 'documents')}${sep}`)) throw new Error('managed document paths cannot be used as source paths')
+      if (absolute === this.directory || absolute.startsWith(`${this.directory}${sep}`)) throw new Error('managed document paths cannot be used as source paths')
       return workspaceRelative.split(sep).join('/') || '.'
     })
   }
 
   private relativeManagedPath(status: DocumentStatus, filename: string): string {
-    return ['.mnemon', 'documents', status, basename(filename)].join('/')
+    return [this.managedRelativePrefix, status, basename(filename)].join('/')
   }
 
   private pathFor(record: Pick<DocumentRecord, 'relativePath'>): string {
-    const path = resolve(this.workspaceRoot, record.relativePath)
+    const legacyPrefix = ['.mnemon', 'documents'].join('/')
+    const relativePath = record.relativePath === legacyPrefix || record.relativePath.startsWith(`${legacyPrefix}/`)
+      ? record.relativePath.slice('.mnemon/'.length)
+      : record.relativePath
+    const path = resolve(this.storageRoot, relativePath)
     const managedRoot = `${resolve(this.directory)}${sep}`
     if (!path.startsWith(managedRoot)) throw new Error('document index contains an unsafe managed path')
     return path
@@ -546,7 +555,11 @@ export class DocumentController {
 export class DocumentManager {
   private readonly controllers = new Map<string, DocumentController>()
 
-  constructor(private readonly limitBytes = DOCUMENTS_ACTIVE_LIMIT_BYTES, private readonly now: () => Date = () => new Date()) {}
+  constructor(
+    private readonly limitBytes = DOCUMENTS_ACTIVE_LIMIT_BYTES,
+    private readonly now: () => Date = () => new Date(),
+    private readonly storageRoot?: () => string,
+  ) {}
 
   forWorkspace(workspaceRoot: string): DocumentController {
     const root = resolve(workspaceRoot)
@@ -561,6 +574,15 @@ export class DocumentManager {
   forAgent(agent: HostAgent): DocumentController {
     const cwd = agent.session.header?.cwd
     if (cwd === undefined || cwd.trim() === '') throw new Error('the current DSH session has no workspace for Mnemon Documents')
-    return this.forWorkspace(cwd)
+    if (this.storageRoot === undefined) return this.forWorkspace(cwd)
+    const storageRoot = resolve(this.storageRoot())
+    const root = resolve(cwd)
+    const key = `${storageRoot}\0${root}`
+    let controller = this.controllers.get(key)
+    if (controller === undefined) {
+      controller = new DocumentController(root, this.limitBytes, this.now, storageRoot)
+      this.controllers.set(key, controller)
+    }
+    return controller
   }
 }

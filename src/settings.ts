@@ -53,7 +53,7 @@ export function createSettingsHandler(settings: HostSettingsService): HostRpcHan
       const ops = payload.ops.map((raw) => {
         const op = object(raw)
         const field = Array.isArray(op.path) && op.path.length === 1 ? String(op.path[0]) : ''
-        if (!['cliPath', 'dataDir', 'store', 'timeoutMs', 'defaultRecallLimit', 'routingGuidance', 'lifecycleEnabled', 'recallMode', 'writebackMode', 'idleReviewMs', 'tabEnabled', 'writeEnabled'].includes(field)) {
+        if (!['storageScope', 'cliPath', 'dataDir', 'store', 'timeoutMs', 'defaultRecallLimit', 'routingGuidance', 'lifecycleEnabled', 'recallMode', 'writebackMode', 'idleReviewMs', 'tabEnabled', 'writeEnabled'].includes(field)) {
           throw new Error(`unsupported Mnemon settings field: ${field}`)
         }
         if (op.op === 'unset') return { op: 'unset' as const, path: [field] }

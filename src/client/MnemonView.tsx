@@ -1,9 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts'
 import type { Config } from '../config.ts'
 import type { DocumentRecord, DocumentSnapshot, DocumentView } from '../documents.ts'
 import { QODERWORK_REVIEW_POLICY } from '../review-activity.ts'
 import type { RuntimeMemoryEntry, RuntimeMemoryImportance, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts'
+import type { StorageAreaInventory, StorageScopeInventory, StorageScopeKind } from '../storage-scope.ts'
 import {
   CATEGORIES,
   type Category,
@@ -1174,7 +1175,6 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
   const catalogKnown = status?.memoryBodies !== undefined
   const memoryBodies = useMemo(() => status?.memoryBodies ?? [], [status])
   const activeBodies = memoryBodies.filter(body => body.active).length
-  const latest = current?.lastAt === undefined ? t('status.noActivity') : new Date(current.lastAt).toLocaleString()
   const phase = current?.lastPhase === undefined || current.lastPhase === 'idle' ? t('status.phaseIdle') : current.lastPhase === 'supervised' ? t('status.phaseSupervised') : current.lastPhase === 'error' ? t('status.phaseError') : current.lastPhase === 'prime' ? t('status.prime') : current.lastPhase === 'recall' ? t('status.recallWorker') : current.lastPhase === 'review' ? t('status.phaseReview') : t('status.writeWorker')
   const reviewState = current?.reviewRunning === true
     ? t('status.reviewRunning')
@@ -1184,6 +1184,9 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
         ? t('status.reviewQualified')
         : t('status.reviewAccumulating')
   const lastReview = current?.lastReviewAt === undefined ? t('status.noReview') : t('status.reviewAt', { time: new Date(current.lastReviewAt).toLocaleTimeString(), action: current.lastReviewAction ?? '—', score: current.lastReviewScore ?? '—' })
+  const storage = status?.storage
+  const selectedScopeKind = storage?.activeKind ?? 'global'
+  const selectedScope = storage?.scopes.find(scope => scope.kind === selectedScopeKind)
   return (
     <div className={css.page}>
       <PageHeader title={t('status.title')} description={t('status.description')} meta={status?.healthy === true && lifecycle?.sessionAvailable === true ? t('status.nominal') : t('status.checkRequired')} action={<button type="button" className={css.secondaryButton} onClick={props.onRefresh}>{props.loading ? t('status.rechecking') : t('status.recheck')}</button>} />
@@ -1192,39 +1195,131 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
         <article><span className={`${css.healthIndicator} ${status?.healthy === true ? css.healthGood : css.healthBad}`} /><div><small>{t('status.engine')}</small><strong>{status?.healthy === true ? t('status.engineConnected') : t('status.engineUnavailable')}</strong><p>{status?.version === undefined ? t('status.versionWaiting') : `CLI ${status.version}`}</p></div></article>
         <article><span className={`${css.healthIndicator} ${activeBodies > 0 ? css.healthGood : css.healthMuted}`} /><div><small>{t('status.spaces')}</small><strong>{catalogKnown ? t('status.activeRatio', { active: activeBodies, total: memoryBodies.length }) : t('status.directoryUnsynced')}</strong><p>{t('status.activeMemories', { count: status?.stats?.totalInsights ?? 0 })}</p></div></article>
         <article><span className={`${css.healthIndicator} ${documents === undefined ? css.healthMuted : css.healthGood}`} /><div><small>{t('status.documents')}</small><strong>{documents === undefined ? t('status.documentsWaiting') : t('status.documentRatio', { active: documents.activeCount, archived: documents.archivedCount })}</strong><p>{documents === undefined ? t('status.documentsSession') : t('status.documentUsage', { used: humanBytes(documents.activeBytes), limit: humanBytes(documents.limitBytes) })}</p></div></article>
-        <article><span className={`${css.healthIndicator} ${lifecycle?.sessionAvailable === true ? css.healthGood : css.healthBad}`} /><div><small>{t('status.router')}</small><strong>{lifecycle?.sessionAvailable === true ? t('status.routerReady') : t('status.sessionMissing')}</strong><p>{workers === undefined ? t('status.orchestrationWaiting') : t('status.workerCounts', { recalls: workers.recalls, answers: workers.answers ?? 0, reviews: workers.reviews ?? 0, documentArchives: workers.documentArchives ?? 0, compactions: workers.compactions ?? 0, migrations: workers.migrations ?? 0, writes: workers.writes })}</p></div></article>
+        <article><span className={`${css.healthIndicator} ${lifecycle?.sessionAvailable === true ? css.healthGood : css.healthBad}`} /><div><small>{t('status.router')}</small><strong>{lifecycle?.sessionAvailable === true ? t('status.routerReady') : t('status.sessionMissing')}</strong><p>{workers === undefined ? t('status.orchestrationWaiting') : t('status.workerSummary', { recalls: workers.recalls, reviews: workers.reviews ?? 0, writes: workers.writes, failures: workers.failures ?? 0 })}</p></div></article>
       </section>
 
-      <div className={css.statusLayout}>
-        <section className={css.lifecyclePanel}>
+      <MemorySystemFlow status={status} reviewState={reviewState} />
+
+      <StorageDomains catalog={storage} selected={selectedScope} selectedKind={selectedScopeKind} />
+
+      <section className={css.lifecyclePanel}>
           <div className={css.statusSectionHeader}><div><h3>{t('status.lifecycle')}</h3><p>{t('status.lifecycleText')}</p></div><span className={css.phaseBadge}>{phase}</span></div>
           <div className={css.lifecycleFlow}>
             <article><span>01</span><div><strong>{t('status.prime')}</strong><p>{t('status.primeText')}</p></div><code>{lifecycle?.counters.primes ?? 0}</code></article>
             <article data-disabled={lifecycle?.recallMode === 'off' || undefined}><span>02</span><div><strong>{t('status.recallWorker')}</strong><p>{lifecycle?.recallMode === 'guided' ? t('status.recallText') : t('status.recallOff')}</p></div><code>{workers?.recalls ?? 0}</code></article>
             <article data-disabled={lifecycle?.writebackMode === 'off' || undefined}><span>03</span><div><strong>{t('status.writeWorker')}</strong><p>{lifecycle?.writebackMode === 'guided' ? t('status.writeText', { threshold: reviewThreshold, seconds: Math.round((lifecycle.idleReviewMs ?? 0) / 1000) }) : t('status.writeOff')}</p></div><code>{workers?.reviews ?? 0}</code></article>
           </div>
-          <div className={css.lifecycleFoot}><span>{t('status.activityScore')} <strong>{reviewActivity?.score ?? 0} / {reviewThreshold}</strong></span><span>{t('status.activitySignals')} <strong>{t('status.activitySignalValues', { chars: reviewActivity?.totalUserTextLength ?? 0, turns: reviewActivity?.turnCount ?? 0, tools: reviewActivity?.toolCallCount ?? 0, unique: reviewActivity?.uniqueToolCount ?? 0 })}</strong></span><span>{t('status.reviewState')} <strong>{reviewState}</strong></span><span>{t('status.latestPhase')} <strong>{phase}</strong></span><span>{t('status.lastReview')} <strong>{lastReview}</strong></span><span>{t('status.reviewDocuments')} <strong>{current?.lastReviewDocumentIds?.length ?? 0}</strong></span><span>{t('status.workerFailures')} <strong>{workers?.failures ?? 0}</strong></span></div>
+          <div className={css.lifecycleFoot}><span>{t('status.activitySignals')} <strong>{t('status.activitySignalValues', { chars: reviewActivity?.totalUserTextLength ?? 0, turns: reviewActivity?.turnCount ?? 0, tools: reviewActivity?.toolCallCount ?? 0, unique: reviewActivity?.uniqueToolCount ?? 0 })}</strong></span><span>{t('status.lastReview')} <strong>{lastReview}</strong></span><span>{t('status.workerFailures')} <strong>{workers?.failures ?? 0}</strong></span></div>
           {current?.lastError !== undefined && <div className={css.inlineError} role="alert">Lifecycle：{current.lastError}</div>}
-        </section>
-
-        <aside className={css.diagnosticsPanel}>
-          <div className={css.statusSectionHeader}><div><h3>{t('status.quickDiagnostics')}</h3></div></div>
-          <ul className={css.diagnosticList}>
-            <li data-ok={status?.commandFound || undefined}><span />{status?.commandFound ? t('status.cliExecutable') : t('status.cliMissing')}</li>
-            <li data-ok={catalogKnown && activeBodies > 0 || undefined}><span />{catalogKnown ? t('status.readingSpaces', { count: activeBodies }) : t('status.directoryWaiting')}</li>
-            <li data-ok={lifecycle?.sessionAvailable || undefined}><span />{lifecycle?.sessionAvailable ? t('status.webAgentReady') : t('status.liveSessionMissing')}</li>
-            <li data-ok={documents !== undefined || undefined}><span />{documents === undefined ? t('status.documentsUnavailable') : t('status.documentsHealthy', { count: documents.activeCount })}</li>
-            <li data-ok={(lifecycle?.counters.failures ?? 0) === 0 || undefined}><span />{t('status.lifecycleFailures', { count: lifecycle?.counters.failures ?? 0 })}</li>
-          </ul>
-          <div className={css.nativeAccess}><h3>{t('status.nativeAccess')}</h3><code>/mnemon status</code><code>/mnemon recall &lt;query&gt;</code><p>{t('status.nativeAccessText')}</p></div>
-        </aside>
-      </div>
-
-      <section className={css.runtimeDetails}>
-        <div className={css.statusSectionHeader}><div><h3>{t('status.engineStorage')}</h3></div><span className={`${css.runtimeBadge} ${status?.healthy === true ? css.runtimeOnline : css.runtimeOffline}`}>{status?.healthy === true ? t('status.online') : t('status.offline')}</span></div>
-        <dl><div><dt>CLI</dt><dd><code>{status?.cliPath ?? 'mnemon'}</code></dd></div><div><dt>{t('status.mnemonVersion')}</dt><dd>{status?.version ?? '—'}</dd></div><div><dt>{t('status.directory')}</dt><dd><code>{status?.memoryBodyDirectory ?? '—'}</code></dd></div><div><dt>{t('status.activeDbSize')}</dt><dd>{status?.stats === undefined ? '—' : humanBytes(status.stats.dbSizeBytes)}</dd></div><div><dt>{t('term.spaces')}</dt><dd>{catalogKnown ? t('common.count', { count: memoryBodies.length }) : '—'}</dd></div><div><dt>{t('status.activeCount')}</dt><dd>{catalogKnown ? t('common.count', { count: activeBodies }) : '—'}</dd></div><div><dt>{t('telemetry.memories')}</dt><dd>{status?.stats?.totalInsights ?? '—'}</dd></div><div><dt>{t('status.activeGraphEdges')}</dt><dd>{status?.stats?.edgeCount ?? '—'}</dd></div><div><dt>{t('status.documentDirectory')}</dt><dd><code>{documents?.directory ?? '—'}</code></dd></div><div><dt>{t('status.activeDocuments')}</dt><dd>{documents?.activeCount ?? '—'}</dd></div><div><dt>{t('status.coldDocuments')}</dt><dd>{documents?.archivedCount ?? '—'}</dd></div><div><dt>{t('status.documentCapacity')}</dt><dd>{documents === undefined ? '—' : `${humanBytes(documents.activeBytes)} / ${humanBytes(documents.limitBytes)}`}</dd></div></dl>
       </section>
+
     </div>
+  )
+}
+
+function storageScopeLabel(t: MnemonTranslate, kind: StorageScopeKind): string {
+  return t(kind === 'global' ? 'status.storageGlobal' : kind === 'workspace' ? 'status.storageWorkspace' : 'status.storageCustom')
+}
+
+function storageAreaLabel(t: MnemonTranslate, kind: StorageAreaInventory['kind']): string {
+  return t(kind === 'runtime' ? 'status.storageRuntime' : kind === 'memory-bodies' ? 'status.storageBodies' : kind === 'documents' ? 'status.storageDocuments' : 'status.storageState')
+}
+
+function storageAreaDetails(t: MnemonTranslate, area: StorageAreaInventory): string {
+  if (area.kind === 'runtime') return t('status.storageRuntimeDetail', { user: area.details.userEntries ?? 0, memory: area.details.memoryEntries ?? 0 })
+  if (area.kind === 'memory-bodies') return t('status.storageBodiesDetail', { active: area.details.activeBodies ?? 0, databases: area.details.databases ?? 0 })
+  if (area.kind === 'documents') return t('status.storageDocumentsDetail', { active: area.details.activeDocuments ?? 0, archived: area.details.archivedDocuments ?? 0 })
+  return area.details.reviewLedger === true ? t('status.storageStateReady') : t('status.storageStateVolatile')
+}
+
+function StorageDomains(props: {
+  catalog: StatusView['storage']
+  selected: StorageScopeInventory | undefined
+  selectedKind: StorageScopeKind
+}): JSX.Element {
+  const t = useT()
+  const areaStatus = (status: StorageAreaInventory['status']) => t(status === 'ready' ? 'status.storageReady' : status === 'empty' ? 'status.storageEmpty' : status === 'missing' ? 'status.storageMissing' : 'status.storageInvalid')
+  return (
+    <section className={css.storageDomains} aria-label={t('status.storageDomains')}>
+      <div className={css.statusSectionHeader}>
+        <div><h3>{t('status.storageDomains')}</h3><p>{t('status.storageDomainsText')}</p></div>
+        <span className={css.phaseBadge}>{storageScopeLabel(t, props.selectedKind)}</span>
+      </div>
+      {props.catalog === undefined ? <div className={css.storageUnavailable}>{t('status.storageWaiting')}</div> : props.selected?.root === undefined ? <div className={css.storageUnavailable}><strong>{storageScopeLabel(t, props.selectedKind)}</strong><p>{props.selectedKind === 'custom' ? t('status.storageCustomUnset') : t('status.storageWorkspaceUnavailable')}</p></div> : <>
+        <div className={css.storageRoot}>
+          <div><span>{storageScopeLabel(t, props.selectedKind)} · {t('status.storageActiveRoot')}</span><code>{props.selected.root}</code></div>
+          <div><strong>{humanBytes(props.selected.totalBytes)}</strong><small>{props.selected.available ? t('status.storageAvailable') : t('status.storageNotCreated')}</small></div>
+        </div>
+        <div className={css.storageAreaGrid}>
+          {props.selected.areas.map(area => <article key={area.kind} data-status={area.status}>
+            <header><div><span /> <strong>{storageAreaLabel(t, area.kind)}</strong></div><em>{areaStatus(area.status)}</em></header>
+            <div className={css.storageAreaMetric}><strong>{area.itemCount}</strong><span>{t('status.storageItems')}</span><code>{humanBytes(area.bytes)}</code></div>
+            <p>{storageAreaDetails(t, area)}</p>
+            <code className={css.storagePath}>{area.path}</code>
+            {area.issue !== undefined && <small>{area.issue}</small>}
+          </article>)}
+        </div>
+      </>}
+      {props.catalog !== undefined && <p className={css.storageFootnote}>{t('status.storageFootnote', { root: props.catalog.activeRoot })}</p>}
+    </section>
+  )
+}
+
+function MemorySystemFlow(props: { status: StatusView | null; reviewState: string }): JSX.Element {
+  const t = useT()
+  const status = props.status
+  const id = useId().replace(/:/g, '')
+  const titleId = `${id}-title`
+  const descriptionId = `${id}-description`
+  const arrowId = `${id}-arrow`
+  const archiveArrowId = `${id}-archive-arrow`
+  const glowId = `${id}-glow`
+  const pathId = (name: string) => `${id}-${name}`
+  const activeScope = status?.storage?.scopes.find(scope => scope.active)
+  const runtime = activeScope?.areas.find(area => area.kind === 'runtime')
+  const documentArea = activeScope?.areas.find(area => area.kind === 'documents')
+  const documents = status?.documents
+  const bodies = status?.memoryBodies ?? []
+  const activeBodies = bodies.filter(body => body.active).length
+  const score = status?.lifecycle?.current?.reviewActivity?.score ?? 0
+  const threshold = status?.lifecycle?.current?.reviewActivity?.threshold ?? QODERWORK_REVIEW_POLICY.reviewThreshold
+  const hostReady = status?.lifecycle?.sessionAvailable === true
+  const flowActive = status?.healthy === true && hostReady
+  const areaState = (area: StorageAreaInventory | undefined): 'ready' | 'idle' | 'error' => area?.status === 'invalid' ? 'error' : area?.status === 'ready' ? 'ready' : 'idle'
+  const markerEnd = `url(#${arrowId})`
+  const archiveMarkerEnd = `url(#${archiveArrowId})`
+  return (
+    <section className={css.memoryFlow} aria-label={t('status.flowTitle')}>
+      <div className={css.statusSectionHeader}><div><h3>{t('status.flowTitle')}</h3><p>{t('status.flowDescription')}</p></div><span className={`${css.runtimeBadge} ${flowActive ? css.runtimeOnline : css.runtimeOffline}`}>{flowActive ? t('status.flowLive') : t('status.flowDegraded')}</span></div>
+      <div className={css.memoryFlowCanvas}>
+        <svg viewBox="0 0 1040 326" role="img" aria-labelledby={`${titleId} ${descriptionId}`}>
+          <title id={titleId}>{t('status.flowTitle')}</title><desc id={descriptionId}>{t('status.flowDescription')}</desc>
+          <defs><marker id={arrowId} markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path className={css.flowArrow} d="M0 0L8 4L0 8Z" /></marker><marker id={archiveArrowId} markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path className={css.flowArchiveArrow} d="M0 0L8 4L0 8Z" /></marker><filter id={glowId}><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
+          <g className={css.flowPaths}>
+            <path id={pathId('ingest')} markerEnd={markerEnd} d="M190 163 C235 163 245 163 284 163" />
+            <path id={pathId('hot')} markerEnd={markerEnd} d="M446 148 C486 130 500 88 548 78" />
+            <path id={pathId('docs')} markerEnd={markerEnd} d="M446 163 C486 163 500 163 548 163" />
+            <path id={pathId('durable')} markerEnd={markerEnd} d="M446 178 C486 198 500 241 548 248" />
+            <path id={pathId('hot-context')} markerEnd={markerEnd} d="M712 78 C770 85 784 133 836 148" />
+            <path id={pathId('doc-context')} markerEnd={markerEnd} d="M712 163 C762 163 788 163 836 163" />
+            <path id={pathId('recall')} markerEnd={markerEnd} d="M712 248 C770 239 785 192 836 178" />
+            <path id={pathId('hot-archive')} markerEnd={archiveMarkerEnd} className={css.flowArchivePath} d="M630 112 C630 145 630 199 630 218" />
+            <path id={pathId('doc-archive')} markerEnd={archiveMarkerEnd} className={css.flowArchivePath} d="M670 195 C681 213 674 225 658 232" />
+          </g>
+          {flowActive && <g className={css.flowParticles} style={{ '--flow-glow': `url(#${glowId})` } as CSSProperties} aria-hidden="true">
+            {['ingest', 'hot', 'docs', 'durable', 'hot-context', 'doc-context', 'recall'].map((path, index) => <circle key={path} r="3"><animateMotion dur={`${2.4 + index * .16}s`} begin={`${index * -.47}s`} repeatCount="indefinite"><mpath href={`#${pathId(path)}`} /></animateMotion></circle>)}
+            {['hot-archive', 'doc-archive'].map((path, index) => <circle key={path} className={css.flowArchiveParticle} r="3"><animateMotion dur={`${3.1 + index * .35}s`} begin={`${index * -1.1}s`} repeatCount="indefinite"><mpath href={`#${pathId(path)}`} /></animateMotion></circle>)}
+          </g>}
+          <g className={css.flowNode} data-state={hostReady ? 'ready' : 'idle'} transform="translate(30 119)"><rect width="160" height="88" rx="15" /><circle cx="20" cy="20" r="4" /><text className={css.flowNodeLabel} x="18" y="47">{t('status.flowConversation')}</text><text className={css.flowNodeMeta} x="18" y="67">{t('status.flowTurns')}</text></g>
+          <g className={`${css.flowNode} ${css.flowSupervisor}`} data-state={hostReady ? 'ready' : 'idle'} transform="translate(284 105)"><rect width="162" height="116" rx="17" /><circle cx="20" cy="20" r="4" /><text className={css.flowNodeLabel} x="18" y="48">{t('status.flowSupervisor')}</text><text className={css.flowNodeMeta} x="18" y="69">{props.reviewState}</text><text className={css.flowNodeValue} x="18" y="96">{score} / {threshold}</text></g>
+          <g className={css.flowNode} data-state={areaState(runtime)} transform="translate(548 35)"><rect width="164" height="78" rx="14" /><circle cx="20" cy="19" r="4" /><text className={css.flowNodeLabel} x="18" y="43">{t('status.storageRuntime')}</text><text className={css.flowNodeMeta} x="18" y="62">{t('status.flowEntries', { count: runtime?.itemCount ?? 0 })}</text></g>
+          <g className={css.flowNode} data-state={areaState(documentArea)} transform="translate(548 124)"><rect width="164" height="78" rx="14" /><circle cx="20" cy="19" r="4" /><text className={css.flowNodeLabel} x="18" y="43">{t('status.storageDocuments')}</text><text className={css.flowNodeMeta} x="18" y="62">{t('status.flowDocuments', { active: documents?.activeCount ?? 0, archived: documents?.archivedCount ?? 0 })}</text></g>
+          <g className={css.flowNode} data-state={status?.healthy === false ? 'error' : activeBodies > 0 ? 'ready' : 'idle'} transform="translate(548 213)"><rect width="164" height="78" rx="14" /><circle cx="20" cy="19" r="4" /><text className={css.flowNodeLabel} x="18" y="43">{t('term.spaces')}</text><text className={css.flowNodeMeta} x="18" y="62">{t('status.activeRatio', { active: activeBodies, total: bodies.length })}</text></g>
+          <g className={css.flowNode} data-state={hostReady ? 'ready' : 'idle'} transform="translate(836 119)"><rect width="174" height="88" rx="15" /><circle cx="20" cy="20" r="4" /><text className={css.flowNodeLabel} x="18" y="47">{t('status.flowContext')}</text><text className={css.flowNodeMeta} x="18" y="67">{t('status.flowContextDetail')}</text></g>
+        </svg>
+      </div>
+      <div className={css.flowLegend}><span><i />{t('status.flowReadWrite')}</span><span><i />{t('status.flowArchive')}</span><span>{t('status.flowCurrentScope', { scope: storageScopeLabel(t, status?.storage?.activeKind ?? 'global') })}</span></div>
+    </section>
   )
 }
 

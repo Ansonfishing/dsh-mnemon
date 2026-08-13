@@ -1,13 +1,16 @@
 import z from 'schemastery'
+import { isAbsolute } from 'node:path'
 import { DEFAULT_IDLE_REVIEW_MS, DEFAULT_RECALL_LIMIT, DEFAULT_TIMEOUT_MS } from './config-values.ts'
 
 export { DEFAULT_IDLE_REVIEW_MS, DEFAULT_RECALL_LIMIT, DEFAULT_TIMEOUT_MS } from './config-values.ts'
 
 /** User-facing configuration mounted from the DSH profile patch. */
 export interface Config {
+  /** Storage domain selected in DSH plugin settings. Changes apply after restart. */
+  storageScope?: 'global' | 'workspace' | 'custom'
   /** Explicit `mnemon` executable. Omit to resolve MNEMON_CLI_PATH, PATH, then common install locations. */
   cliPath?: string
-  /** Mnemon base directory. Omit to preserve MNEMON_DATA_DIR / Mnemon's ~/.mnemon default. */
+  /** Custom Mnemon base directory; also retained as a legacy dataDir-only scope selection. */
   dataDir?: string
   /** Legacy store hint used to bootstrap or discover the initial Memory Space. */
   store?: string
@@ -32,6 +35,9 @@ export interface Config {
 }
 
 export const Config: z<Config> = z.object({
+  // Keep this optional in the schema so legacy dataDir-only installs still
+  // resolve to the custom scope instead of being silently reset to global.
+  storageScope: z.union(['global', 'workspace', 'custom'] as const),
   cliPath: z.string(),
   dataDir: z.string(),
   store: z.string(),
@@ -47,6 +53,7 @@ export const Config: z<Config> = z.object({
 })
 
 export interface ResolvedConfig {
+  storageScope: 'global' | 'workspace' | 'custom'
   cliPath?: string
   dataDir?: string
   store?: string
@@ -70,10 +77,16 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
   const cliPath = optionalText(config.cliPath)
   const dataDir = optionalText(config.dataDir)
   const store = optionalText(config.store)
+  const storageScope = config.storageScope ?? (dataDir === undefined ? 'global' : 'custom')
+  if (storageScope === 'custom' && dataDir === undefined) throw new Error('dsh-mnemon: dataDir is required when storageScope is custom')
+  if (storageScope === 'custom' && dataDir !== undefined && !isAbsolute(dataDir) && dataDir !== '~' && !dataDir.startsWith('~/')) {
+    throw new Error('dsh-mnemon: custom dataDir must be absolute or start with ~/')
+  }
   if (store !== undefined && !/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(store)) {
     throw new Error('dsh-mnemon: store must match [a-zA-Z0-9][a-zA-Z0-9_-]*')
   }
   return {
+    storageScope,
     ...(cliPath === undefined ? {} : { cliPath }),
     ...(dataDir === undefined ? {} : { dataDir }),
     ...(store === undefined ? {} : { store }),

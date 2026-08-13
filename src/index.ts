@@ -11,10 +11,11 @@ import { MnemonService } from './service.ts'
 import { registerSettingsRpc } from './settings.ts'
 import { MnemonSubagentCoordinator } from './subagent.ts'
 import { registerTools } from './tools.ts'
+import { StorageScopeInspector } from './storage-scope.ts'
 
 export const name = 'dsh-mnemon'
 export const inject = ['tools', 'settings', 'commands', 'agents', 'subagents']
-export { Config, resolveConfig, DocumentManager, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, createRunner }
+export { Config, resolveConfig, DocumentManager, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, StorageScopeInspector, createRunner }
 export type { MnemonConfig }
 
 /** Mount native model tools on every DSH surface and UI RPC only when Web connection exists. */
@@ -29,7 +30,8 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   const runner = createRunner(resolved)
   const service = new MnemonService(runner, resolved)
   const runtimeMemory = new RuntimeMemoryController(runner)
-  const documents = new DocumentManager()
+  const documents = new DocumentManager(undefined, undefined, () => runner.effectiveDataDir())
+  const storage = new StorageScopeInspector(runner, resolved)
   const coordinator = new MnemonSubagentCoordinator(ctx.subagents, runtimeMemory, documents)
   const lifecycle = new MnemonLifecycle(ctx, coordinator, resolved)
   ctx.effect(() => lifecycle.start(), 'dsh-mnemon.lifecycle-root()')
@@ -38,7 +40,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   if (resolved.routingGuidance) registerGuidance(ctx)
   registerRuntimeMemoryContext(ctx, runtimeMemory)
   ctx.inject(['connection'], (webContext) => {
-    if (resolved.tabEnabled) registerRpc(webContext.connection, service, lifecycle, runtimeMemory)
+    if (resolved.tabEnabled) registerRpc(webContext.connection, service, lifecycle, runtimeMemory, storage)
     registerSettingsRpc(webContext.connection, ctx.settings)
   })
 }

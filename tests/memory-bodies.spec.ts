@@ -20,6 +20,15 @@ function temporaryDirectory(): string {
 }
 
 describe('MemoryBodyRegistry', () => {
+  it('keeps an empty data directory at zero memory spaces instead of creating a phantom default', () => {
+    const dataDir = temporaryDirectory()
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
+    const registry = new MemoryBodyRegistry(runner, true)
+
+    expect(registry.list()).toEqual([])
+    expect(existsSync(join(dataDir, 'data', '.dsh-memory-bodies.json'))).toBe(false)
+  })
+
   it('migrates native stores into a global memory-body catalog without moving their databases', () => {
     const dataDir = temporaryDirectory()
     mkdirSync(join(dataDir, 'data', 'project'), { recursive: true })

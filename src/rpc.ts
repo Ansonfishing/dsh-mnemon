@@ -2,6 +2,7 @@ import type { HostConnectionHandle, HostRpcHandler, RpcResult } from './contract
 import type { MnemonLifecycle } from './lifecycle.ts'
 import type { RuntimeMemoryController, RuntimeMemoryImportance, RuntimeMemoryTarget } from './runtime-memory.ts'
 import type { Category, EdgeType, Intent, MnemonService, SearchRequest, Source } from './service.ts'
+import type { StorageScopeInspector } from './storage-scope.ts'
 
 export const MNEMON_READ_CHANNEL = '/dsh-mnemon-read'
 export const MNEMON_WRITE_CHANNEL = '/dsh-mnemon-write'
@@ -30,7 +31,7 @@ function badRequest(message: string): RpcResult<unknown> {
   return { ok: false, error: { code: 'bad-request', message, details: { issues: [] } } }
 }
 
-export function createReadHandler(service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController): HostRpcHandler {
+export function createReadHandler(service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
       const payload = object(rawPayload)
@@ -51,6 +52,7 @@ export function createReadHandler(service: MnemonService, lifecycle?: MnemonLife
               lifecycle: lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId)),
             }),
             ...(documents === undefined ? {} : { documents }),
+            ...(storage === undefined ? {} : { storage: storage.catalog(lifecycle?.workspaceRoot(sessionId)) }),
           })
           }
         case 'documents':
@@ -215,8 +217,8 @@ export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLif
 }
 
 /** Read operations are available to trusted Web hosts; local mutations stay loopback-only. */
-export function registerRpc(connection: HostConnectionHandle, service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController): void {
-  connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(service, lifecycle, runtimeMemory), { authority: 'trusted-host' })
+export function registerRpc(connection: HostConnectionHandle, service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector): void {
+  connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(service, lifecycle, runtimeMemory, storage), { authority: 'trusted-host' })
   if (service.config.writeEnabled) {
     connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(service, lifecycle, runtimeMemory), { authority: 'loopback' })
   }

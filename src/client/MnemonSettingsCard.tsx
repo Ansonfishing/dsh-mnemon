@@ -1,30 +1,18 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import type { Config, ResolvedConfig } from '../config.ts'
-import { DEFAULT_IDLE_REVIEW_MS, DEFAULT_RECALL_LIMIT, DEFAULT_TIMEOUT_MS } from '../config-values.ts'
+import type { Config } from '../config.ts'
 import type { ClientSettingsScope } from '../contracts.ts'
 import css from './MnemonSettingsCard.module.css'
+import { translateZh, type MnemonTranslate } from './locales.ts'
 
 export interface MnemonSettingsCardProps {
   scope: ClientSettingsScope<Config>
+  t?: MnemonTranslate
 }
 
-type Field = keyof ResolvedConfig
-type Draft = Record<Field, string | boolean>
+type Field = 'storageScope' | 'dataDir'
+type Draft = Record<Field, string>
 
-const FIELD_ORDER: Field[] = [
-  'cliPath',
-  'dataDir',
-  'store',
-  'timeoutMs',
-  'defaultRecallLimit',
-  'routingGuidance',
-  'lifecycleEnabled',
-  'recallMode',
-  'writebackMode',
-  'idleReviewMs',
-  'tabEnabled',
-  'writeEnabled',
-]
+const FIELD_ORDER: Field[] = ['storageScope', 'dataDir']
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -35,18 +23,8 @@ function record(value: unknown): Record<string, unknown> {
 function draftOf(value: Config | undefined): Draft {
   const resolved = value ?? {}
   return {
-    cliPath: resolved.cliPath?.trim() ?? '',
+    storageScope: resolved.storageScope ?? (resolved.dataDir?.trim() ? 'custom' : 'global'),
     dataDir: resolved.dataDir?.trim() ?? '',
-    store: resolved.store?.trim() ?? '',
-    timeoutMs: String(resolved.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-    defaultRecallLimit: String(resolved.defaultRecallLimit ?? DEFAULT_RECALL_LIMIT),
-    routingGuidance: resolved.routingGuidance ?? true,
-    lifecycleEnabled: resolved.lifecycleEnabled ?? true,
-    recallMode: resolved.recallMode ?? 'guided',
-    writebackMode: resolved.writebackMode ?? 'guided',
-    idleReviewMs: String(resolved.idleReviewMs ?? DEFAULT_IDLE_REVIEW_MS),
-    tabEnabled: resolved.tabEnabled ?? true,
-    writeEnabled: resolved.writeEnabled ?? true,
   }
 }
 
@@ -54,31 +32,16 @@ function inheritedDraft(base: unknown): Draft {
   return draftOf(record(base) as Config)
 }
 
-function isBooleanField(field: Field): field is 'routingGuidance' | 'lifecycleEnabled' | 'tabEnabled' | 'writeEnabled' {
-  return field === 'routingGuidance' || field === 'lifecycleEnabled' || field === 'tabEnabled' || field === 'writeEnabled'
-}
-
-function parsed(field: Field, value: string | boolean): unknown {
-  if (isBooleanField(field)) return value
-  if (field === 'timeoutMs' || field === 'defaultRecallLimit' || field === 'idleReviewMs') return Number(value)
-  return String(value).trim()
-}
-
-function validation(draft: Draft): string | null {
-  const timeout = Number(draft.timeoutMs)
-  if (!Number.isInteger(timeout) || timeout < 100 || timeout > 120_000) return 'CLI 超时需为 100–120000 之间的整数。'
-  const limit = Number(draft.defaultRecallLimit)
-  if (!Number.isInteger(limit) || limit < 1 || limit > 50) return '默认召回条数需为 1–50 之间的整数。'
-  const idleReview = Number(draft.idleReviewMs)
-  if (!Number.isInteger(idleReview) || idleReview < 5_000 || idleReview > 600_000) return '审查空闲等待需为 5000–600000 ms 之间的整数。'
-  const store = String(draft.store).trim()
-  if (store !== '' && !/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(store)) return 'Store 仅支持字母、数字、下划线和连字符。'
-  if (!['guided', 'off'].includes(String(draft.recallMode))) return '召回 Hook 模式无效。'
-  if (!['guided', 'off'].includes(String(draft.writebackMode))) return '沉淀 Hook 模式无效。'
+function validation(t: MnemonTranslate, draft: Draft): string | null {
+  if (!['global', 'workspace', 'custom'].includes(draft.storageScope)) return t('config.invalidScope')
+  if (draft.storageScope !== 'custom') return null
+  const directory = draft.dataDir.trim()
+  if (directory === '') return t('config.customRequired')
+  if (!(directory === '~' || directory.startsWith('~/') || directory.startsWith('/'))) return t('config.customAbsolute')
   return null
 }
 
-export function MnemonSettingsCard({ scope }: MnemonSettingsCardProps): JSX.Element | null {
+export function MnemonSettingsCard({ scope, t = translateZh }: MnemonSettingsCardProps): JSX.Element | null {
   const subscribe = useMemo(() => scope.subscribe.bind(scope), [scope])
   const getSnapshot = useMemo(() => scope.getSnapshot.bind(scope), [scope])
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
@@ -94,11 +57,11 @@ export function MnemonSettingsCard({ scope }: MnemonSettingsCardProps): JSX.Elem
 
   const overridden = useMemo(() => record(snapshot.user), [snapshot.user])
   const inherited = useMemo(() => inheritedDraft(snapshot.base), [snapshot.base])
-  const error = validation(draft)
+  const error = validation(t, draft)
 
   if (snapshot.status === 'unavailable') return null
 
-  const edit = (field: Field, value: string | boolean) => {
+  const edit = (field: Field, value: string) => {
     setDraft(current => ({ ...current, [field]: value }))
     setDirty(current => new Set(current).add(field))
     setReset(current => {
@@ -128,12 +91,13 @@ export function MnemonSettingsCard({ scope }: MnemonSettingsCardProps): JSX.Elem
     setSaving(true)
     setFailed(null)
     try {
-      for (const field of FIELD_ORDER) {
+      const order = draft.storageScope === 'custom' ? [...FIELD_ORDER].reverse() : FIELD_ORDER
+      for (const field of order) {
         if (!dirty.has(field)) continue
-        if (reset.has(field) || (!isBooleanField(field) && String(draft[field]).trim() === '' && (field === 'cliPath' || field === 'dataDir' || field === 'store'))) {
+        if (reset.has(field) || (field === 'dataDir' && draft.dataDir.trim() === '')) {
           await scope.unset(field)
         } else {
-          await scope.set(field, parsed(field, draft[field]))
+          await scope.set(field, draft[field].trim())
         }
       }
       setDirty(new Set())
@@ -148,77 +112,42 @@ export function MnemonSettingsCard({ scope }: MnemonSettingsCardProps): JSX.Elem
   const fieldMeta = (field: Field) => Object.hasOwn(overridden, field) && !reset.has(field)
 
   return (
-    <section className={css.card} aria-label="Mnemon 配置">
+    <section className={css.card} aria-label={t('config.aria')}>
       <div className={css.panelHeader}>
-        <div><span>PLUGIN CONFIG</span><h3>连接与行为</h3><p>配置 Mnemon CLI、Store、召回上限与读写策略。</p></div>
-        <strong>{dirty.size > 0 ? '未保存' : '重启后生效'}</strong>
+        <div><h3>Mnemon</h3><p>{t('config.description')}</p></div>
+        <strong>{dirty.size > 0 ? t('config.unsaved') : t('config.restart')}</strong>
       </div>
       <div className={css.body}>
-        <div className={css.notice}><span>RESTART</span> 保存到 <code>.dsh/settings.yaml</code>，重启 DSH 后应用。</div>
+        <div className={css.notice}>{t('config.noticeBefore')} <code>.dsh/settings.yaml</code>{t('config.noticeAfter')}</div>
 
-        <div className={css.grid}>
-            <SettingField label="Mnemon CLI" hint="留空时按环境变量、PATH 与常见安装路径自动发现。" overridden={fieldMeta('cliPath')} onReset={() => resetField('cliPath')}>
-              <input aria-label="Mnemon CLI" value={String(draft.cliPath)} onChange={event => edit('cliPath', event.target.value)} placeholder="自动发现" disabled={!snapshot.writable} />
-            </SettingField>
-            <SettingField label="数据目录" hint="Mnemon 根目录；留空沿用 MNEMON_DATA_DIR 或 ~/.mnemon。" overridden={fieldMeta('dataDir')} onReset={() => resetField('dataDir')}>
-              <input aria-label="Mnemon 数据目录" value={String(draft.dataDir)} onChange={event => edit('dataDir', event.target.value)} placeholder="~/.mnemon" disabled={!snapshot.writable} />
-            </SettingField>
-            <SettingField label="命名 Store" hint="多个 Agent 共享时留空；需要隔离时指定稳定名称。" overridden={fieldMeta('store')} onReset={() => resetField('store')}>
-              <input aria-label="Mnemon Store" value={String(draft.store)} onChange={event => edit('store', event.target.value)} placeholder="active / default" disabled={!snapshot.writable} />
-            </SettingField>
-            <SettingField label="CLI 超时" hint={`单次命令上限，默认 ${DEFAULT_TIMEOUT_MS} ms。`} overridden={fieldMeta('timeoutMs')} onReset={() => resetField('timeoutMs')}>
-              <input aria-label="Mnemon CLI 超时" type="number" min={100} max={120000} step={100} value={String(draft.timeoutMs)} onChange={event => edit('timeoutMs', event.target.value)} disabled={!snapshot.writable} />
-            </SettingField>
-            <SettingField label="默认召回条数" hint={`模型工具与 WebUI 的默认上限，默认 ${DEFAULT_RECALL_LIMIT}。`} overridden={fieldMeta('defaultRecallLimit')} onReset={() => resetField('defaultRecallLimit')}>
-              <input aria-label="Mnemon 默认召回条数" type="number" min={1} max={50} value={String(draft.defaultRecallLimit)} onChange={event => edit('defaultRecallLimit', event.target.value)} disabled={!snapshot.writable} />
-            </SettingField>
-            <SettingField label="召回 Hook" hint="guided 会在每轮首个模型请求前注入一次召回判断；off 仅保留手动工具。" overridden={fieldMeta('recallMode')} onReset={() => resetField('recallMode')}>
-              <select aria-label="Mnemon 召回 Hook" value={String(draft.recallMode)} onChange={event => edit('recallMode', event.target.value)} disabled={!snapshot.writable}><option value="guided">guided · LLM 判断</option><option value="off">off · 关闭</option></select>
-            </SettingField>
-            <SettingField label="沉淀 Hook" hint="guided 提醒主模型按需 remember；后台活动评分达到 5 后，才等待空闲并 fork 完整 checkpoint 审查。" overridden={fieldMeta('writebackMode')} onReset={() => resetField('writebackMode')}>
-              <select aria-label="Mnemon 沉淀 Hook" value={String(draft.writebackMode)} onChange={event => edit('writebackMode', event.target.value)} disabled={!snapshot.writable}><option value="guided">guided · 自主判断 + 评分审查</option><option value="off">off · 关闭</option></select>
-            </SettingField>
-            <SettingField label="审查空闲等待" hint={`活动评分达到固定门槛 5 后，根 Agent 继续空闲多久才 fork checkpoint，默认 ${DEFAULT_IDLE_REVIEW_MS} ms。`} overridden={fieldMeta('idleReviewMs')} onReset={() => resetField('idleReviewMs')}>
-              <input aria-label="Mnemon 审查空闲等待" type="number" min={5000} max={600000} step={1000} value={String(draft.idleReviewMs)} onChange={event => edit('idleReviewMs', event.target.value)} disabled={!snapshot.writable} />
-            </SettingField>
-        </div>
-
-        <div className={css.switches}>
-            <SettingToggle label="记忆路由指引" hint="指导 Agent 按需召回、审慎写回。" checked={Boolean(draft.routingGuidance)} overridden={fieldMeta('routingGuidance')} disabled={!snapshot.writable} onChange={value => edit('routingGuidance', value)} onReset={() => resetField('routingGuidance')} />
-            <SettingToggle label="生命周期编排" hint="为 DSH 根 Agent 启用 Prime、短提示与评分 checkpoint 审查。" checked={Boolean(draft.lifecycleEnabled)} overridden={fieldMeta('lifecycleEnabled')} disabled={!snapshot.writable} onChange={value => edit('lifecycleEnabled', value)} onReset={() => resetField('lifecycleEnabled')} />
-            <SettingToggle label="会话记忆 Tab" hint="在会话页展示 Mnemon 检索与管理界面。" checked={Boolean(draft.tabEnabled)} overridden={fieldMeta('tabEnabled')} disabled={!snapshot.writable} onChange={value => edit('tabEnabled', value)} onReset={() => resetField('tabEnabled')} />
-            <SettingToggle label="允许写入" hint="控制 Agent 与本机 WebUI 的 remember/link/forget 能力。" checked={Boolean(draft.writeEnabled)} overridden={fieldMeta('writeEnabled')} disabled={!snapshot.writable} onChange={value => edit('writeEnabled', value)} onReset={() => resetField('writeEnabled')} />
+        <div className={css.primarySettings}>
+          <SettingField t={t} label={t('config.scope')} hint={t('config.scopeHint')} overridden={fieldMeta('storageScope')} onReset={() => resetField('storageScope')}>
+            <select aria-label={t('config.scopeAria')} value={draft.storageScope} onChange={event => edit('storageScope', event.target.value)} disabled={!snapshot.writable}><option value="global">{t('config.global')} · ~/.mnemon</option><option value="workspace">{t('config.workspace')} · &lt;workspace&gt;/.mnemon</option><option value="custom">{t('config.custom')}</option></select>
+          </SettingField>
+          {draft.storageScope === 'custom' && <SettingField t={t} label={t('config.customDirectory')} hint={t('config.customHint')} overridden={fieldMeta('dataDir')} onReset={() => resetField('dataDir')}>
+            <input aria-label={t('config.customAria')} value={draft.dataDir} onChange={event => edit('dataDir', event.target.value)} placeholder="~/mnemon-data" disabled={!snapshot.writable} />
+          </SettingField>}
         </div>
 
         {error !== null && <p className={css.error} role="alert">{error}</p>}
-        {failed !== null && <p className={css.error} role="alert">保存失败：{failed}</p>}
-        {!snapshot.writable && <p className={css.readOnly}>当前部署的 settings 为只读。</p>}
+        {failed !== null && <p className={css.error} role="alert">{t('config.saveFailed', { error: failed })}</p>}
+        {!snapshot.writable && <p className={css.readOnly}>{t('config.readOnly')}</p>}
 
         <div className={css.actions}>
-          <button type="button" className={css.discard} disabled={dirty.size === 0 || saving} onClick={discard}>放弃修改</button>
-          <button type="button" className={css.save} disabled={dirty.size === 0 || saving || error !== null || !snapshot.writable} onClick={() => void save()}>{saving ? '保存中…' : '保存到 settings.yaml'}</button>
+          <button type="button" className={css.discard} disabled={dirty.size === 0 || saving} onClick={discard}>{t('config.discard')}</button>
+          <button type="button" className={css.save} disabled={dirty.size === 0 || saving || error !== null || !snapshot.writable} onClick={() => void save()}>{saving ? t('config.saving') : t('config.save')}</button>
         </div>
       </div>
     </section>
   )
 }
 
-function SettingField(props: { label: string; hint: string; overridden: boolean; onReset: () => void; children: JSX.Element }): JSX.Element {
+function SettingField(props: { t: MnemonTranslate; label: string; hint: string; overridden: boolean; onReset: () => void; children: JSX.Element }): JSX.Element {
   return (
     <label className={css.field}>
-      <span className={css.fieldTitle}>{props.label}{props.overridden && <em>已覆盖</em>}{props.overridden && <button type="button" onClick={event => { event.preventDefault(); props.onReset() }}>恢复默认</button>}</span>
+      <span className={css.fieldTitle}>{props.label}{props.overridden && <em>{props.t('config.overridden')}</em>}{props.overridden && <button type="button" onClick={event => { event.preventDefault(); props.onReset() }}>{props.t('config.reset')}</button>}</span>
       {props.children}
       <small>{props.hint}</small>
     </label>
-  )
-}
-
-function SettingToggle(props: { label: string; hint: string; checked: boolean; overridden: boolean; disabled: boolean; onChange: (value: boolean) => void; onReset: () => void }): JSX.Element {
-  return (
-    <div className={css.toggleRow}>
-      <span><strong>{props.label}{props.overridden && <em>已覆盖</em>}</strong><small>{props.hint}</small></span>
-      {props.overridden && <button type="button" className={css.resetLink} onClick={props.onReset}>恢复默认</button>}
-      <label className={css.switch}><input type="checkbox" aria-label={props.label} checked={props.checked} disabled={props.disabled} onChange={event => props.onChange(event.target.checked)} /><span /></label>
-    </div>
   )
 }

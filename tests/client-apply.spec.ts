@@ -5,7 +5,7 @@ import { en, zh } from '../src/client/locales.ts'
 describe('Mnemon Web client composition', () => {
   it('registers locale dictionaries and exposes a locale-bound conversation tab', () => {
     let active: 'zh' | 'en' = 'zh'
-    let slotOptions: Record<string, unknown> | undefined
+    const slots: Record<string, unknown>[] = []
     const registerLocale = vi.fn(() => () => {})
     const context = {
       connection: { rpc: { call: vi.fn(async () => ({ ok: true, value: { status: 'ready', value: {}, writable: true, mode: 'host' } })) } },
@@ -16,7 +16,7 @@ describe('Mnemon Web client composition', () => {
       },
       slots: {
         inject: vi.fn((_name: string, factory: () => unknown) => factory()),
-        register: vi.fn((options: Record<string, unknown>) => { slotOptions = options; return () => {} }),
+        register: vi.fn((options: Record<string, unknown>) => { slots.push(options); return () => {} }),
       },
     }
 
@@ -24,10 +24,15 @@ describe('Mnemon Web client composition', () => {
 
     expect(inject).toEqual(['slots', 'connection', 'locale'])
     expect(registerLocale).toHaveBeenCalledWith('mnemon', { zh, en })
+    const slotOptions = slots.find(options => options.name === 'conversation.view')
     expect(slotOptions).toMatchObject({ name: 'conversation.view', id: 'mnemon', order: 30, locale: 'mnemon' })
+    expect(slots).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'settings.plugin.item', id: 'mnemon', order: 30 })]))
+    const settingsInject = slots.find(options => options.name === 'settings.plugin.item')?.inject as (() => { t: (key: keyof typeof zh) => string }) | undefined
+    expect(settingsInject?.().t('config.scope')).toBe('存储范围')
     const label = slotOptions?.label as () => string
     expect(label()).toBe('记忆体')
     active = 'en'
     expect(label()).toBe('Memory')
+    expect(settingsInject?.().t('config.scope')).toBe('Storage scope')
   })
 })

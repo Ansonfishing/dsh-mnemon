@@ -5,9 +5,10 @@ import { createRunner } from './runner.ts';
 import { RuntimeMemoryController } from './runtime-memory.ts';
 import { MnemonService } from './service.ts';
 import { MnemonSubagentCoordinator } from './subagent.ts';
+import { StorageScopeInspector } from './storage-scope.ts';
 export declare const name = "dsh-mnemon";
 export declare const inject: string[];
-export { Config, resolveConfig, DocumentManager, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, createRunner };
+export { Config, resolveConfig, DocumentManager, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, StorageScopeInspector, createRunner };
 export type { MnemonConfig };
 /** Mount native model tools on every DSH surface and UI RPC only when Web connection exists. */
 export declare function apply(rawContext: unknown, config?: MnemonConfig): void;

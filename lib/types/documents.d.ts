@@ -99,13 +99,15 @@ export declare class DocumentController {
     readonly limitBytes: number;
     private readonly now;
     readonly workspaceRoot: string;
+    readonly storageRoot: string;
     readonly directory: string;
     readonly activeDirectory: string;
     readonly archivedDirectory: string;
     readonly indexPath: string;
     readonly lockPath: string;
+    private readonly managedRelativePrefix;
     private queue;
-    constructor(workspaceRoot: string, limitBytes?: number, now?: () => Date);
+    constructor(workspaceRoot: string, limitBytes?: number, now?: () => Date, storageRoot?: string);
     snapshot(): DocumentSnapshot;
     get(id: string): DocumentView;
     capacityPlan(request: DocumentMutation): DocumentCapacityPlan;
@@ -138,8 +140,9 @@ export declare class DocumentController {
 export declare class DocumentManager {
     private readonly limitBytes;
     private readonly now;
+    private readonly storageRoot?;
     private readonly controllers;
-    constructor(limitBytes?: number, now?: () => Date);
+    constructor(limitBytes?: number, now?: () => Date, storageRoot?: (() => string) | undefined);
     forWorkspace(workspaceRoot: string): DocumentController;
     forAgent(agent: HostAgent): DocumentController;
 }

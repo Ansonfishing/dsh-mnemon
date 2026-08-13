@@ -370,6 +370,11 @@ export class MnemonLifecycle {
     }
   }
 
+  workspaceRoot(sessionId?: string): string | undefined {
+    if (sessionId === undefined || sessionId.trim() === '') return undefined
+    return this.ctx.agents.get(sessionId.trim())?.session.header?.cwd
+  }
+
   recall(sessionId: string, request: SearchRequest, signal = new AbortController().signal) {
     return this.coordinator.recall(this.liveAgent(sessionId), request, signal)
   }

@@ -52,6 +52,18 @@ describe('MnemonView', () => {
       memoryBodyDirectory: '/tmp/mnemon/data',
       memoryBodies: options.withInactiveBody ? [body, secondaryBody] : [body],
       stats: { totalInsights: 12, deletedInsights: 0, edgeCount: 9, oplogCount: 20, dbSizeBytes: 4096, byCategory: {}, topEntities: [] },
+      storage: {
+        activeKind: 'custom', activeRoot: '/tmp/mnemon', generatedAt: '2026-08-13T03:00:00.000Z',
+        scopes: [{
+          kind: 'custom', root: '/tmp/mnemon', configured: true, active: true, available: true, totalBytes: 8192,
+          areas: [
+            { kind: 'runtime', path: '/tmp/mnemon/runtime', status: 'ready', bytes: 1024, itemCount: 1, details: { userEntries: 1, memoryEntries: 0 } },
+            { kind: 'memory-bodies', path: '/tmp/mnemon/data', status: 'ready', bytes: 7168, itemCount: 1, details: { activeBodies: 1, databases: 1 } },
+            { kind: 'documents', path: '/tmp/mnemon/documents', status: 'empty', bytes: 0, itemCount: 0, details: { activeDocuments: 0, archivedDocuments: 0 } },
+            { kind: 'state', path: '/tmp/mnemon/state', status: 'missing', bytes: 0, itemCount: 0, details: {} },
+          ],
+        }],
+      },
       lifecycle: {
         enabled: true,
         recallMode: 'guided',
@@ -236,7 +248,10 @@ describe('MnemonView', () => {
     expect(screen.getByText('记忆子 Agent 可用')).toBeTruthy()
     expect(screen.getByRole('heading', { name: '子 Agent 生命周期' })).toBeTruthy()
     expect(screen.getByText('召回处理')).toBeTruthy()
-    expect(screen.getByText('/mnemon status')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '记忆系统流转' })).toBeTruthy()
+    expect(screen.getByRole('img', { name: /^记忆系统流转/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '存储域' })).toBeTruthy()
+    expect(screen.getByText('/tmp/mnemon')).toBeTruthy()
   })
 
   it('activates an additional memory space without crashing the live graph', async () => {

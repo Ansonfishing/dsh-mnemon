@@ -95,4 +95,18 @@ describe('Mnemon Documents control plane', () => {
     expect(manager.forWorkspace(root)).toBe(manager.forWorkspace(root))
     await expect(manager.forWorkspace(root).mutate({ action: 'create', title: 'Unsafe', content: 'x', sourcePaths: ['../outside.md'] })).rejects.toThrow('inside the workspace')
   })
+
+  it('places managed Documents under the same configured storage root as runtime memory and Memory Spaces', async () => {
+    const root = workspace()
+    const storageRoot = workspace()
+    const manager = new DocumentManager(undefined, undefined, () => storageRoot)
+    const agent = { session: { header: { cwd: root } } } as never
+
+    const result = await manager.forAgent(agent).mutate({ action: 'create', title: 'Unified storage', content: 'All managed memory belongs below one selected root.' })
+
+    expect(result.document.relativePath).toMatch(/^documents\/active\//)
+    expect(result.snapshot.directory).toBe(join(storageRoot, 'documents'))
+    expect(existsSync(join(storageRoot, result.document.relativePath))).toBe(true)
+    expect(existsSync(join(root, '.mnemon', 'documents'))).toBe(false)
+  })
 })

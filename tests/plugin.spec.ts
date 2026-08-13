@@ -64,6 +64,7 @@ describe('dsh-mnemon plugin composition', () => {
       inject: [
         '@deepseek-ai/dsh-client-connection',
         '@deepseek-ai/dsh-client-ui-conversation',
+        '@deepseek-ai/dsh-client-ui-plugin-config',
         '@deepseek-ai/dsh-client-locale',
       ],
       platform: 'web',

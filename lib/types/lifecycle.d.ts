@@ -56,6 +56,7 @@ export declare class MnemonLifecycle {
     constructor(ctx: HostContextShape, coordinator: MnemonSubagentCoordinator, config: ResolvedConfig);
     start(): () => void;
     snapshot(sessionId?: string): LifecycleSnapshot;
+    workspaceRoot(sessionId?: string): string | undefined;
     recall(sessionId: string, request: SearchRequest, signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedRecallResult>;
     related(sessionId: string, id: string, memoryBodyId?: string, signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedRecallResult>;
     answer(sessionId: string, query: string, evidence: Insight[], signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedAnswerResult>;

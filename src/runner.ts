@@ -1,6 +1,6 @@
 import { accessSync, constants, existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { delimiter, join, resolve } from 'node:path'
 import type { JsonValue } from './contracts.ts'
 import type { ResolvedConfig } from './config.ts'
 import { runProcess, type ProcessOptions, type ProcessRunner } from './process.ts'
@@ -80,10 +80,15 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
 
   const globalArgs = (store?: string): string[] => {
     const args: string[] = []
-    if (config.dataDir !== undefined) args.push('--data-dir', expandHome(config.dataDir))
+    if (config.storageScope !== 'global' || config.dataDir !== undefined) args.push('--data-dir', effectiveDataDir())
     if (store !== undefined) args.push('--store', store)
     else if (config.store !== undefined) args.push('--store', config.store)
     return args
+  }
+  const effectiveDataDir = (): string => {
+    if (config.storageScope === 'workspace') return resolve(process.cwd(), '.mnemon')
+    if (config.storageScope === 'custom') return expandHome(config.dataDir!)
+    return expandHome(process.env.MNEMON_DATA_DIR?.trim() || '~/.mnemon')
   }
   const launch = async (
     args: readonly string[],
@@ -134,7 +139,7 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
     },
     runText: execute,
     effectiveDataDir() {
-      return expandHome(config.dataDir ?? (process.env.MNEMON_DATA_DIR?.trim() || '~/.mnemon'))
+      return effectiveDataDir()
     },
     effectiveStore() {
       if (config.store !== undefined) return config.store
