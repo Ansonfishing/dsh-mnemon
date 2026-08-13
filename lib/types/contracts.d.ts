@@ -154,6 +154,7 @@ export interface HostAgent {
         header?: {
             origin?: 'subagent';
             delegationDepth?: number;
+            cwd?: string;
         };
         events: readonly HostSessionEvent[];
     };
@@ -177,6 +178,7 @@ export interface HostSubagentResult {
 }
 export interface HostSubagentRun {
     id: string;
+    localAgent?: HostAgent;
     result: Promise<HostSubagentResult>;
     dispose(): Promise<void>;
 }

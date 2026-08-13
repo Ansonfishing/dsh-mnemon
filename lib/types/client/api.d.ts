@@ -1,5 +1,6 @@
 import type { ClientConnectionHandle } from '../contracts.ts';
 import type { MemoryBody } from '../memory-bodies.ts';
+import type { DocumentMutation, DocumentMutationResult, DocumentSearchResult, DocumentSnapshot, DocumentView } from '../documents.ts';
 import type { RuntimeMemoryImportance, RuntimeMemoryMutationResult, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts';
 import type { EntityView, Insight, MemoryBodyCatalog, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts';
 export interface SearchResponse {
@@ -30,6 +31,11 @@ export declare class MnemonClient {
         old_text?: string;
         importance?: RuntimeMemoryImportance;
     }): Promise<RuntimeMemoryMutationResult>;
+    documents(): Promise<DocumentSnapshot>;
+    document(id: string): Promise<DocumentView>;
+    searchDocuments(query: string, includeArchived?: boolean, limit?: number): Promise<DocumentSearchResult>;
+    mutateDocument(request: DocumentMutation): Promise<DocumentMutationResult>;
+    archiveDocument(id: string): Promise<DocumentMutationResult>;
     bodies(): Promise<MemoryBodyCatalog>;
     graph(memoryBodyIds?: string[]): Promise<MemoryGraphSnapshot>;
     list(request?: MemoryListRequest): Promise<MemoryListView>;

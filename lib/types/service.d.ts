@@ -3,6 +3,7 @@ import type { ResolvedConfig } from './config.ts';
 import { MemoryBodyRegistry, type CreateMemoryBodyRequest, type MemoryBody, type UpdateMemoryBodyRequest } from './memory-bodies.ts';
 import type { MnemonRunner } from './runner.ts';
 import type { LifecycleSnapshot } from './lifecycle.ts';
+import type { DocumentSnapshot } from './documents.ts';
 export declare const CATEGORIES: readonly ["preference", "decision", "fact", "insight", "context", "general"];
 export type Category = typeof CATEGORIES[number];
 export declare const SOURCES: readonly ["user", "agent", "external"];
@@ -85,6 +86,7 @@ export interface StatusView {
     memoryBodyDirectory: string;
     memoryBodies: MemoryBodyView[];
     lifecycle?: LifecycleSnapshot;
+    documents?: DocumentSnapshot;
     stats?: MemoryBodyStats & {
         dbPath?: string;
     };

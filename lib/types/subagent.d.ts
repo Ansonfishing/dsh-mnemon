@@ -1,4 +1,5 @@
 import type { HostAgent, HostSubagentsService } from './contracts.ts';
+import { type DocumentManager, type DocumentMutation, type DocumentMutationResult, type DocumentView } from './documents.ts';
 import { type RuntimeMemoryController, type RuntimeMemoryMutation, type RuntimeMemoryMutationResult } from './runtime-memory.ts';
 import type { Insight, RememberRequest, SearchRequest } from './service.ts';
 /** Rejects schema keywords that DSH structured-output tools cannot compile. */
@@ -10,9 +11,10 @@ export interface SubagentCounters {
     reviews: number;
     migrations: number;
     compactions: number;
+    documentArchives: number;
     failures: number;
     lastRunId?: string;
-    lastOperation?: 'recall' | 'write' | 'review' | 'migration' | 'compaction';
+    lastOperation?: 'recall' | 'write' | 'review' | 'migration' | 'compaction' | 'document-archive';
     lastAt?: string;
 }
 export interface DelegatedRecallResult {
@@ -34,7 +36,17 @@ export interface DelegatedWriteResult {
     summary: string;
     action: string;
     memoryBodyIds: string[];
+    documentIds?: string[];
 }
+export type CoordinatedDocumentResult = DocumentMutationResult & {
+    maintenance?: {
+        runId: string;
+        provider: string;
+        summary: string;
+        memoryBodyIds: string[];
+        archivedDocumentIds: string[];
+    };
+};
 export interface DelegatedAnswerResult {
     answer: string;
     citations: string[];
@@ -56,18 +68,27 @@ export declare function isSubagent(agent: HostAgent | undefined): boolean;
 export declare class MnemonSubagentCoordinator {
     private readonly subagents;
     private readonly runtimeMemory?;
+    private readonly documents?;
     private readonly counters;
     private runtimeQueue;
-    constructor(subagents: HostSubagentsService, runtimeMemory?: RuntimeMemoryController | undefined);
+    private documentQueue;
+    constructor(subagents: HostSubagentsService, runtimeMemory?: RuntimeMemoryController | undefined, documents?: DocumentManager | undefined);
     snapshot(): SubagentCounters;
+    documentsSnapshot(parent: HostAgent): import("./documents.ts").DocumentSnapshot;
+    documentGet(parent: HostAgent, id: string): DocumentView;
+    documentSearch(parent: HostAgent, query: string, includeArchived?: boolean, limit?: number): Promise<import("./documents.ts").DocumentSearchResult>;
     recall(parent: HostAgent, request: SearchRequest, signal: AbortSignal): Promise<DelegatedRecallResult>;
     related(parent: HostAgent, id: string, memoryBodyId: string | undefined, signal: AbortSignal): Promise<DelegatedRecallResult>;
     remember(parent: HostAgent, request: RememberRequest, signal: AbortSignal): Promise<DelegatedWriteResult>;
     runtime(parent: HostAgent, request: RuntimeMemoryMutation, signal: AbortSignal): Promise<CoordinatedRuntimeMemoryResult>;
+    document(parent: HostAgent, request: DocumentMutation, signal: AbortSignal): Promise<CoordinatedDocumentResult>;
+    archiveDocument(parent: HostAgent, id: string, signal: AbortSignal): Promise<CoordinatedDocumentResult>;
     answer(parent: HostAgent, query: string, evidence: Insight[], signal: AbortSignal): Promise<DelegatedAnswerResult>;
     write(parent: HostAgent, operation: string, request: unknown, signal: AbortSignal): Promise<DelegatedWriteResult>;
     review(parent: HostAgent, signal: AbortSignal): Promise<DelegatedWriteResult>;
     private recallResult;
+    private documentLocked;
+    private archiveDocumentLocked;
     private runtimeLocked;
     private compactUserAndRetry;
     private delegate;

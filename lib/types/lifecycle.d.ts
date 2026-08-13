@@ -2,6 +2,7 @@ import type { ResolvedConfig } from './config.ts';
 import type { HostContextShape } from './contracts.ts';
 import type { Insight, RememberRequest, SearchRequest } from './service.ts';
 import type { RuntimeMemoryMutation } from './runtime-memory.ts';
+import type { DocumentMutation } from './documents.ts';
 import { MnemonSubagentCoordinator, type DelegatedWriteResult, type SubagentCounters } from './subagent.ts';
 export declare const MNEMON_PLUGIN_SOURCE = "dsh-mnemon";
 export type LifecyclePhase = 'idle' | 'prime' | 'recall' | 'writeback' | 'review' | 'supervised' | 'error';
@@ -24,6 +25,7 @@ export interface LifecycleAgentSnapshot {
     lastPhase: LifecyclePhase;
     lastReviewAt?: string;
     lastReviewAction?: string;
+    lastReviewDocumentIds?: string[];
     lastAt?: string;
     lastError?: string;
 }
@@ -56,6 +58,11 @@ export declare class MnemonLifecycle {
     answer(sessionId: string, query: string, evidence: Insight[], signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedAnswerResult>;
     remember(sessionId: string, request: RememberRequest, signal?: AbortSignal): Promise<DelegatedWriteResult>;
     runtime(sessionId: string, request: RuntimeMemoryMutation, signal?: AbortSignal): Promise<import("./subagent.ts").CoordinatedRuntimeMemoryResult>;
+    documents(sessionId: string): import("./documents.ts").DocumentSnapshot;
+    document(sessionId: string, id: string): import("./documents.ts").DocumentView;
+    searchDocuments(sessionId: string, query: string, includeArchived?: boolean, limit?: number): Promise<import("./documents.ts").DocumentSearchResult>;
+    mutateDocument(sessionId: string, request: DocumentMutation, signal?: AbortSignal): Promise<import("./subagent.ts").CoordinatedDocumentResult>;
+    archiveDocument(sessionId: string, id: string, signal?: AbortSignal): Promise<import("./subagent.ts").CoordinatedDocumentResult>;
     mutate(sessionId: string, operation: string, request: unknown, signal?: AbortSignal): Promise<DelegatedWriteResult>;
     supervise(sessionId: string, content: string, signal?: AbortSignal): Promise<SupervisedWritebackResult>;
     private liveAgent;
