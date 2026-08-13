@@ -176,7 +176,7 @@
 .graphEdge[data-edge="scope"] { stroke: #708199; stroke-dasharray: 4 5; opacity: .28; }
 .graphEdge[data-edge="semantic"] { stroke: #4d7cfe; opacity: .48; }
 .graphEdge[data-edge="causal"] { stroke: #ef6b5b; opacity: .52; }
-.graphEdge[data-edge="entity"] { stroke: #22a879; opacity: .52; }
+.graphEdge[data-edge="entity"] { stroke: #22a879; stroke-width: 1.45; opacity: .78; }
 .graphNode { --node: #8290a8; outline: none; cursor: grab; }
 .graphNode[data-dragging] { cursor: grabbing; }
 .graphNode[data-category="decision"] { --node: #ef8354; }

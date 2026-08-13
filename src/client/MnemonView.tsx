@@ -242,7 +242,7 @@ function enrichMultiSpaceGraph(graph: MemoryGraphSnapshot, bodies: MemoryBodyVie
     const needle = item.entity.normalize('NFKC').toLocaleLowerCase()
     for (const body of item.bodies) {
       const matching = (memoriesByBody.get(body.id) ?? []).filter(memory => memory.content.normalize('NFKC').toLocaleLowerCase().includes(needle))
-      if (matching.length === 0) edges.push({ sourceId: spaceGraphId(body.id), targetId: key, label: item.entity, color: '#708199', type: 'scope' })
+      if (matching.length === 0) edges.push({ sourceId: spaceGraphId(body.id), targetId: key, label: item.entity, color: '#22a879', type: 'entity' })
       else for (const memory of matching) edges.push({ sourceId: key, targetId: graphNodeKey(memory), label: item.entity, color: '#22a879', type: 'entity' })
     }
   }
