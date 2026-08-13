@@ -10,6 +10,12 @@
 
 > **What's more?** 更多 DSH Native 能力支持正在路上。**Memory to View.**
 
+## 实机演示
+
+[![dsh-mnemon 记忆系统实机演示：状态、运行时记忆、多记忆体图谱、档案、检索、实体与监督写回](./docs/assets/dsh-mnemon-memory-system-demo-poster.jpg)](./docs/assets/dsh-mnemon-memory-system-demo.mp4)
+
+**▶ [播放 77 秒完整演示](./docs/assets/dsh-mnemon-memory-system-demo.mp4)** — 实际操作状态、运行时记忆、多记忆体实时图谱、项目档案、图增强检索、实体聚合、监督写回与内容维护。
+
 ## 三层记忆
 
 | 层级 | 适合保存 | 如何记住 | 如何进入上下文 |
