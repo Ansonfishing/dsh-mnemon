@@ -53,7 +53,7 @@
               spawn：仅召回 active 空间 -------> 有界证据
 ```
 
-[![Mnemon 记忆体页：多记忆体目录、激活状态与实时关系图](./docs/zh-CN/assets/screenshots/overview-memory-graph.png)](./docs/zh-CN/project-overview.md)
+[![Mnemon 记忆体页：多记忆体目录、激活状态与实时关系图](./docs/assets/dsh-mnemon-memory-system-demo-poster.jpg)](./docs/zh-CN/project-overview.md)
 
 *多记忆体目录、激活状态与实时关系图。点击图片阅读[完整项目介绍](./docs/zh-CN/project-overview.md)。*
 

@@ -53,7 +53,7 @@ Reusable knowledge produced by current work
               spawn: recall active spaces only -> bounded evidence
 ```
 
-[![Mnemon Memory Spaces page with the multi-space catalog, activation state, and live relationship graph](./docs/zh-CN/assets/screenshots/overview-memory-graph.png)](./docs/en/project-overview.md)
+[![Mnemon Memory Spaces page with the multi-space catalog, activation state, and live relationship graph](./docs/assets/dsh-mnemon-memory-system-demo-poster.jpg)](./docs/en/project-overview.md)
 
 *Memory Space catalog, activation state, and live relationship graph. Select the image for the [complete project overview](./docs/en/project-overview.md).*
 
