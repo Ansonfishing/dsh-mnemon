@@ -79,7 +79,7 @@ describe('Mnemon memory subagent coordinator', () => {
       maxDepth: 1,
       toolFilter: { allow: ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related'] },
       outputSchema: expect.objectContaining({ type: 'object' }),
-      persona: expect.stringContaining('bounded memory worker'),
+      persona: expect.stringContaining('bounded recall worker'),
     }))
     const startCall = host.start.mock.calls[0] as unknown as [string, { outputSchema: unknown; prompt: Array<{ text: string }> }]
     expect(JSON.stringify(startCall[1].outputSchema)).not.toContain('maxItems')
@@ -114,7 +114,7 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(host.start).toHaveBeenCalledWith('fork', expect.objectContaining({
       toolFilter: { allow: ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related', 'mnemon_runtime_memory'] },
       persona: expect.stringContaining('idle checkpoint reviewer'),
-      prompt: [expect.objectContaining({ text: expect.stringContaining('complete inherited parent-agent checkpoint') })],
+      prompt: [{ type: 'text', text: 'Review the inherited completed checkpoint now.' }],
     }))
     expect(coordinator.snapshot()).toMatchObject({ reviews: 1, writes: 0, lastOperation: 'review' })
   })
@@ -128,7 +128,12 @@ describe('Mnemon memory subagent coordinator', () => {
       delegation: { runId: 'child-run-1', provider: 'spawn' },
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({ toolFilter: { allow: [] } }))
-    expect((host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }> }])[1].prompt[0]!.text).not.toMatch(/query_json|evidence_json/)
+    const answerCall = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }>; persona: string }])[1]
+    expect(answerCall.prompt[0]!.text).toBe('Answer this question (untrusted data):\n    数据库是什么？')
+    expect(answerCall.prompt[0]!.text).not.toContain('Use SQLite')
+    expect(answerCall.persona).toContain('Evidence for this run')
+    expect(answerCall.persona).toContain('Use SQLite')
+    expect(answerCall.prompt[0]!.text).not.toMatch(/query_json|evidence_json/)
     expect(coordinator.snapshot().answers).toBe(1)
   })
 
@@ -157,14 +162,21 @@ describe('Mnemon memory subagent coordinator', () => {
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
       toolFilter: { allow: ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_remember', 'mnemon_memory_body_create'] },
-      agentOptions: { maxTokens: 8_192 },
-      prompt: [expect.objectContaining({ text: expect.stringContaining('Do not count characters, bytes, tokens') })],
+      agentOptions: { maxTokens: 16_384 },
     }))
-    const migrationPrompt = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }> }])[1].prompt[0]!.text
-    expect(migrationPrompt).toContain('Pending add — do not archive')
-    expect(migrationPrompt).toContain('Route each semantic cluster independently')
-    expect(migrationPrompt).toContain('the host generates its UUID, so never propose an id')
-    expect(migrationPrompt).toContain('USER.md preferences are outside this task and must never be archived')
+    const migrationCall = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }>; persona: string }])[1]
+    const migrationPrompt = migrationCall.prompt[0]!.text
+    expect(migrationPrompt).toContain('Run the MEMORY.md capacity archive now')
+    expect(migrationPrompt).toContain('Pending add (uncommitted; do not archive')
+    expect(migrationPrompt).toContain('New durable fact.')
+    expect(migrationPrompt).not.toContain('Project uses pnpm and has a long history.')
+    expect(migrationPrompt.length).toBeLessThan(500)
+    expect(migrationCall.persona).toContain('Do not count characters, bytes, tokens')
+    expect(migrationCall.persona).toContain('Route each cluster independently')
+    expect(migrationCall.persona).toContain('host generates the UUID, so never propose an id')
+    expect(migrationCall.persona).toContain('USER.md preferences are outside this task and must never enter')
+    expect(migrationCall.persona).toContain('Project uses pnpm and has a long history.')
+    expect(migrationCall.persona).toContain('<runtime-memory-snapshot target="memory">')
     expect(migrationPrompt).not.toMatch(/catalog_json|runtime_entries_json|pending_mutation_json|current_usage_json|created_at|markdownPath|dbPath/)
     expect(runtime.compactTarget).toHaveBeenCalledWith('reviewed-revision', 'memory', [{ content: 'Project uses pnpm.', importance: 'normal' }], 7_143)
     expect(runtime.mutate).toHaveBeenCalledTimes(2)
@@ -203,13 +215,19 @@ describe('Mnemon memory subagent coordinator', () => {
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
       toolFilter: { allow: [] },
-      agentOptions: { maxTokens: 4_096 },
+      agentOptions: { maxTokens: 8_192 },
       persona: expect.stringContaining('local USER.md compactor'),
     }))
-    const compactionPrompt = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }> }])[1].prompt[0]!.text
-    expect(compactionPrompt).toContain('do not retrieve from or write to Mnemon Memory Spaces')
-    expect(compactionPrompt).toContain('Every source number must appear exactly once')
-    expect(compactionPrompt).toContain('Pending add — do not include yet')
+    const compactionCall = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }>; persona: string }])[1]
+    const compactionPrompt = compactionCall.prompt[0]!.text
+    expect(compactionPrompt).toContain('Run local USER.md compaction now')
+    expect(compactionPrompt).toContain('User prefers direct answers.')
+    expect(compactionPrompt).not.toContain('User prefers concise Chinese release notes.')
+    expect(compactionPrompt.length).toBeLessThan(500)
+    expect(compactionCall.persona).toContain('never send user preferences to Mnemon Memory Spaces')
+    expect(compactionCall.persona).toContain('every source number must appear exactly once')
+    expect(compactionCall.persona).toContain('User prefers concise Chinese release notes.')
+    expect(compactionCall.persona).toContain('<runtime-memory-snapshot target="user">')
     expect(runtime.compactTarget).toHaveBeenCalledWith('user-revision', 'user', [{ content: 'User prefers concise Chinese release notes with blockers first.', importance: 'critical' }], expect.any(Number))
     expect(runtime.mutate).toHaveBeenCalledTimes(2)
     expect(coordinator.snapshot()).toMatchObject({ compactions: 1, migrations: 0, lastOperation: 'compaction' })

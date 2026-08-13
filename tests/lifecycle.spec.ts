@@ -157,7 +157,10 @@ describe('Mnemon DSH lifecycle integration', () => {
 
     expect(result).toMatchObject({ delegated: true, sessionId: 'session-1', runId: 'write-child' })
     expect(value.followup).not.toHaveBeenCalled()
-    expect(value.coordinator.write).toHaveBeenCalledWith(value.agent, 'supervised-writeback', expect.objectContaining({ candidate: expect.stringContaining('Use SQLite') }), expect.any(AbortSignal))
+    expect(value.coordinator.write).toHaveBeenCalledWith(value.agent, 'supervised-writeback', {
+      content: 'Use SQLite because deployment must remain single-file.',
+      source: 'explicit Mnemon tab submission',
+    }, expect.any(AbortSignal))
     expect(value.lifecycle.snapshot('session-1').counters.supervisedRequests).toBe(1)
   })
 

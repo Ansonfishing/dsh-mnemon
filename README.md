@@ -62,7 +62,7 @@ DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https:/
 | `MEMORY.md` 达到容量 | 控制层 → 受限 `spawn` → revision barrier | 按语义簇向一个或多个 Mnemon 记忆体归档，再返回压缩候选 | 归档回执；失败时不改本地热记忆 |
 | WebUI 沉淀 | 写 RPC → `spawn` | 选择记忆体、查重、提炼、写入，必要时创建或合并 | 可审计的 action、目标记忆体和摘要 |
 
-`spawn` 子 Agent 使用全新的隔离上下文；空闲审查则要求 DSH 的 `fork` provider，并只继承已经完成的 turn checkpoint。两者都通过 persona、工具白名单、结构化输出和 `maxDepth: 1` 限制职责。根 Agent 调用 `mnemon_recall` / `mnemon_remember` 等工具时会先进入子 Agent；同名工具在记忆子 Agent 内才直接访问 MnemonService，因此不会递归委派。
+`spawn` 子 Agent 使用全新的隔离上下文；空闲审查则要求 DSH 的 `fork` provider，并只继承已经完成的 turn checkpoint。两者都通过预定义 persona、工具白名单、结构化输出和 `maxDepth: 1` 限制职责。职责、边界与操作协议位于子 Agent 的 system persona，query 只携带本次动作和最小必要数据；容量维护时，已提交的 `MEMORY.md` / `USER.md` 以只读 system 快照提供，不再把整份热记忆、路径或 JSON 协议重复塞进 query。根 Agent 调用 `mnemon_recall` / `mnemon_remember` 等工具时会先进入子 Agent；同名工具在记忆子 Agent 内才直接访问 MnemonService，因此不会递归委派。
 
 Prime 只初始化路由状态；pre-step 提示保持为一句短语，不注入目录、计数或记忆内容。主模型决定需要持久上下文时才调用 `mnemon_recall`，随后根工具用隔离子 Agent 选择记忆体并返回可复核证据。当前用户指令与仓库事实始终高于历史记忆。
 
