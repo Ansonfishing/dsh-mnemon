@@ -124,11 +124,33 @@ describe('RuntimeMemoryController', () => {
     const { controller } = fixture()
     await controller.mutate({ action: 'add', target: 'user', content: 'User prefers concise Chinese replies', importance: 'critical' })
     const context = controller.contextText()
-    expect(context).toContain('Manage it exclusively with the mnemon_runtime_memory tool')
-    expect(context).toContain('USER PROFILE')
-    expect(context).toContain('User prefers concise Chinese replies')
-    expect(context).toContain('MEMORY [0/10240 bytes]\n(empty)')
+    expect(context).toContain('MNEMON RUNTIME MEMORY PROTOCOL')
+    expect(context).toContain('Manage hot memory exclusively with mnemon_runtime_memory')
+    expect(context).toContain('Use action="add" only for a new independent fact')
+    expect(context).toContain('Use action="replace" with a short unique old_text')
+    expect(context).toContain('Use action="remove" with a short unique old_text')
+    expect(context).toContain('The user\'s explicit request in the current turn wins over both files')
+    expect(context).toContain('Contents of USER.md (user profile;')
+    expect(context).toContain('<runtime-memory-file name="USER.md">\nUser prefers concise Chinese replies\n</runtime-memory-file>')
+    expect(context).toContain('Contents of MEMORY.md (working reference; 0/10240 UTF-8 bytes)')
+    expect(context).toContain('<runtime-memory-file name="MEMORY.md">\n(empty)\n</runtime-memory-file>')
+    expect(context.match(/always relevant/gi)).toHaveLength(2)
     expect(context).not.toContain(controller.sourcePath)
+  })
+
+  it('assembles every prompt from the latest generated USER.md and MEMORY.md projections', async () => {
+    const { controller } = fixture()
+    const empty = controller.contextText()
+    expect(empty).not.toContain('User prefers compact release notes')
+
+    await controller.mutate({ action: 'add', target: 'user', content: 'User prefers compact release notes', importance: 'critical' })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Release checks run with pnpm verify' })
+    const populated = controller.contextText()
+
+    expect(populated).toContain('User prefers compact release notes')
+    expect(populated).toContain('Release checks run with pnpm verify')
+    expect(readFileSync(controller.userPath, 'utf8')).toBe('User prefers compact release notes\n')
+    expect(readFileSync(controller.memoryPath, 'utf8')).toBe('Release checks run with pnpm verify\n')
   })
 
   it('applies a compacted target only to the exact reviewed revision', async () => {

@@ -110,7 +110,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
 
   ctx.tools.register(definition({
     name: 'mnemon_runtime_memory',
-    description: 'Maintain compact hot memory that is injected into future turns. Use proactively for durable user corrections, preferences, stable environment facts, project conventions, and reusable lessons. target=user is only for who the user is; target=memory is for project/environment/decisions/lessons. Skip temporary progress, completed-work logs, raw dumps, secrets, and rediscoverable facts. Use replace instead of duplicating an existing entry. This tool is the only supported writer for runtime MEMORY.md and USER.md.',
+    description: 'Maintain compact hot memory injected into future turns. Use proactively for durable user corrections, preferences, personal details, stable environment facts, project conventions, tool quirks, and reusable lessons. add creates one independent fact; replace corrects or consolidates one uniquely matched entry; remove is only for an explicitly withdrawn, obsolete, or wrong entry. target=user is only for who the user is; target=memory is for project/environment/decisions/lessons. Skip questions, guesses, assistant-authored claims, temporary progress, completed-work logs, raw dumps, secrets, rediscoverable facts, and skill-covered guidance. This tool is the exclusive writer for runtime MEMORY.md and USER.md; capacity archival and compaction are automatic.',
     parameters: {
       type: 'object',
       properties: {
