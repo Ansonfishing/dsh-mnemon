@@ -95,8 +95,9 @@ describe('dsh-mnemon plugin composition', () => {
       expect.objectContaining({ name: 'mnemon:runtime-memory', text: expect.any(Function) }),
     ])
     const guidance = (fixture.sections[0] as { text: string }).text
-    expect(guidance).toContain('call mnemon_recall')
-    expect(guidance.length).toBeLessThan(320)
+    expect(guidance).toContain('Call mnemon_recall')
+    expect(guidance).toContain('never infer a missing historical rule')
+    expect(guidance.length).toBeLessThan(360)
     expect(guidance).not.toContain('RECALL RESULT')
     expect(fixture.commands).toEqual([expect.objectContaining({ name: 'mnemon' })])
     expect(fixture.channels).toHaveLength(3)

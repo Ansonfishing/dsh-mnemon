@@ -130,6 +130,7 @@ describe('RuntimeMemoryController', () => {
     expect(context).toContain('Use action="replace" with a short unique old_text')
     expect(context).toContain('Use action="remove" with a short unique old_text')
     expect(context).toContain('The user\'s explicit request in the current turn wins over both files')
+    expect(context).toContain('call mnemon_recall instead of inferring or filling the gap')
     expect(context).toContain('Contents of USER.md (user profile;')
     expect(context).toContain('<runtime-memory-file name="USER.md">\nUser prefers concise Chinese replies\n</runtime-memory-file>')
     expect(context).toContain('Contents of MEMORY.md (working reference; 0/10240 UTF-8 bytes)')

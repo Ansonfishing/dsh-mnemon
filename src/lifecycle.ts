@@ -102,8 +102,8 @@ function memoryToolCalls(events: readonly HostSessionEvent[], turn?: number): nu
 }
 
 function guidedReminder(config: ResolvedConfig): string | undefined {
-  if (config.recallMode === 'guided' && config.writebackMode === 'guided') return '[MNEMON] Call mnemon_recall only when prior durable context matters; use mnemon_runtime_memory only for new, explicit, reusable information. Otherwise call neither.'
-  if (config.recallMode === 'guided') return '[MNEMON] Call mnemon_recall only when prior durable context matters; otherwise continue without recalling.'
+  if (config.recallMode === 'guided' && config.writebackMode === 'guided') return '[MNEMON] Call mnemon_recall when prior durable context matters or hot memory lacks an exact historical detail—never infer the missing rule; use mnemon_runtime_memory only for new, explicit, reusable information. Otherwise call neither.'
+  if (config.recallMode === 'guided') return '[MNEMON] Call mnemon_recall when prior durable context matters or hot memory lacks an exact historical detail—never infer the missing rule; otherwise continue without recalling.'
   if (config.writebackMode === 'guided') return '[MNEMON] Use mnemon_runtime_memory only for new, explicit, reusable information; otherwise continue without writing memory.'
   return undefined
 }
