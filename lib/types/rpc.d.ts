@@ -1,10 +1,11 @@
 import type { HostConnectionHandle, HostRpcHandler } from './contracts.ts';
 import type { MnemonLifecycle } from './lifecycle.ts';
+import type { RuntimeMemoryController } from './runtime-memory.ts';
 import type { MnemonService } from './service.ts';
 export declare const MNEMON_READ_CHANNEL = "/dsh-mnemon-read";
 export declare const MNEMON_WRITE_CHANNEL = "/dsh-mnemon-write";
-export declare function createReadHandler(service: MnemonService, lifecycle?: MnemonLifecycle): HostRpcHandler;
-export declare function createWriteHandler(service: MnemonService, lifecycle?: MnemonLifecycle): HostRpcHandler;
+export declare function createReadHandler(service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController): HostRpcHandler;
+export declare function createWriteHandler(service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController): HostRpcHandler;
 /** Read operations are available to trusted Web hosts; local mutations stay loopback-only. */
-export declare function registerRpc(connection: HostConnectionHandle, service: MnemonService, lifecycle?: MnemonLifecycle): void;
+export declare function registerRpc(connection: HostConnectionHandle, service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController): void;
 //# sourceMappingURL=rpc.d.ts.map

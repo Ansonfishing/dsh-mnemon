@@ -1,5 +1,6 @@
 import type { ClientConnectionHandle } from '../contracts.ts';
 import type { MemoryBody } from '../memory-bodies.ts';
+import type { RuntimeMemoryImportance, RuntimeMemoryMutationResult, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts';
 import type { EntityView, Insight, MemoryBodyCatalog, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts';
 export interface SearchResponse {
     query: string;
@@ -21,6 +22,14 @@ export declare class MnemonClient {
     constructor(connection: ClientConnectionHandle, sessionId?: string | undefined);
     private call;
     status(): Promise<StatusView>;
+    runtimeMemory(): Promise<RuntimeMemorySnapshot>;
+    mutateRuntimeMemory(request: {
+        action: 'add' | 'replace' | 'remove';
+        target: RuntimeMemoryTarget;
+        content?: string;
+        old_text?: string;
+        importance?: RuntimeMemoryImportance;
+    }): Promise<RuntimeMemoryMutationResult>;
     bodies(): Promise<MemoryBodyCatalog>;
     graph(memoryBodyIds?: string[]): Promise<MemoryGraphSnapshot>;
     list(request?: MemoryListRequest): Promise<MemoryListView>;
@@ -40,9 +49,8 @@ export declare class MnemonClient {
     }>;
     forget(id: string, memoryBodyId?: string): Promise<Record<string, unknown>>;
     createBody(request: {
-        id?: string;
         name: string;
-        description?: string;
+        description: string;
         active?: boolean;
     }): Promise<MemoryBody>;
     updateBody(memoryBodyId: string, request: {

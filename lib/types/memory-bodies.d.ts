@@ -9,9 +9,8 @@ export interface MemoryBody {
     updatedAt: string;
 }
 export interface CreateMemoryBodyRequest {
-    id?: string;
     name: string;
-    description?: string;
+    description: string;
     active?: boolean;
 }
 export interface UpdateMemoryBodyRequest {
