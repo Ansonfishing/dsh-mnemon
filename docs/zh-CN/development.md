@@ -173,4 +173,6 @@ pnpm publish --access public       # prepublishOnly 会先跑 pnpm run verify
 
 凭据约定：NPM_TOKEN 只写入用户级 `~/.npmrc`（`npm config set "//registry.npmjs.org/:_authToken" "${NPM_TOKEN}" --userconfig ~/.npmrc`），发布后删除。**不要**把凭据行提交进仓库 `.npmrc`：pnpm 11 出于安全会忽略项目级 `.npmrc` 中未展开的环境变量凭据并告警，且该文件会随仓库传播。
 
+2FA 注意：若 npm 账号开启发布级两步验证，交互发布直接执行 `pnpm publish --access public`，按提示输入 OTP；脚本/CI 发布需改用 Classic **Automation** 令牌或允许 bypass 2FA 的 Granular 令牌（`npm login` 生成的普通令牌无法发布，会报 403 Two-factor authentication required）。
+
 发布前核对 `package.json` 的 `repository`/`homepage`/`bugs` 指向 `omdsh-dev/dsh-mnemon`（npm 页面与 GitHub 保持一致），并确认版本号已递增。

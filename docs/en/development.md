@@ -173,4 +173,6 @@ pnpm publish --access public       # prepublishOnly runs pnpm run verify first
 
 Credential convention: write NPM_TOKEN only to the user-level `~/.npmrc` (`npm config set "//registry.npmjs.org/:_authToken" "${NPM_TOKEN}" --userconfig ~/.npmrc`) and remove it after publishing. Do **not** commit the credential line to the repository `.npmrc`: pnpm 11 deliberately ignores unexpanded environment-variable credentials in project-level `.npmrc` (with a warning), and that file travels with the repo.
 
+2FA note: when the npm account has publish-level two-factor authentication, an interactive `pnpm publish --access public` prompts for the OTP; scripted/CI publishing needs a Classic **Automation** token or a Granular token allowed to bypass 2FA (a plain token from `npm login` cannot publish and fails with 403 Two-factor authentication required).
+
 Before publishing, check that `package.json` `repository`/`homepage`/`bugs` point at `omdsh-dev/dsh-mnemon` (npm page consistent with GitHub) and that the version has been bumped.
