@@ -88,9 +88,17 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     async execute(args: { id: string; depth?: number; edge?: EdgeType; memoryBodyId?: string }, exec: ToolExecution) {
-      return isSubagent(exec.agent)
-        ? service.related(args.id, args.depth, args.edge, exec.signal, args.memoryBodyId)
-        : coordinator.related(requireAgent(exec), args.id, args.memoryBodyId, exec.signal)
+      if (!isSubagent(exec.agent)) return coordinator.related(requireAgent(exec), args.id, args.memoryBodyId, exec.signal)
+      const results = await service.related(args.id, args.depth, args.edge, exec.signal, args.memoryBodyId)
+      // DSH tool output validation requires the declared object shape. Keep the
+      // underlying service array internal and expose a stable traversal receipt.
+      return {
+        id: args.id,
+        depth: args.depth ?? 2,
+        ...(args.edge === undefined ? {} : { edge: args.edge }),
+        ...(args.memoryBodyId === undefined ? {} : { memoryBodyId: args.memoryBodyId }),
+        results,
+      }
     },
     presentCall: (args: { id: string }) => ({ card: 'generic', title: 'Traverse Mnemon graph', kind: 'search', rawInput: args.id }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon graph traversal complete' }),

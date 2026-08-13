@@ -296,5 +296,14 @@ describe('Mnemon root/child tool split', () => {
 
     await recall.execute({ query: 'child query', memoryBodyIds: ['project'] } as never, { agent: parent('subagent'), signal })
     expect(memoryService.search).toHaveBeenCalledWith({ query: 'child query', memoryBodyIds: ['project'] }, signal)
+
+    vi.mocked(memoryService.related).mockResolvedValueOnce([{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }])
+    const related = registered.find(tool => tool.name === 'mnemon_related')!
+    await expect(related.execute({ id: 'm1', depth: 2, memoryBodyId: 'project' } as never, { agent: parent('subagent'), signal })).resolves.toEqual({
+      id: 'm1',
+      depth: 2,
+      memoryBodyId: 'project',
+      results: [{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }],
+    })
   })
 })
