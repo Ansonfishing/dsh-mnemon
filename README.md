@@ -92,8 +92,14 @@ mnemon --version
 安装插件并重启 DSH Web profile：
 
 ```sh
-dsh plugin --profile web add "github:dsh-external/dsh-mnemon"
+dsh plugin --profile web add dsh-mnemon
 dsh --profile web
+```
+
+未发布到 npm 的预发布版本可从 git 安装：
+
+```sh
+dsh plugin --profile web add "github:omdsh-dev/dsh-mnemon"
 ```
 
 本地开发检出使用绝对路径：

@@ -27,13 +27,19 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dsh-external/dsh-mnemon.git"
+    "url": "git+https://github.com/omdsh-dev/dsh-mnemon.git"
   },
-  "homepage": "https://github.com/dsh-external/dsh-mnemon#readme",
+  "homepage": "https://github.com/omdsh-dev/dsh-mnemon#readme",
   "bugs": {
-    "url": "https://github.com/dsh-external/dsh-mnemon/issues"
+    "url": "https://github.com/omdsh-dev/dsh-mnemon/issues"
   },
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",

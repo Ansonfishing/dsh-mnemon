@@ -161,3 +161,16 @@ Web locale 变更时，中文键集合仍是类型事实源；英文词典必须
 ```
 
 `package.json.files` 当前发布 `lib`、patch、两份根 README、双语公开 docs 和 License；历史研究台账不进入安装包。
+
+## 发布到 npm
+
+发布后 `dsh plugin --profile web add dsh-mnemon` 即按 registry 名称解析（与 dsh-better-sidebar 同路径）。发布步骤：
+
+```sh
+npm pack --dry-run                 # 检查 tarball 文件清单（含 cordis.patch.yml、lib、docs）
+pnpm publish --access public       # prepublishOnly 会先跑 pnpm run verify
+```
+
+凭据约定：NPM_TOKEN 只写入用户级 `~/.npmrc`（`npm config set "//registry.npmjs.org/:_authToken" "${NPM_TOKEN}" --userconfig ~/.npmrc`），发布后删除。**不要**把凭据行提交进仓库 `.npmrc`：pnpm 11 出于安全会忽略项目级 `.npmrc` 中未展开的环境变量凭据并告警，且该文件会随仓库传播。
+
+发布前核对 `package.json` 的 `repository`/`homepage`/`bugs` 指向 `omdsh-dev/dsh-mnemon`（npm 页面与 GitHub 保持一致），并确认版本号已递增。

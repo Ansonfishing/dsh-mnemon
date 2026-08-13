@@ -161,3 +161,16 @@ When the Web locale changes, the Chinese key set remains the type source of trut
 ```
 
 `package.json.files` currently publishes `lib`, the patch, both root READMEs, the public bilingual docs, and the License; the historical research ledger is excluded from the installed package.
+
+## Publishing to npm
+
+After publication, `dsh plugin --profile web add dsh-mnemon` resolves by registry name — the same path as dsh-better-sidebar. Steps:
+
+```sh
+npm pack --dry-run                 # inspect the tarball file list (cordis.patch.yml, lib, docs)
+pnpm publish --access public       # prepublishOnly runs pnpm run verify first
+```
+
+Credential convention: write NPM_TOKEN only to the user-level `~/.npmrc` (`npm config set "//registry.npmjs.org/:_authToken" "${NPM_TOKEN}" --userconfig ~/.npmrc`) and remove it after publishing. Do **not** commit the credential line to the repository `.npmrc`: pnpm 11 deliberately ignores unexpanded environment-variable credentials in project-level `.npmrc` (with a warning), and that file travels with the repo.
+
+Before publishing, check that `package.json` `repository`/`homepage`/`bugs` point at `omdsh-dev/dsh-mnemon` (npm page consistent with GitHub) and that the version has been bumped.

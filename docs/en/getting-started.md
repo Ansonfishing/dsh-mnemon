@@ -59,7 +59,13 @@ If DSH cannot find it on `PATH`, set `MNEMON_CLI_PATH` or configure an absolute 
 Install it into the Web profile:
 
 ```sh
-dsh plugin --profile web add "github:dsh-external/dsh-mnemon"
+dsh plugin --profile web add dsh-mnemon
+```
+
+Pre-release builds not yet published to npm can be installed from git:
+
+```sh
+dsh plugin --profile web add "github:omdsh-dev/dsh-mnemon"
 ```
 
 For a local development checkout:

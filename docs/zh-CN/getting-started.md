@@ -59,7 +59,13 @@ mnemon --version
 安装到 Web profile：
 
 ```sh
-dsh plugin --profile web add "github:dsh-external/dsh-mnemon"
+dsh plugin --profile web add dsh-mnemon
+```
+
+未发布到 npm 的预发布版本可从 git 安装：
+
+```sh
+dsh plugin --profile web add "github:omdsh-dev/dsh-mnemon"
 ```
 
 本地开发检出：

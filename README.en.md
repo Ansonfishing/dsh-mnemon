@@ -92,8 +92,14 @@ mnemon --version
 Install the plugin and restart the DSH Web profile:
 
 ```sh
-dsh plugin --profile web add "github:dsh-external/dsh-mnemon"
+dsh plugin --profile web add dsh-mnemon
 dsh --profile web
+```
+
+Pre-release builds not yet published to npm can be installed from git:
+
+```sh
+dsh plugin --profile web add "github:omdsh-dev/dsh-mnemon"
 ```
 
 For a local checkout, use an absolute path:
