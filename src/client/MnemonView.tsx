@@ -642,6 +642,10 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const [bodyName, setBodyName] = useState('')
   const [bodyDescription, setBodyDescription] = useState('')
   const [catalogUnavailable, setCatalogUnavailable] = useState(false)
+  const [editingBody, setEditingBody] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [savingBody, setSavingBody] = useState<string | null>(null)
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true)
@@ -686,6 +690,22 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
     } catch (reason) { setError(message(reason)) } finally { setChanging(null) }
   }
 
+  const beginEdit = (body: MemoryBodyView) => {
+    setEditingBody(body.id); setEditName(body.name); setEditDescription(body.description ?? ''); setError(null)
+  }
+
+  const saveEdit = async (event: FormEvent, body: MemoryBodyView) => {
+    event.preventDefault()
+    if (editName.trim() === '') return
+    setSavingBody(body.id); setError(null)
+    try {
+      await props.client.updateBody(body.id, { name: editName, description: editDescription })
+      setEditingBody(null)
+      await load(true)
+      props.onMutate()
+    } catch (reason) { setError(message(reason)) } finally { setSavingBody(null) }
+  }
+
   const create = async (event: FormEvent) => {
     event.preventDefault()
     if (bodyName.trim() === '' || bodyDescription.trim() === '') return
@@ -715,10 +735,20 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
         </div>
         <div className={css.bodyGrid}>
           {catalog?.items.map(body => (
-            <article key={body.id} className={css.bodyCard} data-active={body.active || undefined} data-healthy={body.healthy || undefined} title={body.error}>
-              <div className={css.bodyCardTop}><span className={css.bodySignal} /><div><strong>{body.name}</strong><code>{body.id}</code><small className={css.bodyHealth}>{body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small></div><button type="button" className={css.bodySwitch} role="switch" aria-checked={body.active} aria-label={t('overview.toggleAria', { name: body.name })} disabled={!props.writeEnabled || changing === body.id} onClick={() => void toggle(body)}><span className={css.bodySwitchTrack} aria-hidden="true"><i /></span><span>{changing === body.id ? t('overview.toggling') : body.active ? t('common.active') : t('common.inactive')}</span></button></div>
-              <p>{body.description || t('overview.noDescription')}</p>
-              <footer><span>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></footer>
+            <article key={body.id} className={css.bodyCard} data-active={body.active || undefined} data-healthy={body.healthy || undefined} data-editing={editingBody === body.id || undefined} title={body.error}>
+              {editingBody === body.id ? (
+                <form className={css.bodyEdit} onSubmit={event => void saveEdit(event, body)}>
+                  <label>{t('overview.editName')}<input aria-label={t('overview.editName')} value={editName} onChange={event => setEditName(event.target.value)} maxLength={100} required /></label>
+                  <label>{t('overview.editDescription')}<textarea aria-label={t('overview.editDescription')} value={editDescription} onChange={event => setEditDescription(event.target.value)} rows={3} maxLength={1000} /></label>
+                  <div className={css.bodyEditActions}><button type="submit" className={css.primaryButton} disabled={savingBody === body.id || editName.trim() === ''}>{savingBody === body.id ? t('overview.savingBody') : t('overview.saveBody')}</button><button type="button" className={css.ghostButton} onClick={() => setEditingBody(null)}>{t('common.cancel')}</button></div>
+                </form>
+              ) : (
+                <>
+                  <div className={css.bodyCardTop}><span className={css.bodySignal} /><div><strong>{body.name}</strong><code>{body.id}</code><small className={css.bodyHealth}>{body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small></div><div className={css.bodyCardActions}><button type="button" className={css.bodySwitch} role="switch" aria-checked={body.active} aria-label={t('overview.toggleAria', { name: body.name })} disabled={!props.writeEnabled || changing === body.id} onClick={() => void toggle(body)}><span className={css.bodySwitchTrack} aria-hidden="true"><i /></span><span>{changing === body.id ? t('overview.toggling') : body.active ? t('common.active') : t('common.inactive')}</span></button><button type="button" className={css.bodyEditButton} aria-label={t('overview.editBodyAria', { name: body.name })} title={t('overview.editBody')} disabled={!props.writeEnabled} onClick={() => beginEdit(body)}>✎</button></div></div>
+                  <p>{body.description || t('overview.noDescription')}</p>
+                  <footer><span>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></footer>
+                </>
+              )}
             </article>
           ))}
           {catalog?.total === 0 && <div className={css.bodyDirectoryEmpty}><span>◇</span><div><strong>{catalogUnavailable ? t('overview.unsyncedTitle') : t('overview.emptyTitle')}</strong><p>{catalogUnavailable ? t('overview.unsyncedShort') : t('overview.emptyShort')}</p></div></div>}

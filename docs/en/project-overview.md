@@ -176,7 +176,7 @@ The conversation's “Memory System” tab contains eight pages in three divider
 |---|---|
 | Status | CLI, runtime hot memory, storage scope, lifecycle, and subagent diagnostics |
 | Runtime | USER / MEMORY hot context, capacity, and deterministic maintenance |
-| Memory Spaces | Memory Space catalog, activation controls, and a live multi-space graph |
+| Memory Spaces | Memory Space catalog, activation controls, metadata editing, and a live multi-space graph |
 | Documents | Search, read, edit, and archive managed Documents |
 | Distill | Give a candidate to a bounded worker for deduplication, routing, and writing |
 | Recall | Direct recall, related traversal, and evidence-only Agent search |

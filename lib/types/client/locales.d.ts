@@ -89,6 +89,12 @@ export declare const zh: {
     'overview.createDescriptionPlaceholder': string;
     'overview.creating': string;
     'overview.createAction': string;
+    'overview.editBody': string;
+    'overview.editBodyAria': string;
+    'overview.editName': string;
+    'overview.editDescription': string;
+    'overview.saveBody': string;
+    'overview.savingBody': string;
     'overview.snapshot': string;
     'overview.waitingSnapshot': string;
     'overview.updatedAt': string;
@@ -606,6 +612,12 @@ export declare const en: {
     'overview.createDescriptionPlaceholder': string;
     'overview.creating': string;
     'overview.createAction': string;
+    'overview.editBody': string;
+    'overview.editBodyAria': string;
+    'overview.editName': string;
+    'overview.editDescription': string;
+    'overview.saveBody': string;
+    'overview.savingBody': string;
     'overview.snapshot': string;
     'overview.waitingSnapshot': string;
     'overview.updatedAt': string;

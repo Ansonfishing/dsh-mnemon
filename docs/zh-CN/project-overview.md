@@ -176,7 +176,7 @@ Web 的直接检索走确定性服务；“Agent 查询”则先完成相同检�
 |---|---|
 | 状态 | CLI、运行时热记忆、存储域、生命周期和 subagent 诊断 |
 | 运行时 | USER / MEMORY 热记忆、容量和确定性维护 |
-| 记忆体 | Memory Space 目录、激活开关和多空间实时图谱 |
+| 记忆体 | Memory Space 目录、激活开关、元信息编辑和多空间实时图谱 |
 | 档案 | Documents 检索、阅读、编辑和归档 |
 | 沉淀 | 把候选交给受限 worker 查重、路由和写入 |
 | 检索 | direct recall、related 和 evidence-only Agent 查询 |

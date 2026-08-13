@@ -180,8 +180,14 @@ describe('MnemonView', () => {
       if (endpoint === 'remember') return { ok: true, value: { delegated: true, runId: 'child-2', provider: 'spawn', summary: '已按高级约束写入。', action: 'stored', memoryBodyIds: ['project'] } }
       if (endpoint === 'forget') return { ok: true, value: { action: 'forgotten' } }
       if (endpoint === 'body-update') {
-        if (payload?.memoryBodyId === secondaryBody.id) secondaryActive = payload.active as boolean
-        return { ok: true, value: { ...(payload?.memoryBodyId === secondaryBody.id ? secondaryBody : body), active: payload?.active as boolean } }
+        const target = payload?.memoryBodyId === secondaryBody.id ? secondaryBody : body
+        if (payload?.name !== undefined) target.name = String(payload.name)
+        if (payload?.description !== undefined) target.description = String(payload.description)
+        if (payload?.active !== undefined) {
+          target.active = Boolean(payload.active)
+          if (target === secondaryBody) secondaryActive = target.active
+        }
+        return { ok: true, value: { ...target } }
       }
       if (endpoint === 'body-create') return { ok: true, value: { ...body, id: 'new-body', name: String(payload?.name ?? '') } }
       return { ok: false, error: { code: 'unexpected', message: endpoint } }
@@ -289,6 +295,24 @@ describe('MnemonView', () => {
     expect(screen.getByRole('img', { name: /Mnemon 实时记忆图谱，7 个元素/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: '记忆体: 偏好记忆体' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '实体: DSH' })).toBeTruthy()
+  })
+
+  it('edits an existing Memory Space name and description', async () => {
+    const { connection, call } = createConnection()
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+
+    await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /记忆体 记忆体目录与实时图谱/ }))
+
+    fireEvent.click(await screen.findByRole('button', { name: '编辑项目记忆体' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '名称' }), { target: { value: '项目决策空间' } })
+    fireEvent.change(screen.getByRole('textbox', { name: '路由说明' }), { target: { value: '存放架构与交付决策。' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => expect(screen.getByText('项目决策空间')).toBeTruthy())
+    expect(screen.getByText('存放架构与交付决策。')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '编辑项目决策空间' })).toBeTruthy()
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-update', { memoryBodyId: 'project', name: '项目决策空间', description: '存放架构与交付决策。' })
   })
 
   it('progressively renders long content lists instead of mounting every card', async () => {

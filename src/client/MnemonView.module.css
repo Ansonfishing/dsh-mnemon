@@ -149,6 +149,15 @@
 .bodySwitch[aria-checked="true"] { color: var(--mn-text); }
 .bodySwitch[aria-checked="true"] .bodySwitchTrack { border-color: color-mix(in srgb, var(--mn-body-accent) 65%, var(--mn-line)); background: color-mix(in srgb, var(--mn-body-accent) 25%, var(--mn-layer-2)); }
 .bodySwitch[aria-checked="true"] .bodySwitchTrack i { background: var(--mn-body-accent); transform: translateX(12px); }
+.bodyCardActions { display: flex; align-items: center; gap: 6px; }
+.bodyEditButton { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid transparent; border-radius: 7px; color: var(--mn-muted); background: transparent; font-size: 12px; cursor: pointer; }
+.bodyEditButton:hover { color: var(--mn-text); border-color: var(--mn-line); background: var(--mn-hover); }
+.bodyEdit { display: grid; gap: 9px; padding-top: 2px; }
+.bodyEdit label { display: grid; gap: 4px; color: var(--mn-faint); font-size: 9px; }
+.bodyEdit input, .bodyEdit textarea { width: 100%; border: 1px solid var(--mn-line); border-radius: 8px; outline: 0; padding: 7px 9px; color: var(--mn-text); background: var(--mn-input); font-size: 12px; line-height: 1.5; }
+.bodyEdit textarea { resize: vertical; }
+.bodyEdit input:focus, .bodyEdit textarea:focus { border-color: var(--mn-accent); }
+.bodyEditActions { display: flex; justify-content: flex-end; gap: 7px; }
 .bodyCard > p { min-height: 15px; margin: 7px 0; color: var(--mn-muted); font-size: 10px; line-height: 1.45; }
 .bodyCard footer { display: flex; flex-wrap: wrap; gap: 5px 11px; padding-top: 6px; border-top: 1px solid var(--mn-line); color: var(--mn-faint); font-size: 9px; }
 .bodyCreate { margin-top: 10px; border-top: 1px solid var(--mn-line); padding-top: 8px; }

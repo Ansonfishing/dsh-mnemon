@@ -10,7 +10,7 @@ The main Web interface follows DSH's global language and light/dark theme. The t
 |---|---|---|
 | Status | Diagnostics for the CLI, runtime hot memory, storage scope, Memory Spaces, Documents, lifecycle, and workers | Aggregated reads |
 | Runtime | Inspect and maintain USER / MEMORY hot memory and capacity | Regular mutations are deterministic; capacity maintenance may start a worker |
-| Memory Spaces | Memory Space directory, activation switches, a live multi-space graph, and node inspection | Deterministic RPC reads; switches use write RPC |
+| Memory Spaces | Memory Space directory, activation switches and metadata editing, a live multi-space graph, and node inspection | Deterministic RPC reads; switches and metadata edits use write RPC |
 | Documents | Search, read, create, update, and archive Documents | Search/edit operations use the control layer; archiving starts a worker |
 | Distill | Let a memory worker select scope, deduplicate, and write; supports advanced constraints | `spawn` semantic write |
 | Recall | Direct smart / keyword / basic retrieval; optional evidence-bounded Agent answers | Direct service reads; Agent answers use a worker with no tools |
