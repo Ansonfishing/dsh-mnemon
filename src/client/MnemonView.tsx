@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts'
 import type { Config } from '../config.ts'
+import type { DocumentRecord, DocumentSnapshot, DocumentView } from '../documents.ts'
 import type { RuntimeMemoryEntry, RuntimeMemoryImportance, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts'
 import {
   CATEGORIES,
@@ -26,11 +27,12 @@ export interface MnemonViewProps {
   t?: MnemonTranslate
 }
 
-type Page = 'overview' | 'runtime' | 'explore' | 'entities' | 'remember' | 'list' | 'status'
+type Page = 'overview' | 'runtime' | 'documents' | 'explore' | 'entities' | 'remember' | 'list' | 'status'
 
 const PAGE_NAV: Array<{ id: Page; label: MnemonKey; detail: MnemonKey; glyph: string }> = [
   { id: 'overview', label: 'nav.overview', detail: 'nav.overview.detail', glyph: '◇' },
   { id: 'runtime', label: 'nav.runtime', detail: 'nav.runtime.detail', glyph: '◫' },
+  { id: 'documents', label: 'nav.documents', detail: 'nav.documents.detail', glyph: '▤' },
   { id: 'explore', label: 'nav.search', detail: 'nav.search.detail', glyph: '⌕' },
   { id: 'entities', label: 'nav.entities', detail: 'nav.entities.detail', glyph: '◎' },
   { id: 'remember', label: 'nav.remember', detail: 'nav.remember.detail', glyph: '+' },
@@ -1014,12 +1016,158 @@ function ListPage(props: { client: MnemonClient; revision: number; writeEnabled:
   )
 }
 
+type DocumentListItem = DocumentRecord & { healthy?: boolean; excerpt: string }
+
+function DocumentsPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; sessionId?: string; onMutate: () => void }): JSX.Element {
+  const t = useT()
+  const [snapshot, setSnapshot] = useState<DocumentSnapshot | null>(null)
+  const [items, setItems] = useState<DocumentListItem[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<DocumentView | null>(null)
+  const [status, setStatus] = useState<'active' | 'archived'>('active')
+  const [query, setQuery] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [composing, setComposing] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [confirmArchive, setConfirmArchive] = useState(false)
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [content, setContent] = useState('')
+  const [sources, setSources] = useState('')
+
+  const display = useCallback(async (nextQuery: string, nextStatus: 'active' | 'archived') => {
+    setLoading(true); setError(null)
+    try {
+      const current = await props.client.documents()
+      const records = nextQuery.trim() === ''
+        ? current.documents
+        : (await props.client.searchDocuments(nextQuery, nextStatus === 'archived')).results
+      const filtered = records.filter(record => record.status === nextStatus)
+      setSnapshot(current)
+      setItems(filtered)
+      setSelectedId(previous => previous !== null && filtered.some(record => record.id === previous) ? previous : filtered[0]?.id ?? null)
+    } catch (reason) {
+      setError(message(reason)); setSnapshot(null); setItems([]); setSelectedId(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [props.client])
+
+  useEffect(() => { void display(query, status) }, [display, props.revision, status])
+  useEffect(() => {
+    if (selectedId === null) { setSelected(null); return }
+    let active = true
+    void props.client.document(selectedId).then(value => { if (active) setSelected(value) }).catch(reason => { if (active) setError(message(reason)) })
+    return () => { active = false }
+  }, [props.client, selectedId, props.revision])
+
+  const resetComposer = () => { setTitle(''); setDescription(''); setContent(''); setSources(''); setComposing(false) }
+  const sourcePaths = (value: string) => value.split(/\r?\n|,/gu).map(path => path.trim()).filter(Boolean)
+
+  const create = async (event: FormEvent) => {
+    event.preventDefault(); setSaving(true); setError(null); setNotice(null)
+    try {
+      const result = await props.client.mutateDocument({ action: 'create', title, description, content, sourcePaths: sourcePaths(sources) })
+      setNotice(result.maintenance === undefined ? t('documents.created') : t('documents.createdAfterArchive', { count: result.maintenance.archivedDocumentIds.length }))
+      setStatus('active'); setQuery(''); resetComposer(); props.onMutate(); await display('', 'active'); setSelectedId(result.document.id)
+    } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
+  }
+
+  const beginEdit = () => {
+    if (selected === null) return
+    setTitle(selected.title); setDescription(selected.description); setContent(selected.content); setSources(selected.sourcePaths.join('\n')); setEditing(true); setComposing(false); setConfirmArchive(false)
+  }
+
+  const update = async (event: FormEvent) => {
+    event.preventDefault()
+    if (selected === null) return
+    setSaving(true); setError(null); setNotice(null)
+    try {
+      const result = await props.client.mutateDocument({ action: 'update', id: selected.id, title, description, content, sourcePaths: sourcePaths(sources) })
+      setNotice(result.maintenance === undefined ? t('documents.updated') : t('documents.updatedAfterArchive', { count: result.maintenance.archivedDocumentIds.length }))
+      setEditing(false); props.onMutate(); await display(query, status); setSelectedId(result.document.id)
+    } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
+  }
+
+  const archive = async () => {
+    if (selected === null) return
+    setSaving(true); setError(null); setNotice(null)
+    try {
+      const result = await props.client.archiveDocument(selected.id)
+      setNotice(t('documents.archived', { spaces: result.maintenance?.memoryBodyIds.join(', ') || '—' }))
+      setConfirmArchive(false); setStatus('archived'); setQuery(''); props.onMutate(); await display('', 'archived'); setSelectedId(result.document.id)
+    } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
+  }
+
+  const usage = snapshot === null ? 0 : Math.min(100, snapshot.activeBytes / snapshot.limitBytes * 100)
+  const activeCount = snapshot?.activeCount ?? 0
+  const archivedCount = snapshot?.archivedCount ?? 0
+
+  return (
+    <div className={css.page}>
+      <PageHeader title={t('documents.title')} description={t('documents.description')} meta={snapshot === null ? t('common.loading') : t('documents.capacity', { used: humanBytes(snapshot.activeBytes), limit: humanBytes(snapshot.limitBytes) })} action={<button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void display(query, status)}>{t('documents.refresh')}</button>} />
+      {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
+      {notice !== null && <div className={css.runtimeNotice} role="status">{notice}</div>}
+
+      <section className={css.documentSummary} aria-label={t('documents.summary')}>
+        <article><span>{t('documents.active')}</span><strong>{activeCount}</strong><small>{t('documents.activeHint')}</small></article>
+        <article><span>{t('documents.archivedCount')}</span><strong>{archivedCount}</strong><small>{t('documents.archivedHint')}</small></article>
+        <article className={css.documentCapacity}><span>{t('documents.activeCapacity')}</span><strong>{snapshot === null ? '—' : `${usage.toFixed(1)}%`}</strong><div><i style={{ width: `${usage}%` }} /></div><small>{t('documents.capacityHint')}</small></article>
+      </section>
+
+      <section className={css.documentToolbar}>
+        <form onSubmit={event => { event.preventDefault(); void display(query, status) }}><span aria-hidden="true">⌕</span><input aria-label={t('documents.searchAria')} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('documents.searchPlaceholder')} /><button type="submit" className={css.secondaryButton}>{t('documents.search')}</button></form>
+        <div role="group" aria-label={t('documents.scope')}><button type="button" data-active={status === 'active' || undefined} onClick={() => setStatus('active')}>{t('documents.active')} <b>{activeCount}</b></button><button type="button" data-active={status === 'archived' || undefined} onClick={() => setStatus('archived')}>{t('documents.archivedCount')} <b>{archivedCount}</b></button></div>
+        {props.writeEnabled && props.sessionId !== undefined && <button type="button" className={css.primaryButton} onClick={() => { setComposing(value => !value); setEditing(false) }}>{composing ? t('common.cancel') : t('documents.new')}</button>}
+      </section>
+
+      {composing && <form className={css.documentEditor} onSubmit={event => void create(event)}>
+        <header><div><h3>{t('documents.newTitle')}</h3><p>{t('documents.editorHint')}</p></div><span>{t('documents.managedCopy')}</span></header>
+        <div className={css.documentEditorMeta}><label>{t('documents.name')}<input value={title} onChange={event => setTitle(event.target.value)} required /></label><label>{t('documents.routing')}<input value={description} onChange={event => setDescription(event.target.value)} /></label></div>
+        <label>{t('documents.sources')}<input value={sources} onChange={event => setSources(event.target.value)} placeholder={t('documents.sourcesPlaceholder')} /></label>
+        <label>{t('documents.markdown')}<textarea value={content} onChange={event => setContent(event.target.value)} rows={10} required /></label>
+        <footer><button type="button" className={css.ghostButton} onClick={resetComposer}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving || title.trim() === '' || content.trim() === ''}>{saving ? t('documents.saving') : t('documents.create')}</button></footer>
+      </form>}
+
+      <div className={css.documentWorkspace}>
+        <aside className={css.documentList} aria-label={t('documents.list')}>
+          <header><span>{status === 'active' ? t('documents.activeList') : t('documents.archiveList')}</span><code>{items.length}</code></header>
+          {items.map(document => <button type="button" key={document.id} data-selected={selectedId === document.id || undefined} onClick={() => { setSelectedId(document.id); setEditing(false); setConfirmArchive(false) }}><div><strong>{document.title}</strong><time dateTime={document.updatedAt}>{new Date(document.updatedAt).toLocaleDateString()}</time></div><p>{document.description || document.excerpt || t('documents.noDescription')}</p><footer><span>{humanBytes(document.sizeBytes)}</span><code>{document.id.slice(0, 8)}</code>{document.healthy === false && <em>{t('documents.missing')}</em>}</footer></button>)}
+          {!loading && items.length === 0 && <div className={css.documentListEmpty}><span>▤</span><strong>{status === 'active' ? t('documents.emptyActive') : t('documents.emptyArchived')}</strong><p>{status === 'active' ? t('documents.emptyActiveText') : t('documents.emptyArchivedText')}</p></div>}
+          {loading && <div className={css.loading}>{t('common.loading')}</div>}
+        </aside>
+
+        <section className={css.documentReader} aria-label={t('documents.reader')}>
+          {selected === null ? <EmptyState glyph="▤" title={t('documents.selectTitle')}>{t('documents.selectText')}</EmptyState> : editing ? <form className={css.documentEditor} onSubmit={event => void update(event)}>
+            <header><div><h3>{t('documents.editTitle')}</h3><p>{t('documents.editorHint')}</p></div><code>{selected.id}</code></header>
+            <div className={css.documentEditorMeta}><label>{t('documents.name')}<input value={title} onChange={event => setTitle(event.target.value)} required /></label><label>{t('documents.routing')}<input value={description} onChange={event => setDescription(event.target.value)} /></label></div>
+            <label>{t('documents.sources')}<input value={sources} onChange={event => setSources(event.target.value)} /></label><label>{t('documents.markdown')}<textarea value={content} onChange={event => setContent(event.target.value)} rows={18} required /></label>
+            <footer><button type="button" className={css.ghostButton} onClick={() => setEditing(false)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving}>{saving ? t('documents.saving') : t('documents.save')}</button></footer>
+          </form> : <article className={css.documentDetail}>
+            <header><div><span>{selected.status === 'active' ? t('documents.active') : t('documents.coldArchive')}</span><h3>{selected.title}</h3><p>{selected.description || t('documents.noDescription')}</p></div><div>{props.writeEnabled && selected.status === 'active' && <button type="button" className={css.secondaryButton} onClick={beginEdit}>{t('documents.edit')}</button>}</div></header>
+            <dl><div><dt>{t('documents.path')}</dt><dd><code>{selected.relativePath}</code></dd></div><div><dt>{t('documents.revision')}</dt><dd>{selected.revision}</dd></div><div><dt>{t('documents.hash')}</dt><dd><code>{selected.contentHash.slice(0, 16)}</code></dd></div><div><dt>{t('documents.size')}</dt><dd>{humanBytes(selected.sizeBytes)}</dd></div></dl>
+            {selected.sourcePaths.length > 0 && <div className={css.documentSources}><span>{t('documents.sources')}</span>{selected.sourcePaths.map(path => <code key={path}>{path}</code>)}</div>}
+            {selected.status === 'archived' && <div className={css.documentArchiveReceipt}><strong>{t('documents.archiveReceipt')}</strong><p>{selected.archiveSummary}</p><div>{selected.memoryBodyIds.map(id => <code key={id}>{id}</code>)}</div></div>}
+            <pre>{selected.content}</pre>
+            {props.writeEnabled && selected.status === 'active' && <footer className={css.documentDanger}>{confirmArchive ? <><span>{t('documents.archiveConfirm')}</span><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void archive()}>{saving ? t('documents.archiving') : t('documents.archiveNow')}</button><button type="button" className={css.ghostButton} onClick={() => setConfirmArchive(false)}>{t('common.cancel')}</button></> : <><div><strong>{t('documents.archiveTitle')}</strong><p>{t('documents.archiveDescription')}</p></div><button type="button" className={css.dangerButton} onClick={() => setConfirmArchive(true)}>{t('documents.archive')}</button></>}</footer>}
+          </article>}
+        </section>
+      </div>
+      <p className={css.runtimeFootnote}>{t('documents.footnote')}</p>
+    </div>
+  )
+}
+
 function StatusPage(props: { status: StatusView | null; loading: boolean; onRefresh: () => void }): JSX.Element {
   const t = useT()
   const status = props.status
   const lifecycle = status?.lifecycle
   const current = lifecycle?.current
   const workers = lifecycle?.subagents
+  const documents = status?.documents
   const catalogKnown = status?.memoryBodies !== undefined
   const memoryBodies = useMemo(() => status?.memoryBodies ?? [], [status])
   const activeBodies = memoryBodies.filter(body => body.active).length
@@ -1034,7 +1182,8 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
       <section className={css.healthStrip} aria-label={t('status.aria')}>
         <article><span className={`${css.healthIndicator} ${status?.healthy === true ? css.healthGood : css.healthBad}`} /><div><small>{t('status.engine')}</small><strong>{status?.healthy === true ? t('status.engineConnected') : t('status.engineUnavailable')}</strong><p>{status?.version === undefined ? t('status.versionWaiting') : `CLI ${status.version}`}</p></div></article>
         <article><span className={`${css.healthIndicator} ${activeBodies > 0 ? css.healthGood : css.healthMuted}`} /><div><small>{t('status.spaces')}</small><strong>{catalogKnown ? t('status.activeRatio', { active: activeBodies, total: memoryBodies.length }) : t('status.directoryUnsynced')}</strong><p>{t('status.activeMemories', { count: status?.stats?.totalInsights ?? 0 })}</p></div></article>
-        <article><span className={`${css.healthIndicator} ${lifecycle?.sessionAvailable === true ? css.healthGood : css.healthBad}`} /><div><small>{t('status.router')}</small><strong>{lifecycle?.sessionAvailable === true ? t('status.routerReady') : t('status.sessionMissing')}</strong><p>{workers === undefined ? t('status.orchestrationWaiting') : t('status.workerCounts', { recalls: workers.recalls, answers: workers.answers ?? 0, reviews: workers.reviews ?? 0, compactions: workers.compactions ?? 0, migrations: workers.migrations ?? 0, writes: workers.writes })}</p></div></article>
+        <article><span className={`${css.healthIndicator} ${documents === undefined ? css.healthMuted : css.healthGood}`} /><div><small>{t('status.documents')}</small><strong>{documents === undefined ? t('status.documentsWaiting') : t('status.documentRatio', { active: documents.activeCount, archived: documents.archivedCount })}</strong><p>{documents === undefined ? t('status.documentsSession') : t('status.documentUsage', { used: humanBytes(documents.activeBytes), limit: humanBytes(documents.limitBytes) })}</p></div></article>
+        <article><span className={`${css.healthIndicator} ${lifecycle?.sessionAvailable === true ? css.healthGood : css.healthBad}`} /><div><small>{t('status.router')}</small><strong>{lifecycle?.sessionAvailable === true ? t('status.routerReady') : t('status.sessionMissing')}</strong><p>{workers === undefined ? t('status.orchestrationWaiting') : t('status.workerCounts', { recalls: workers.recalls, answers: workers.answers ?? 0, reviews: workers.reviews ?? 0, documentArchives: workers.documentArchives ?? 0, compactions: workers.compactions ?? 0, migrations: workers.migrations ?? 0, writes: workers.writes })}</p></div></article>
       </section>
 
       <div className={css.statusLayout}>
@@ -1045,7 +1194,7 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
             <article data-disabled={lifecycle?.recallMode === 'off' || undefined}><span>02</span><div><strong>{t('status.recallWorker')}</strong><p>{lifecycle?.recallMode === 'guided' ? t('status.recallText') : t('status.recallOff')}</p></div><code>{workers?.recalls ?? 0}</code></article>
             <article data-disabled={lifecycle?.writebackMode === 'off' || undefined}><span>03</span><div><strong>{t('status.writeWorker')}</strong><p>{lifecycle?.writebackMode === 'guided' ? t('status.writeText', { seconds: Math.round((lifecycle.idleReviewMs ?? 0) / 1000) }) : t('status.writeOff')}</p></div><code>{workers?.reviews ?? 0}</code></article>
           </div>
-          <div className={css.lifecycleFoot}><span>{t('status.latestPhase')} <strong>{phase}</strong></span><span>{t('status.reviewState')} <strong>{reviewState}</strong></span><span>{t('status.lastReview')} <strong>{lastReview}</strong></span><span>{t('status.workerFailures')} <strong>{workers?.failures ?? 0}</strong></span></div>
+          <div className={css.lifecycleFoot}><span>{t('status.latestPhase')} <strong>{phase}</strong></span><span>{t('status.reviewState')} <strong>{reviewState}</strong></span><span>{t('status.lastReview')} <strong>{lastReview}</strong></span><span>{t('status.reviewDocuments')} <strong>{current?.lastReviewDocumentIds?.length ?? 0}</strong></span><span>{t('status.workerFailures')} <strong>{workers?.failures ?? 0}</strong></span></div>
           {current?.lastError !== undefined && <div className={css.inlineError} role="alert">Lifecycle：{current.lastError}</div>}
         </section>
 
@@ -1055,6 +1204,7 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
             <li data-ok={status?.commandFound || undefined}><span />{status?.commandFound ? t('status.cliExecutable') : t('status.cliMissing')}</li>
             <li data-ok={catalogKnown && activeBodies > 0 || undefined}><span />{catalogKnown ? t('status.readingSpaces', { count: activeBodies }) : t('status.directoryWaiting')}</li>
             <li data-ok={lifecycle?.sessionAvailable || undefined}><span />{lifecycle?.sessionAvailable ? t('status.webAgentReady') : t('status.liveSessionMissing')}</li>
+            <li data-ok={documents !== undefined || undefined}><span />{documents === undefined ? t('status.documentsUnavailable') : t('status.documentsHealthy', { count: documents.activeCount })}</li>
             <li data-ok={(lifecycle?.counters.failures ?? 0) === 0 || undefined}><span />{t('status.lifecycleFailures', { count: lifecycle?.counters.failures ?? 0 })}</li>
           </ul>
           <div className={css.nativeAccess}><h3>{t('status.nativeAccess')}</h3><code>/mnemon status</code><code>/mnemon recall &lt;query&gt;</code><p>{t('status.nativeAccessText')}</p></div>
@@ -1063,7 +1213,7 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
 
       <section className={css.runtimeDetails}>
         <div className={css.statusSectionHeader}><div><h3>{t('status.engineStorage')}</h3></div><span className={`${css.runtimeBadge} ${status?.healthy === true ? css.runtimeOnline : css.runtimeOffline}`}>{status?.healthy === true ? t('status.online') : t('status.offline')}</span></div>
-        <dl><div><dt>CLI</dt><dd><code>{status?.cliPath ?? 'mnemon'}</code></dd></div><div><dt>{t('status.mnemonVersion')}</dt><dd>{status?.version ?? '—'}</dd></div><div><dt>{t('status.directory')}</dt><dd><code>{status?.memoryBodyDirectory ?? '—'}</code></dd></div><div><dt>{t('status.activeDbSize')}</dt><dd>{status?.stats === undefined ? '—' : humanBytes(status.stats.dbSizeBytes)}</dd></div><div><dt>{t('term.spaces')}</dt><dd>{catalogKnown ? t('common.count', { count: memoryBodies.length }) : '—'}</dd></div><div><dt>{t('status.activeCount')}</dt><dd>{catalogKnown ? t('common.count', { count: activeBodies }) : '—'}</dd></div><div><dt>{t('telemetry.memories')}</dt><dd>{status?.stats?.totalInsights ?? '—'}</dd></div><div><dt>{t('status.activeGraphEdges')}</dt><dd>{status?.stats?.edgeCount ?? '—'}</dd></div></dl>
+        <dl><div><dt>CLI</dt><dd><code>{status?.cliPath ?? 'mnemon'}</code></dd></div><div><dt>{t('status.mnemonVersion')}</dt><dd>{status?.version ?? '—'}</dd></div><div><dt>{t('status.directory')}</dt><dd><code>{status?.memoryBodyDirectory ?? '—'}</code></dd></div><div><dt>{t('status.activeDbSize')}</dt><dd>{status?.stats === undefined ? '—' : humanBytes(status.stats.dbSizeBytes)}</dd></div><div><dt>{t('term.spaces')}</dt><dd>{catalogKnown ? t('common.count', { count: memoryBodies.length }) : '—'}</dd></div><div><dt>{t('status.activeCount')}</dt><dd>{catalogKnown ? t('common.count', { count: activeBodies }) : '—'}</dd></div><div><dt>{t('telemetry.memories')}</dt><dd>{status?.stats?.totalInsights ?? '—'}</dd></div><div><dt>{t('status.activeGraphEdges')}</dt><dd>{status?.stats?.edgeCount ?? '—'}</dd></div><div><dt>{t('status.documentDirectory')}</dt><dd><code>{documents?.directory ?? '—'}</code></dd></div><div><dt>{t('status.activeDocuments')}</dt><dd>{documents?.activeCount ?? '—'}</dd></div><div><dt>{t('status.coldDocuments')}</dt><dd>{documents?.archivedCount ?? '—'}</dd></div><div><dt>{t('status.documentCapacity')}</dt><dd>{documents === undefined ? '—' : `${humanBytes(documents.activeBytes)} / ${humanBytes(documents.limitBytes)}`}</dd></div></dl>
       </section>
     </div>
   )
@@ -1114,6 +1264,7 @@ function MnemonWorkspace({ connection, sessionId }: MnemonViewProps): JSX.Elemen
         <section className={css.canvas}>
           {page === 'overview' && <OverviewPage client={client} revision={revision} writeEnabled={writeEnabled} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onExplore={explore} />}
           {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}
+          {page === 'documents' && <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} />}
           {page === 'explore' && <ExplorePage client={client} status={status} seed={searchSeed} writeEnabled={writeEnabled} onForget={forget} />}
           {page === 'entities' && <EntitiesPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onExplore={explore} />}
           {page === 'remember' && <RememberPage client={client} sessionId={sessionId} memoryBodies={status?.memoryBodies ?? []} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} />}

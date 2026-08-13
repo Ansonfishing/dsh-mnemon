@@ -80,6 +80,13 @@ describe('MnemonView', () => {
     const memory = { id: 'memory-12345678', content: '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], entities: ['SQLite'], color: '#e74c3c', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-12345678` }
     const secondaryMemory = { id: 'preference-1', content: '用户偏好简洁中文回答。', category: 'preference', importance: 4, tags: ['style'], color: '#9b59b6', memoryBodyId: secondaryBody.id, memoryBodyName: secondaryBody.name, graphId: `${secondaryBody.id}:preference-1` }
     let runtimeEntries = [{ content: '用户偏好简洁中文回答。', created_at: '2026-08-13T02:00:00.000Z', updated_at: '2026-08-13T02:00:00.000Z', target: 'user', importance: 'critical' }]
+    let documents = [{
+      id: 'document-12345678', title: '发布验证清单', description: '发布前的完整验证路径。', status: 'active', filename: 'release-document-1234.md',
+      relativePath: '.mnemon/documents/active/release-document-1234.md', sourcePaths: ['package.json'], sessionIds: ['session-1'],
+      createdAt: '2026-08-13T02:00:00.000Z', updatedAt: '2026-08-13T02:00:00.000Z', lastAccessedAt: '2026-08-13T02:00:00.000Z',
+      revision: 1, contentHash: 'a'.repeat(64), sizeBytes: 640, memoryBodyIds: [] as string[], healthy: true, excerpt: '发布前运行 typecheck、单元测试与真实 WebUI E2E。',
+      content: '# 发布验证\n\n发布前运行 typecheck、单元测试与真实 WebUI E2E。',
+    }]
     const call = vi.fn(async (_channel: string, endpoint: string, payload?: Record<string, unknown>) => {
       const bodies = options.withInactiveBody ? [body, { ...secondaryBody, active: secondaryActive }] : [body]
       if (endpoint === 'runtime-memory') {
@@ -93,6 +100,32 @@ describe('MnemonView', () => {
         }
         const targetView = (target: string, limit: number) => { const entries = runtimeEntries.filter(entry => entry.target === target); return { target, entryCount: entries.length, used: entries.reduce((sum, entry) => sum + entry.content.length, 0), limit, markdownPath: `/tmp/mnemon/runtime/${target === 'user' ? 'USER' : 'MEMORY'}.md` } }
         return { ok: true, value: { directory: '/tmp/mnemon/runtime', sourcePath: '/tmp/mnemon/runtime/memories.json', generatedAt: '2026-08-13T03:00:00.000Z', entries: runtimeEntries, targets: { user: targetView('user', 4096), memory: targetView('memory', 10240) } } }
+      }
+      if (endpoint === 'documents') {
+        const active = documents.filter(document => document.status === 'active')
+        return { ok: true, value: { workspaceRoot: '/tmp/project', directory: '/tmp/project/.mnemon/documents', indexPath: '/tmp/project/.mnemon/documents/index.json', generatedAt: '2026-08-13T03:00:00.000Z', revision: 'r1', limitBytes: 10 * 1024 * 1024, activeBytes: active.reduce((sum, document) => sum + document.sizeBytes, 0), activeCount: active.length, archivedCount: documents.length - active.length, total: documents.length, documents: documents.map(({ content: _content, ...document }) => document) } }
+      }
+      if (endpoint === 'document-search') {
+        const query = String(payload?.query ?? '').toLowerCase()
+        const includeArchived = payload?.includeArchived === true
+        const results = documents.filter(document => (includeArchived || document.status === 'active') && `${document.title} ${document.description} ${document.content}`.toLowerCase().includes(query)).map(document => ({ ...document, score: 8 }))
+        return { ok: true, value: { query, includeArchived, total: results.length, generatedAt: '2026-08-13T03:00:00.000Z', results } }
+      }
+      if (endpoint === 'document') {
+        if (payload?.action === 'create') {
+          const created = { ...documents[0]!, id: 'document-new-1234', title: String(payload.title), description: String(payload.description ?? ''), content: String(payload.content), excerpt: String(payload.content).slice(0, 120), sourcePaths: payload.sourcePaths as string[] ?? [], filename: 'new-document-new.md', relativePath: '.mnemon/documents/active/new-document-new.md' }
+          documents = [...documents, created]
+          return { ok: true, value: { success: true, action: 'created', document: created, snapshot: {} } }
+        }
+        if (payload?.action === 'update') {
+          documents = documents.map(document => document.id === payload.id ? { ...document, title: String(payload.title ?? document.title), description: String(payload.description ?? document.description), content: String(payload.content ?? document.content), revision: document.revision + 1 } : document)
+          return { ok: true, value: { success: true, action: 'updated', document: documents.find(document => document.id === payload.id), snapshot: {} } }
+        }
+        if (payload?.action === 'archive') {
+          documents = documents.map(document => document.id === payload.id ? { ...document, status: 'archived', relativePath: `.mnemon/documents/archived/${document.filename}`, archiveSummary: '已写入发布记忆体索引。', memoryBodyIds: ['project'] } : document)
+          return { ok: true, value: { success: true, action: 'archived', document: documents.find(document => document.id === payload.id), snapshot: {}, maintenance: { runId: 'archive-child', provider: 'spawn', summary: 'indexed', memoryBodyIds: ['project'], archivedDocumentIds: [payload.id] } } }
+        }
+        return { ok: true, value: documents.find(document => document.id === payload?.id) }
       }
       if (endpoint === 'status') return { ok: true, value: { ...status, memoryBodies: bodies } }
       if (endpoint === 'bodies') return { ok: true, value: { items: bodies, total: bodies.length, activeCount: bodies.filter(item => item.active).length, directory: '/tmp/mnemon/data', generatedAt: '2026-08-13T03:00:00.000Z' } }
@@ -136,7 +169,7 @@ describe('MnemonView', () => {
     return { connection: { rpc: { call } } as unknown as ClientConnectionHandle, call }
   }
 
-  it('shows the live graph and all seven Mnemon workspaces', async () => {
+  it('shows the live graph and all eight Mnemon workspaces', async () => {
     const { connection } = createConnection()
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
     await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
@@ -179,6 +212,13 @@ describe('MnemonView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /检索 意图增强召回/ }))
     expect(screen.getByRole('heading', { name: '检索记忆' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /档案 项目知识与冷归档/ }))
+    expect(screen.getByRole('heading', { name: '项目档案' })).toBeTruthy()
+    await waitFor(() => expect(screen.getByText('发布验证清单')).toBeTruthy())
+    await waitFor(() => expect(screen.getByRole('region', { name: '档案阅读器' }).querySelector('pre')?.textContent).toContain('发布前运行 typecheck、单元测试与真实 WebUI E2E。'))
+    expect(screen.getByText('640 B / 10.0 MB')).toBeTruthy()
+    expect(screen.getByText('`.mnemon/documents/index.json` 是控制面事实源；active 总量固定不超过 10 MB，archived 不计入上限，项目源文件不会被修改。')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: /实体 关系与上下文/ }))
     expect(screen.getByRole('heading', { name: '实体查阅' })).toBeTruthy()
@@ -248,6 +288,31 @@ describe('MnemonView', () => {
     expect(screen.getByText('原始召回内容')).toBeTruthy()
     expect(screen.getByText('项目选择 SQLite，因为需要单文件部署。')).toBeTruthy()
     expect(call).toHaveBeenCalledWith(expect.anything(), 'agent-search', expect.objectContaining({ query: 'SQLite', sessionId: 'session-1' }))
+  })
+
+  it('creates and cold-archives a managed Document through the WebUI control plane', async () => {
+    const { connection, call } = createConnection()
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /档案 项目知识与冷归档/ }))
+    await waitFor(() => expect(screen.getByText('发布验证清单')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: '新建档案' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '标题' }), { target: { value: '架构交接说明' } })
+    fireEvent.change(screen.getByRole('textbox', { name: '检索说明' }), { target: { value: '解释存储控制层与并发边界。' } })
+    fireEvent.change(screen.getByRole('textbox', { name: '来源路径' }), { target: { value: 'src/documents.ts' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Markdown 内容' }), { target: { value: '# 控制层\n\nindex.json 是事实源。' } })
+    fireEvent.click(screen.getByRole('button', { name: '创建档案' }))
+
+    await waitFor(() => expect(screen.getAllByText('架构交接说明').length).toBeGreaterThan(0))
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'document', expect.objectContaining({ action: 'create', title: '架构交接说明', content: '# 控制层\n\nindex.json 是事实源。', sessionId: 'session-1' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '归档' })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '归档' }))
+    fireEvent.click(screen.getByRole('button', { name: '确认归档' }))
+    await waitFor(() => expect(screen.getByText(/已建立 Mnemon 冷索引并归档/)).toBeTruthy())
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'document', { action: 'archive', id: 'document-new-1234', sessionId: 'session-1' })
+    expect(screen.getByText('Mnemon 冷索引回执')).toBeTruthy()
+    expect(screen.getByText('已写入发布记忆体索引。')).toBeTruthy()
   })
 
   it('dispatches the default writeback path to an isolated memory subagent', async () => {
@@ -337,6 +402,7 @@ describe('MnemonView', () => {
     expect(screen.getByRole('region', { name: 'Memory Space Directory' })).toBeTruthy()
     expect(screen.getByRole('navigation', { name: 'Mnemon pages' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Recall Intent-aware retrieval/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Documents Project knowledge and cold archive/ })).toBeTruthy()
     expect(screen.queryByText('PERSISTENT AGENT MEMORY')).toBeNull()
     expect(screen.queryByText(/Memory Bod(y|ies)/i)).toBeNull()
 

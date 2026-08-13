@@ -82,6 +82,7 @@ export interface DocumentMutationResult {
   action: 'created' | 'updated' | 'archived'
   document: DocumentView
   snapshot: DocumentSnapshot
+  maintenance?: { runId: string; provider: string; summary: string; memoryBodyIds: string[]; archivedDocumentIds: string[] }
 }
 
 export interface DocumentCapacityPlan {

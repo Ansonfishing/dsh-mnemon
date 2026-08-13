@@ -1,6 +1,7 @@
 import type { ClientConnectionHandle } from '../contracts.ts'
 import { MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from '../rpc.ts'
 import type { MemoryBody } from '../memory-bodies.ts'
+import type { DocumentMutation, DocumentMutationResult, DocumentSearchResult, DocumentSnapshot, DocumentView } from '../documents.ts'
 import type { RuntimeMemoryImportance, RuntimeMemoryMutationResult, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts'
 import type { EntityView, Insight, MemoryBodyCatalog, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts'
 
@@ -42,6 +43,26 @@ export class MnemonClient {
     importance?: RuntimeMemoryImportance
   }): Promise<RuntimeMemoryMutationResult> {
     return this.call(MNEMON_WRITE_CHANNEL, 'runtime-memory', { ...request, sessionId: this.sessionId })
+  }
+
+  documents(): Promise<DocumentSnapshot> {
+    return this.call(MNEMON_READ_CHANNEL, 'documents', { sessionId: this.sessionId })
+  }
+
+  document(id: string): Promise<DocumentView> {
+    return this.call(MNEMON_READ_CHANNEL, 'document', { sessionId: this.sessionId, id })
+  }
+
+  searchDocuments(query: string, includeArchived = false, limit = 50): Promise<DocumentSearchResult> {
+    return this.call(MNEMON_READ_CHANNEL, 'document-search', { sessionId: this.sessionId, query, includeArchived, limit })
+  }
+
+  mutateDocument(request: DocumentMutation): Promise<DocumentMutationResult> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'document', { ...request, sessionId: this.sessionId })
+  }
+
+  archiveDocument(id: string): Promise<DocumentMutationResult> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'document', { action: 'archive', id, sessionId: this.sessionId })
   }
 
   bodies(): Promise<MemoryBodyCatalog> {
