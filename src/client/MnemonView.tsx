@@ -1340,7 +1340,8 @@ function MemorySystemFlow(props: { status: StatusView | null; reviewState: strin
   const spawnRecent = lastWorkerOperation !== undefined && lastWorkerOperation !== 'review'
   const archiveRecent = lastWorkerOperation === 'document-archive' || lastWorkerOperation === 'migration'
   const reviewState = current?.reviewRunning === true ? 'running' : current?.idleReviewPending === true ? 'pending' : 'idle'
-  const semanticActive = current?.lastPhase === 'recall' || current?.lastPhase === 'supervised'
+  const rootRunning = current?.status === 'running'
+  const semanticActive = rootRunning && (current?.lastPhase === 'recall' || current?.lastPhase === 'supervised')
   const runtimeCount = runtime?.itemCount ?? 0
   const insights = status?.stats?.totalInsights ?? 0
   const flowNode = (title: string, meta: string, state: 'ready' | 'idle' | 'error' = 'idle', kind: 'host' | 'worker' | 'store' | 'task' = 'host', emphasis?: 'active' | 'recent' | 'pending') => (
@@ -1359,9 +1360,9 @@ function MemorySystemFlow(props: { status: StatusView | null; reviewState: strin
             <header><span>01</span><div><strong>{t('status.flowLaneContext')}</strong><small>{t('status.flowLaneContextDetail')}</small></div></header>
             <div className={css.flowTrack}>
               {flowNode(t('status.storageRuntime'), t('status.flowRuntimeMeta', { count: runtimeCount }), areaState(runtime), 'store')}
-              {connector(t('status.flowPromptAssembly'), 'host', runtime?.status === 'ready')}
-              {flowNode(t('status.flowSupervisor'), t('status.flowRootMeta'), hostReady ? 'ready' : 'idle', 'host', hostReady ? 'active' : undefined)}
-              {connector('↔', 'host', hostReady)}
+              {connector(t('status.flowPromptAssembly'), 'host')}
+              {flowNode(t('status.flowSupervisor'), t('status.flowRootMeta'), hostReady ? 'ready' : 'idle', 'host', rootRunning ? 'active' : undefined)}
+              {connector('↔', 'host', rootRunning)}
               {flowNode(t('status.flowConversation'), t('status.flowTurns'), hostReady ? 'ready' : 'idle', 'task')}
             </div>
             <div className={`${css.flowTrack} ${css.flowSecondaryTrack}`}>
@@ -1379,7 +1380,7 @@ function MemorySystemFlow(props: { status: StatusView | null; reviewState: strin
             <header><span>02</span><div><strong>{t('status.flowLaneSemantic')}</strong><small>{t('status.flowLaneSemanticDetail')}</small></div></header>
             <div className={css.flowTrack}>
               {flowNode(t('status.flowSupervisor'), t('status.flowSemanticRequest'), hostReady ? 'ready' : 'idle', 'task')}
-              {connector('→', 'worker', semanticActive || spawnRecent)}
+              {connector('→', 'worker', semanticActive)}
               {flowNode(t('status.flowSpawnWorker'), `${t('status.flowSpawnMeta')}${spawnRecent ? ` · ${t('status.flowRecent')}` : ''}`, hostReady ? 'ready' : 'idle', 'worker', semanticActive ? 'active' : spawnRecent ? 'recent' : undefined)}
               {connector('→', 'worker', semanticActive)}
               {flowNode(t('status.flowHostBridge'), t('status.flowHostBridgeMeta'), status?.healthy === false ? 'error' : status?.healthy === true ? 'ready' : 'idle', 'host')}
@@ -1401,7 +1402,7 @@ function MemorySystemFlow(props: { status: StatusView | null; reviewState: strin
             </div>
             <div className={`${css.flowTrack} ${css.flowReviewTrack}`}>
               {flowNode(t('status.flowReviewGate'), t('status.flowReviewGateMeta', { score, threshold, seconds: idleSeconds }), current?.reviewActivity?.eligible === true ? 'ready' : 'idle', 'task', reviewState === 'pending' ? 'pending' : undefined)}
-              {connector('→', 'worker', reviewState !== 'idle')}
+              {connector('→', 'worker', reviewState === 'running')}
               {flowNode(t('status.flowForkReview'), t('status.flowForkReviewMeta', { state: props.reviewState }), current?.lastError === undefined ? hostReady ? 'ready' : 'idle' : 'error', 'worker', reviewState === 'running' ? 'active' : reviewState === 'pending' ? 'pending' : undefined)}
               {connector('→', 'host', reviewState === 'running')}
               {flowNode(t('status.flowReviewTargets'), t('status.flowReviewTargetsMeta'), areaState(documentArea), 'host')}
@@ -1410,13 +1411,13 @@ function MemorySystemFlow(props: { status: StatusView | null; reviewState: strin
             </div>
             <div className={`${css.flowTrack} ${css.flowArchiveTrack}`}>
               {flowNode(t('status.storageDocuments'), t('status.flowDocuments', { active: documents?.activeCount ?? 0, archived: documents?.archivedCount ?? 0 }), areaState(documentArea), 'store')}
-              {connector('→', 'worker', archiveRecent)}
+              {connector('→', 'worker')}
               {flowNode(t('status.flowColdArchive'), `${t('status.flowColdArchiveMeta')}${archiveRecent ? ` · ${t('status.flowRecent')}` : ''}`, hostReady ? 'ready' : 'idle', 'worker', archiveRecent ? 'recent' : undefined)}
-              {connector('→', 'worker', archiveRecent)}
+              {connector('→', 'worker')}
               {flowNode(t('status.flowHostBridge'), t('status.flowHostBridgeMeta'), status?.healthy === false ? 'error' : status?.healthy === true ? 'ready' : 'idle', 'host')}
-              {connector('→', 'host', archiveRecent)}
+              {connector('→', 'host')}
               {flowNode(t('status.flowIndexFirst'), t('term.spaces'), status?.healthy === false ? 'error' : activeBodies > 0 ? 'ready' : 'idle', 'store')}
-              {connector('→', 'host', archiveRecent)}
+              {connector('→', 'host')}
               {flowNode(t('status.flowRevisionMove'), t('status.flowRevisionMoveMeta', { archived: documents?.archivedCount ?? 0 }), areaState(documentArea), 'store')}
             </div>
           </section>
