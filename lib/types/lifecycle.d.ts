@@ -4,6 +4,7 @@ import type { Insight, RememberRequest, SearchRequest } from './service.ts';
 import type { RuntimeMemoryMutation } from './runtime-memory.ts';
 import type { DocumentMutation } from './documents.ts';
 import { MnemonSubagentCoordinator, type DelegatedWriteResult, type SubagentCounters } from './subagent.ts';
+import { type ReviewActivityScore } from './review-activity.ts';
 export declare const MNEMON_PLUGIN_SOURCE = "dsh-mnemon";
 export type LifecyclePhase = 'idle' | 'prime' | 'recall' | 'writeback' | 'review' | 'supervised' | 'error';
 export interface LifecycleCounters {
@@ -22,9 +23,11 @@ export interface LifecycleAgentSnapshot {
     memoryToolCalls: number;
     idleReviewPending: boolean;
     reviewRunning: boolean;
+    reviewActivity: ReviewActivityScore;
     lastPhase: LifecyclePhase;
     lastReviewAt?: string;
     lastReviewAction?: string;
+    lastReviewScore?: number;
     lastReviewDocumentIds?: string[];
     lastAt?: string;
     lastError?: string;

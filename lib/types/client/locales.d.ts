@@ -349,7 +349,12 @@ export declare const zh: {
     'status.reviewState': string;
     'status.reviewPending': string;
     'status.reviewRunning': string;
+    'status.reviewQualified': string;
+    'status.reviewAccumulating': string;
     'status.reviewIdle': string;
+    'status.activityScore': string;
+    'status.activitySignals': string;
+    'status.activitySignalValues': string;
     'status.lastReview': string;
     'status.noReview': string;
     'status.reviewAt': string;
@@ -733,7 +738,12 @@ export declare const en: {
     'status.reviewState': string;
     'status.reviewPending': string;
     'status.reviewRunning': string;
+    'status.reviewQualified': string;
+    'status.reviewAccumulating': string;
     'status.reviewIdle': string;
+    'status.activityScore': string;
+    'status.activitySignals': string;
+    'status.activitySignalValues': string;
     'status.lastReview': string;
     'status.noReview': string;
     'status.reviewAt': string;

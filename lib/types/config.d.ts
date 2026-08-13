@@ -22,9 +22,9 @@ export interface Config {
     lifecycleEnabled?: boolean;
     /** Recall behavior at the first step of each DSH turn. */
     recallMode?: 'guided' | 'off';
-    /** Enable the short remember cue and the debounced full-checkpoint idle review. */
+    /** Enable the short remember cue and the scored, debounced full-checkpoint review. */
     writebackMode?: 'guided' | 'off';
-    /** Continuous root-agent idle time before a full-checkpoint memory review starts. */
+    /** Continuous root-agent idle time after the QoderWork activity gate is met. */
     idleReviewMs?: number;
 }
 export declare const Config: z<Config>;
