@@ -46,7 +46,12 @@ function fixture(): { service: MnemonService; process: ReturnType<typeof vi.fn<P
       exitCode: 0,
     }
     if (args.includes('recall')) return {
-      stdout: JSON.stringify({ results: [{ id: 'm1', content: 'SQLite is selected.', category: 'decision', score: 0.91, confidence: 'high' }] }),
+      stdout: JSON.stringify({ results: args.includes('--readonly')
+        ? [
+            { id: 'm1', content: 'Use SQLite for local-first storage.', category: 'decision', entities: ['SQLite'], tags: ['storage'] },
+            { id: 'm2', content: 'Four graph memory', category: 'fact', entities: ['Mnemon'] },
+          ]
+        : [{ id: 'm1', content: 'SQLite is selected.', category: 'decision', score: 0.91, confidence: 'high' }] }),
       stderr: '',
       exitCode: 0,
     }
@@ -98,20 +103,21 @@ describe('MnemonService', () => {
     const { service, process } = fixture()
     const graph = await service.graph()
     expect(graph.nodes).toEqual([
-      expect.objectContaining({ id: 'm2', category: 'fact', content: 'Four graph memory' }),
-      expect.objectContaining({ id: 'm1', category: 'decision' }),
+      expect.objectContaining({ id: 'm2', category: 'fact', content: 'Four graph memory', entities: ['Mnemon'] }),
+      expect.objectContaining({ id: 'm1', category: 'decision', entities: ['SQLite'], tags: ['storage'] }),
     ])
     expect(graph.edges).toEqual([expect.objectContaining({ sourceId: 'work:m1', targetId: 'work:m2', type: 'temporal', label: 'backbone' })])
     expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['viz', '--format', 'html']), expect.anything())
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--readonly', 'recall', '', '--basic']), expect.anything())
   })
 
-  it('lists active memories without issuing a recall and filters locally', async () => {
+  it('lists active memories with readonly metadata and filters locally', async () => {
     const { service, process } = fixture()
     await expect(service.list({ query: 'sqlite', category: 'decision' })).resolves.toMatchObject({
       total: 1,
       items: [{ id: 'm1', content: 'Use SQLite for local-first storage.', category: 'decision', color: '#e74c3c' }],
     })
-    expect(process.mock.calls.some(([, args]) => args.includes('recall'))).toBe(false)
+    expect(process.mock.calls.filter(([, args]) => args.includes('recall')).every(([, args]) => args.includes('--readonly'))).toBe(true)
   })
 
   it('exposes top entities and recalls one entity on demand', async () => {

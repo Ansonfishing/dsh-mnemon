@@ -90,7 +90,7 @@ describe('MnemonView', () => {
       },
     }
     const memory = { id: 'memory-12345678', content: '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], entities: ['SQLite'], color: '#e74c3c', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-12345678` }
-    const secondaryMemory = { id: 'preference-1', content: '用户偏好简洁中文回答。', category: 'preference', importance: 4, tags: ['style'], color: '#9b59b6', memoryBodyId: secondaryBody.id, memoryBodyName: secondaryBody.name, graphId: `${secondaryBody.id}:preference-1` }
+    const secondaryMemory = { id: 'preference-1', content: '用户偏好简洁中文回答。', category: 'preference', importance: 4, tags: ['style'], entities: ['DSH'], color: '#9b59b6', memoryBodyId: secondaryBody.id, memoryBodyName: secondaryBody.name, graphId: `${secondaryBody.id}:preference-1` }
     let runtimeEntries = [{ content: '用户偏好简洁中文回答。', created_at: '2026-08-13T02:00:00.000Z', updated_at: '2026-08-13T02:00:00.000Z', target: 'user', importance: 'critical' }]
     let documents = [{
       id: 'document-12345678', title: '发布验证清单', description: '发布前的完整验证路径。', status: 'active', filename: 'release-document-1234.md',
@@ -145,7 +145,10 @@ describe('MnemonView', () => {
         ok: true,
         value: {
           nodes: [memory, { id: 'memory-graph-2', content: 'Mnemon 使用四图持久记忆。', category: 'fact', color: '#3498db', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-graph-2` }, ...(secondaryActive ? [secondaryMemory] : [])],
-          edges: [{ sourceId: `${body.id}:${memory.id}`, targetId: `${body.id}:memory-graph-2`, label: 'backbone', color: '#aaaaaa', type: 'temporal' }],
+          edges: [
+            { sourceId: `${body.id}:${memory.id}`, targetId: `${body.id}:memory-graph-2`, label: 'backbone', color: '#aaaaaa', type: 'temporal' },
+            { sourceId: `${body.id}:${memory.id}`, targetId: `${body.id}:memory-graph-2`, label: 'SQLite', color: '#2ecc71', type: 'entity' },
+          ],
           generatedAt: '2026-08-13T03:00:00.000Z',
         },
       }
@@ -183,7 +186,7 @@ describe('MnemonView', () => {
 
   it('shows the live graph and all eight Mnemon workspaces', async () => {
     const { connection } = createConnection()
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    const { container } = render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
     await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
     expect(screen.getByRole('heading', { name: '记忆体总览' })).toBeTruthy()
     expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy()
@@ -197,6 +200,11 @@ describe('MnemonView', () => {
     expect(screen.getByRole('button', { name: '记忆体: 项目记忆体' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '实体: SQLite' })).toBeTruthy()
     expect(screen.getByText('1 个空间 · 2 条记忆 · 1 个实体')).toBeTruthy()
+    const entityEdges = container.querySelectorAll('path[data-edge="entity"]')
+    expect(entityEdges).toHaveLength(1)
+    expect(entityEdges[0]?.getAttribute('data-source-kind')).toBe('entity')
+    expect(entityEdges[0]?.getAttribute('data-target-kind')).toBe('memory')
+    expect(entityEdges[0]?.getAttribute('data-source-id')).toBe(container.querySelector('[data-kind="entity"]')?.getAttribute('data-node-id'))
     fireEvent.click(screen.getByRole('button', { name: '实体: SQLite' }))
     expect(screen.getByText('实体详情')).toBeTruthy()
     expect(screen.getByText('索引次数')).toBeTruthy()
