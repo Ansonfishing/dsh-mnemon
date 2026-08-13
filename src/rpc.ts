@@ -148,9 +148,8 @@ export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLif
             : await lifecycle.mutate(String(payload.sessionId ?? ''), 'forget', { id: String(payload.id ?? ''), ...(payload.memoryBodyId === undefined ? {} : { memoryBodyId: String(payload.memoryBodyId) }) }))
         case 'body-create':
           return success(await service.createBody({
-            ...(payload.id === undefined ? {} : { id: String(payload.id) }),
             name: String(payload.name ?? ''),
-            ...(payload.description === undefined ? {} : { description: String(payload.description) }),
+            description: String(payload.description ?? ''),
             ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
           }))
         case 'body-update':

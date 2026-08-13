@@ -569,7 +569,6 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const [error, setError] = useState<string | null>(null)
   const [changing, setChanging] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
-  const [bodyId, setBodyId] = useState('')
   const [bodyName, setBodyName] = useState('')
   const [bodyDescription, setBodyDescription] = useState('')
   const [catalogUnavailable, setCatalogUnavailable] = useState(false)
@@ -622,8 +621,8 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
     if (bodyName.trim() === '' || bodyDescription.trim() === '') return
     setCreating(true); setError(null)
     try {
-      await props.client.createBody({ ...(bodyId.trim() === '' ? {} : { id: bodyId }), name: bodyName, description: bodyDescription })
-      setBodyId(''); setBodyName(''); setBodyDescription('')
+      await props.client.createBody({ name: bodyName, description: bodyDescription })
+      setBodyName(''); setBodyDescription('')
       await load(true)
       props.onMutate()
     } catch (reason) { setError(message(reason)) } finally { setCreating(false) }
@@ -654,7 +653,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
           ))}
           {catalog?.total === 0 && <div className={css.bodyDirectoryEmpty}><span>◇</span><div><strong>{catalogUnavailable ? t('overview.unsyncedTitle') : t('overview.emptyTitle')}</strong><p>{catalogUnavailable ? t('overview.unsyncedShort') : t('overview.emptyShort')}</p></div></div>}
         </div>
-        {props.writeEnabled && !catalogUnavailable && <details className={css.bodyCreate} open={catalog?.total === 0 ? true : undefined}><summary>{t('overview.create')}</summary><form onSubmit={event => void create(event)}><input aria-label={t('overview.createId')} value={bodyId} onChange={event => setBodyId(event.target.value)} placeholder={t('overview.createIdPlaceholder')} /><input aria-label={t('overview.createName')} value={bodyName} onChange={event => setBodyName(event.target.value)} placeholder={t('overview.createNamePlaceholder')} required /><input aria-label={t('overview.createDescription')} value={bodyDescription} onChange={event => setBodyDescription(event.target.value)} placeholder={t('overview.createDescriptionPlaceholder')} required /><button type="submit" className={css.secondaryButton} disabled={creating}>{creating ? t('overview.creating') : t('overview.createAction')}</button></form></details>}
+        {props.writeEnabled && !catalogUnavailable && <details className={css.bodyCreate} open={catalog?.total === 0 ? true : undefined}><summary>{t('overview.create')}</summary><form onSubmit={event => void create(event)}><input aria-label={t('overview.createName')} value={bodyName} onChange={event => setBodyName(event.target.value)} placeholder={t('overview.createNamePlaceholder')} required /><input aria-label={t('overview.createDescription')} value={bodyDescription} onChange={event => setBodyDescription(event.target.value)} placeholder={t('overview.createDescriptionPlaceholder')} required /><button type="submit" className={css.secondaryButton} disabled={creating}>{creating ? t('overview.creating') : t('overview.createAction')}</button></form></details>}
       </section>
       {!catalogUnavailable && graph !== null && graph.nodes.length > 0 ? (
         <div className={css.graphLayout}>

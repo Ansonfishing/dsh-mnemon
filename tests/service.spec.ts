@@ -153,21 +153,21 @@ describe('MnemonService', () => {
 
   it('aggregates reads across active memory bodies and activates a write target', async () => {
     const { service, process } = fixture()
-    await service.createBody({ id: 'research', name: '研究记忆体', description: 'Research decisions', active: true })
+    const research = await service.createBody({ name: '研究决策', description: '研究假设、证据与技术取舍；评估研究方向时召回。', active: true })
 
     const result = await service.search({ query: 'database choice' })
     expect(result.results).toHaveLength(2)
-    expect(result.results.map(item => item.memoryBodyId)).toEqual(['work', 'research'])
-    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--store', 'research', 'recall']), expect.anything())
+    expect(result.results.map(item => item.memoryBodyId)).toEqual(['work', research.id])
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--store', research.id, 'recall']), expect.anything())
 
-    service.updateBody('research', { active: false })
-    await service.remember({ memoryBodyId: 'research', content: 'Durable cross-body write.' })
-    expect(service.memoryBodies.get('research').active).toBe(true)
+    service.updateBody(research.id, { active: false })
+    await service.remember({ memoryBodyId: research.id, content: 'Durable cross-body write.' })
+    expect(service.memoryBodies.get(research.id).active).toBe(true)
   })
 
   it('rejects explicit reads from an inactive memory body', async () => {
     const { service } = fixture()
-    await service.createBody({ id: 'archive', name: '归档记忆体' })
-    await expect(service.search({ query: 'anything', memoryBodyIds: ['archive'] })).rejects.toThrow('not active')
+    const archive = await service.createBody({ name: '交付历史', description: '稳定的交付决策与回滚经验；规划发布时召回。' })
+    await expect(service.search({ query: 'anything', memoryBodyIds: [archive.id] })).rejects.toThrow('not active')
   })
 })

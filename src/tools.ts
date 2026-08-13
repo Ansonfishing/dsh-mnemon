@@ -207,18 +207,17 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
 
   ctx.tools.register(definition({
     name: 'mnemon_memory_body_create',
-    description: 'Create a new isolated Mnemon Memory Space. Use only when durable knowledge forms a recurring scope not owned by any existing space; never create one for a single temporary task. After creation, write the qualifying insight into it with mnemon_remember, which will activate it.',
+    description: 'Create a new isolated Mnemon Memory Space. Use only when durable knowledge forms a recurring scope not owned by any existing space; never create one for a single temporary task. Supply a topic-specific human name and a precise routing description that states what belongs here and when it should be recalled; avoid generic labels such as miscellaneous, archive, or new memory. The host generates the immutable UUID. After creation, write the qualifying insight into it with mnemon_remember, which will activate it.',
     parameters: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: 'Stable ASCII id matching letters, numbers, underscore, or hyphen.' },
-        name: { type: 'string', description: 'Short human-readable name.' },
-        description: { type: 'string', description: 'Clear routing boundary: what belongs here and when it should be recalled.' },
+        name: { type: 'string', description: 'Topic-specific human-readable name that remains meaningful in the directory.' },
+        description: { type: 'string', description: 'Precise routing boundary: what durable knowledge belongs here and when it should be recalled.' },
       },
       required: ['name', 'description'],
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    execute: (args: { id?: string; name: string; description?: string }, exec: ToolExecution) => isSubagent(exec.agent)
+    execute: (args: { name: string; description: string }, exec: ToolExecution) => isSubagent(exec.agent)
       ? service.createBody(args, exec.signal)
       : coordinator.write(requireAgent(exec), 'create-memory-body', args, exec.signal),
     presentCall: () => ({ card: 'generic', title: 'Create Mnemon Memory Space', kind: 'edit' }),

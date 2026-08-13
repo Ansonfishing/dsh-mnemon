@@ -19,7 +19,7 @@ function fakeService(writeEnabled = true): MnemonService {
     remember: vi.fn(async () => ({ action: 'added' })),
     link: vi.fn(async () => ({ status: 'linked' })),
     forget: vi.fn(async () => ({ status: 'deleted' })),
-    createBody: vi.fn(async request => ({ id: request.id ?? 'new', name: request.name, description: request.description ?? '', active: request.active ?? false })),
+    createBody: vi.fn(async request => ({ id: '00000000-0000-4000-8000-000000000001', name: request.name, description: request.description, active: request.active ?? false })),
     updateBody: vi.fn((id, request) => ({ id, name: request.name ?? id, description: request.description ?? '', active: request.active ?? false })),
   } as unknown as MnemonService
 }

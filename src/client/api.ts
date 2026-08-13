@@ -88,7 +88,7 @@ export class MnemonClient {
     return this.call(MNEMON_WRITE_CHANNEL, 'forget', { id, sessionId: this.sessionId, ...(memoryBodyId === undefined ? {} : { memoryBodyId }) })
   }
 
-  createBody(request: { id?: string; name: string; description?: string; active?: boolean }): Promise<MemoryBody> {
+  createBody(request: { name: string; description: string; active?: boolean }): Promise<MemoryBody> {
     return this.call(MNEMON_WRITE_CHANNEL, 'body-create', request)
   }
 

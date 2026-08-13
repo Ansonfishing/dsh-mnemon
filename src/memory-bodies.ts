@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import type { MnemonRunner } from './runner.ts'
@@ -23,9 +24,8 @@ interface RegistryFile {
 }
 
 export interface CreateMemoryBodyRequest {
-  id?: string
   name: string
-  description?: string
+  description: string
   active?: boolean
 }
 
@@ -52,14 +52,6 @@ export function validateMemoryBodyId(value: string): string {
   const normalized = value.trim()
   if (!ID_PATTERN.test(normalized)) throw new Error('memoryBodyId must match [a-zA-Z0-9][a-zA-Z0-9_-]*')
   return normalized
-}
-
-function slug(name: string): string {
-  const normalized = name.normalize('NFKD').toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48)
-  return normalized === '' ? `memory-${Date.now().toString(36)}` : normalized
 }
 
 /**
@@ -101,19 +93,15 @@ export class MemoryBodyRegistry {
 
   async create(request: CreateMemoryBodyRequest, signal?: AbortSignal): Promise<MemoryBody> {
     const name = requiredText(request.name, 'name', 100)
-    let id = validateMemoryBodyId(request.id?.trim() || slug(name))
-    if (request.id === undefined) {
-      const base = id
-      let suffix = 2
-      while (this.bodies.some(body => body.id === id)) id = `${base}-${suffix++}`
-    }
-    if (this.list().some(body => body.id === id)) throw new Error(`memory body already exists: ${id}`)
+    const description = requiredText(request.description, 'description', 1000)
+    let id = validateMemoryBodyId(randomUUID())
+    while (this.list().some(body => body.id === id)) id = validateMemoryBodyId(randomUUID())
     await this.runner.runText(['store', 'create', id], { ...(signal === undefined ? {} : { signal }), store: id })
     const timestamp = this.now().toISOString()
     const body: StoredMemoryBody = {
       id,
       name,
-      description: optionalText(request.description, 'description', 1000),
+      description,
       active: request.active ?? false,
       createdAt: timestamp,
       updatedAt: timestamp,
