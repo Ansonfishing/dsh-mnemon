@@ -203,6 +203,58 @@ describe('Mnemon DSH lifecycle integration', () => {
     })
   })
 
+  it('deduplicates the same entered user message across multiple steps', async () => {
+    const value = fixture()
+    const prompt = userMessage('x'.repeat(50))
+    await value.preStep([prompt], 1, 1)
+    await value.preStep([prompt], 1, 2)
+    await value.turnStopping(1)
+
+    expect(value.lifecycle.snapshot('session-1').current?.reviewActivity).toMatchObject({
+      totalUserTextLength: 50,
+      turnCount: 1,
+      textLengthScore: 1,
+      turnScore: 1,
+      score: 2,
+    })
+  })
+
+  it('keeps the activity watermark when a new turn aborts an in-flight review', async () => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    let finish: (() => void) | undefined
+    vi.mocked(value.coordinator.review).mockImplementationOnce(async () => await new Promise(resolve => {
+      finish = () => resolve({
+        delegated: true,
+        runId: 'review-child',
+        provider: 'fork',
+        summary: 'Stale completion',
+        action: 'skipped',
+        memoryBodyIds: [],
+      })
+    }))
+
+    await value.preStep([userMessage('x'.repeat(150))], 1)
+    value.events.push({ type: 'turn/end', data: { turn: 1 } })
+    await value.turnStopping(1)
+    await value.preStep([userMessage('threshold turn')], 2)
+    value.events.push({ type: 'turn/end', data: { turn: 2 } })
+    await value.turnStopping(2)
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ reviewRunning: true })
+
+    await value.preStep([userMessage('new evidence')], 3)
+    finish?.()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(value.lifecycle.snapshot('session-1').current).toMatchObject({
+      reviewRunning: false,
+      idleReviewPending: false,
+      reviewActivity: { score: 6, turnCount: 3, eligible: true },
+    })
+    expect(value.lifecycle.snapshot('session-1').current?.lastReviewAt).toBeUndefined()
+  })
+
   it('can cue recall and remember independently', async () => {
     const recallOnly = fixture(resolveConfig({ recallMode: 'guided', writebackMode: 'off' }))
     const recallDecision = await recallOnly.preStep([userMessage()], 1)
