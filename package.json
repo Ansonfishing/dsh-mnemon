@@ -1,13 +1,15 @@
 {
   "name": "dsh-mnemon",
   "version": "0.1.0",
-  "description": "DSH Memory Space plugin for Mnemon: subagent-supervised recall and writeback across isolated persistent 4-graph stores.",
+  "description": "Three-tier DSH memory for Mnemon: hot runtime context, managed project Documents, and subagent-supervised persistent 4-graph Memory Spaces.",
   "keywords": [
     "deepseek-harness",
     "dsh",
     "mnemon",
     "agent-memory",
     "persistent-memory",
+    "project-documents",
+    "memory-archive",
     "memory-space",
     "multi-memory-space",
     "subagent",

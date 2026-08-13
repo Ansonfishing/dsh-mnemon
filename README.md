@@ -2,9 +2,9 @@
 
 > **LLM-supervised 4-graph persistent memory for AI agents.**
 
-DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https://github.com/mnemon-dev/mnemon) 接入 DSH，并提供两层记忆：每轮直接进入上下文的运行时热记忆，以及建立在 Mnemon 原生命名 Store 上的长期“记忆体”。每个记忆体都有稳定的 `id`、名称、路由说明、激活状态和独立 `.db`，DSH 记忆子 Agent 负责跨记忆体选择、召回、查重、归档与容量迁移。
+DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https://github.com/mnemon-dev/mnemon) 接入 DSH，并提供三个梯度：每轮直接进入上下文的运行时热记忆、当前工作区内可检索的项目档案（Documents），以及建立在 Mnemon 原生命名 Store 上的长期“记忆体”。每个记忆体都有稳定的 `id`、名称、路由说明、激活状态和独立 `.db`，DSH 记忆子 Agent 负责跨记忆体选择、召回、查重、归档与容量迁移。
 
-主 Agent 不需要接收完整记忆体目录、原始检索过程或归档推理。新出现的稳定信息通常通过确定性的运行时控制层写入热记忆；主模型按需调用的长期召回与归档使用有界 `spawn` 子 Agent。当 turn 持续空闲达到阈值时，插件使用 `fork` 子 Agent 继承主 Agent 的完整已完成 checkpoint，保守判断是否需要 add / replace / remove 热记忆。只有精简证据或结构化回执会回到主上下文；长期存储、四图索引、衰减和去重仍由本地 Mnemon CLI 确定性执行。
+主 Agent 不需要接收完整记忆体目录、原始检索过程或归档推理。新出现的稳定信息通常通过确定性的运行时控制层写入热记忆；复杂且可复用的项目产物进入受控 Documents；主模型按需调用的长期召回与归档使用有界 `spawn` 子 Agent。当 turn 持续空闲达到阈值时，插件使用一个 `fork` 子 Agent 继承主 Agent 的完整已完成 checkpoint，同时保守判断是否维护热记忆、以及是否创建或修订一份项目档案。只有精简证据或结构化回执会回到主上下文；长期存储、四图索引、衰减和去重仍由本地 Mnemon CLI 确定性执行。
 
 ## 运行时热记忆
 
@@ -26,6 +26,25 @@ DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https:/
 - **上下文接入**：`mnemon:runtime-memory` system prompt section 在每次 prompt 组装时读取受控投影，采用从 QoderWork memory protocol 裁剪后的保存、跳过、分类和重要性规则。
 - **容量边界**：`USER.md` 为 4 KiB，`MEMORY.md` 为 10 KiB，均按 UTF-8 字节计算。
 - **分层容量整理**：`USER.md` 只在本地由无工具权限的隔离子 Agent 保守合并，Host 要求每个原条目恰好被一个压缩候选覆盖，用户偏好不会进入 Mnemon 记忆体；`MEMORY.md` 才执行“先归档后压缩”，并可把不同语义簇路由到多个既有或新建记忆体。全部归档成功后，Host 再按重要性与 UTF-8 安全水位确定性装箱并重试原写入。模型不承担精确字节计算；归档失败、覆盖不完整或 revision 冲突时，原热记忆保持不变。
+
+## 项目档案（Documents）
+
+Documents 是热记忆和 Mnemon 记忆体之间的项目知识层。它保存设计、调查、操作流程、架构理由和交接记录等“比一条记忆更完整、又需要快速阅读”的内容；用户画像不会进入这里。
+
+```text
+<workspace>/.mnemon/documents/
+├── index.json       # 元数据、状态、修订与哈希的唯一事实源
+├── active/          # 参与近场检索，所有托管 Markdown 合计不超过 10 MiB
+└── archived/        # 冷归档原文，不计入 active 容量
+```
+
+- **托管副本**：Documents 只写入 `.mnemon/documents`；frontmatter 记录 UUID、标题、检索说明、时间、哈希、来源路径、会话与记忆体引用。`sourcePaths` 只允许指向当前工作区，原项目文件从不被修改。
+- **控制面与并发**：所有创建、修订、搜索和迁移经由统一控制层；进程内串行、跨实例加锁、索引原子替换，归档使用 document revision 防止覆盖并发修订。
+- **近场检索**：`mnemon_document_search` 默认只读 active，按标题、description 和正文确定性排名；模型应先查热记忆与 Documents，仍缺少历史细节时再进入 Mnemon 深召回。
+- **空闲沉淀**：同一个完整 checkpoint `fork` reviewer 在复杂 turn 确实形成可复用项目知识时，最多创建或修订一份档案；普通聊天、常规编辑、原始日志和用户偏好会被跳过。
+- **先索引后迁移**：active 按真实 UTF-8 Markdown 字节硬限制为 10 MiB。容量不足或人工归档时，选择最久未访问的档案，由受限 `spawn` worker 先向恰当 Mnemon 记忆体写入摘要、冷路径和内容 SHA-256；只有结构化成功回执返回后，原文才移入 `archived/`。失败或 revision 冲突时 active 原文保持不变。
+
+完整查询梯度是：运行时热记忆 → active Documents → 激活 Mnemon 记忆体 → Mnemon 结果指向的 archived 原文。
 
 ## 记忆体模型
 
@@ -57,9 +76,10 @@ DeepSeek Harness（DSH）的 Mnemon 外置记忆插件。它把 [Mnemon](https:/
 | 每次 prompt 组装 | `systemPrompt.section()` | 动态投影 `USER.md` / `MEMORY.md` 与热记忆协议 | 当前紧凑热记忆 |
 | 每轮开始 | `agent/pre-step` | 只注入一句按需 recall / runtime-memory 提醒，不读取目录、不执行记忆工具 | 主模型自行判断是否发起召回或维护热记忆 |
 | 显式工具/命令 | `ctx.subagents.start('spawn', …)` | 在受限 Mnemon 工具集合内完成一次语义操作 | 结构化召回结果或写入回执 |
-| turn 结束并持续空闲 | `agent/turn-stopping` → debounce → `fork` | 继承截至最新 `turn/end` 的完整主 Agent checkpoint，保守判断是否需要一次 add / replace / remove 热记忆 | 不注入复核推理，不唤醒主 Agent；新 turn 会取消复核 |
+| turn 结束并持续空闲 | `agent/turn-stopping` → debounce → `fork` | 继承截至最新 `turn/end` 的完整主 Agent checkpoint，保守判断是否维护一次热记忆，并在复杂工作形成可复用产物时最多维护一份 Document | 不注入复核推理，不唤醒主 Agent；新 turn 会取消复核 |
 | `USER.md` 达到容量 | 控制层 → 无工具 `spawn` → source coverage / revision barrier | 只在本地合并用户画像，不写入记忆体 | 本地整理回执；覆盖不完整时不改数据 |
 | `MEMORY.md` 达到容量 | 控制层 → 受限 `spawn` → revision barrier | 按语义簇向一个或多个 Mnemon 记忆体归档，再返回压缩候选 | 归档回执；失败时不改本地热记忆 |
+| Documents 达到容量或人工归档 | LRU 预检 → 受限 `spawn` → document revision barrier | 先在 Mnemon 写入摘要、精确冷路径和哈希 | 成功后才移动原文；失败或冲突时保留 active |
 | WebUI 沉淀 | 写 RPC → `spawn` | 选择记忆体、查重、提炼、写入，必要时创建或合并 | 可审计的 action、目标记忆体和摘要 |
 
 `spawn` 子 Agent 使用全新的隔离上下文；空闲审查则要求 DSH 的 `fork` provider，并只继承已经完成的 turn checkpoint。两者都通过预定义 persona、工具白名单、结构化输出和 `maxDepth: 1` 限制职责。职责、边界与操作协议位于子 Agent 的 system persona，query 只携带本次动作和最小必要数据；容量维护时，已提交的 `MEMORY.md` / `USER.md` 以只读 system 快照提供，不再把整份热记忆、路径或 JSON 协议重复塞进 query。根 Agent 调用 `mnemon_recall` / `mnemon_remember` 等工具时会先进入子 Agent；同名工具在记忆子 Agent 内才直接访问 MnemonService，因此不会递归委派。
@@ -72,6 +92,8 @@ Prime 只初始化路由状态；pre-step 提示保持为一句短语，不注�
 
 - `mnemon_memory_bodies`：读取全局记忆体目录、激活状态和统计；
 - `mnemon_runtime_memory`：维护每轮注入的 USER / MEMORY 热记忆；支持 `add`、`replace`、`remove`；USER 容量压力只做本地画像整理，MEMORY 容量压力才归档到一个或多个记忆体；
+- `mnemon_document_search`：确定性检索当前工作区的 active Documents；只在沿已知冷引用深查时显式包含 archived；
+- `mnemon_document_manage`：经统一控制层创建、修订或归档项目档案；冷归档必须先完成 Mnemon 索引；
 - `mnemon_recall`：从一个或多个激活记忆体执行图增强、关键词或基础召回；
 - `mnemon_related`：沿 temporal / semantic / causal / entity 边遍历关联记忆；
 - `mnemon_remember`：选择记忆体并沉淀一条持久洞察；
@@ -85,14 +107,15 @@ Prime 只初始化路由状态；pre-step 提示保持为一句短语，不注�
 ### 会话「记忆体」Tab
 
 - 中文界面使用“记忆体”，英文界面使用更贴近独立持久上下文边界的 **Memory Space**；Tab 和所有功能文案跟随 DSH 全局语言设置即时切换。Mnemon 品牌名与官方 slogan 保持原文。
-- 总览、运行时、检索、实体、沉淀、内容和状态采用上边缘二级导航，给实时图谱与内容列表保留完整横向空间。
+- 总览、运行时、档案、检索、实体、沉淀、内容和状态采用上边缘二级导航，给实时图谱与内容列表保留完整横向空间。
 - **总览**：管理全局记忆体目录和激活开关；每 15 秒聚合所有激活记忆体的四图快照；支持流畅力导向动画、节点拖拽、键盘微调、自然铺开、均匀重置和节点检查。
 - **运行时**：展示 USER / MEMORY 两类热记忆、UTF-8 容量、重要级别与更新时间；支持添加、编辑和确认移除，并在容量迁移后显示目标记忆体回执。
+- **档案**：展示 active / archived 双目录、真实 10 MiB 容量、来源路径、修订、哈希和 Mnemon 冷索引回执；支持确定性检索、阅读、创建、编辑和确认归档。
 - **检索**：三种直连召回模式、分类过滤、跨记忆体来源标记、关联图查阅、复制 ID 和软删除确认；可选 Agent 查询先确定性召回，再由无 Mnemon 工具权限的隔离 Agent 只基于命中证据生成顶部答案。
 - **实体**：列出高频实体，并由 MnemonService 直连聚合实体的跨图上下文，不启动 Recall Worker。
 - **沉淀**：默认直接调度记忆子 Agent；人工高级选项可约束目标记忆体、分类、重要性、实体和标签，但不会绕过查重与监督。
 - **内容**：无副作用浏览已激活记忆体，支持筛选、复制、基于旧内容新建和软删除。
-- **状态**：只展示 Mnemon 引擎、记忆体目录、Recall/Write Worker、会话绑定、阶段计数和快速诊断，不在页面混入部署配置。
+- **状态**：展示 Mnemon 引擎、记忆体与 Documents 目录、Recall/Write/Archive Worker、会话绑定、阶段计数和快速诊断，不在页面混入部署配置。
 
 界面使用 DSH design token，跟随 DSH 全局明暗模式，不维护插件私有主题开关。WebUI 不直接启动进程、不接触数据库：Host 侧统一校验输入、控制超时并调用本地 `mnemon`。
 
@@ -178,11 +201,12 @@ profile patch 中同 ID 的 `config` 可能整体覆盖默认行；覆盖时应�
 
 1. 用清晰的 name 和 description 划分长期范围，例如“项目决策”“个人偏好”“研究资料”；不要为一次临时任务创建记忆体。
 2. 只激活当前可能影响工作的记忆体，减少无关召回；跨域任务可以同时激活多个。
-3. 用户偏好、当前项目约定和高频环境事实优先写入运行时热记忆，让它们在下一任务立即可用。
-4. 延续旧任务、询问历史决策或排查已知坑时，让 Recall Worker 选择相关长期记忆体并返回证据。
-5. 明确需要长期四图归档时使用“沉淀”，常规运行中由容量迁移把已确认热记忆送入 Mnemon；空闲审查只作为保守兜底。
-6. 临时进度、普通聊天和可直接从仓库读取的事实不应写入热记忆或长期记忆体。
-7. 需要解释关系时，从 recall 返回的完整 `memoryBodyId + id` 调用 `mnemon_related`，不要猜 ID。
+3. 用户偏好与高频项目事实优先写入运行时热记忆，让它们在下一任务立即可用；用户偏好始终留在 USER，不进入 Documents 或 Mnemon 记忆体。
+4. 设计、研究、流程和交接等完整产物进入 active Documents；查询项目记录时先检索 Documents，再按需深召回。
+5. 延续旧任务、询问历史决策或排查已知坑时，让 Recall Worker 选择相关长期记忆体并返回证据；需要完整原文时沿命中记录的 archived 路径读取。
+6. 明确需要长期四图归档时使用“沉淀”，常规运行中由容量迁移把已确认热记忆或冷档案索引送入 Mnemon；空闲审查只作为保守兜底。
+7. 临时进度、普通聊天和可直接从仓库读取的事实不应写入热记忆、Documents 或长期记忆体。
+8. 需要解释关系时，从 recall 返回的完整 `memoryBodyId + id` 调用 `mnemon_related`，不要猜 ID。
 
 ## DSH 命令
 
@@ -213,7 +237,7 @@ pnpm run verify
 - `lib/client.js`：自包含浏览器 bundle，仅 external `react` / `react/jsx-runtime`；
 - `lib/types/`：Host 与 Client 类型声明及中间 ESM。
 
-测试覆盖运行时 JSON/Markdown 一致性、并发锁、UTF-8 容量、过期压缩拒绝、先归档后压缩的事务顺序、记忆体目录迁移、独立 Store 路由、激活读边界、写后激活、非破坏性合并、子 Agent 工具隔离、pre-step 仅提醒、turn 空闲 debounce、完整 checkpoint `fork` 审查与新 turn 取消、WebUI 运行时 CRUD、直连检索、证据限定 Agent 问答、RPC 权限、只读模式、多记忆体图谱和七区工作台。发布前还应使用隔离 `MNEMON_DATA_DIR` 和独立端口 DSH，通过真实 WebUI 对话验证模型自主写入热记忆、新任务直接读取热记忆、容量迁移、历史问题自主召回、空闲复核、跨记忆体读取、状态计数和最终 CLI recall。
+测试覆盖运行时 JSON/Markdown 一致性、并发锁、UTF-8 容量、过期压缩拒绝、先归档后压缩的事务顺序、Documents 路径隔离、frontmatter、索引检索、LRU 容量预检、先建立 Mnemon 冷索引再移动、document revision 冲突保护、记忆体目录迁移、独立 Store 路由、激活读边界、写后激活、非破坏性合并、子 Agent 工具隔离、pre-step 仅提醒、turn 空闲 debounce、完整 checkpoint `fork` 审查与新 turn 取消、WebUI 运行时与 Documents CRUD、直连检索、证据限定 Agent 问答、RPC 权限、只读模式、多记忆体图谱和八区工作台。发布前还应使用隔离 `MNEMON_DATA_DIR`、隔离工作区和独立端口 DSH，通过真实 WebUI 对话验证模型自主写入热记忆、复杂 turn 自动形成 Document、新任务先查 active Documents、容量冷迁移、历史问题自主召回、空闲复核、跨记忆体读取、状态计数和最终 CLI recall。
 
 ## 品牌资源
 
