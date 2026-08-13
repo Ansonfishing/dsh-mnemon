@@ -88,4 +88,77 @@ describe('MnemonSettingsCard', () => {
 
     await waitFor(() => expect(calls).toEqual(['dataDir', 'storageScope']))
   })
+
+  it('connects custom-directory validation to the visible control', () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {},
+      user: {},
+      revision: 0,
+      writable: true,
+      mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}),
+      unset: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+
+    render(<MnemonSettingsCard scope={scope} />)
+    fireEvent.change(screen.getByLabelText('Mnemon 存储范围'), { target: { value: 'custom' } })
+
+    const directory = screen.getByLabelText('Mnemon 自定义数据目录')
+    expect(directory.getAttribute('aria-invalid')).toBe('true')
+    expect(directory.getAttribute('aria-describedby')).toContain('mnemon-settings-validation')
+    expect(screen.getByRole('alert').textContent).toBe('选择自定义存储时必须填写数据目录。')
+  })
+
+  it('uses native disabled semantics for a read-only settings scope', () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {},
+      user: {},
+      revision: 0,
+      writable: false,
+      mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}),
+      unset: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+
+    render(<MnemonSettingsCard scope={scope} />)
+
+    expect((screen.getByLabelText('Mnemon 存储范围') as HTMLSelectElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: '保存到 settings.yaml' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('当前部署的插件设置为只读。')).toBeTruthy()
+  })
+
+  it('does not present temporary defaults as read-only while settings load', () => {
+    const snapshot = {
+      status: 'loading' as const,
+      writable: false,
+      mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}),
+      unset: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+
+    render(<MnemonSettingsCard scope={scope} />)
+
+    expect(screen.getByRole('status').textContent).toBe('载入中…')
+    expect(screen.queryByText('当前部署的插件设置为只读。')).toBeNull()
+    expect(screen.queryByLabelText('Mnemon 存储范围')).toBeNull()
+  })
 })

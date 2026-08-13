@@ -58,6 +58,7 @@ export function MnemonSettingsCard({ scope, t = translateZh }: MnemonSettingsCar
   const overridden = useMemo(() => record(snapshot.user), [snapshot.user])
   const inherited = useMemo(() => inheritedDraft(snapshot.base), [snapshot.base])
   const error = validation(t, draft)
+  const controlsDisabled = !snapshot.writable || saving
 
   if (snapshot.status === 'unavailable') return null
 
@@ -110,44 +111,56 @@ export function MnemonSettingsCard({ scope, t = translateZh }: MnemonSettingsCar
   }
 
   const fieldMeta = (field: Field) => Object.hasOwn(overridden, field) && !reset.has(field)
+  const errorId = error === null ? undefined : 'mnemon-settings-validation'
+  const loading = snapshot.status === 'loading'
 
   return (
-    <section className={css.card} aria-label={t('config.aria')}>
+    <section className={css.card} aria-label={t('config.aria')} aria-busy={saving || loading}>
       <div className={css.panelHeader}>
-        <div><h3>Mnemon</h3><p>{t('config.description')}</p></div>
-        <strong>{dirty.size > 0 ? t('config.unsaved') : t('config.restart')}</strong>
+        <div className={css.headerCopy}><h3>Mnemon</h3><p>{t('config.description')}</p></div>
+        <span className={`${css.status} ${dirty.size > 0 ? css.statusDirty : ''}`} aria-live="polite">
+          {loading ? t('common.loading') : dirty.size > 0 ? t('config.unsaved') : t('config.restart')}
+        </span>
       </div>
       <div className={css.body}>
-        <div className={css.notice}>{t('config.noticeBefore')} <code>.dsh/settings.yaml</code>{t('config.noticeAfter')}</div>
+        {loading ? <p className={css.loading} role="status">{t('common.loading')}</p> : <>
+        <p className={css.notice}>{t('config.noticeBefore')} <code>.dsh/settings.yaml</code>{t('config.noticeAfter')}</p>
 
         <div className={css.primarySettings}>
-          <SettingField t={t} label={t('config.scope')} hint={t('config.scopeHint')} overridden={fieldMeta('storageScope')} onReset={() => resetField('storageScope')}>
-            <select aria-label={t('config.scopeAria')} value={draft.storageScope} onChange={event => edit('storageScope', event.target.value)} disabled={!snapshot.writable}><option value="global">{t('config.global')} · ~/.mnemon</option><option value="workspace">{t('config.workspace')} · &lt;workspace&gt;/.mnemon</option><option value="custom">{t('config.custom')}</option></select>
+          <SettingField controlId="mnemon-storage-scope" t={t} label={t('config.scope')} hint={t('config.scopeHint')} overridden={fieldMeta('storageScope')} resetDisabled={controlsDisabled} onReset={() => resetField('storageScope')}>
+            <select id="mnemon-storage-scope" aria-label={t('config.scopeAria')} aria-describedby="mnemon-storage-scope-hint" value={draft.storageScope} onChange={event => edit('storageScope', event.target.value)} disabled={controlsDisabled}><option value="global">{t('config.global')} · ~/.mnemon</option><option value="workspace">{t('config.workspace')} · &lt;workspace&gt;/.mnemon</option><option value="custom">{t('config.custom')}</option></select>
           </SettingField>
-          {draft.storageScope === 'custom' && <SettingField t={t} label={t('config.customDirectory')} hint={t('config.customHint')} overridden={fieldMeta('dataDir')} onReset={() => resetField('dataDir')}>
-            <input aria-label={t('config.customAria')} value={draft.dataDir} onChange={event => edit('dataDir', event.target.value)} placeholder="~/mnemon-data" disabled={!snapshot.writable} />
+          {draft.storageScope === 'custom' && <SettingField controlId="mnemon-custom-directory" t={t} label={t('config.customDirectory')} hint={t('config.customHint')} overridden={fieldMeta('dataDir')} resetDisabled={controlsDisabled} onReset={() => resetField('dataDir')}>
+            <input id="mnemon-custom-directory" aria-label={t('config.customAria')} aria-describedby={`mnemon-custom-directory-hint${errorId === undefined ? '' : ` ${errorId}`}`} aria-invalid={error !== null} value={draft.dataDir} onChange={event => edit('dataDir', event.target.value)} placeholder="~/mnemon-data" spellCheck={false} autoComplete="off" disabled={controlsDisabled} />
           </SettingField>}
         </div>
 
-        {error !== null && <p className={css.error} role="alert">{error}</p>}
-        {failed !== null && <p className={css.error} role="alert">{t('config.saveFailed', { error: failed })}</p>}
-        {!snapshot.writable && <p className={css.readOnly}>{t('config.readOnly')}</p>}
+        <div className={css.feedback} aria-live="polite">
+          {error !== null && <p id="mnemon-settings-validation" className={css.error} role="alert">{error}</p>}
+          {failed !== null && <p className={css.error} role="alert">{t('config.saveFailed', { error: failed })}</p>}
+          {!snapshot.writable && <p className={css.readOnly}>{t('config.readOnly')}</p>}
+        </div>
 
         <div className={css.actions}>
           <button type="button" className={css.discard} disabled={dirty.size === 0 || saving} onClick={discard}>{t('config.discard')}</button>
           <button type="button" className={css.save} disabled={dirty.size === 0 || saving || error !== null || !snapshot.writable} onClick={() => void save()}>{saving ? t('config.saving') : t('config.save')}</button>
         </div>
+        </>}
       </div>
     </section>
   )
 }
 
-function SettingField(props: { t: MnemonTranslate; label: string; hint: string; overridden: boolean; onReset: () => void; children: JSX.Element }): JSX.Element {
+function SettingField(props: { controlId: string; t: MnemonTranslate; label: string; hint: string; overridden: boolean; resetDisabled: boolean; onReset: () => void; children: JSX.Element }): JSX.Element {
   return (
-    <label className={css.field}>
-      <span className={css.fieldTitle}>{props.label}{props.overridden && <em>{props.t('config.overridden')}</em>}{props.overridden && <button type="button" onClick={event => { event.preventDefault(); props.onReset() }}>{props.t('config.reset')}</button>}</span>
+    <div className={css.field}>
+      <div className={css.fieldHeading}>
+        <label className={css.fieldTitle} htmlFor={props.controlId}>{props.label}</label>
+        {props.overridden && <em className={css.overridden}>{props.t('config.overridden')}</em>}
+        {props.overridden && <button className={css.reset} type="button" disabled={props.resetDisabled} onClick={props.onReset}>{props.t('config.reset')}</button>}
+      </div>
       {props.children}
-      <small>{props.hint}</small>
-    </label>
+      <p id={`${props.controlId}-hint`} className={css.fieldHint}>{props.hint}</p>
+    </div>
   )
 }
