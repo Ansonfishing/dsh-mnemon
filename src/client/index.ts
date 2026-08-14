@@ -2,6 +2,7 @@ import type { ClientConnectionHandle, ClientContextShape } from '../contracts.ts
 import { MnemonSettingsCard } from './MnemonSettingsCard.tsx'
 import { MnemonView } from './MnemonView.tsx'
 import { MnemonToolView, MNEMON_TOOLVIEW_NAMES } from './MnemonToolviews.tsx'
+import { MnemonTurnTail, selectMnemonTurnTail } from './MnemonTurnTail.tsx'
 import { en, zh, type MnemonKey } from './locales.ts'
 import { MnemonSettingsScope } from './settings.ts'
 
@@ -49,4 +50,16 @@ export function apply(rawContext: unknown): void {
       }),
     }, MnemonToolView as never))
   }
+  // Per-turn memory activity bar under completed turns; the chain selector
+  // declines open turns and the component hides when the turn touched no memory.
+  ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
+    name: 'conversation.chat.turnTail',
+    locale: namespace,
+    select: selectMnemonTurnTail as never,
+    inject: (sessionId: unknown): { sessionId?: string; connection: ClientConnectionHandle; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+      ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
+      connection: ctx.connection,
+      t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
+    }),
+  }, MnemonTurnTail as never))
 }
