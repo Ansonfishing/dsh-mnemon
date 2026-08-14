@@ -142,6 +142,13 @@ function PageHeader(props: { title: string; description: string; meta?: string; 
   )
 }
 
+function ProgressiveFooter(props: { visible: number; total: number; pageSize: number; compact?: boolean; onMore: () => void }): JSX.Element | null {
+  const t = useT()
+  if (props.total === 0) return null
+  const remaining = Math.max(0, props.total - props.visible)
+  return <div className={props.compact === true ? css.compactListProgress : css.listProgress}><span>{t('common.showing', { visible: props.visible, total: props.total })}</span>{remaining > 0 && <button type="button" className={css.secondaryButton} onClick={props.onMore}>{t('common.showMore', { count: Math.min(props.pageSize, remaining) })}</button>}</div>
+}
+
 /** DSH-style action dialog shared by Sidebar add/write flows. */
 function SidebarModal(props: { title: string; description?: string; busy?: boolean; onClose: () => void; children: ReactNode }): JSX.Element {
   const t = useT()
@@ -967,6 +974,8 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
 
 function ExplorePage(props: { client: MnemonClient; status: StatusView | null; seed: string; writeEnabled: boolean; onForget: (insight: Insight) => Promise<void> }): JSX.Element {
   const t = useT()
+  const appearance = useMnemonViewAppearance()
+  const pageSize = appearance.surface === 'sidebar' ? 6 : Number.MAX_SAFE_INTEGER
   const [query, setQuery] = useState(props.seed)
   const [mode, setMode] = useState<'smart' | 'keyword' | 'basic'>('smart')
   const [category, setCategory] = useState<Category | ''>('')
@@ -978,12 +987,14 @@ function ExplorePage(props: { client: MnemonClient; status: StatusView | null; s
   const [relatedTo, setRelatedTo] = useState<Insight | null>(null)
   const [related, setRelated] = useState<Insight[]>([])
   const [relatedLoading, setRelatedLoading] = useState(false)
+  const [visibleResultLimit, setVisibleResultLimit] = useState(pageSize)
+  const [visibleRelatedLimit, setVisibleRelatedLimit] = useState(pageSize)
 
   useEffect(() => { if (props.seed !== '') setQuery(props.seed) }, [props.seed])
 
   const runSearch = async (withAgent: boolean) => {
     if (query.trim() === '') return
-    setSearchKind(withAgent ? 'agent' : 'direct'); setSearched(true); setError(null); setRelatedTo(null); setAgentAnswer(null)
+    setSearchKind(withAgent ? 'agent' : 'direct'); setSearched(true); setError(null); setRelatedTo(null); setAgentAnswer(null); setVisibleResultLimit(pageSize); setVisibleRelatedLimit(pageSize)
     try {
       const request = { query, mode, ...(category === '' ? {} : { category }), limit: props.status?.defaultRecallLimit ?? 10 }
       if (withAgent) {
@@ -1004,7 +1015,7 @@ function ExplorePage(props: { client: MnemonClient; status: StatusView | null; s
   const searching = searchKind !== null
 
   const showRelated = async (insight: Insight) => {
-    setRelatedTo(insight); setRelated([]); setRelatedLoading(true); setError(null)
+    setRelatedTo(insight); setRelated([]); setRelatedLoading(true); setError(null); setVisibleRelatedLimit(pageSize)
     if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(() => document.getElementById('mnemon-related-pane')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))
     try { setRelated(await props.client.related(insight.id, insight.memoryBodyId)) } catch (reason) { setError(message(reason)) } finally { setRelatedLoading(false) }
   }
@@ -1015,6 +1026,8 @@ function ExplorePage(props: { client: MnemonClient; status: StatusView | null; s
     setRelated(items => items.filter(item => insightKey(item) !== insightKey(insight)))
     if (relatedTo !== null && insightKey(relatedTo) === insightKey(insight)) setRelatedTo(null)
   }
+  const visibleResults = results.slice(0, visibleResultLimit)
+  const visibleRelated = related.slice(0, visibleRelatedLimit)
 
   return (
     <div className={css.page}>
@@ -1033,8 +1046,8 @@ function ExplorePage(props: { client: MnemonClient; status: StatusView | null; s
       {searched && !searching && results.length === 0 && error === null && <EmptyState glyph="0" title={t('search.emptyTitle')}>{t('search.emptyText')}</EmptyState>}
       {results.length > 0 && (
         <div className={relatedTo === null ? css.singleColumn : css.resultLayout}>
-          <section className={css.results}><div className={css.sectionHeading}><div><h3>{t('search.results')}</h3></div><strong>{results.length}</strong></div>{results.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}</section>
-          {relatedTo !== null && <aside id="mnemon-related-pane" className={css.relatedPane}><div className={css.sectionHeading}><div><h3>{t('search.related')}</h3></div><button type="button" onClick={() => setRelatedTo(null)} aria-label={t('search.closeRelated')}>×</button></div><p className={css.relatedSource}>{relatedTo.content}</p>{relatedLoading && <div className={css.loading}>{t('search.traversing')}</div>}{!relatedLoading && related.length === 0 && <div className={css.muted}>{t('search.noRelated')}</div>}{related.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}</aside>}
+          <section className={css.results}><div className={css.sectionHeading}><div><h3>{t('search.results')}</h3></div><strong>{results.length}</strong></div>{visibleResults.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}{appearance.surface === 'sidebar' && <ProgressiveFooter visible={visibleResults.length} total={results.length} pageSize={pageSize} onMore={() => setVisibleResultLimit(value => value + pageSize)} />}</section>
+          {relatedTo !== null && <aside id="mnemon-related-pane" className={css.relatedPane}><div className={css.sectionHeading}><div><h3>{t('search.related')}</h3></div><button type="button" onClick={() => setRelatedTo(null)} aria-label={t('search.closeRelated')}>×</button></div><p className={css.relatedSource}>{relatedTo.content}</p>{relatedLoading && <div className={css.loading}>{t('search.traversing')}</div>}{!relatedLoading && related.length === 0 && <div className={css.muted}>{t('search.noRelated')}</div>}{visibleRelated.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}{appearance.surface === 'sidebar' && !relatedLoading && <ProgressiveFooter visible={visibleRelated.length} total={related.length} pageSize={pageSize} onMore={() => setVisibleRelatedLimit(value => value + pageSize)} />}</aside>}
         </div>
       )}
     </div>
@@ -1043,18 +1056,26 @@ function ExplorePage(props: { client: MnemonClient; status: StatusView | null; s
 
 function EntitiesPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; onForget: (insight: Insight) => Promise<void>; onExplore: (query: string) => void }): JSX.Element {
   const t = useT()
+  const appearance = useMnemonViewAppearance()
+  const entityPageSize = appearance.surface === 'sidebar' ? 10 : Number.MAX_SAFE_INTEGER
+  const insightPageSize = appearance.surface === 'sidebar' ? 6 : Number.MAX_SAFE_INTEGER
   const [view, setView] = useState<EntityView>({ items: [], insights: [] })
   const [entity, setEntity] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [visibleEntityLimit, setVisibleEntityLimit] = useState(entityPageSize)
+  const [visibleInsightLimit, setVisibleInsightLimit] = useState(insightPageSize)
 
   const load = useCallback(async (selected?: string) => {
-    setLoading(true); setError(null)
+    setLoading(true); setError(null); setVisibleInsightLimit(insightPageSize)
+    if (selected === undefined) setVisibleEntityLimit(entityPageSize)
     try { setView(await props.client.entities(selected, 20)) } catch (reason) { setError(message(reason)) } finally { setLoading(false) }
-  }, [props.client])
+  }, [entityPageSize, insightPageSize, props.client])
 
   useEffect(() => { void load() }, [load, props.revision])
   const submit = (event: FormEvent) => { event.preventDefault(); if (entity.trim() !== '') void load(entity) }
+  const visibleEntities = view.items.slice(0, visibleEntityLimit)
+  const visibleInsights = view.insights.slice(0, visibleInsightLimit)
 
   return (
     <div className={css.page}>
@@ -1063,14 +1084,15 @@ function EntitiesPage(props: { client: MnemonClient; revision: number; writeEnab
         <aside className={css.entityRail}>
           <form className={css.entitySearch} onSubmit={submit}><input aria-label={t('entities.nameAria')} value={entity} onChange={event => setEntity(event.target.value)} placeholder={t('entities.placeholder')} /><button type="submit" className={css.primaryButton} disabled={loading || entity.trim() === ''}>{t('entities.action')}</button></form>
           <div className={css.entityHeading}><span>{t('entities.top')}</span><small>{t('entities.frequency')}</small></div>
-          <div className={css.entityList}>{view.items.map(item => <button key={item.entity} type="button" aria-pressed={view.selected === item.entity} onClick={() => { setEntity(item.entity); void load(item.entity) }}><span>{item.entity}</span><strong>{item.count}</strong></button>)}</div>
+          <div className={css.entityList}>{visibleEntities.map(item => <button key={item.entity} type="button" aria-pressed={view.selected === item.entity} onClick={() => { setEntity(item.entity); void load(item.entity) }}><span>{item.entity}</span><strong>{item.count}</strong></button>)}</div>
+          {appearance.surface === 'sidebar' && <ProgressiveFooter compact visible={visibleEntities.length} total={view.items.length} pageSize={entityPageSize} onMore={() => setVisibleEntityLimit(value => value + entityPageSize)} />}
           {!loading && view.items.length === 0 && <p className={css.muted}>{t('entities.emptyRail')}</p>}
         </aside>
         <section className={css.entityResults}>
           {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
           {loading && <div className={css.loadingPanel}>{t('entities.loading')}</div>}
           {!loading && view.selected === undefined && <EmptyState glyph="◎" title={t('entities.selectTitle')}>{t('entities.selectText')}</EmptyState>}
-          {!loading && view.selected !== undefined && <><div className={css.sectionHeading}><div><h3>{view.selected}</h3></div><strong>{view.insights.length}</strong></div>{view.insights.length === 0 ? <EmptyState glyph="0" title={t('entities.emptyTitle')}>{t('entities.emptyText')}</EmptyState> : view.insights.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={props.onForget} onRelated={() => props.onExplore(insight.content)} />)}</>}
+          {!loading && view.selected !== undefined && <><div className={css.sectionHeading}><div><h3>{view.selected}</h3></div><strong>{view.insights.length}</strong></div>{view.insights.length === 0 ? <EmptyState glyph="0" title={t('entities.emptyTitle')}>{t('entities.emptyText')}</EmptyState> : <>{visibleInsights.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={props.onForget} onRelated={() => props.onExplore(insight.content)} />)}{appearance.surface === 'sidebar' && <ProgressiveFooter visible={visibleInsights.length} total={view.insights.length} pageSize={insightPageSize} onMore={() => setVisibleInsightLimit(value => value + insightPageSize)} />}</>}</>}
         </section>
       </div>
     </div>
@@ -1080,6 +1102,7 @@ function EntitiesPage(props: { client: MnemonClient; revision: number; writeEnab
 function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; onMutate: () => void }): JSX.Element {
   const t = useT()
   const appearance = useMnemonViewAppearance()
+  const pageSize = 10
   const [snapshot, setSnapshot] = useState<RuntimeMemorySnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1093,12 +1116,16 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
   const [editImportance, setEditImportance] = useState<RuntimeMemoryImportance>('normal')
   const [removing, setRemoving] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const [filterTarget, setFilterTarget] = useState<'all' | RuntimeMemoryTarget>('all')
+  const [filterQuery, setFilterQuery] = useState('')
+  const [visibleLimit, setVisibleLimit] = useState(pageSize)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try { setSnapshot(await props.client.runtimeMemory()) } catch (reason) { setError(message(reason)) } finally { setLoading(false) }
   }, [props.client])
   useEffect(() => { void load() }, [load, props.revision])
+  useEffect(() => { setVisibleLimit(pageSize) }, [filterQuery, filterTarget])
 
   const entryKey = (entry: RuntimeMemoryEntry) => `${entry.target}:${entry.created_at}:${entry.content}`
   const mutate = async (request: Parameters<MnemonClient['mutateRuntimeMemory']>[0]) => {
@@ -1147,6 +1174,22 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
     ? appearanceClass(css.dangerButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemDangerAction))
     : css.dangerButton
 
+  const runtimeEntry = (entry: RuntimeMemoryEntry, showTarget = false) => {
+    const key = entryKey(entry)
+    const isEditing = editing === key
+    const isInlineEditing = appearance.surface === 'buildin' && isEditing
+    const isRemoving = removing === key
+    const isInlineRemoving = appearance.surface === 'buildin' && isRemoving
+    return <article key={key} className={css.runtimeEntry} data-importance={entry.importance} data-target={entry.target}>
+      <div className={css.runtimeEntryMeta}>{showTarget ? <div className={css.runtimeEntryBadges}><span className={css.runtimeEntryTarget}>{entry.target === 'user' ? 'USER.md' : 'MEMORY.md'}</span><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span></div> : <span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span>}<time dateTime={entry.updated_at}>{new Date(entry.updated_at).toLocaleString()}</time></div>
+      {isInlineEditing ? <textarea aria-label={t('runtime.editContent')} value={editContent} onChange={event => setEditContent(event.target.value)} rows={4} /> : <p>{entry.content}</p>}
+      {isInlineEditing && <select aria-label={t('runtime.importance')} value={editImportance} onChange={event => setEditImportance(event.target.value as RuntimeMemoryImportance)}><option value="critical">{t('runtime.importance.critical')}</option><option value="normal">{t('runtime.importance.normal')}</option><option value="low">{t('runtime.importance.low')}</option></select>}
+      <footer>
+        {isInlineRemoving ? <><span>{t('runtime.removeConfirm')}</span><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void remove(entry)}>{t('runtime.removeAction')}</button><button type="button" className={css.ghostButton} onClick={() => setRemoving(null)}>{t('common.cancel')}</button></> : isInlineEditing ? <><button type="button" className={css.primaryButton} disabled={saving || editContent.trim() === ''} onClick={() => void replace(entry)}>{t('runtime.saveEdit')}</button><button type="button" className={css.ghostButton} onClick={() => setEditing(null)}>{t('common.cancel')}</button></> : props.writeEnabled ? <><button type="button" className={runtimeEditActionClass} disabled={saving && isRemoving} onClick={() => beginEdit(entry)}>{t('runtime.editAction')}</button><button type="button" className={runtimeRemoveActionClass} disabled={saving && isRemoving} onClick={() => { setRemoving(key); setEditing(null) }}>{t('runtime.removeAction')}</button></> : null}
+      </footer>
+    </article>
+  }
+
   const targetPanel = (value: RuntimeMemoryTarget) => {
     const view = snapshot?.targets[value]
     const entries = snapshot?.entries.filter(entry => entry.target === value) ?? []
@@ -1160,26 +1203,21 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
         <div className={css.capacityLine}><div><i style={{ width: `${percentage}%` }} /></div><span>{view === undefined ? '—' : `${humanBytes(view.used)} / ${humanBytes(view.limit)}`}</span></div>
         <p className={css.runtimeTargetDescription}>{t(`runtime.target.${value}.description` as MnemonKey)}</p>
         <div className={css.runtimeEntries}>
-          {entries.map(entry => {
-            const key = entryKey(entry)
-            const isEditing = editing === key
-            const isInlineEditing = appearance.surface === 'buildin' && isEditing
-            const isRemoving = removing === key
-            const isInlineRemoving = appearance.surface === 'buildin' && isRemoving
-            return <article key={key} className={css.runtimeEntry} data-importance={entry.importance}>
-              <div className={css.runtimeEntryMeta}><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span><time dateTime={entry.updated_at}>{new Date(entry.updated_at).toLocaleString()}</time></div>
-              {isInlineEditing ? <textarea aria-label={t('runtime.editContent')} value={editContent} onChange={event => setEditContent(event.target.value)} rows={4} /> : <p>{entry.content}</p>}
-              {isInlineEditing && <select aria-label={t('runtime.importance')} value={editImportance} onChange={event => setEditImportance(event.target.value as RuntimeMemoryImportance)}><option value="critical">{t('runtime.importance.critical')}</option><option value="normal">{t('runtime.importance.normal')}</option><option value="low">{t('runtime.importance.low')}</option></select>}
-              <footer>
-                {isInlineRemoving ? <><span>{t('runtime.removeConfirm')}</span><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void remove(entry)}>{t('runtime.removeAction')}</button><button type="button" className={css.ghostButton} onClick={() => setRemoving(null)}>{t('common.cancel')}</button></> : isInlineEditing ? <><button type="button" className={css.primaryButton} disabled={saving || editContent.trim() === ''} onClick={() => void replace(entry)}>{t('runtime.saveEdit')}</button><button type="button" className={css.ghostButton} onClick={() => setEditing(null)}>{t('common.cancel')}</button></> : props.writeEnabled ? <><button type="button" className={runtimeEditActionClass} disabled={saving && isRemoving} onClick={() => beginEdit(entry)}>{t('runtime.editAction')}</button><button type="button" className={runtimeRemoveActionClass} disabled={saving && isRemoving} onClick={() => { setRemoving(key); setEditing(null) }}>{t('runtime.removeAction')}</button></> : null}
-              </footer>
-            </article>
-          })}
+          {entries.map(entry => runtimeEntry(entry))}
           {!loading && entries.length === 0 && <div className={css.runtimeEmpty}><span>○</span><p>{t('runtime.empty')}</p></div>}
         </div>
       </section>
     )
   }
+
+  const targetSummary = (value: RuntimeMemoryTarget) => {
+    const view = snapshot?.targets[value]
+    const percentage = view === undefined || view.limit === 0 ? 0 : Math.min(100, Math.round(view.used / view.limit * 100))
+    return <section className={css.runtimeSummaryCard} aria-label={t(`runtime.target.${value}` as MnemonKey)}><header className={css.runtimeTargetHeader}><div><span>{value === 'user' ? 'USER.md' : 'MEMORY.md'}</span><h3>{t(`runtime.target.${value}` as MnemonKey)}</h3></div><strong>{view?.entryCount ?? 0}</strong></header><div className={css.capacityLine}><div><i style={{ width: `${percentage}%` }} /></div><span>{view === undefined ? '—' : `${humanBytes(view.used)} / ${humanBytes(view.limit)}`}</span></div><p className={css.runtimeTargetDescription}>{t(`runtime.target.${value}.description` as MnemonKey)}</p></section>
+  }
+  const normalizedQuery = filterQuery.trim().toLocaleLowerCase()
+  const filteredEntries = (snapshot?.entries ?? []).filter(entry => (filterTarget === 'all' || entry.target === filterTarget) && (normalizedQuery === '' || entry.content.toLocaleLowerCase().includes(normalizedQuery)))
+  const visibleEntries = filteredEntries.slice(0, visibleLimit)
 
   const closeComposer = () => {
     setContent('')
@@ -1205,7 +1243,17 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
       {notice !== null && <div className={css.runtimeNotice} role="status">{notice}</div>}
       {props.writeEnabled && appearance.surface === 'buildin' && composer}
       {!props.writeEnabled && <div className={css.runtimeReadOnly}>{t('runtime.readOnly')}</div>}
-      <div className={css.runtimeGrid}>{targetPanel('user')}{targetPanel('memory')}</div>
+      {appearance.surface === 'buildin' ? <div className={css.runtimeGrid}>{targetPanel('user')}{targetPanel('memory')}</div> : <>
+        <div className={css.runtimeSummaryGrid}>{targetSummary('user')}{targetSummary('memory')}</div>
+        <section className={css.runtimeBrowser} aria-label={t('runtime.entriesAria')}>
+          <div className={css.runtimeBrowserToolbar}>
+            <div className={css.runtimeScopeFilter} role="group" aria-label={t('runtime.scopeAria')}><button type="button" data-active={filterTarget === 'all' || undefined} onClick={() => setFilterTarget('all')}>{t('runtime.scopeAll')} <b>{snapshot?.entries.length ?? 0}</b></button><button type="button" data-active={filterTarget === 'user' || undefined} onClick={() => setFilterTarget('user')}>{t('runtime.target.user')} <b>{snapshot?.targets.user.entryCount ?? 0}</b></button><button type="button" data-active={filterTarget === 'memory' || undefined} onClick={() => setFilterTarget('memory')}>{t('runtime.target.memory')} <b>{snapshot?.targets.memory.entryCount ?? 0}</b></button></div>
+            <div className={css.runtimeFilterQuery}><span aria-hidden="true">⌕</span><input aria-label={t('runtime.filterAria')} value={filterQuery} onChange={event => setFilterQuery(event.target.value)} placeholder={t('runtime.filterPlaceholder')} /></div>
+          </div>
+          <div className={css.runtimeUnifiedList}>{visibleEntries.map(entry => runtimeEntry(entry, true))}{!loading && filteredEntries.length === 0 && <div className={css.runtimeEmpty}><span>○</span><p>{t('runtime.noMatch')}</p></div>}</div>
+          {!loading && <ProgressiveFooter visible={visibleEntries.length} total={filteredEntries.length} pageSize={pageSize} onMore={() => setVisibleLimit(value => value + pageSize)} />}
+        </section>
+      </>}
       <p className={css.runtimeFootnote}>{t('runtime.footnote')}</p>
       {appearance.surface === 'sidebar' && adding && <SidebarModal title={t('runtime.addTitle')} description={t('runtime.addDescription')} busy={saving} onClose={closeComposer}>{composer}</SidebarModal>}
       {appearance.surface === 'sidebar' && editingEntry !== undefined && <SidebarModal title={t('runtime.editContent')} description={t(`runtime.target.${editingEntry.target}` as MnemonKey)} busy={saving} onClose={() => setEditing(null)}>{editForm}</SidebarModal>}
@@ -1284,24 +1332,24 @@ function RememberPage(props: { client: MnemonClient; sessionId: string | undefin
 }
 
 function ListPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; onForget: (insight: Insight) => Promise<void>; onClone: (insight: Insight) => void; onExplore: (query: string) => void }): JSX.Element {
-  const PAGE_SIZE = 48
   const t = useT()
+  const appearance = useMnemonViewAppearance()
+  const pageSize = appearance.surface === 'sidebar' ? 12 : 48
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<Category | ''>('')
   const [view, setView] = useState<MemoryListView | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE)
+  const [visibleLimit, setVisibleLimit] = useState(pageSize)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try { setView(await props.client.list({ ...(query.trim() === '' ? {} : { query }), ...(category === '' ? {} : { category }), limit: 1000 })) } catch (reason) { setError(message(reason)) } finally { setLoading(false) }
   }, [category, props.client, query])
-  useEffect(() => { void load() }, [props.revision])
-  const submit = (event: FormEvent) => { event.preventDefault(); setVisibleLimit(PAGE_SIZE); void load() }
+  useEffect(() => { setVisibleLimit(pageSize); void load() }, [pageSize, props.revision])
+  const submit = (event: FormEvent) => { event.preventDefault(); setVisibleLimit(pageSize); void load() }
   const forget = async (insight: Insight) => { await props.onForget(insight); setView(current => current === null ? current : { ...current, total: Math.max(0, current.total - 1), items: current.items.filter(item => insightKey(item) !== insightKey(insight)) }) }
   const visibleItems = view?.items.slice(0, visibleLimit) ?? []
-  const remaining = Math.max(0, (view?.items.length ?? 0) - visibleItems.length)
 
   return (
     <div className={css.page}>
@@ -1311,7 +1359,7 @@ function ListPage(props: { client: MnemonClient; revision: number; writeEnabled:
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
       {!loading && view?.items.length === 0 && <EmptyState glyph="≡" title={t('content.emptyTitle')}>{t('content.emptyText')}</EmptyState>}
       <div className={css.memoryList}>{visibleItems.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onClone={props.onClone} onRelated={() => props.onExplore(insight.content)} />)}</div>
-      {view !== null && view.items.length > 0 && <div className={css.listProgress}><span>{t('content.showing', { visible: visibleItems.length, total: view.items.length })}</span>{remaining > 0 && <button type="button" className={css.secondaryButton} onClick={() => setVisibleLimit(value => value + PAGE_SIZE)}>{t('content.showMore', { count: Math.min(PAGE_SIZE, remaining) })}</button>}</div>}
+      {view !== null && <ProgressiveFooter visible={visibleItems.length} total={view.items.length} pageSize={pageSize} onMore={() => setVisibleLimit(value => value + pageSize)} />}
     </div>
   )
 }
@@ -1321,8 +1369,11 @@ type DocumentListItem = DocumentRecord & { healthy?: boolean; excerpt: string }
 function DocumentsPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; sessionId?: string; onMutate: () => void }): JSX.Element {
   const t = useT()
   const appearance = useMnemonViewAppearance()
+  const pageSize = appearance.surface === 'sidebar' ? 8 : Number.MAX_SAFE_INTEGER
+  const readerRef = useRef<HTMLElement | null>(null)
   const [snapshot, setSnapshot] = useState<DocumentSnapshot | null>(null)
   const [items, setItems] = useState<DocumentListItem[]>([])
+  const [visibleLimit, setVisibleLimit] = useState(pageSize)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selected, setSelected] = useState<DocumentView | null>(null)
   const [status, setStatus] = useState<'active' | 'archived'>('active')
@@ -1340,7 +1391,7 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
   const [sources, setSources] = useState('')
 
   const display = useCallback(async (nextQuery: string, nextStatus: 'active' | 'archived') => {
-    setLoading(true); setError(null)
+    setLoading(true); setError(null); setVisibleLimit(pageSize)
     try {
       const current = await props.client.documents()
       const records = nextQuery.trim() === ''
@@ -1355,7 +1406,7 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
     } finally {
       setLoading(false)
     }
-  }, [props.client])
+  }, [pageSize, props.client])
 
   useEffect(() => { void display(query, status) }, [display, props.revision, status])
   useEffect(() => {
@@ -1365,6 +1416,14 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
     void props.client.document(selectedId).then(value => { if (active) setSelected(value) }).catch(reason => { if (active) setError(message(reason)) })
     return () => { active = false }
   }, [props.client, selectedId, props.revision])
+  useLayoutEffect(() => {
+    if (appearance.surface === 'sidebar' && readerRef.current !== null) readerRef.current.scrollTop = 0
+  }, [appearance.surface, selectedId])
+  useEffect(() => {
+    if (appearance.surface !== 'sidebar' || selectedId === null) return
+    const index = items.findIndex(item => item.id === selectedId)
+    if (index >= visibleLimit) setVisibleLimit(Math.ceil((index + 1) / pageSize) * pageSize)
+  }, [appearance.surface, items, pageSize, selectedId, visibleLimit])
 
   const resetComposer = () => { setTitle(''); setDescription(''); setContent(''); setSources(''); setComposing(false) }
   const startComposer = () => { setTitle(''); setDescription(''); setContent(''); setSources(''); setEditing(false); setComposing(true) }
@@ -1427,6 +1486,7 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
   const documentArchiveActionClass = appearance.surface === 'sidebar'
     ? appearanceClass(css.dangerButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemDangerAction))
     : css.dangerButton
+  const visibleItems = items.slice(0, visibleLimit)
 
   return (
     <div className={css.page}>
@@ -1451,12 +1511,13 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
       <div className={css.documentWorkspace}>
         <aside className={css.documentList} aria-label={t('documents.list')}>
           <header><span>{status === 'active' ? t('documents.activeList') : t('documents.archiveList')}</span><code>{items.length}</code></header>
-          {items.map(document => <button type="button" key={document.id} data-selected={selectedId === document.id || undefined} onClick={() => { setSelected(null); setSelectedId(document.id); setEditing(false); setConfirmArchive(false) }}><div><strong>{document.title}</strong><time dateTime={document.updatedAt}>{new Date(document.updatedAt).toLocaleDateString()}</time></div><p>{document.description || document.excerpt || t('documents.noDescription')}</p><footer><span>{humanBytes(document.sizeBytes)}</span><code>{document.id.slice(0, 8)}</code>{document.healthy === false && <em>{t('documents.missing')}</em>}</footer></button>)}
+          {visibleItems.map(document => <button type="button" key={document.id} data-selected={selectedId === document.id || undefined} onClick={() => { setSelected(null); setSelectedId(document.id); setEditing(false); setConfirmArchive(false) }}><div><strong>{document.title}</strong><time dateTime={document.updatedAt}>{new Date(document.updatedAt).toLocaleDateString()}</time></div><p>{document.description || document.excerpt || t('documents.noDescription')}</p><footer><span>{humanBytes(document.sizeBytes)}</span><code>{document.id.slice(0, 8)}</code>{document.healthy === false && <em>{t('documents.missing')}</em>}</footer></button>)}
+          {appearance.surface === 'sidebar' && !loading && <ProgressiveFooter compact visible={visibleItems.length} total={items.length} pageSize={pageSize} onMore={() => setVisibleLimit(value => value + pageSize)} />}
           {!loading && items.length === 0 && <div className={css.documentListEmpty}><span>▤</span><strong>{status === 'active' ? t('documents.emptyActive') : t('documents.emptyArchived')}</strong><p>{status === 'active' ? t('documents.emptyActiveText') : t('documents.emptyArchivedText')}</p></div>}
           {loading && <div className={css.loading}>{t('common.loading')}</div>}
         </aside>
 
-        <section className={css.documentReader} aria-label={t('documents.reader')}>
+        <section ref={readerRef} className={css.documentReader} aria-label={t('documents.reader')} data-scroll-region={appearance.surface === 'sidebar' ? '' : undefined}>
           {selected === null ? <EmptyState glyph="▤" title={t('documents.selectTitle')}>{t('documents.selectText')}</EmptyState> : editing && appearance.surface === 'buildin' ? editComposer : <article className={css.documentDetail}>
             <header><div><span>{selected.status === 'active' ? t('documents.active') : t('documents.coldArchive')}</span><h3>{selected.title}</h3><p>{selected.description || t('documents.noDescription')}</p></div><div>{props.writeEnabled && selected.status === 'active' && <button type="button" className={documentEditActionClass} onClick={beginEdit}>{t('documents.edit')}</button>}</div></header>
             <dl><div><dt>{t('documents.path')}</dt><dd><code>{selected.relativePath}</code></dd></div><div><dt>{t('documents.revision')}</dt><dd>{selected.revision}</dd></div><div><dt>{t('documents.hash')}</dt><dd><code>{selected.contentHash.slice(0, 16)}</code></dd></div><div><dt>{t('documents.size')}</dt><dd>{humanBytes(selected.sizeBytes)}</dd></div></dl>
@@ -1645,16 +1706,30 @@ function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelectio
   const activeBodies = memoryBodies.filter(body => body.active).length
   const workspaceContext = status?.workspaceContext
   const showWorkspacePicker = workspaceContext?.mode === 'workspace' && workspaceSelection !== undefined && workspaceSelection.options.length > 0
+  const storageMode = workspaceContext?.mode ?? status?.storage?.activeKind
+  const storageModeText = storageMode === undefined ? '—' : storageScopeLabel(t, storageMode)
+  const workspaceDiverged = workspaceContext?.mode === 'workspace' && !workspaceContext.aligned
+  const canAlignWorkspace = workspaceDiverged && workspaceSelection?.effectiveWorkspaceId !== undefined
+  const workspaceDifference = workspaceContext === undefined
+    ? ''
+    : `${t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}; ${t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}`
+  const workspacePicker = showWorkspacePicker && <label className={appearanceClass(css.workspacePicker, appearance.classes.workspacePicker)}><span>{t('workspace.viewing')}</span><select aria-label={t('workspace.selectorAria')} value={workspaceSelection.selectedWorkspaceId ?? ''} onChange={event => workspaceSelection.onSelect(event.target.value)}>{workspaceSelection.options.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.title}</option>)}</select></label>
 
   return (
     <main className={appearanceClass(css.shell, appearance.classes.shell)} data-mnemon-surface={appearance.surface}>
       <header className={appearanceClass(css.masthead, appearance.classes.masthead)}>
-        <div className={appearanceClass(css.brand, appearance.classes.brand)}>{appearance.showLogo && <MnemonLogo className={css.brandLogo} />}<h1>{appearance.title}</h1></div>
+        <div className={appearanceClass(css.brand, appearance.classes.brand)}>
+          {appearance.showLogo && <MnemonLogo className={css.brandLogo} />}
+          <h1>{appearance.title}</h1>
+          {appearance.surface === 'sidebar' && <span className={css.storageMode} aria-label={t('workspace.storageModeAria', { mode: storageModeText })}><span>{t('workspace.storageMode')}</span><strong>{storageModeText}</strong></span>}
+          {appearance.surface === 'sidebar' && workspacePicker}
+          {appearance.surface === 'sidebar' && canAlignWorkspace && <div className={appearanceClass(css.workspaceMismatch, appearance.classes.workspaceMismatch)} role="status" aria-label={`${t('workspace.mismatchTitle')}. ${workspaceDifference}`} title={workspaceDifference}><span>{t('workspace.mismatchShort')}</span><button type="button" onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button></div>}
+        </div>
         {appearance.showTelemetry && <section className={css.telemetry} aria-label={t('telemetry.aria')}><div className={css.telemetryMetric}><span>{t('telemetry.memories')}</span><strong>{stats?.totalInsights ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.graph')}</span><strong>{stats?.edgeCount ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.entities')}</span><strong>{stats?.topEntities.length ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.spaces')}</span><strong>{status === null || !catalogKnown ? '—' : activeBodies}</strong></div></section>}
-        <div className={appearanceClass(css.headerActions, appearance.classes.headerActions)}>{showWorkspacePicker && <label className={appearanceClass(css.workspacePicker, appearance.classes.workspacePicker)}><span>{t('workspace.viewing')}</span><select aria-label={t('workspace.selectorAria')} value={workspaceSelection.selectedWorkspaceId ?? ''} onChange={event => workspaceSelection.onSelect(event.target.value)}>{workspaceSelection.options.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.title}</option>)}</select></label>}<div className={appearanceClass(css.statusCluster, appearance.classes.statusCluster)}><span className={`${css.statusDot} ${statusLoading && status === null ? css.checking : status?.healthy === true ? css.online : css.offline}`} /><span>{statusLoading ? t('header.checking') : status?.healthy === true ? catalogKnown ? t('header.connected', { count: activeBodies }) : t('header.directoryPending') : t('header.unavailable')}</span><button type="button" className={css.iconButton} disabled={statusLoading} onClick={refreshAll} aria-label={t('common.refresh')}>↻</button></div></div>
+        <div className={appearanceClass(css.headerActions, appearance.classes.headerActions)}>{appearance.surface === 'buildin' && workspacePicker}<div className={appearanceClass(css.statusCluster, appearance.classes.statusCluster)}><span className={`${css.statusDot} ${statusLoading && status === null ? css.checking : status?.healthy === true ? css.online : css.offline}`} /><span>{statusLoading ? t('header.checking') : status?.healthy === true ? t('header.connected') : t('header.unavailable')}</span><button type="button" className={css.iconButton} disabled={statusLoading} onClick={refreshAll} aria-label={t('common.refresh')}>↻</button></div></div>
       </header>
       {(statusError !== null || status?.healthy === false) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
-      {workspaceContext?.mode === 'workspace' && !workspaceContext.aligned && <div className={appearanceClass(css.workspaceMismatch, appearance.classes.workspaceMismatch)} role="status"><div><strong>{t('workspace.mismatchTitle')}</strong><span>{t('workspace.mismatchDescription')}</span><div><code>{t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}</code><code>{t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}</code></div></div>{workspaceSelection?.effectiveWorkspaceId !== undefined && <button type="button" className={css.secondaryButton} onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button>}</div>}
+      {appearance.surface === 'buildin' && workspaceDiverged && <div className={css.workspaceMismatch} role="status"><div><strong>{t('workspace.mismatchTitle')}</strong><span>{t('workspace.mismatchDescription')}</span><div><code>{t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}</code><code>{t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}</code></div></div>{canAlignWorkspace && <button type="button" className={css.secondaryButton} onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button>}</div>}
       <div className={css.workspace}>
         <WorkspaceNavigation page={page} onSelect={selectPrimaryPage} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} writeEnabled={writeEnabled} />
         <MemoryNavigation page={page} writeEnabled={writeEnabled} onSelect={selectPage} onRemember={() => openRemember()} />

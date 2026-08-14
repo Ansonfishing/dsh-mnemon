@@ -50,6 +50,9 @@
 .brand { display: flex; min-width: 0; align-items: center; gap: 11px; }
 .brandLogo { width: 32px; height: 32px; flex: 0 0 auto; overflow: hidden; border-radius: 8px; box-shadow: 0 0 0 1px var(--mn-line); }
 .brand h1 { margin: 1px 0 0; font-size: 16px; line-height: 1.15; letter-spacing: -.02em; }
+.storageMode { display: flex; min-height: 32px; flex: 0 0 auto; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--mn-line-strong); border-radius: 8px; color: var(--mn-muted); background: var(--mn-layer-1); white-space: nowrap; }
+.storageMode > span { font-size: 10px; }
+.storageMode > strong { color: var(--mn-text); font-size: 11px; font-weight: 600; }
 .cardKicker, .sectionHeading > div > span, .entityHeading > span, .inspectorHeading > span {
   color: var(--mn-faint); font: 650 9px/1.2 var(--mn-code); letter-spacing: .12em; text-transform: uppercase;
 }
@@ -331,6 +334,21 @@
 .runtimeNotice, .runtimeReadOnly { margin-bottom: 13px; padding: 9px 12px; border: 1px solid color-mix(in srgb, var(--mn-success) 28%, var(--mn-line)); border-radius: 9px; color: var(--mn-success); background: color-mix(in srgb, var(--mn-success) 6%, var(--mn-layer-1)); font-size: 11px; }
 .runtimeReadOnly { color: var(--mn-muted); border-color: var(--mn-line); background: var(--mn-layer-1); }
 .runtimeGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.runtimeSummaryGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+.runtimeSummaryCard { min-width: 0; border: 1px solid var(--mn-line); border-radius: 11px; background: var(--mn-layer-1); }
+.runtimeBrowser { overflow: hidden; border: 1px solid var(--mn-line); border-radius: 11px; background: var(--mn-layer-1); }
+.runtimeBrowserToolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border-bottom: 1px solid var(--mn-line); }
+.runtimeScopeFilter { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+.runtimeScopeFilter button { min-height: 32px; border: 1px solid transparent; border-radius: 7px; padding: 0 10px; color: var(--mn-muted); background: transparent; cursor: pointer; }
+.runtimeScopeFilter button:hover { background: var(--mn-hover); }
+.runtimeScopeFilter button[data-active] { border-color: var(--mn-line); color: var(--mn-text); background: var(--mn-layer-2); }
+.runtimeScopeFilter b { margin-left: 4px; color: var(--mn-faint); font: 600 10px var(--mn-code); }
+.runtimeFilterQuery { display: flex; width: min(320px, 42%); min-width: 210px; align-items: center; gap: 7px; border: 1px solid var(--mn-line); border-radius: 8px; padding: 0 9px; background: var(--mn-input); }
+.runtimeFilterQuery > span { color: var(--mn-faint); }
+.runtimeFilterQuery input { width: 100%; min-width: 0; height: 32px; border: 0; outline: 0; color: var(--mn-text); background: transparent; }
+.runtimeUnifiedList { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 10px; background: color-mix(in srgb, var(--mn-layer-2) 30%, var(--mn-layer-1)); }
+.runtimeEntryBadges { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.runtimeEntryMeta .runtimeEntryTarget { color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 8%, var(--mn-layer-2)); font-family: var(--mn-code); }
 .runtimeTarget { min-width: 0; overflow: hidden; }
 .runtimeTargetHeader { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 15px 9px; }
 .runtimeTargetHeader > div { display: grid; gap: 1px; }
@@ -497,6 +515,8 @@
 .memoryList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; align-items: start; }
 .memoryList .insightCard { height: 100%; margin: 0; }
 .listProgress { display: flex; min-height: 58px; align-items: center; justify-content: center; gap: 13px; margin-top: 12px; padding: 10px; border-top: 1px solid var(--mn-line); color: var(--mn-faint); font-size: 10px; }
+.compactListProgress { display: grid; justify-items: stretch; gap: 7px; margin-top: 8px; padding: 10px 2px 2px; border-top: 1px solid var(--mn-line); color: var(--mn-faint); font-size: 10px; text-align: center; }
+.compactListProgress button { width: 100%; }
 
 .healthStrip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 13px; overflow: hidden; border: 1px solid var(--mn-line); border-radius: 12px; background: var(--mn-layer-1); }
 .healthStrip article { display: flex; min-width: 0; min-height: 78px; box-sizing: border-box; align-items: flex-start; gap: 10px; padding: 14px 15px; border-right: 1px solid var(--mn-line); }
@@ -550,6 +570,7 @@
   .memoryList { grid-template-columns: 1fr; }
   .storageAreaGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .runtimeGrid { grid-template-columns: 1fr; }
+  .runtimeSummaryGrid { grid-template-columns: 1fr; }
   .documentWorkspace { grid-template-columns: minmax(220px, 270px) minmax(0, 1fr); }
   .documentDetail > dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -578,6 +599,8 @@
   .entityLayout, .writebackLayout { grid-template-columns: 1fr; }
   .runtimeComposerHeading, .runtimeComposerActions { align-items: stretch; flex-direction: column; }
   .runtimeComposerActions select, .runtimeComposerActions button { width: 100%; }
+  .runtimeBrowserToolbar { align-items: stretch; flex-direction: column; }
+  .runtimeFilterQuery { width: 100%; min-width: 0; }
   .documentSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .documentCapacity { grid-column: 1 / -1; }
   .documentToolbar { align-items: stretch; flex-direction: column; }

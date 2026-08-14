@@ -17,8 +17,9 @@
   background: var(--dsw-alias-bg-base);
 }
 
-.shell .brand { flex: 1 1 auto; gap: 0; }
+.shell .brand { flex: 1 1 auto; gap: 8px; overflow: hidden; }
 .shell .brand h1 {
+  flex: 0 0 auto;
   margin: 0;
   font-size: 16px;
   font-weight: 700;
@@ -26,13 +27,33 @@
   letter-spacing: 0;
 }
 
+.shell [class*='storageMode'] {
+  min-height: 32px;
+  gap: 5px;
+  padding: 0 9px;
+  border-color: var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-1);
+}
+.shell [class*='storageMode'] > span { color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+.shell [class*='storageMode'] > strong { color: var(--dsw-alias-label-primary); font-size: 12px; }
+
 .shell .headerActions { flex: 0 1 auto; gap: 6px; }
-.shell .workspacePicker > span { display: none; }
-.shell .workspacePicker select {
-  width: min(210px, 24vw);
-  height: 34px;
-  border-color: var(--dsw-alias-border-l2);
+.shell .workspacePicker {
+  min-height: 32px;
+  flex: 0 1 auto;
+  gap: 7px;
+  padding-left: 9px;
+  border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+.shell .workspacePicker > span { display: block; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+.shell .workspacePicker select {
+  width: min(190px, 20vw);
+  height: 30px;
+  border: 0;
+  border-left: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 0 7px 7px 0;
   padding: 0 28px 0 10px;
   background: var(--dsw-specific-input-major);
   font-size: 13px;
@@ -49,9 +70,29 @@
 }
 
 .shell .workspaceMismatch {
-  margin: 8px 16px 0;
+  min-height: 32px;
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 0 3px 0 9px;
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 34%, var(--dsw-alias-border-l1));
   border-radius: 8px;
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 6%, var(--dsw-alias-bg-layer-1));
+  white-space: nowrap;
 }
+.shell .workspaceMismatch > span { color: var(--dsw-alias-label-secondary); font-size: 11px; }
+.shell .workspaceMismatch > button {
+  min-height: 26px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 55%, var(--dsw-alias-border-l2));
+  border-radius: 6px;
+  padding: 0 8px;
+  color: var(--dsw-alias-state-business-primary);
+  background: var(--dsw-alias-bg-base);
+  font-size: 11px;
+  cursor: pointer;
+}
+.shell .workspaceMismatch > button:hover { background: var(--dsw-alias-interactive-bg-hover); }
 
 .shell .topNavigation {
   min-height: 0;
@@ -443,6 +484,7 @@
 .shell [class*='badge'],
 .shell [class*='entities'] span,
 .shell [class*='runtimeEntryMeta'] > span,
+.shell [class*='runtimeEntryBadges'] > span,
 .shell [class*='runtimeEntryMeta'] time,
 .shell [class*='runtimeFootnote'],
 .shell [class*='documentSummary'] article > span,
@@ -470,6 +512,20 @@
 .shell [class*='documentList'] > button strong,
 .shell [class*='runtimeEntry'] > p,
 .shell [class*='inspectorMeta'] dd { font-size: 13px; }
+.shell [class*='listProgress'],
+.shell [class*='compactListProgress'] { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
+.shell [class*='documentWorkspace'] {
+  height: clamp(520px, calc(100dvh - 220px), 760px);
+  min-height: 520px;
+  align-items: stretch;
+}
+.shell [class*='documentList'],
+.shell [class*='documentReader'] {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
 
 .shell article[class*='bodyCard'] {
   display: flex;
@@ -633,7 +689,11 @@
 @media (max-width: 760px) {
   .shell .masthead { min-height: 48px; padding: 8px 12px 4px; }
   .shell .headerActions { max-width: 68vw; }
-  .shell .workspacePicker select { width: min(170px, 38vw); }
+  .shell [class*='storageMode'] > span,
+  .shell .workspacePicker > span,
+  .shell .workspaceMismatch > span { display: none; }
+  .shell .workspacePicker { gap: 0; padding-left: 0; }
+  .shell .workspacePicker select { width: min(160px, 31vw); border-left: 0; }
   .shell .topNavigation { padding: 0 12px; }
   .shell .memoryNavigation { padding-inline: 12px; }
   .shell .memoryTabs button { padding-inline: 10px; }
@@ -644,17 +704,21 @@
     text-align: left;
   }
   .shell .canvas > div { padding: 14px 12px calc(170px + env(safe-area-inset-bottom, 0px)); }
-  .shell .workspaceMismatch { margin-inline: 12px; }
   .shell .modalBackdrop { padding: 12px; }
   .shell .modal { width: calc(100vw - 24px); max-height: calc(100vh - 24px); }
   .shell .modal > div:last-child { padding: 14px; }
+  .shell [class*='documentWorkspace'] { height: auto; min-height: 0; }
+  .shell [class*='documentList'] { overflow-y: auto; scrollbar-gutter: auto; }
+  .shell [class*='documentReader'] { overflow: visible; scrollbar-gutter: auto; }
 }
 
 @media (max-width: 520px) {
   .shell .masthead { min-height: 46px; }
   .shell .brand h1 { font-size: 16px; }
   .shell .headerActions { max-width: 62vw; }
-  .shell .workspacePicker select { width: min(145px, 40vw); }
+  .shell [class*='storageMode'] { padding-inline: 7px; }
+  .shell .workspacePicker select { width: min(118px, 30vw); padding-left: 8px; }
+  .shell .workspaceMismatch > button { padding-inline: 6px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
