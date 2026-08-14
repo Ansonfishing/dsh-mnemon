@@ -557,6 +557,7 @@ export declare const zh: {
     'config.workspace': string;
     'config.custom': string;
     'config.customHintShort': string;
+    'config.customSelected': string;
     'config.customPack': string;
     'config.customPackAria': string;
     'config.customPackRequired': string;
@@ -572,6 +573,12 @@ export declare const zh: {
     'config.customDirectory': string;
     'config.customHint': string;
     'config.customAria': string;
+    'config.customBrowseHint': string;
+    'config.customNotSelected': string;
+    'config.customBrowse': string;
+    'config.customBrowseAgain': string;
+    'config.customBrowsing': string;
+    'config.customBrowseUnavailable': string;
     'config.invalidScope': string;
     'config.customRequired': string;
     'config.customAbsolute': string;
@@ -632,6 +639,16 @@ export declare const zh: {
     'config.packExported': string;
     'config.packImported': string;
     'config.packFailed': string;
+    'config.packSimpleDescription': string;
+    'config.packWholeZip': string;
+    'config.packWholeZipHint': string;
+    'config.packImportZip': string;
+    'config.packExportZip': string;
+    'config.packChooseZip': string;
+    'config.packUnnamedZip': string;
+    'config.packZipReady': string;
+    'config.packImportZipAction': string;
+    'config.packImportedWhole': string;
 };
 export type MnemonKey = keyof typeof zh;
 export declare const en: {
@@ -1192,6 +1209,7 @@ export declare const en: {
     'config.workspace': string;
     'config.custom': string;
     'config.customHintShort': string;
+    'config.customSelected': string;
     'config.customPack': string;
     'config.customPackAria': string;
     'config.customPackRequired': string;
@@ -1207,6 +1225,12 @@ export declare const en: {
     'config.customDirectory': string;
     'config.customHint': string;
     'config.customAria': string;
+    'config.customBrowseHint': string;
+    'config.customNotSelected': string;
+    'config.customBrowse': string;
+    'config.customBrowseAgain': string;
+    'config.customBrowsing': string;
+    'config.customBrowseUnavailable': string;
     'config.invalidScope': string;
     'config.customRequired': string;
     'config.customAbsolute': string;
@@ -1267,6 +1291,16 @@ export declare const en: {
     'config.packExported': string;
     'config.packImported': string;
     'config.packFailed': string;
+    'config.packSimpleDescription': string;
+    'config.packWholeZip': string;
+    'config.packWholeZipHint': string;
+    'config.packImportZip': string;
+    'config.packExportZip': string;
+    'config.packChooseZip': string;
+    'config.packUnnamedZip': string;
+    'config.packZipReady': string;
+    'config.packImportZipAction': string;
+    'config.packImportedWhole': string;
 };
 export type MnemonTranslate = (key: MnemonKey, params?: Record<string, unknown>) => string;
 export declare function translateZh(key: MnemonKey, params?: Record<string, unknown>): string;

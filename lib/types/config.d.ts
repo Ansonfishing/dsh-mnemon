@@ -8,9 +8,9 @@ export interface Config {
     cliPath?: string;
     /** Custom Mnemon base directory; also retained as a legacy dataDir-only scope selection. */
     dataDir?: string;
-    /** Selected entry from customPacks. The resolved entry is mirrored to dataDir for compatibility. */
+    /** @deprecated Migration-only selector from the former named-Pack settings UI. */
     customPackId?: string;
-    /** Named custom Mnemon roots available from the settings dropdown. */
+    /** @deprecated Migration-only roots from the former named-Pack settings UI. */
     customPacks?: CustomPackConfig[];
     /** Legacy store hint used to bootstrap or discover the initial Memory Space. */
     store?: string;
@@ -59,8 +59,6 @@ export interface ResolvedConfig {
     storageScope: 'global' | 'workspace' | 'custom';
     cliPath?: string;
     dataDir?: string;
-    customPackId?: string;
-    customPacks: CustomPackConfig[];
     store?: string;
     timeoutMs: number;
     defaultRecallLimit: number;

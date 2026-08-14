@@ -2,7 +2,7 @@ import type { ResolvedConfig } from './config.ts';
 import type { MnemonRunner } from './runner.ts';
 export declare const MNEMON_PACK_FORMAT = "mnemonpack";
 export declare const MNEMON_PACK_VERSION = 1;
-export declare const MNEMON_PACK_MIME = "application/vnd.mnemon.pack+zip";
+export declare const MNEMON_PACK_MIME = "application/zip";
 export declare const MNEMON_PACK_MAX_ARCHIVE_BYTES: number;
 export declare const MNEMON_PACK_MAX_EXPANDED_BYTES: number;
 declare const COMPONENT_ORDER: readonly ["runtime", "documents", "memory-spaces"];
@@ -58,11 +58,10 @@ export declare class MnemonPackManager {
     private readonly afterImport;
     private readonly now;
     private readonly root;
-    constructor(runner: MnemonRunner, config: Pick<ResolvedConfig, 'storageScope' | 'customPackId'>, afterImport?: (components: MnemonPackComponent[]) => void, now?: () => Date);
+    constructor(runner: MnemonRunner, config: Pick<ResolvedConfig, 'storageScope'>, afterImport?: (components: MnemonPackComponent[]) => void, now?: () => Date);
     target(): {
         root: string;
         scope: ResolvedConfig['storageScope'];
-        customPackId?: string;
     };
     exportPack(scope: MnemonPackScope): Promise<MnemonPackExport>;
     inspectPack(base64: string, fileName?: string): MnemonPackPreview;
