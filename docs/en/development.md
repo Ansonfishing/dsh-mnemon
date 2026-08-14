@@ -171,7 +171,7 @@ When the Web locale changes, the Chinese key set remains the type source of trut
 ```text
 [ ] pnpm run verify
 [ ] review source and generated lib diffs
-[ ] validate package file list includes README.en.md, docs/assets, and bilingual docs
+[ ] validate package file list includes README.md, README.zh-CN.md, docs/assets, and bilingual docs
 [ ] install the built/local bundle into an isolated Web profile
 [ ] run real Mnemon CLI and WebUI smoke tests
 [ ] verify Chinese and English workspaces

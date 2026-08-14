@@ -8,7 +8,7 @@
 |---|---|
 | 0.1.x (npm `dsh-mnemon`) | ✅ |
 
-Only the latest published version receives security fixes. The plugin targets the DSH mainline snapshot it was verified against; see the compatibility baseline in [README.en.md](./README.en.md).
+Only the latest published version receives security fixes. The plugin targets the DSH mainline snapshot it was verified against; see the compatibility baseline in [README.md](./README.md).
 
 ## Reporting a vulnerability
 
@@ -61,7 +61,7 @@ Out of scope:
 |---|---|
 | 0.1.x（npm `dsh-mnemon`） | ✅ |
 
-仅最新发布版本获得安全修复。插件以验证时的 DSH mainline 快照为兼容基线，见 [README.md](./README.md)。
+仅最新发布版本获得安全修复。插件以验证时的 DSH mainline 快照为兼容基线，见 [README.zh-CN.md](./README.zh-CN.md)。
 
 ### 报告漏洞
 

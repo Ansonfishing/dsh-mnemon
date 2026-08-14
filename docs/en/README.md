@@ -1,6 +1,6 @@
 # dsh-mnemon Documentation
 
-[简体中文](../zh-CN/README.md) | **English** | [Project home](../../README.en.md)
+[简体中文](../zh-CN/README.md) | **English** | [Project home](../../README.md)
 
 This hub is organized by what you need to accomplish. New users should follow Getting Started, then use the visual guide for the interface. Reference documents are for deployment, integration, and development work.
 

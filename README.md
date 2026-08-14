@@ -1,173 +1,173 @@
 <h1 align="center">dsh-mnemon</h1>
 
-<p align="center"><strong>简体中文</strong> · <a href="./README.en.md">English</a></p>
+<p align="center"><strong>English</strong> · <a href="./README.zh-CN.md">简体中文</a></p>
 
 <p align="center">
-  <a href="./docs/zh-CN/ui-guide.md">
-    <img src="./docs/assets/media/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon Sidebar 记忆系统：记忆体目录与关系图" width="760">
+  <a href="./docs/en/ui-guide.md">
+    <img src="./docs/assets/media/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon Sidebar Memory System with Memory Space catalog and relationship graph" width="760">
   </a>
 </p>
 
-<p align="center"><strong>让 DeepSeek Harness 拥有可跨 Agent 共享的本地、分层、可监督长期记忆。</strong></p>
+<p align="center"><strong>Local, layered, supervised memory for DeepSeek Harness—with cross-agent sharing through Mnemon.</strong></p>
 
-`dsh-mnemon` 将 [Mnemon](https://github.com/mnemon-dev/mnemon) 接入 DeepSeek Harness（DSH），并把每轮需要的热记忆、需要完整阅读的项目档案和按需召回的长期记忆体组织在同一个工作台中。其他 Agent 只要同样接入 Mnemon，并使用同一套可访问的本地 Mnemon 存储，就可以与 DSH 共享长期记忆。
+`dsh-mnemon` integrates [Mnemon](https://github.com/mnemon-dev/mnemon) with DeepSeek Harness (DSH). It brings hot memory needed every turn, full project Documents, and on-demand long-term Memory Spaces into one workbench. Other agents can share DSH's long-term memory when they also integrate Mnemon and use the same accessible local Mnemon storage.
 
-- **本地优先**：记忆保存在本机 SQLite、JSON 与 Markdown 中，不依赖远程记忆服务。
-- **跨 Agent 共享**：DSH 的 Mnemon 记忆体可以被其他支持 Mnemon 的 Agent 读取和复用。
-- **三层协作**：运行时记忆、项目档案、记忆体各自保存适合自己的信息粒度。
-- **受监督写入**：语义判断交给隔离的记忆子 Agent，路径、权限、容量、锁与 revision 由 Host 控制。
-- **DSH 原生体验**：默认 Sidebar 工作台、对话内回合记忆、存入记忆弹窗、双语界面与明暗主题。
+- **Local first**: memory stays in local SQLite, JSON, and Markdown; no remote memory service is required.
+- **Cross-agent sharing**: Mnemon-enabled agents can read and reuse DSH's Mnemon Memory Spaces.
+- **Three cooperating tiers**: Runtime Memory, Project Documents, and Memory Spaces retain information at the right granularity.
+- **Supervised writes**: isolated memory subagents make semantic decisions; the Host enforces paths, permissions, capacity, locks, and revisions.
+- **Native DSH experience**: a Sidebar workbench by default, turn memory, a Save-to-memory dialog, bilingual copy, and global themes.
 
-当前用户指令、仓库文件与实时工具结果始终高于历史记忆。
+Current user instructions, repository files, and live tool results always take precedence over historical memory.
 
-## 实机演示
+## Live demo
 
-![dsh-mnemon Sidebar 记忆系统与对话内交互演示](./docs/assets/media/dsh-mnemon-memory-system-demo.gif)
+![dsh-mnemon Sidebar Memory System and in-conversation interaction demo](./docs/assets/media/dsh-mnemon-memory-system-demo.gif)
 
-完整逐页说明见 [Sidebar 与对话交互指南](./docs/zh-CN/ui-guide.md)。
+See the [Sidebar and conversation UI guide](./docs/en/ui-guide.md) for the complete visual walkthrough.
 
-## 5 分钟开始使用
+## Start in five minutes
 
-### 1. 安装 Mnemon
+### 1. Install Mnemon
 
 ```sh
 # macOS
 brew install --cask mnemon-dev/tap/mnemon
 
-# macOS / Linux，也可以通过 Go 安装
+# macOS / Linux via Go
 go install github.com/mnemon-dev/mnemon@latest
 
 mnemon --version
 ```
 
-### 2. 安装插件
+### 2. Install the plugin
 
 ```sh
 dsh plugin --profile web add dsh-mnemon
 dsh --profile web
 ```
 
-本地开发检出使用绝对路径：
+Use an absolute path for a local development checkout:
 
 ```sh
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
-### 3. 打开记忆系统
+### 3. Open Memory System
 
-安装后默认使用 `sidebar`：点击 DSH 左侧栏的“记忆系统”即可进入。第一次使用建议按以下顺序：
+New installations use `sidebar` by default. Click **Memory System** in the DSH sidebar, then follow this first-run path:
 
-1. 在“状态”确认 Mnemon CLI、运行时、记忆体与档案均正常；
-2. 在“记忆体 → 概览”创建一个边界明确的记忆体；
-3. 用“沉淀记忆”提交一条稳定、未来仍有用的信息；
-4. 在“检索”用一个聚焦问题验证召回；
-5. 回到对话，展开回复下方的“本回合记忆”查看工具轨迹。
+1. Confirm the Mnemon CLI, Runtime, Memory Spaces, and Documents are healthy under **Status**.
+2. Create a narrowly scoped Memory Space under **Memory Spaces → Overview**.
+3. Submit one stable, future-useful item through **Remember**.
+4. Verify it with a focused question under **Recall**.
+5. Return to the conversation and expand **Turn memory** below the answer.
 
-更完整的安装、Provider 要求与验证步骤见[快速开始](./docs/zh-CN/getting-started.md)。
+See [Getting Started](./docs/en/getting-started.md) for provider requirements and complete verification.
 
-## 一个工作台，三层记忆
+## One workbench, three memory tiers
 
-| 层级 | 适合保存 | 如何进入上下文 |
+| Tier | Best for | How it reaches context |
 |---|---|---|
-| **运行时** | 用户偏好、协作要求、项目约定、环境事实 | `USER.md` / `MEMORY.md` 每轮紧凑注入 |
-| **档案** | 设计、调查、流程、复盘、交接材料 | 先确定性检索 active Documents，再按需阅读全文 |
-| **记忆体** | 跨会话事实、决策、实体与关系 | 只从已激活 Memory Spaces 按需召回有界证据 |
+| **Runtime** | User preferences, collaboration rules, project conventions, environment facts | Compact `USER.md` / `MEMORY.md` projections on every turn |
+| **Documents** | Designs, investigations, procedures, postmortems, and handoffs | Deterministic search of active Documents, then full text on demand |
+| **Memory Spaces** | Cross-session facts, decisions, entities, and relations | Bounded evidence recalled on demand from active spaces only |
 
-三层不是同一内容的简单复制：信息会按使用频率、叙事长度和召回方式进入最合适的层级。完整规则见[存储与三层记忆模型](./docs/zh-CN/storage-model.md)。
+The tiers are not simple copies of the same content. Knowledge is routed by frequency, narrative length, and retrieval needs. See [Storage and the three-tier model](./docs/en/storage-model.md).
 
-### 与其他 Agent 共享长期记忆
+### Share long-term memory with other agents
 
-跨 Agent 共享发生在 Mnemon 提供的**记忆体**层。其他支持 Mnemon 的 Agent 指向相同的 `storageRoot` 和 Store 后，可以召回或继续沉淀同一批长期事实、实体与关系。DSH 专有的运行时记忆和项目档案不会因此自动暴露给其他 Agent。
+Cross-agent sharing applies to the **Memory Spaces** backed by Mnemon. Another Mnemon-enabled agent can recall from or contribute to the same durable facts, entities, and relations when it targets the same `storageRoot` and Store. DSH-managed Runtime Memory and Project Documents are not automatically exposed to other agents.
 
-默认 `global` 模式使用 `~/.mnemon`，最适合作为本机 Agent 之间的共享记忆根；`custom` 和 `workspace` 也可以共享，但所有参与方必须显式对齐目录。共享同一目录意味着共享同一份数据，请先确认信任边界，并避免并发执行不兼容的离线迁移或目录操作。
+The default `global` scope uses `~/.mnemon`, making it the simplest shared memory root for local agents. `custom` and `workspace` roots can also be shared, but every participant must align its directory explicitly. A shared root is shared data: establish a trust boundary first, and avoid incompatible offline migration or directory operations while another process is using it.
 
-## Sidebar 工作台
+## Sidebar workbench
 
-| 页面 | 主要用途 |
+| Page | Main purpose |
 |---|---|
-| **状态** | 检查连接、存储根、三层数据摘要，以及 Mnemon / dsh-mnemon 版本 |
-| **运行时** | 查看 USER / MEMORY 容量，筛选、添加、编辑或移除热记忆 |
-| **记忆体** | 管理激活边界；在概览、检索、内容、实体之间切换；打开“沉淀记忆” |
-| **档案** | 搜索、阅读、新建、编辑与归档受管 Markdown 文档 |
+| **Status** | Inspect connection, storage root, tier summaries, and Mnemon / dsh-mnemon versions |
+| **Runtime** | Inspect USER / MEMORY capacity; filter, add, edit, or remove hot memory |
+| **Memory Spaces** | Manage activation; switch among Overview, Recall, Content, and Entities; open Remember |
+| **Documents** | Search, read, create, edit, and archive managed Markdown documents |
 
-添加与编辑使用统一弹窗；危险操作需要二次确认；长列表采用筛选、计数与“加载更多”，档案正文使用独立阅读区域。
+Add and edit use consistent dialogs, destructive actions require confirmation, long collections expose filters and progressive loading, and Documents use a dedicated reader.
 
-### 对话内记忆
+### Memory inside conversations
 
-| 本回合记忆 | 存入记忆 |
+| Turn memory | Save to memory |
 |---|---|
-| [![展开本回合记忆并查看工具入口](./docs/assets/screenshots/conversation-turn-memory.png)](./docs/assets/screenshots/conversation-turn-memory.png) | [![确认存入记忆弹窗](./docs/assets/screenshots/conversation-save-dialog.png)](./docs/assets/screenshots/conversation-save-dialog.png) |
+| [![Expanded Turn memory with exact tool links](./docs/assets/screenshots/conversation-turn-memory.png)](./docs/assets/screenshots/conversation-turn-memory.png) | [![Confirm save to memory dialog](./docs/assets/screenshots/conversation-save-dialog.png)](./docs/assets/screenshots/conversation-save-dialog.png) |
 
-- **本回合记忆**汇总本轮的召回、沉淀与档案检索；展开后可以跳到对应页面。
-- **存入记忆**先加载可编辑候选，只有确认后才交给记忆子 Agent 判断、查重、提炼并写入。
+- **Turn memory** summarizes recalls, writes, and Document searches for the turn; expand it to jump to the matching page.
+- **Save to memory** loads an editable candidate. Only confirmation sends it to the memory subagent for qualification, deduplication, distillation, and writing.
 
-这两个入口默认开启，可在“设置 → 记忆系统 → 对话界面”中分别关闭，保存后实时生效。
+Both are on by default. Disable them independently under **Settings → Memory System → Conversation interface**; saved changes apply live.
 
-## 展示与存储
+## Display and storage
 
-配置位于 `$DSH_HOME/settings.yaml`（通常为 `~/.dsh/settings.yaml`）：
+Configuration lives in `$DSH_HOME/settings.yaml` (commonly `~/.dsh/settings.yaml`):
 
 ```yaml
 mnemon:
-  displayMode: sidebar # sidebar | buildin；默认 sidebar
+  displayMode: sidebar # sidebar | buildin; sidebar by default
   storageScope: global # global | workspace | custom
 ```
 
-| 选择 | 行为 |
+| Choice | Behavior |
 |---|---|
-| `sidebar` | 默认；左侧栏独立工作台，采用与 DSH 官方面板一致的极简外观 |
-| `buildin` | 保留原有对话区内嵌形态及其既有视觉 |
-| `global` | 多个工作区共享 `~/.mnemon`（或 `MNEMON_DATA_DIR`） |
-| `workspace` | 每个工作区使用自己的 `<workspace>/.mnemon`；工作台可查看其他工作区，Agent 仍跟随当前会话 |
-| `custom` | 使用 `dataDir` 指定的绝对路径或 `~/...` |
+| `sidebar` | Default dedicated workbench aligned with official DSH panel styling |
+| `buildin` | Preserves the original conversation-area presentation and visuals |
+| `global` | Shares `~/.mnemon` (or `MNEMON_DATA_DIR`) across workspaces |
+| `workspace` | Uses `<workspace>/.mnemon`; the workbench may inspect another workspace while the Agent still follows the current session |
+| `custom` | Uses an absolute or `~/...` path supplied through `dataDir` |
 
-设置保存后实时生效，无需手动刷新。切换存储范围不会自动迁移、合并或删除旧数据；工作区查看目标与会话实际目录不一致时，顶部会提示并提供一键对齐。
+Saved settings apply live without a manual refresh. Changing scope never migrates, merges, or deletes old data. If the inspected workspace differs from the session's effective workspace, the header explains the mismatch and offers one-click alignment.
 
-## 常用命令
+## Common commands
 
 ```text
 /mnemon status
-/mnemon recall <查询>
-/mnemon related <完整记忆 ID>
-/mnemon remember <稳定、自包含的长期洞察>
-/mnemon forget <完整记忆 ID>
+/mnemon recall <query>
+/mnemon related <full memory ID>
+/mnemon remember <stable, self-contained durable insight>
+/mnemon forget <full memory ID>
 ```
 
-推荐查询顺序：运行时热记忆 → active Documents → 已激活记忆体 → 命中记录指向的归档原文。
+Recommended lookup order: Runtime Memory → active Documents → active Memory Spaces → archived original referenced by a hit.
 
-## 数据与安全边界
+## Data and security boundaries
 
-- 插件通过本地 `mnemon` CLI 访问长期记忆；WebUI 不直接读取 SQLite，也不直接启动进程。
-- CLI 使用参数数组且禁用 shell；输出、超时和取消均有边界。
-- 插件不保存 API key；子 Agent 推理复用 DSH 已配置的 Provider。
-- 当前没有确定性的秘密扫描器。不要把密钥、token、私钥或原始敏感日志写入任何记忆层。
-- 卸载插件不会删除 `~/.mnemon`、工作区 `.mnemon` 或自定义目录中的数据。
+- The plugin reaches durable memory through the local `mnemon` CLI. The WebUI neither reads SQLite directly nor starts processes.
+- CLI calls use argument arrays with shell disabled, bounded output, timeouts, and cancellation.
+- The plugin stores no API keys. Subagent inference uses the provider already configured in DSH.
+- There is no deterministic secret scanner yet. Never store keys, tokens, private keys, or raw sensitive logs in any tier.
+- Uninstalling the plugin does not remove data under `~/.mnemon`, workspace `.mnemon` roots, or custom directories.
 
-完整边界、备份恢复与故障排查见[运维指南](./docs/zh-CN/operations.md)。
+See [Operations, security, and troubleshooting](./docs/en/operations.md) for complete boundaries, backup, recovery, and diagnostics.
 
-## 文档
+## Documentation
 
-| 我想要…… | 从这里开始 |
+| I want to… | Start here |
 |---|---|
-| 安装并完成第一次验证 | [快速开始](./docs/zh-CN/getting-started.md) |
-| 认识每个页面与对话内入口 | [Sidebar 与对话交互指南](./docs/zh-CN/ui-guide.md) |
-| 理解三层模型和完整流转 | [项目介绍](./docs/zh-CN/project-overview.md) · [生命周期与核心流程](./docs/zh-CN/workflows.md) |
-| 选择存储范围或高级开关 | [配置参考](./docs/zh-CN/configuration.md) |
-| 备份、更新或排查问题 | [运维、安全与故障排查](./docs/zh-CN/operations.md) |
-| 集成工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
-| 开发、测试或发布 | [开发与验证](./docs/zh-CN/development.md) |
+| Install and complete first-run verification | [Getting Started](./docs/en/getting-started.md) |
+| Learn every page and conversation entry | [Sidebar and conversation UI guide](./docs/en/ui-guide.md) |
+| Understand the three tiers and complete flow | [Project overview](./docs/en/project-overview.md) · [Lifecycle and workflows](./docs/en/workflows.md) |
+| Choose storage scope or advanced switches | [Configuration reference](./docs/en/configuration.md) |
+| Back up, update, or troubleshoot | [Operations, security, and troubleshooting](./docs/en/operations.md) |
+| Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |
+| Develop, test, or publish | [Development and verification](./docs/en/development.md) |
 
-完整目录见[文档中心](./docs/zh-CN/README.md)。
+See the [documentation hub](./docs/en/README.md) for the full map.
 
-## 开发
+## Development
 
 ```sh
 pnpm install
 pnpm run verify
 ```
 
-`verify` 依次运行 TypeScript 检查、Vitest 和生产构建。构建产物提交在 `lib/` 中。
+`verify` runs TypeScript checks, Vitest, and the production build. Generated artifacts are committed under `lib/`.
 
 ## License
 
-MIT。安全问题请按 [SECURITY.md](./SECURITY.md) 私下报告，不要直接创建公开 issue。
+MIT. Report security issues privately through [SECURITY.md](./SECURITY.md), not a public issue.
