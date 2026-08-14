@@ -24,7 +24,7 @@ import type { MnemonRunner } from './runner.ts'
 
 export const MNEMON_PACK_FORMAT = 'mnemonpack'
 export const MNEMON_PACK_VERSION = 1
-export const MNEMON_PACK_MIME = 'application/vnd.mnemon.pack+zip'
+export const MNEMON_PACK_MIME = 'application/zip'
 export const MNEMON_PACK_MAX_ARCHIVE_BYTES = 48 * 1024 * 1024
 export const MNEMON_PACK_MAX_EXPANDED_BYTES = 256 * 1024 * 1024
 
@@ -708,7 +708,7 @@ export class MnemonPackManager {
         if (archive.length > MNEMON_PACK_MAX_ARCHIVE_BYTES) throw new Error('exported Mnemon Pack exceeds the transport safety limit')
         const stamp = exportedAt.replace(/[:.]/gu, '-').replace('T', '_').replace('Z', '')
         return {
-          fileName: `mnemon-${scope}-${stamp}.mnemonpack`, mimeType: MNEMON_PACK_MIME, bytes: archive.length,
+          fileName: `mnemon-backup-${stamp}.zip`, mimeType: MNEMON_PACK_MIME, bytes: archive.length,
           base64: Buffer.from(archive).toString('base64'), targetRoot: this.root, manifest,
         }
       })

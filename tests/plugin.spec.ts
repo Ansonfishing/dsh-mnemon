@@ -62,6 +62,7 @@ describe('dsh-mnemon plugin composition', () => {
   it('exports a DSH Web client with its ordering dependencies', () => {
     expect(manifest.dsh.client).toEqual({
       inject: [
+        '@deepseek-ai/dsh-client-runtime',
         '@deepseek-ai/dsh-client-connection',
         '@deepseek-ai/dsh-client-ui-conversation',
         '@deepseek-ai/dsh-client-ui-settings',

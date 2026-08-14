@@ -175,16 +175,17 @@ describe('Mnemon RPC', () => {
   it('keeps Pack backup and restore on a dedicated loopback channel', async () => {
     const packs = {
       target: vi.fn(() => ({ root: '/tmp/mnemon', scope: 'custom' })),
-      exportPack: vi.fn(async () => ({ fileName: 'backup.mnemonpack', base64: 'eA==' })),
+      exportPack: vi.fn(async () => ({ fileName: 'backup.zip', base64: 'eA==' })),
       inspectPack: vi.fn(() => ({ archiveBytes: 1, manifest: { components: ['runtime'] } })),
       importPack: vi.fn(async () => ({ imported: true })),
     } as unknown as MnemonPackManager
 
     await expect(createPackHandler(packs)('target', {})).resolves.toMatchObject({ ok: true, value: { root: '/tmp/mnemon' } })
-    await expect(createPackHandler(packs)('export', { scope: 'full' })).resolves.toMatchObject({ ok: true, value: { fileName: 'backup.mnemonpack' } })
-    await expect(createPackHandler(packs)('inspect', { base64: 'eA==', fileName: 'backup.mnemonpack' })).resolves.toMatchObject({ ok: true, value: { archiveBytes: 1 } })
+    await expect(createPackHandler(packs)('export', { scope: 'runtime' })).resolves.toMatchObject({ ok: true, value: { fileName: 'backup.zip' } })
+    expect(packs.exportPack).toHaveBeenCalledWith('full')
+    await expect(createPackHandler(packs)('inspect', { base64: 'eA==', fileName: 'backup.zip' })).resolves.toMatchObject({ ok: true, value: { archiveBytes: 1 } })
     await expect(createPackHandler(packs)('import', { base64: 'eA==', mode: 'replace', components: ['runtime'] })).resolves.toMatchObject({ ok: true, value: { imported: true } })
-    expect(packs.importPack).toHaveBeenCalledWith('eA==', { mode: 'replace', components: ['runtime'] })
+    expect(packs.importPack).toHaveBeenCalledWith('eA==', { mode: 'merge' })
     await expect(createPackHandler(packs, false)('import', { base64: 'eA==', mode: 'merge' })).resolves.toMatchObject({ ok: false, error: { code: 'internal' } })
 
     const handle = vi.fn()

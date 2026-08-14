@@ -3,10 +3,11 @@ import { apply, inject } from '../src/client/index.ts'
 import { en, zh } from '../src/client/locales.ts'
 
 describe('Mnemon Web client composition', () => {
-  it('registers locale dictionaries and exposes a locale-bound conversation tab', () => {
+  it('registers locale dictionaries and exposes a locale-bound conversation tab', async () => {
     let active: 'zh' | 'en' = 'zh'
     const slots: Record<string, unknown>[] = []
     const registerLocale = vi.fn(() => () => {})
+    const pickDirectory = vi.fn(async () => '/tmp/custom-mnemon')
     const context = {
       connection: { rpc: { call: vi.fn(async () => ({ ok: true, value: { status: 'ready', value: {}, writable: true, mode: 'host' } })) } },
       effect: vi.fn((callback: () => unknown) => callback()),
@@ -18,18 +19,21 @@ describe('Mnemon Web client composition', () => {
         inject: vi.fn((_name: string, factory: () => unknown) => factory()),
         register: vi.fn((options: Record<string, unknown>) => { slots.push(options); return () => {} }),
       },
+      workspaces: { pickDirectory },
     }
 
     apply(context)
 
-    expect(inject).toEqual(['slots', 'connection', 'locale'])
+    expect(inject).toEqual(['slots', 'connection', 'locale', 'workspaces'])
     expect(registerLocale).toHaveBeenCalledWith('mnemon', { zh, en })
     const slotOptions = slots.find(options => options.name === 'conversation.view')
     expect(slotOptions).toMatchObject({ name: 'conversation.view', id: 'mnemon', order: 30, locale: 'mnemon' })
     expect(slots).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'settings.section', id: 'mnemon', order: 20 })]))
     const settingsEntry = slots.find(options => options.name === 'settings.section')
-    const settingsInject = settingsEntry?.inject as (() => { t: (key: keyof typeof zh) => string }) | undefined
+    const settingsInject = settingsEntry?.inject as (() => { t: (key: keyof typeof zh) => string; pickDirectory: () => Promise<string | null> }) | undefined
     expect(settingsInject?.().t('config.scope')).toBe('存储范围')
+    await expect(settingsInject?.().pickDirectory()).resolves.toBe('/tmp/custom-mnemon')
+    expect(pickDirectory).toHaveBeenCalledTimes(1)
     const label = slotOptions?.label as () => string
     expect(label()).toBe('记忆系统')
     active = 'en'

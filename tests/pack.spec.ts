@@ -63,7 +63,7 @@ describe('Mnemon Pack', () => {
     const manifest = JSON.parse(Buffer.from(files['manifest.json']!).toString('utf8'))
 
     expect(exported).toMatchObject({ mimeType: MNEMON_PACK_MIME, targetRoot: source.root })
-    expect(exported.fileName).toMatch(/^mnemon-full-.*\.mnemonpack$/u)
+    expect(exported.fileName).toMatch(/^mnemon-backup-.*\.zip$/u)
     expect(manifest).toMatchObject({ format: MNEMON_PACK_FORMAT, version: 1, scope: 'full', components: ['runtime', 'documents', 'memory-spaces'] })
     expect(Object.keys(files)).toEqual(expect.arrayContaining([
       'payload/runtime/memories.json',

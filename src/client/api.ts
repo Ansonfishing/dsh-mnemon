@@ -5,7 +5,7 @@ import type { DocumentMutation, DocumentMutationResult, DocumentSearchResult, Do
 import type { RuntimeMemoryImportance, RuntimeMemoryMutationResult, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts'
 import type { EntityView, Insight, MemoryBodyCatalog, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts'
 import type { AssistantMessageText, TurnMemoryActivity, TurnMemoryActivitySnapshot } from '../lifecycle.ts'
-import type { MnemonPackComponent, MnemonPackExport, MnemonPackImportMode, MnemonPackImportResult, MnemonPackPreview, MnemonPackScope } from '../pack.ts'
+import type { MnemonPackExport, MnemonPackImportResult, MnemonPackPreview } from '../pack.ts'
 
 interface TurnActivityCacheEntry {
   cursor: number
@@ -169,19 +169,19 @@ export class MnemonClient {
     return this.call(MNEMON_WRITE_CHANNEL, 'body-update', { memoryBodyId, ...request })
   }
 
-  packTarget(): Promise<{ root: string; scope: 'global' | 'workspace' | 'custom'; customPackId?: string }> {
+  packTarget(): Promise<{ root: string; scope: 'global' | 'workspace' | 'custom' }> {
     return this.call(MNEMON_PACK_CHANNEL, 'target', {})
   }
 
-  exportPack(scope: MnemonPackScope): Promise<MnemonPackExport> {
-    return this.call(MNEMON_PACK_CHANNEL, 'export', { scope })
+  exportPack(): Promise<MnemonPackExport> {
+    return this.call(MNEMON_PACK_CHANNEL, 'export', {})
   }
 
   inspectPack(base64: string, fileName?: string): Promise<MnemonPackPreview> {
     return this.call(MNEMON_PACK_CHANNEL, 'inspect', { base64, ...(fileName === undefined ? {} : { fileName }) })
   }
 
-  importPack(base64: string, mode: MnemonPackImportMode, components?: MnemonPackComponent[]): Promise<MnemonPackImportResult> {
-    return this.call(MNEMON_PACK_CHANNEL, 'import', { base64, mode, ...(components === undefined ? {} : { components }) })
+  importPack(base64: string): Promise<MnemonPackImportResult> {
+    return this.call(MNEMON_PACK_CHANNEL, 'import', { base64 })
   }
 }

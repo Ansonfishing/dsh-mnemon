@@ -3,7 +3,7 @@ import type { MnemonLifecycle } from './lifecycle.ts'
 import type { RuntimeMemoryController, RuntimeMemoryImportance, RuntimeMemoryTarget } from './runtime-memory.ts'
 import type { Category, EdgeType, Intent, MnemonService, SearchRequest, Source } from './service.ts'
 import type { StorageScopeInspector } from './storage-scope.ts'
-import type { MnemonPackComponent, MnemonPackImportMode, MnemonPackManager, MnemonPackScope } from './pack.ts'
+import type { MnemonPackManager } from './pack.ts'
 
 export const MNEMON_READ_CHANNEL = '/dsh-mnemon-read'
 export const MNEMON_WRITE_CHANNEL = '/dsh-mnemon-write'
@@ -240,14 +240,11 @@ export function createPackHandler(manager: MnemonPackManager, writeEnabled = tru
     try {
       const payload = object(rawPayload)
       if (endpoint === 'target') return success(manager.target())
-      if (endpoint === 'export') return success(await manager.exportPack(String(payload.scope ?? '') as MnemonPackScope))
+      if (endpoint === 'export') return success(await manager.exportPack('full'))
       if (endpoint === 'inspect') return success(manager.inspectPack(String(payload.base64 ?? ''), payload.fileName === undefined ? undefined : String(payload.fileName)))
       if (endpoint === 'import') {
         if (!writeEnabled) throw new Error('Mnemon Pack import is disabled while memory writes are read-only')
-        return success(await manager.importPack(String(payload.base64 ?? ''), {
-          mode: String(payload.mode ?? '') as MnemonPackImportMode,
-          ...(Array.isArray(payload.components) ? { components: payload.components.map(String) as MnemonPackComponent[] } : {}),
-        }))
+        return success(await manager.importPack(String(payload.base64 ?? ''), { mode: 'merge' }))
       }
       return badRequest(`unknown Pack endpoint: ${endpoint}`)
     } catch (error) {

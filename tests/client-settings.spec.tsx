@@ -65,7 +65,7 @@ describe('MnemonSettingsCard', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
   })
 
-  it('persists a custom directory before selecting the custom scope', async () => {
+  it('selects and persists one custom directory through the native browser', async () => {
     const mutate = vi.fn(async () => {})
     const snapshot = {
       status: 'ready' as const,
@@ -84,34 +84,42 @@ describe('MnemonSettingsCard', () => {
       unset: vi.fn(async () => {}),
       mutate,
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
-    const view = render(<MnemonSettingsCard scope={scope} />)
+    const pickDirectory = vi.fn(async () => '/tmp/mnemon-custom')
+    const view = render(<MnemonSettingsCard scope={scope} pickDirectory={pickDirectory} />)
 
-    fireEvent.click(view.getByRole('radio', { name: /自定义目录/ }))
-    fireEvent.change(view.getByLabelText('Mnemon 自定义数据目录'), { target: { value: '/tmp/mnemon-custom' } })
+    fireEvent.click(view.getByRole('radio', { name: '自定义' }))
+    await waitFor(() => expect(view.getByText('/tmp/mnemon-custom')).toBeTruthy())
     fireEvent.click(view.getByRole('button', { name: '保存' }))
 
+    expect(pickDirectory).toHaveBeenCalledTimes(1)
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([
-      { op: 'set', path: ['customPacks'], value: [{ id: 'custom', name: '自定义 Pack', dataDir: '/tmp/mnemon-custom' }] },
-      { op: 'set', path: ['customPackId'], value: 'custom' },
-      { op: 'set', path: ['dataDir'], value: '/tmp/mnemon-custom' },
       { op: 'set', path: ['storageScope'], value: 'custom' },
+      { op: 'set', path: ['dataDir'], value: '/tmp/mnemon-custom' },
     ]))
   })
 
-  it('switches among configured custom Packs through the native dropdown', async () => {
+  it('migrates a legacy named Pack to the single selected directory', async () => {
     const mutate = vi.fn(async () => {})
     const snapshot = {
       status: 'ready' as const,
       value: {
         storageScope: 'custom' as const,
         customPackId: 'project',
-        dataDir: '/packs/project',
         customPacks: [
           { id: 'project', name: 'Project', dataDir: '/packs/project' },
           { id: 'research', name: 'Research', dataDir: '/packs/research' },
         ],
       },
-      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+      base: {},
+      user: {
+        storageScope: 'custom' as const,
+        customPackId: 'project',
+        customPacks: [
+          { id: 'project', name: 'Project', dataDir: '/packs/project' },
+          { id: 'research', name: 'Research', dataDir: '/packs/research' },
+        ],
+      },
+      revision: 0, writable: true, mode: 'host' as const,
     }
     const scope = {
       snapshot,
@@ -120,17 +128,22 @@ describe('MnemonSettingsCard', () => {
       set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}), mutate,
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
 
-    render(<MnemonSettingsCard scope={scope} />)
-    fireEvent.change(screen.getByLabelText('选择自定义 Mnemon Pack'), { target: { value: 'research' } })
+    const pickDirectory = vi.fn(async () => '/packs/research')
+    render(<MnemonSettingsCard scope={scope} pickDirectory={pickDirectory} />)
+    expect(screen.getByText('/packs/project')).toBeTruthy()
+    expect(screen.queryByRole('combobox')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '重新选择' }))
+    await waitFor(() => expect(screen.getByText('/packs/research')).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([
-      { op: 'set', path: ['customPackId'], value: 'research' },
       { op: 'set', path: ['dataDir'], value: '/packs/research' },
+      { op: 'unset', path: ['customPackId'] },
+      { op: 'unset', path: ['customPacks'] },
     ]))
   })
 
-  it('connects custom-directory validation to the visible control', () => {
+  it('keeps custom storage invalid when the native browser is cancelled', async () => {
     const snapshot = {
       status: 'ready' as const,
       value: { storageScope: 'global' as const },
@@ -148,13 +161,14 @@ describe('MnemonSettingsCard', () => {
       unset: vi.fn(async () => {}),
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
 
-    render(<MnemonSettingsCard scope={scope} />)
-    fireEvent.click(screen.getByRole('radio', { name: /自定义目录/ }))
+    const pickDirectory = vi.fn(async () => null)
+    render(<MnemonSettingsCard scope={scope} pickDirectory={pickDirectory} />)
+    fireEvent.click(screen.getByRole('radio', { name: '自定义' }))
 
-    const directory = screen.getByLabelText('Mnemon 自定义数据目录')
-    expect(directory.getAttribute('aria-invalid')).toBe('true')
-    expect(directory.getAttribute('aria-describedby')).toContain('mnemon-settings-validation')
+    await waitFor(() => expect(pickDirectory).toHaveBeenCalledTimes(1))
+    expect(screen.getByText('尚未选择')).toBeTruthy()
     expect(screen.getByRole('alert').textContent).toBe('选择自定义存储时必须填写数据目录。')
+    expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('uses native disabled semantics for a read-only settings scope', () => {
@@ -287,7 +301,7 @@ describe('MnemonSettingsCard', () => {
     expect((view.getByLabelText('存入记忆按钮') as HTMLInputElement).checked).toBe(false)
   })
 
-  it('previews a complete Pack and requires explicit confirmation before atomic replacement', async () => {
+  it('previews and safely imports one complete directory ZIP', async () => {
     const snapshot = {
       status: 'ready' as const,
       value: { storageScope: 'global' as const },
@@ -304,7 +318,7 @@ describe('MnemonSettingsCard', () => {
       if (endpoint === 'inspect') return {
         ok: true as const,
         value: {
-          fileName: 'backup.mnemonpack', archiveBytes: 4, expandedBytes: 2048,
+          fileName: 'backup.zip', archiveBytes: 4, expandedBytes: 2048,
           targetRoot: '/active/.mnemon', targetScope: 'global',
           occupied: { runtime: true, documents: true, 'memory-spaces': true },
           manifest: {
@@ -321,7 +335,7 @@ describe('MnemonSettingsCard', () => {
       }
       if (endpoint === 'import') return {
         ok: true as const,
-        value: { imported: true, mode: 'replace', targetRoot: '/active/.mnemon', components: ['runtime', 'memory-spaces'], summary: [] },
+        value: { imported: true, mode: 'merge', targetRoot: '/active/.mnemon', components: ['runtime', 'documents', 'memory-spaces'], summary: [] },
       }
       throw new Error(`unexpected endpoint ${endpoint}: ${JSON.stringify(payload)}`)
     })
@@ -330,20 +344,16 @@ describe('MnemonSettingsCard', () => {
     render(<MnemonSettingsCard scope={scope} connection={connection} />)
     await waitFor(() => expect(screen.getByText('/active/.mnemon')).toBeTruthy())
 
-    const file = new File(['pack'], 'backup.mnemonpack', { type: 'application/vnd.mnemon.pack+zip' })
-    fireEvent.change(screen.getByLabelText('选择整体 Pack文件'), { target: { files: [file] } })
-    await waitFor(() => expect(screen.getByText('backup.mnemonpack')).toBeTruthy())
-    expect(screen.getAllByText('目标已有数据')).toHaveLength(3)
+    const file = new File(['pack'], 'backup.zip', { type: 'application/zip' })
+    fireEvent.change(screen.getByLabelText('选择 Mnemon 备份 ZIP'), { target: { files: [file] } })
+    await waitFor(() => expect(screen.getByText('backup.zip')).toBeTruthy())
+    expect(screen.getByText(/校验通过 · 3 个组件 · 4 项/)).toBeTruthy()
+    expect(screen.queryByRole('checkbox', { name: /Documents/ })).toBeNull()
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /Documents/ }))
-    fireEvent.click(screen.getByRole('button', { name: '覆盖导入…' }))
-    expect(call.mock.calls.some(([, endpoint]) => endpoint === 'import')).toBe(false)
-    expect(screen.getByRole('alert').textContent).toContain('所选组件会被 Pack 内容原子替换')
-
-    fireEvent.click(screen.getByRole('button', { name: '确认覆盖' }))
+    fireEvent.click(screen.getByRole('button', { name: '安全导入' }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-pack', 'import', {
-      base64: 'cGFjaw==', mode: 'replace', components: ['runtime', 'memory-spaces'],
+      base64: 'cGFjaw==',
     }))
-    expect(screen.getByText(/已将 Runtime、记忆体 导入/)).toBeTruthy()
+    expect(screen.getByText('已将 ZIP 安全合并到 /active/.mnemon。')).toBeTruthy()
   })
 })
