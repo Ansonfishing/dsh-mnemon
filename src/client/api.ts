@@ -1,10 +1,11 @@
 import type { ClientConnectionHandle } from '../contracts.ts'
-import { MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from '../rpc.ts'
+import { MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from '../rpc.ts'
 import type { MemoryBody } from '../memory-bodies.ts'
 import type { DocumentMutation, DocumentMutationResult, DocumentSearchResult, DocumentSnapshot, DocumentView } from '../documents.ts'
 import type { RuntimeMemoryImportance, RuntimeMemoryMutationResult, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts'
 import type { EntityView, Insight, MemoryBodyCatalog, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts'
 import type { AssistantMessageText, TurnMemoryActivity, TurnMemoryActivitySnapshot } from '../lifecycle.ts'
+import type { MnemonPackComponent, MnemonPackExport, MnemonPackImportMode, MnemonPackImportResult, MnemonPackPreview, MnemonPackScope } from '../pack.ts'
 
 interface TurnActivityCacheEntry {
   cursor: number
@@ -166,5 +167,21 @@ export class MnemonClient {
 
   updateBody(memoryBodyId: string, request: { name?: string; description?: string; active?: boolean }): Promise<MemoryBody> {
     return this.call(MNEMON_WRITE_CHANNEL, 'body-update', { memoryBodyId, ...request })
+  }
+
+  packTarget(): Promise<{ root: string; scope: 'global' | 'workspace' | 'custom'; customPackId?: string }> {
+    return this.call(MNEMON_PACK_CHANNEL, 'target', {})
+  }
+
+  exportPack(scope: MnemonPackScope): Promise<MnemonPackExport> {
+    return this.call(MNEMON_PACK_CHANNEL, 'export', { scope })
+  }
+
+  inspectPack(base64: string, fileName?: string): Promise<MnemonPackPreview> {
+    return this.call(MNEMON_PACK_CHANNEL, 'inspect', { base64, ...(fileName === undefined ? {} : { fileName }) })
+  }
+
+  importPack(base64: string, mode: MnemonPackImportMode, components?: MnemonPackComponent[]): Promise<MnemonPackImportResult> {
+    return this.call(MNEMON_PACK_CHANNEL, 'import', { base64, mode, ...(components === undefined ? {} : { components }) })
   }
 }

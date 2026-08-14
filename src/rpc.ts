@@ -3,9 +3,11 @@ import type { MnemonLifecycle } from './lifecycle.ts'
 import type { RuntimeMemoryController, RuntimeMemoryImportance, RuntimeMemoryTarget } from './runtime-memory.ts'
 import type { Category, EdgeType, Intent, MnemonService, SearchRequest, Source } from './service.ts'
 import type { StorageScopeInspector } from './storage-scope.ts'
+import type { MnemonPackComponent, MnemonPackImportMode, MnemonPackManager, MnemonPackScope } from './pack.ts'
 
 export const MNEMON_READ_CHANNEL = '/dsh-mnemon-read'
 export const MNEMON_WRITE_CHANNEL = '/dsh-mnemon-write'
+export const MNEMON_PACK_CHANNEL = '/dsh-mnemon-pack'
 
 function object(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('payload must be an object')
@@ -232,10 +234,33 @@ export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLif
   }
 }
 
+/** Backup payloads contain private memory and therefore remain loopback-only. */
+export function createPackHandler(manager: MnemonPackManager, writeEnabled = true): HostRpcHandler {
+  return async (endpoint, rawPayload) => {
+    try {
+      const payload = object(rawPayload)
+      if (endpoint === 'target') return success(manager.target())
+      if (endpoint === 'export') return success(await manager.exportPack(String(payload.scope ?? '') as MnemonPackScope))
+      if (endpoint === 'inspect') return success(manager.inspectPack(String(payload.base64 ?? ''), payload.fileName === undefined ? undefined : String(payload.fileName)))
+      if (endpoint === 'import') {
+        if (!writeEnabled) throw new Error('Mnemon Pack import is disabled while memory writes are read-only')
+        return success(await manager.importPack(String(payload.base64 ?? ''), {
+          mode: String(payload.mode ?? '') as MnemonPackImportMode,
+          ...(Array.isArray(payload.components) ? { components: payload.components.map(String) as MnemonPackComponent[] } : {}),
+        }))
+      }
+      return badRequest(`unknown Pack endpoint: ${endpoint}`)
+    } catch (error) {
+      return failure(error)
+    }
+  }
+}
+
 /** Read operations are available to trusted Web hosts; local mutations stay loopback-only. */
-export function registerRpc(connection: HostConnectionHandle, service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector): void {
+export function registerRpc(connection: HostConnectionHandle, service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector, packs?: MnemonPackManager): void {
   connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(service, lifecycle, runtimeMemory, storage), { authority: 'trusted-host' })
   if (service.config.writeEnabled) {
     connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(service, lifecycle, runtimeMemory), { authority: 'loopback' })
   }
+  if (packs !== undefined) connection.rpc.handle(MNEMON_PACK_CHANNEL, createPackHandler(packs, service.config.writeEnabled), { authority: 'loopback' })
 }

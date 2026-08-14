@@ -66,6 +66,8 @@ export interface MnemonRunner {
   readonly config: ResolvedConfig
   runJson(args: readonly string[], options?: { signal?: AbortSignal; globalFlags?: boolean; store?: string }): Promise<JsonValue>
   runText(args: readonly string[], options?: { signal?: AbortSignal; globalFlags?: boolean; store?: string }): Promise<string>
+  /** Run one operation after all CLI work and hold the same queue until it settles. */
+  withExclusive<T>(operation: () => T | Promise<T>): Promise<T>
   effectiveDataDir(): string
   effectiveStore(): string
 }
@@ -138,6 +140,11 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
       }
     },
     runText: execute,
+    withExclusive<T>(operation: () => T | Promise<T>): Promise<T> {
+      const result = processQueue.then(operation)
+      processQueue = result.then(() => undefined, () => undefined)
+      return result
+    },
     effectiveDataDir() {
       return effectiveDataDir()
     },

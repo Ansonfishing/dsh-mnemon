@@ -103,7 +103,10 @@ describe('dsh-mnemon plugin composition', () => {
     expect(guidance.length).toBeLessThan(360)
     expect(guidance).not.toContain('RECALL RESULT')
     expect(fixture.commands).toEqual([expect.objectContaining({ name: 'mnemon' })])
-    expect(fixture.channels).toHaveLength(3)
+    expect(fixture.channels).toHaveLength(4)
+    expect(fixture.channels).toEqual(expect.arrayContaining([
+      expect.arrayContaining(['/dsh-mnemon-pack', expect.anything(), { authority: 'loopback' }]),
+    ]))
     expect(fixture.registrations).toEqual([
       expect.arrayContaining(['mnemon', expect.anything(), expect.objectContaining({ applies: 'restart' })]),
       expect.arrayContaining(['mnemon-ui', expect.anything(), expect.objectContaining({ applies: 'live', base: { toolviews: false, turnBar: false, saveAction: false } })]),
@@ -120,7 +123,10 @@ describe('dsh-mnemon plugin composition', () => {
       'mnemon_status',
       'mnemon_document_search',
     ])
-    expect(fixture.channels).toHaveLength(2)
+    expect(fixture.channels).toHaveLength(3)
+    expect(fixture.channels).toEqual(expect.arrayContaining([
+      expect.arrayContaining(['/dsh-mnemon-pack', expect.anything(), { authority: 'loopback' }]),
+    ]))
     expect(fixture.sections).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'mnemon:runtime-memory' })]))
   })
 

@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveConfig } from '../src/config.ts'
 import type { HostConnectionHandle } from '../src/contracts.ts'
 import type { MnemonLifecycle } from '../src/lifecycle.ts'
-import { createReadHandler, createWriteHandler, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL, registerRpc } from '../src/rpc.ts'
+import { createPackHandler, createReadHandler, createWriteHandler, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL, registerRpc } from '../src/rpc.ts'
 import type { RuntimeMemoryController } from '../src/runtime-memory.ts'
 import { MnemonService } from '../src/service.ts'
+import type { MnemonPackManager } from '../src/pack.ts'
 
 function fakeService(writeEnabled = true): MnemonService {
   return {
@@ -169,6 +170,26 @@ describe('Mnemon RPC', () => {
     registerRpc(connection, fakeService())
     expect(handle).toHaveBeenCalledWith(MNEMON_READ_CHANNEL, expect.any(Function), { authority: 'trusted-host' })
     expect(handle).toHaveBeenCalledWith(MNEMON_WRITE_CHANNEL, expect.any(Function), { authority: 'loopback' })
+  })
+
+  it('keeps Pack backup and restore on a dedicated loopback channel', async () => {
+    const packs = {
+      target: vi.fn(() => ({ root: '/tmp/mnemon', scope: 'custom' })),
+      exportPack: vi.fn(async () => ({ fileName: 'backup.mnemonpack', base64: 'eA==' })),
+      inspectPack: vi.fn(() => ({ archiveBytes: 1, manifest: { components: ['runtime'] } })),
+      importPack: vi.fn(async () => ({ imported: true })),
+    } as unknown as MnemonPackManager
+
+    await expect(createPackHandler(packs)('target', {})).resolves.toMatchObject({ ok: true, value: { root: '/tmp/mnemon' } })
+    await expect(createPackHandler(packs)('export', { scope: 'full' })).resolves.toMatchObject({ ok: true, value: { fileName: 'backup.mnemonpack' } })
+    await expect(createPackHandler(packs)('inspect', { base64: 'eA==', fileName: 'backup.mnemonpack' })).resolves.toMatchObject({ ok: true, value: { archiveBytes: 1 } })
+    await expect(createPackHandler(packs)('import', { base64: 'eA==', mode: 'replace', components: ['runtime'] })).resolves.toMatchObject({ ok: true, value: { imported: true } })
+    expect(packs.importPack).toHaveBeenCalledWith('eA==', { mode: 'replace', components: ['runtime'] })
+    await expect(createPackHandler(packs, false)('import', { base64: 'eA==', mode: 'merge' })).resolves.toMatchObject({ ok: false, error: { code: 'internal' } })
+
+    const handle = vi.fn()
+    registerRpc({ rpc: { handle } } as unknown as HostConnectionHandle, fakeService(), undefined, undefined, undefined, packs)
+    expect(handle).toHaveBeenCalledWith(MNEMON_PACK_CHANNEL, expect.any(Function), { authority: 'loopback' })
   })
 
   it('does not expose a write channel in read-only mode', () => {

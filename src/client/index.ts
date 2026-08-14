@@ -111,9 +111,10 @@ export function apply(rawContext: unknown): void {
     order: 20,
     label: () => translate('tab.label'),
     locale: namespace,
-    inject: (): { scope: MnemonSettingsScope<Config>; interactionScope: MnemonSettingsScope<InteractionConfig>; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+    inject: (): { scope: MnemonSettingsScope<Config>; interactionScope: MnemonSettingsScope<InteractionConfig>; connection: ClientConnectionHandle; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
       scope: settings,
       interactionScope: interactionSettings,
+      connection: ctx.connection,
       t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
     }),
   }, MnemonSettingsCard))

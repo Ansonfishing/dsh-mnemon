@@ -132,6 +132,12 @@ export class MemoryBodyRegistry {
     return this.update(id, { active })
   }
 
+  /** Refresh metadata after an atomic Pack import replaced the data component. */
+  reload(): void {
+    this.bodies = []
+    this.loadAndReconcile()
+  }
+
   private loadAndReconcile(): void {
     let migratedSyntheticDefault = false
     if (this.persistent && existsSync(this.registryPath)) {

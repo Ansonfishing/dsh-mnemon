@@ -88,6 +88,7 @@
     "verify": "pnpm run typecheck && pnpm run test && pnpm run build"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
     "markdown-to-jsx": "^7.7.17",
     "schemastery": "^3.18.0"
   },
@@ -97,6 +98,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh": "0.1.0-rc.6",
     "@deepseek-ai/dsh-client-connection": "0.1.0-rc.6",
     "@deepseek-ai/dsh-client-locale": "0.1.0-rc.6",
     "@deepseek-ai/dsh-client-runtime": "0.1.0-rc.6",
