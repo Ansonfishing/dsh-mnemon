@@ -24,14 +24,13 @@ describe('Mnemon config and resolution', () => {
   it('resolves the one storage-scope setting and preserves legacy dataDir as custom', () => {
     expect(resolveConfig({ storageScope: 'workspace' })).toMatchObject({ storageScope: 'workspace' })
     expect(resolveConfig({ dataDir: '/memory/custom' })).toMatchObject({
-      storageScope: 'custom', dataDir: '/memory/custom', customPackId: 'legacy',
-      customPacks: [{ id: 'legacy', name: 'Custom Pack', dataDir: '/memory/custom' }],
+      storageScope: 'custom', dataDir: '/memory/custom',
     })
-    expect(() => resolveConfig({ storageScope: 'custom' })).toThrow('custom Pack')
+    expect(() => resolveConfig({ storageScope: 'custom' })).toThrow('custom dataDir')
     expect(() => resolveConfig({ storageScope: 'custom', dataDir: 'relative/memory' })).toThrow('absolute')
   })
 
-  it('selects a named custom Pack while mirroring its root to the legacy dataDir field', () => {
+  it('migrates the selected root from the former named-Pack settings', () => {
     expect(resolveConfig({
       storageScope: 'custom',
       customPackId: 'research',
@@ -41,12 +40,7 @@ describe('Mnemon config and resolution', () => {
       ],
     })).toMatchObject({
       storageScope: 'custom',
-      customPackId: 'research',
       dataDir: '~/memory/research',
-      customPacks: [
-        { id: 'project', name: 'Project', dataDir: '/memory/project' },
-        { id: 'research', name: 'Research', dataDir: '~/memory/research' },
-      ],
     })
   })
 

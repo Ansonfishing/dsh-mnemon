@@ -12,9 +12,9 @@ export interface Config {
   cliPath?: string
   /** Custom Mnemon base directory; also retained as a legacy dataDir-only scope selection. */
   dataDir?: string
-  /** Selected entry from customPacks. The resolved entry is mirrored to dataDir for compatibility. */
+  /** @deprecated Migration-only selector from the former named-Pack settings UI. */
   customPackId?: string
-  /** Named custom Mnemon roots available from the settings dropdown. */
+  /** @deprecated Migration-only roots from the former named-Pack settings UI. */
   customPacks?: CustomPackConfig[]
   /** Legacy store hint used to bootstrap or discover the initial Memory Space. */
   store?: string
@@ -100,8 +100,6 @@ export interface ResolvedConfig {
   storageScope: 'global' | 'workspace' | 'custom'
   cliPath?: string
   dataDir?: string
-  customPackId?: string
-  customPacks: CustomPackConfig[]
   store?: string
   timeoutMs: number
   defaultRecallLimit: number
@@ -174,17 +172,17 @@ function resolveCustomPacks(value: CustomPackConfig[] | undefined, legacyDataDir
 export function resolveConfig(config: Config = {}): ResolvedConfig {
   const cliPath = optionalText(config.cliPath)
   const legacyDataDir = optionalText(config.dataDir)
-  const customPacks = resolveCustomPacks(config.customPacks, legacyDataDir)
+  const legacyPacks = resolveCustomPacks(config.customPacks, legacyDataDir)
   const requestedPackId = optionalText(config.customPackId)
   if (requestedPackId !== undefined && !CUSTOM_PACK_ID.test(requestedPackId)) throw new Error('dsh-mnemon: customPackId is invalid')
   const store = optionalText(config.store)
-  const storageScope = config.storageScope ?? (legacyDataDir === undefined && customPacks.length === 0 ? 'global' : 'custom')
+  const storageScope = config.storageScope ?? (legacyDataDir === undefined && legacyPacks.length === 0 ? 'global' : 'custom')
   const selectedPack = requestedPackId === undefined
-    ? customPacks.find(pack => pack.dataDir === legacyDataDir) ?? (customPacks.length === 1 ? customPacks[0] : undefined)
-    : customPacks.find(pack => pack.id === requestedPackId)
+    ? legacyPacks.find(pack => pack.dataDir === legacyDataDir) ?? (legacyPacks.length === 1 ? legacyPacks[0] : undefined)
+    : legacyPacks.find(pack => pack.id === requestedPackId)
   if (requestedPackId !== undefined && selectedPack === undefined) throw new Error(`dsh-mnemon: unknown custom Pack: ${requestedPackId}`)
-  if (storageScope === 'custom' && selectedPack === undefined) throw new Error('dsh-mnemon: a custom Pack is required when storageScope is custom')
   const dataDir = selectedPack?.dataDir ?? legacyDataDir
+  if (storageScope === 'custom' && dataDir === undefined) throw new Error('dsh-mnemon: a custom dataDir is required when storageScope is custom')
   if (store !== undefined && !/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(store)) {
     throw new Error('dsh-mnemon: store must match [a-zA-Z0-9][a-zA-Z0-9_-]*')
   }
@@ -192,8 +190,6 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     storageScope,
     ...(cliPath === undefined ? {} : { cliPath }),
     ...(dataDir === undefined ? {} : { dataDir }),
-    ...(selectedPack === undefined ? {} : { customPackId: selectedPack.id }),
-    customPacks,
     ...(store === undefined ? {} : { store }),
     timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     defaultRecallLimit: config.defaultRecallLimit ?? DEFAULT_RECALL_LIMIT,

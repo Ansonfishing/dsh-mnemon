@@ -675,15 +675,15 @@ export class MnemonPackManager {
 
   constructor(
     private readonly runner: MnemonRunner,
-    private readonly config: Pick<ResolvedConfig, 'storageScope' | 'customPackId'>,
+    private readonly config: Pick<ResolvedConfig, 'storageScope'>,
     private readonly afterImport: (components: MnemonPackComponent[]) => void = () => {},
     private readonly now: () => Date = () => new Date(),
   ) {
     this.root = resolve(runner.effectiveDataDir())
   }
 
-  target(): { root: string; scope: ResolvedConfig['storageScope']; customPackId?: string } {
-    return { root: this.root, scope: this.config.storageScope, ...(this.config.customPackId === undefined ? {} : { customPackId: this.config.customPackId }) }
+  target(): { root: string; scope: ResolvedConfig['storageScope'] } {
+    return { root: this.root, scope: this.config.storageScope }
   }
 
   async exportPack(scope: MnemonPackScope): Promise<MnemonPackExport> {
