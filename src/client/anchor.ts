@@ -49,7 +49,12 @@ export function subscribeMnemonAnchor(sessionId: string | undefined, onAnchor: (
   const key = keyOf(sessionId)
   const handler = (event: Event): void => {
     const anchor = (event as CustomEvent<MnemonAnchor>).detail
-    if (anchor !== undefined && keyOf(anchor.sessionId) === key) onAnchor(anchor)
+    if (anchor !== undefined && keyOf(anchor.sessionId) === key) {
+      // A mounted view consumes the event immediately. Clear only this exact
+      // dispatch so a newer anchor cannot be lost if listeners navigate again.
+      if (pendingBySession.get(key) === anchor) pendingBySession.delete(key)
+      onAnchor(anchor)
+    }
   }
   window.addEventListener(MNEMON_ANCHOR_EVENT, handler)
   return () => window.removeEventListener(MNEMON_ANCHOR_EVENT, handler)

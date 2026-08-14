@@ -129,6 +129,14 @@
   outline-offset: 1px;
 }
 
+.truncated {
+  display: block;
+  margin-top: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 14px;
+}
+
 .outcome {
   margin-top: 8px;
   border-radius: 6px;

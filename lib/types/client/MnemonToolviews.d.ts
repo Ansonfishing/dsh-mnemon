@@ -6,7 +6,8 @@ export interface MnemonToolViewProps {
     block: unknown;
     openFile?: (path: string) => void;
     cwd?: string;
-    inspect: () => void;
+    /** Optional on older/newer DSH tool hosts; omit the action when unavailable. */
+    inspect?: () => void;
     /** Session the call belongs to; injected by the slot host. */
     sessionId?: string;
     t: (key: MnemonKey, params?: Record<string, unknown>) => string;

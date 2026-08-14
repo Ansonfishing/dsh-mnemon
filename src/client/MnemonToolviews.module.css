@@ -2,20 +2,24 @@
 
 .root {
   display: flex;
+  flex-direction: column;
   min-width: 0;
+  color: var(--dsw-alias-label-primary);
+}
+
+.row {
+  display: flex;
   height: 24px;
   align-items: center;
   gap: 6px;
   border-radius: 6px;
   cursor: pointer;
-  flex-wrap: wrap;
   position: relative;
-  color: var(--dsw-alias-label-primary);
 }
-.root:hover {
+.row:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
-.root:focus-visible {
+.row:focus-visible {
   outline: 1.5px solid var(--dsw-alias-state-business-primary);
   outline-offset: 2px;
 }
@@ -27,7 +31,7 @@
   border-radius: 50%;
 }
 .dotRunning {
-  background: var(--dsw-alias-state-info-primary);
+  background: var(--dsw-alias-state-info-primary, #4f7cff);
   animation: mnemonToolPulse 1.4s ease-in-out infinite;
 }
 .dotOk {
@@ -81,7 +85,7 @@
   opacity: 0;
   transition: opacity .12s;
 }
-.root:hover .actions, .root:focus-visible .actions, .root[data-open] .actions {
+.row:hover .actions, .row:focus-visible .actions, .root[data-open] .actions {
   opacity: 1;
 }
 
@@ -123,7 +127,6 @@
 }
 
 .details {
-  flex-basis: 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;

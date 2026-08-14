@@ -263,6 +263,7 @@ export declare const zh: {
     'saveAction.fetching': string;
     'saveAction.missing': string;
     'saveAction.candidate': string;
+    'saveAction.truncated': string;
     'saveAction.submit': string;
     'saveAction.submitting': string;
     'saveAction.result': string;
@@ -837,6 +838,7 @@ export declare const en: {
     'saveAction.fetching': string;
     'saveAction.missing': string;
     'saveAction.candidate': string;
+    'saveAction.truncated': string;
     'saveAction.submit': string;
     'saveAction.submitting': string;
     'saveAction.result': string;

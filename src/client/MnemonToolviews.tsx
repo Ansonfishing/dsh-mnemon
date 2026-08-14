@@ -11,7 +11,8 @@ export interface MnemonToolViewProps {
   block: unknown
   openFile?: (path: string) => void
   cwd?: string
-  inspect: () => void
+  /** Optional on older/newer DSH tool hosts; omit the action when unavailable. */
+  inspect?: () => void
   /** Session the call belongs to; injected by the slot host. */
   sessionId?: string
   t: (key: MnemonKey, params?: Record<string, unknown>) => string
@@ -76,9 +77,14 @@ function outputJson(block: unknown): Record<string, unknown> | null {
   }
 }
 
-function truncate(value: string, max: number): string {
+function truncateInline(value: string, max: number): string {
   const normalized = value.replace(/\s+/g, ' ').trim()
   return normalized.length <= max ? normalized : `${normalized.slice(0, max)}…`
+}
+
+function truncateBlock(value: string, max: number): string {
+  const normalized = value.trim()
+  return normalized.length <= max ? normalized : `${normalized.slice(0, max)}\n…`
 }
 
 function countOf(value: unknown): number | undefined {
@@ -89,17 +95,17 @@ function countOf(value: unknown): number | undefined {
 function summaryFor(toolName: string, args: Record<string, unknown>, out: Record<string, unknown> | null, t: (key: MnemonKey, params?: Record<string, unknown>) => string): string {
   switch (toolName) {
     case 'mnemon_recall': {
-      const query = typeof args.query === 'string' ? truncate(args.query, 56) : ''
+      const query = typeof args.query === 'string' ? truncateInline(args.query, 56) : ''
       const hits = out === null ? undefined : countOf(out.results)
       return hits === undefined ? query : t('toolview.recallSummary', { query, count: hits })
     }
     case 'mnemon_related': {
       const id = typeof args.id === 'string' ? args.id : ''
       const hits = out === null ? undefined : countOf(out.results)
-      return hits === undefined ? truncate(id, 56) : t('toolview.relatedSummary', { id: truncate(id, 28), count: hits })
+      return hits === undefined ? truncateInline(id, 56) : t('toolview.relatedSummary', { id: truncateInline(id, 28), count: hits })
     }
     case 'mnemon_document_search': {
-      const query = typeof args.query === 'string' ? truncate(args.query, 56) : ''
+      const query = typeof args.query === 'string' ? truncateInline(args.query, 56) : ''
       const hits = out === null ? undefined : countOf(out.results)
       return hits === undefined ? query : t('toolview.documentSearchSummary', { query, count: hits })
     }
@@ -108,33 +114,33 @@ function summaryFor(toolName: string, args: Record<string, unknown>, out: Record
     case 'mnemon_memory_bodies':
       return out === null ? t('toolview.running') : t('toolview.bodiesSummary', { count: out.total ?? 0, active: out.activeCount ?? 0 })
     case 'mnemon_remember':
-      return typeof args.content === 'string' ? truncate(args.content, 56) : t('toolview.genericSummary')
+      return typeof args.content === 'string' ? truncateInline(args.content, 56) : t('toolview.genericSummary')
     case 'mnemon_runtime_memory': {
       const action = typeof args.action === 'string' ? args.action : ''
       const target = typeof args.target === 'string' ? args.target : ''
-      const content = typeof args.content === 'string' ? truncate(args.content, 40) : ''
+      const content = typeof args.content === 'string' ? truncateInline(args.content, 40) : ''
       return content === '' ? t('toolview.runtimeSummary', { action, target }) : t('toolview.runtimeSummaryWithContent', { action, target, content })
     }
     case 'mnemon_document_manage': {
       const action = typeof args.action === 'string' ? args.action : ''
-      const title = typeof args.title === 'string' ? truncate(args.title, 40) : ''
+      const title = typeof args.title === 'string' ? truncateInline(args.title, 40) : ''
       return title === '' ? t('toolview.documentManageSummary', { action }) : t('toolview.documentManageSummaryWithTitle', { action, title })
     }
     case 'mnemon_link': {
-      const source = typeof args.sourceId === 'string' ? truncate(args.sourceId, 18) : '?'
-      const target = typeof args.targetId === 'string' ? truncate(args.targetId, 18) : '?'
+      const source = typeof args.sourceId === 'string' ? truncateInline(args.sourceId, 18) : '?'
+      const target = typeof args.targetId === 'string' ? truncateInline(args.targetId, 18) : '?'
       return `${source} → ${target}`
     }
     case 'mnemon_forget':
-      return typeof args.id === 'string' ? truncate(args.id, 56) : t('toolview.genericSummary')
+      return typeof args.id === 'string' ? truncateInline(args.id, 56) : t('toolview.genericSummary')
     case 'mnemon_memory_body_create':
-      return typeof args.name === 'string' ? truncate(args.name, 56) : t('toolview.genericSummary')
+      return typeof args.name === 'string' ? truncateInline(args.name, 56) : t('toolview.genericSummary')
     case 'mnemon_memory_body_update': {
-      const id = typeof args.memoryBodyId === 'string' ? truncate(args.memoryBodyId, 32) : ''
+      const id = typeof args.memoryBodyId === 'string' ? truncateInline(args.memoryBodyId, 32) : ''
       return id === '' ? t('toolview.genericSummary') : t('toolview.bodyUpdateSummary', { id })
     }
     case 'mnemon_memory_body_merge': {
-      const target = typeof args.targetMemoryBodyId === 'string' ? truncate(args.targetMemoryBodyId, 24) : '?'
+      const target = typeof args.targetMemoryBodyId === 'string' ? truncateInline(args.targetMemoryBodyId, 24) : '?'
       const sources = countOf(args.sourceMemoryBodyIds) ?? 0
       return t('toolview.bodyMergeSummary', { target, count: sources })
     }
@@ -171,29 +177,31 @@ export const MnemonToolView = memo(function MnemonToolView({ toolName, block, in
   }
   const inspectCall = (event: ReactMouseEvent): void => {
     event.stopPropagation()
-    inspect()
+    inspect?.()
   }
 
   const showArgs = Object.keys(args).length > 0
   const showResult = text !== ''
 
   return (
-    <div className={css.root} data-state={state} data-open={open || undefined} role="button" tabIndex={0} aria-expanded={open} aria-label={`${title}：${summary}`} onClick={toggle} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle() } }}>
-      <span className={`${css.dot} ${state === 'running' ? css.dotRunning : state === 'error' ? css.dotError : state === 'stopped' ? css.dotStopped : css.dotOk}`} aria-hidden="true" />
-      <MnemonLogo className={css.leading} title={title} />
-      <span className={css.title}>{title}</span>
-      <span className={css.summary}>{summary}</span>
-      {(settled || target !== undefined) && (
-        <span className={css.actions} onClick={event => event.stopPropagation()}>
-          {target !== undefined && <button type="button" className={css.actionButton} onClick={openView} title={t('toolview.openView')}>{t('toolview.openView')}</button>}
-          {settled && <button type="button" className={css.actionButton} onClick={inspectCall} title={t('toolview.inspect')}>{t('toolview.inspect')}</button>}
-        </span>
-      )}
-      <span className={`${css.chevron} ${open ? css.chevronOpen : ''}`} aria-hidden="true" />
+    <div className={css.root} data-state={state} data-open={open || undefined}>
+      <div className={css.row} role="button" tabIndex={0} aria-expanded={open} aria-label={`${title}：${summary}`} onClick={toggle} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle() } }}>
+        <span className={`${css.dot} ${state === 'running' ? css.dotRunning : state === 'error' ? css.dotError : state === 'stopped' ? css.dotStopped : css.dotOk}`} aria-hidden="true" />
+        <MnemonLogo className={css.leading} title={title} />
+        <span className={css.title}>{title}</span>
+        <span className={css.summary}>{summary}</span>
+        {(inspect !== undefined || target !== undefined) && (
+          <span className={css.actions} onClick={event => event.stopPropagation()}>
+            {target !== undefined && <button type="button" className={css.actionButton} onClick={openView} title={t('toolview.openView')}>{t('toolview.openView')}</button>}
+            {settled && inspect !== undefined && <button type="button" className={css.actionButton} onClick={inspectCall} title={t('toolview.inspect')}>{t('toolview.inspect')}</button>}
+          </span>
+        )}
+        <span className={`${css.chevron} ${open ? css.chevronOpen : ''}`} aria-hidden="true" />
+      </div>
       {open && (
         <div className={css.details} onClick={event => event.stopPropagation()}>
-          {showArgs && <div className={css.detailSection}><span className={css.detailLabel}>{t('toolview.args')}</span><pre className={css.detailCode}>{truncate(JSON.stringify(args, null, 2), 2000)}</pre></div>}
-          {showResult && <div className={css.detailSection}><span className={css.detailLabel}>{t('toolview.result')}</span><pre className={css.detailCode}>{truncate(text, 4000)}</pre></div>}
+          {showArgs && <div className={css.detailSection}><span className={css.detailLabel}>{t('toolview.args')}</span><pre className={css.detailCode}>{truncateBlock(JSON.stringify(args, null, 2), 2000)}</pre></div>}
+          {showResult && <div className={css.detailSection}><span className={css.detailLabel}>{t('toolview.result')}</span><pre className={css.detailCode}>{truncateBlock(text, 4000)}</pre></div>}
           {!showArgs && !showResult && <div className={css.detailEmpty}>{state === 'running' ? t('toolview.running') : t('toolview.noResult')}</div>}
         </div>
       )}
