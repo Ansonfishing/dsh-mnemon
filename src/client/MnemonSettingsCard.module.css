@@ -201,7 +201,14 @@
   line-height: 18px;
 }
 
-.customField input {
+.inlineActions {
+  display: flex;
+  flex: none;
+  gap: 12px;
+}
+
+.customField input,
+.customField select {
   box-sizing: border-box;
   width: 100%;
   height: 34px;
@@ -216,7 +223,12 @@
   line-height: 20px;
 }
 
-.customField input:focus-visible {
+.customField select {
+  appearance: auto;
+}
+
+.customField input:focus-visible,
+.customField select:focus-visible {
   border-color: var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary));
   outline: none;
 }
@@ -225,9 +237,41 @@
   border-color: var(--dsw-alias-state-error-primary);
 }
 
-.customField input:disabled {
+.customField input:disabled,
+.customField select:disabled {
   cursor: default;
   opacity: .45;
+}
+
+.addPackFields {
+  display: grid;
+  grid-template-columns: minmax(0, .8fr) minmax(0, 1.4fr) auto;
+  gap: 8px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  margin-top: 4px;
+  padding-top: 10px;
+}
+
+.compactButton {
+  appearance: none;
+  min-width: 76px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-3);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.compactButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.compactButton:disabled {
+  cursor: default;
+  opacity: .4;
 }
 
 .customField p,
@@ -345,6 +389,10 @@
   .actions > div,
   .actions button {
     flex: 1;
+  }
+
+  .addPackFields {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

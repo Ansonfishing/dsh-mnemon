@@ -12,6 +12,10 @@ export interface Config {
   cliPath?: string
   /** Custom Mnemon base directory; also retained as a legacy dataDir-only scope selection. */
   dataDir?: string
+  /** Selected entry from customPacks. The resolved entry is mirrored to dataDir for compatibility. */
+  customPackId?: string
+  /** Named custom Mnemon roots available from the settings dropdown. */
+  customPacks?: CustomPackConfig[]
   /** Legacy store hint used to bootstrap or discover the initial Memory Space. */
   store?: string
   /** Hard deadline for one CLI process. */
@@ -43,6 +47,12 @@ export interface Config {
   }
 }
 
+export interface CustomPackConfig {
+  id: string
+  name: string
+  dataDir: string
+}
+
 /** Browser-only interaction settings, registered live under `mnemon-ui`. */
 export interface InteractionConfig {
   toolviews?: boolean
@@ -62,6 +72,12 @@ export const Config: z<Config> = z.object({
   storageScope: z.union(['global', 'workspace', 'custom'] as const),
   cliPath: z.string(),
   dataDir: z.string(),
+  customPackId: z.string(),
+  customPacks: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    dataDir: z.string(),
+  })).default([]),
   store: z.string(),
   timeoutMs: z.number().step(1).min(100).max(120_000).default(DEFAULT_TIMEOUT_MS),
   defaultRecallLimit: z.number().step(1).min(1).max(50).default(DEFAULT_RECALL_LIMIT),
@@ -84,6 +100,8 @@ export interface ResolvedConfig {
   storageScope: 'global' | 'workspace' | 'custom'
   cliPath?: string
   dataDir?: string
+  customPackId?: string
+  customPacks: CustomPackConfig[]
   store?: string
   timeoutMs: number
   defaultRecallLimit: number
@@ -120,15 +138,53 @@ function optionalText(value: string | undefined): string | undefined {
   return trimmed === undefined || trimmed === '' ? undefined : trimmed
 }
 
+const CUSTOM_PACK_ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/
+
+function validateCustomDataDir(value: string): string {
+  const dataDir = optionalText(value)
+  if (dataDir === undefined) throw new Error('dsh-mnemon: custom Pack dataDir is required')
+  if (!isAbsolute(dataDir) && dataDir !== '~' && !dataDir.startsWith('~/')) {
+    throw new Error('dsh-mnemon: custom Pack dataDir must be absolute or start with ~/')
+  }
+  return dataDir
+}
+
+function resolveCustomPacks(value: CustomPackConfig[] | undefined, legacyDataDir: string | undefined): CustomPackConfig[] {
+  const packs: CustomPackConfig[] = []
+  const ids = new Set<string>()
+  for (const candidate of value ?? []) {
+    const id = optionalText(candidate.id)
+    const name = optionalText(candidate.name)
+    if (id === undefined || !CUSTOM_PACK_ID.test(id)) throw new Error('dsh-mnemon: custom Pack id must match [a-zA-Z0-9][a-zA-Z0-9_-]*')
+    if (ids.has(id)) throw new Error(`dsh-mnemon: duplicate custom Pack id: ${id}`)
+    if (name === undefined || name.length > 100) throw new Error('dsh-mnemon: custom Pack name must contain 1..100 characters')
+    ids.add(id)
+    packs.push({ id, name, dataDir: validateCustomDataDir(candidate.dataDir) })
+  }
+  if (packs.length > 32) throw new Error('dsh-mnemon: at most 32 custom Packs may be configured')
+  if (legacyDataDir !== undefined && !packs.some(pack => pack.dataDir === legacyDataDir)) {
+    let id = 'legacy'
+    let suffix = 2
+    while (ids.has(id)) id = `legacy-${suffix++}`
+    packs.push({ id, name: 'Custom Pack', dataDir: validateCustomDataDir(legacyDataDir) })
+  }
+  return packs
+}
+
 export function resolveConfig(config: Config = {}): ResolvedConfig {
   const cliPath = optionalText(config.cliPath)
-  const dataDir = optionalText(config.dataDir)
+  const legacyDataDir = optionalText(config.dataDir)
+  const customPacks = resolveCustomPacks(config.customPacks, legacyDataDir)
+  const requestedPackId = optionalText(config.customPackId)
+  if (requestedPackId !== undefined && !CUSTOM_PACK_ID.test(requestedPackId)) throw new Error('dsh-mnemon: customPackId is invalid')
   const store = optionalText(config.store)
-  const storageScope = config.storageScope ?? (dataDir === undefined ? 'global' : 'custom')
-  if (storageScope === 'custom' && dataDir === undefined) throw new Error('dsh-mnemon: dataDir is required when storageScope is custom')
-  if (storageScope === 'custom' && dataDir !== undefined && !isAbsolute(dataDir) && dataDir !== '~' && !dataDir.startsWith('~/')) {
-    throw new Error('dsh-mnemon: custom dataDir must be absolute or start with ~/')
-  }
+  const storageScope = config.storageScope ?? (legacyDataDir === undefined && customPacks.length === 0 ? 'global' : 'custom')
+  const selectedPack = requestedPackId === undefined
+    ? customPacks.find(pack => pack.dataDir === legacyDataDir) ?? (customPacks.length === 1 ? customPacks[0] : undefined)
+    : customPacks.find(pack => pack.id === requestedPackId)
+  if (requestedPackId !== undefined && selectedPack === undefined) throw new Error(`dsh-mnemon: unknown custom Pack: ${requestedPackId}`)
+  if (storageScope === 'custom' && selectedPack === undefined) throw new Error('dsh-mnemon: a custom Pack is required when storageScope is custom')
+  const dataDir = selectedPack?.dataDir ?? legacyDataDir
   if (store !== undefined && !/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(store)) {
     throw new Error('dsh-mnemon: store must match [a-zA-Z0-9][a-zA-Z0-9_-]*')
   }
@@ -136,6 +192,8 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     storageScope,
     ...(cliPath === undefined ? {} : { cliPath }),
     ...(dataDir === undefined ? {} : { dataDir }),
+    ...(selectedPack === undefined ? {} : { customPackId: selectedPack.id }),
+    customPacks,
     ...(store === undefined ? {} : { store }),
     timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     defaultRecallLimit: config.defaultRecallLimit ?? DEFAULT_RECALL_LIMIT,

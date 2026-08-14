@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type JSX } from 'react'
-import type { Config, InteractionConfig } from '../config.ts'
+import type { Config, CustomPackConfig, InteractionConfig } from '../config.ts'
 import type { ClientSettingsScope, ClientSettingsSnapshot, SettingsOperation } from '../contracts.ts'
 import css from './MnemonSettingsCard.module.css'
 import { translateZh, type MnemonTranslate } from './locales.ts'
@@ -11,12 +11,17 @@ export interface MnemonSettingsCardProps {
   t?: MnemonTranslate
 }
 
-type CoreField = 'storageScope' | 'dataDir'
+type CoreField = 'storageScope' | 'dataDir' | 'customPackId' | 'customPacks'
 type InteractionField = 'toolviews' | 'turnBar' | 'saveAction'
 type Field = CoreField | InteractionField
-type Draft = Record<CoreField, string> & Record<InteractionField, boolean>
+interface Draft extends Record<InteractionField, boolean> {
+  storageScope: string
+  dataDir: string
+  customPackId: string
+  customPacks: CustomPackConfig[]
+}
 
-const CORE_FIELDS: CoreField[] = ['storageScope', 'dataDir']
+const CORE_FIELDS: CoreField[] = ['storageScope', 'dataDir', 'customPackId', 'customPacks']
 const INTERACTION_FIELDS: InteractionField[] = ['toolviews', 'turnBar', 'saveAction']
 
 function record(value: unknown): Record<string, unknown> {
@@ -25,9 +30,24 @@ function record(value: unknown): Record<string, unknown> {
 
 function coreDraft(value: Config | undefined): Pick<Draft, CoreField> {
   const resolved = value ?? {}
+  const customPacks = (resolved.customPacks ?? []).filter(pack => pack.id?.trim() && pack.name?.trim() && pack.dataDir?.trim()).map(pack => ({
+    id: pack.id.trim(), name: pack.name.trim(), dataDir: pack.dataDir.trim(),
+  }))
+  const legacyDirectory = resolved.dataDir?.trim() ?? ''
+  if (legacyDirectory !== '' && !customPacks.some(pack => pack.dataDir === legacyDirectory)) {
+    let id = 'legacy'
+    let suffix = 2
+    while (customPacks.some(pack => pack.id === id)) id = `legacy-${suffix++}`
+    customPacks.push({ id, name: 'Custom Pack', dataDir: legacyDirectory })
+  }
+  const selected = customPacks.find(pack => pack.id === resolved.customPackId)
+    ?? customPacks.find(pack => pack.dataDir === legacyDirectory)
+    ?? (customPacks.length === 1 ? customPacks[0] : undefined)
   return {
-    storageScope: resolved.storageScope ?? (resolved.dataDir?.trim() ? 'custom' : 'global'),
-    dataDir: resolved.dataDir?.trim() ?? '',
+    storageScope: resolved.storageScope ?? (legacyDirectory ? 'custom' : 'global'),
+    dataDir: selected?.dataDir ?? legacyDirectory,
+    customPackId: selected?.id ?? '',
+    customPacks,
   }
 }
 
@@ -46,6 +66,7 @@ function draftOf(core: Config | undefined, interaction: InteractionConfig | unde
 function validation(t: MnemonTranslate, draft: Draft): string | null {
   if (!['global', 'workspace', 'custom'].includes(draft.storageScope)) return t('config.invalidScope')
   if (draft.storageScope !== 'custom') return null
+  if (draft.customPackId === '' || !draft.customPacks.some(pack => pack.id === draft.customPackId)) return t('config.customPackRequired')
   const directory = draft.dataDir.trim()
   if (directory === '') return t('config.customRequired')
   if (!(directory === '~' || directory.startsWith('~/') || directory.startsWith('/'))) return t('config.customAbsolute')
@@ -62,7 +83,8 @@ function operations(fields: readonly Field[], dirty: ReadonlySet<Field>, reset: 
   return fields.flatMap((field): SettingsOperation[] => {
     if (!dirty.has(field)) return []
     if (reset.has(field) || (field === 'dataDir' && draft.dataDir.trim() === '')) return [{ op: 'unset', path: [field] }]
-    return [{ op: 'set', path: [field], value: typeof draft[field] === 'string' ? draft[field].trim() : draft[field] }]
+    const value = draft[field]
+    return [{ op: 'set', path: [field], value: typeof value === 'string' ? value.trim() : value }]
   })
 }
 
@@ -87,6 +109,9 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const [reset, setReset] = useState<Set<Field>>(() => new Set())
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
+  const [addingPack, setAddingPack] = useState(false)
+  const [newPackName, setNewPackName] = useState('')
+  const [newPackDirectory, setNewPackDirectory] = useState('')
 
   useEffect(() => {
     if (dirty.size === 0) setDraft(draftOf(coreSnapshot.value, interactionSnapshot.value))
@@ -110,6 +135,63 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
       return next
     })
     setFailed(null)
+  }
+
+  const stageCore = (next: Partial<Pick<Draft, CoreField>>, fields: CoreField[]): void => {
+    setDraft(current => ({ ...current, ...next }))
+    setDirty(current => {
+      const result = new Set(current)
+      for (const field of fields) result.add(field)
+      return result
+    })
+    setReset(current => {
+      const result = new Set(current)
+      for (const field of fields) result.delete(field)
+      return result
+    })
+    setFailed(null)
+  }
+
+  const chooseScope = (storageScope: string): void => {
+    if (storageScope !== 'custom' || draft.customPackId !== '') return edit('storageScope', storageScope)
+    let id = 'custom'
+    let suffix = 2
+    while (draft.customPacks.some(pack => pack.id === id)) id = `custom-${suffix++}`
+    const customPacks = [...draft.customPacks, { id, name: t('config.customDefaultName'), dataDir: '' }]
+    stageCore({ storageScope, customPackId: id, customPacks }, ['storageScope', 'customPackId', 'customPacks'])
+  }
+
+  const chooseCustomPack = (customPackId: string): void => {
+    const pack = draft.customPacks.find(candidate => candidate.id === customPackId)
+    if (pack === undefined) return
+    stageCore({ customPackId, dataDir: pack.dataDir }, ['customPackId', 'dataDir'])
+  }
+
+  const editCustomDirectory = (dataDir: string): void => {
+    const customPacks = draft.customPacks.map(pack => pack.id === draft.customPackId ? { ...pack, dataDir } : pack)
+    stageCore({ dataDir, customPacks }, ['dataDir', 'customPacks'])
+  }
+
+  const addCustomPack = (): void => {
+    const name = newPackName.trim()
+    const dataDir = newPackDirectory.trim()
+    if (name === '' || dataDir === '') return
+    const id = `pack-${globalThis.crypto.randomUUID()}`
+    const customPacks = [...draft.customPacks, { id, name, dataDir }]
+    stageCore({ storageScope: 'custom', customPackId: id, dataDir, customPacks }, ['storageScope', 'customPackId', 'dataDir', 'customPacks'])
+    setAddingPack(false)
+    setNewPackName('')
+    setNewPackDirectory('')
+  }
+
+  const removeCustomPack = (): void => {
+    const customPacks = draft.customPacks.filter(pack => pack.id !== draft.customPackId)
+    const selected = customPacks[0]
+    stageCore({
+      customPacks,
+      customPackId: selected?.id ?? '',
+      dataDir: selected?.dataDir ?? '',
+    }, ['customPacks', 'customPackId', 'dataDir'])
   }
 
   const resetField = (field: Field): void => {
@@ -137,7 +219,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
     setSaving(true)
     setFailed(null)
     try {
-      const coreOrder: CoreField[] = draft.storageScope === 'custom' ? ['dataDir', 'storageScope'] : CORE_FIELDS
+      const coreOrder: CoreField[] = draft.storageScope === 'custom' ? ['customPacks', 'customPackId', 'dataDir', 'storageScope'] : CORE_FIELDS
       const coreOps = operations(coreOrder, dirty, reset, draft)
       const interactionOps = operations(INTERACTION_FIELDS, dirty, reset, draft)
       await Promise.all([
@@ -173,18 +255,34 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           </div>
 
           <div className={css.choiceGrid} role="radiogroup" aria-label={t('config.scopeAria')}>
-            <ChoiceCard id="mnemon-storage-global" name="mnemon-storage" label={t('config.global')} detail="~/.mnemon" checked={draft.storageScope === 'global'} disabled={coreDisabled} onChange={() => edit('storageScope', 'global')} />
-            <ChoiceCard id="mnemon-storage-workspace" name="mnemon-storage" label={t('config.workspace')} detail="<workspace>/.mnemon" checked={draft.storageScope === 'workspace'} disabled={coreDisabled} onChange={() => edit('storageScope', 'workspace')} />
-            <ChoiceCard id="mnemon-storage-custom" name="mnemon-storage" label={t('config.custom')} detail={draft.dataDir.trim() || t('config.customHintShort')} checked={draft.storageScope === 'custom'} disabled={coreDisabled} onChange={() => edit('storageScope', 'custom')} />
+            <ChoiceCard id="mnemon-storage-global" name="mnemon-storage" label={t('config.global')} detail="~/.mnemon" checked={draft.storageScope === 'global'} disabled={coreDisabled} onChange={() => chooseScope('global')} />
+            <ChoiceCard id="mnemon-storage-workspace" name="mnemon-storage" label={t('config.workspace')} detail="<workspace>/.mnemon" checked={draft.storageScope === 'workspace'} disabled={coreDisabled} onChange={() => chooseScope('workspace')} />
+            <ChoiceCard id="mnemon-storage-custom" name="mnemon-storage" label={t('config.custom')} detail={draft.customPacks.find(pack => pack.id === draft.customPackId)?.name || t('config.customHintShort')} checked={draft.storageScope === 'custom'} disabled={coreDisabled} onChange={() => chooseScope('custom')} />
           </div>
 
           {draft.storageScope === 'custom' && <div className={css.customField}>
             <div className={css.fieldHeading}>
+              <label htmlFor="mnemon-custom-pack">{t('config.customPack')}</label>
+              <span className={css.inlineActions}>
+                <button className={css.reset} type="button" disabled={coreDisabled} onClick={() => setAddingPack(value => !value)}>{addingPack ? t('config.cancelAddPack') : t('config.addPack')}</button>
+                {draft.customPacks.length > 0 && <button className={css.reset} type="button" disabled={coreDisabled} onClick={removeCustomPack}>{t('config.removePack')}</button>}
+              </span>
+            </div>
+            <select id="mnemon-custom-pack" aria-label={t('config.customPackAria')} value={draft.customPackId} onChange={event => chooseCustomPack(event.target.value)} disabled={coreDisabled || draft.customPacks.length === 0}>
+              {draft.customPacks.length === 0 && <option value="">{t('config.noCustomPacks')}</option>}
+              {draft.customPacks.map(pack => <option key={pack.id} value={pack.id}>{pack.name}</option>)}
+            </select>
+            <div className={css.fieldHeading}>
               <label htmlFor="mnemon-custom-directory">{t('config.customDirectory')}</label>
               {overridden('dataDir') && <button className={css.reset} type="button" disabled={coreDisabled} onClick={() => resetField('dataDir')}>{t('config.reset')}</button>}
             </div>
-            <input id="mnemon-custom-directory" aria-label={t('config.customAria')} aria-describedby={`mnemon-custom-directory-hint${errorId === undefined ? '' : ` ${errorId}`}`} aria-invalid={error !== null} value={draft.dataDir} onChange={event => edit('dataDir', event.target.value)} placeholder="~/mnemon-data" spellCheck={false} autoComplete="off" disabled={coreDisabled} />
+            <input id="mnemon-custom-directory" aria-label={t('config.customAria')} aria-describedby={`mnemon-custom-directory-hint${errorId === undefined ? '' : ` ${errorId}`}`} aria-invalid={error !== null} value={draft.dataDir} onChange={event => editCustomDirectory(event.target.value)} placeholder="~/mnemon-data" spellCheck={false} autoComplete="off" disabled={coreDisabled || draft.customPackId === ''} />
             <p id="mnemon-custom-directory-hint">{t('config.customHint')}</p>
+            {addingPack && <div className={css.addPackFields}>
+              <input aria-label={t('config.customPackNameAria')} value={newPackName} onChange={event => setNewPackName(event.target.value)} placeholder={t('config.customPackNamePlaceholder')} maxLength={100} disabled={coreDisabled} />
+              <input aria-label={t('config.newPackDirectoryAria')} value={newPackDirectory} onChange={event => setNewPackDirectory(event.target.value)} placeholder="~/mnemon-packs/project" spellCheck={false} autoComplete="off" disabled={coreDisabled} />
+              <button type="button" className={css.compactButton} disabled={coreDisabled || newPackName.trim() === '' || newPackDirectory.trim() === ''} onClick={addCustomPack}>{t('config.confirmAddPack')}</button>
+            </div>}
           </div>}
         </section>
 

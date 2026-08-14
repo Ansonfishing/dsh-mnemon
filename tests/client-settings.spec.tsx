@@ -91,8 +91,42 @@ describe('MnemonSettingsCard', () => {
     fireEvent.click(view.getByRole('button', { name: '保存' }))
 
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([
+      { op: 'set', path: ['customPacks'], value: [{ id: 'custom', name: '自定义 Pack', dataDir: '/tmp/mnemon-custom' }] },
+      { op: 'set', path: ['customPackId'], value: 'custom' },
       { op: 'set', path: ['dataDir'], value: '/tmp/mnemon-custom' },
       { op: 'set', path: ['storageScope'], value: 'custom' },
+    ]))
+  })
+
+  it('switches among configured custom Packs through the native dropdown', async () => {
+    const mutate = vi.fn(async () => {})
+    const snapshot = {
+      status: 'ready' as const,
+      value: {
+        storageScope: 'custom' as const,
+        customPackId: 'project',
+        dataDir: '/packs/project',
+        customPacks: [
+          { id: 'project', name: 'Project', dataDir: '/packs/project' },
+          { id: 'research', name: 'Research', dataDir: '/packs/research' },
+        ],
+      },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}), mutate,
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+
+    render(<MnemonSettingsCard scope={scope} />)
+    fireEvent.change(screen.getByLabelText('选择自定义 Mnemon Pack'), { target: { value: 'research' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([
+      { op: 'set', path: ['customPackId'], value: 'research' },
+      { op: 'set', path: ['dataDir'], value: '/packs/research' },
     ]))
   })
 

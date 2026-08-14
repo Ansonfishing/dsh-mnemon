@@ -23,9 +23,37 @@ describe('Mnemon config and resolution', () => {
 
   it('resolves the one storage-scope setting and preserves legacy dataDir as custom', () => {
     expect(resolveConfig({ storageScope: 'workspace' })).toMatchObject({ storageScope: 'workspace' })
-    expect(resolveConfig({ dataDir: '/memory/custom' })).toMatchObject({ storageScope: 'custom', dataDir: '/memory/custom' })
-    expect(() => resolveConfig({ storageScope: 'custom' })).toThrow('dataDir')
+    expect(resolveConfig({ dataDir: '/memory/custom' })).toMatchObject({
+      storageScope: 'custom', dataDir: '/memory/custom', customPackId: 'legacy',
+      customPacks: [{ id: 'legacy', name: 'Custom Pack', dataDir: '/memory/custom' }],
+    })
+    expect(() => resolveConfig({ storageScope: 'custom' })).toThrow('custom Pack')
     expect(() => resolveConfig({ storageScope: 'custom', dataDir: 'relative/memory' })).toThrow('absolute')
+  })
+
+  it('selects a named custom Pack while mirroring its root to the legacy dataDir field', () => {
+    expect(resolveConfig({
+      storageScope: 'custom',
+      customPackId: 'research',
+      customPacks: [
+        { id: 'project', name: 'Project', dataDir: '/memory/project' },
+        { id: 'research', name: 'Research', dataDir: '~/memory/research' },
+      ],
+    })).toMatchObject({
+      storageScope: 'custom',
+      customPackId: 'research',
+      dataDir: '~/memory/research',
+      customPacks: [
+        { id: 'project', name: 'Project', dataDir: '/memory/project' },
+        { id: 'research', name: 'Research', dataDir: '~/memory/research' },
+      ],
+    })
+  })
+
+  it('rejects duplicate, missing, and unsafe custom Pack definitions', () => {
+    expect(() => resolveConfig({ customPacks: [{ id: 'same', name: 'One', dataDir: '/one' }, { id: 'same', name: 'Two', dataDir: '/two' }] })).toThrow('duplicate')
+    expect(() => resolveConfig({ storageScope: 'custom', customPackId: 'missing', customPacks: [{ id: 'other', name: 'Other', dataDir: '/other' }] })).toThrow('unknown custom Pack')
+    expect(() => resolveConfig({ customPacks: [{ id: '../bad', name: 'Bad', dataDir: '/bad' }] })).toThrow('id')
   })
 
   it('rejects unsafe store names', () => {
