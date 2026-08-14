@@ -181,7 +181,23 @@ export interface HostContextShape {
 export interface SlotsService {
   inject(name: string, factory: () => unknown): unknown
   register(
-    options: { name: string; id: string; order?: number; label?: string | (() => string); locale?: string; inject?: () => Record<string, unknown> },
+    options: {
+      name: string
+      /** list slots: stable contributor id. */
+      id?: string
+      /** keyed slots: dispatch key (chat node kind, tool name). */
+      key?: string
+      /** chain slots: owner-predicate deciding whether this entry renders. */
+      select?: (owner: unknown) => unknown
+      order?: number
+      /** keyed/list/single shadowing: lowest priority renders; chain ignores it. */
+      priority?: number
+      label?: string | (() => string)
+      locale?: string
+      children?: Record<string, unknown>
+      /** session-scope slots receive (sessionId, actions); root-scope none. */
+      inject?: (...args: unknown[]) => Record<string, unknown>
+    },
     component: (props: never) => unknown,
   ): unknown
 }

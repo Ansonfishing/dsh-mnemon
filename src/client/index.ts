@@ -1,6 +1,7 @@
 import type { ClientConnectionHandle, ClientContextShape } from '../contracts.ts'
 import { MnemonSettingsCard } from './MnemonSettingsCard.tsx'
 import { MnemonView } from './MnemonView.tsx'
+import { MnemonToolView, MNEMON_TOOLVIEW_NAMES } from './MnemonToolviews.tsx'
 import { en, zh, type MnemonKey } from './locales.ts'
 import { MnemonSettingsScope } from './settings.ts'
 
@@ -35,4 +36,17 @@ export function apply(rawContext: unknown): void {
       t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
     }),
   }, MnemonSettingsCard as never))
+  // Memory-flavoured rows for every mnemon_* tool call in the chat flow; a
+  // keyed hit replaces the generic tool row.
+  for (const toolName of MNEMON_TOOLVIEW_NAMES) {
+    ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({
+      name: 'tool.call.toolview',
+      key: toolName,
+      locale: namespace,
+      inject: (sessionId: unknown): { sessionId?: string; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+        ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
+        t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
+      }),
+    }, MnemonToolView as never))
+  }
 }
