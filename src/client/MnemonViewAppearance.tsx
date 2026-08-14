@@ -15,9 +15,19 @@ type AppearanceSlot =
   | 'topNavigation'
   | 'nav'
   | 'navGroup'
+  | 'memoryWorkspace'
   | 'memoryNavigation'
   | 'memoryTabs'
   | 'memoryWriteButton'
+  | 'bodyCardHeader'
+  | 'bodyDirectoryActions'
+  | 'bodyCardIdentity'
+  | 'bodyCardMeta'
+  | 'bodyCardFooter'
+  | 'bodyCardStats'
+  | 'itemActionButton'
+  | 'itemEditAction'
+  | 'itemDangerAction'
   | 'modalBackdrop'
   | 'modal'
   | 'canvas'
@@ -71,9 +81,19 @@ export function resolveMnemonViewAppearance(surface: MnemonViewSurface, t: Mnemo
       topNavigation: sidebarCss.topNavigation,
       nav: sidebarCss.nav,
       navGroup: sidebarCss.navGroup,
+      memoryWorkspace: sidebarCss.memoryWorkspace,
       memoryNavigation: sidebarCss.memoryNavigation,
       memoryTabs: sidebarCss.memoryTabs,
       memoryWriteButton: sidebarCss.memoryWriteButton,
+      bodyCardHeader: sidebarCss.bodyCardHeader,
+      bodyDirectoryActions: sidebarCss.bodyDirectoryActions,
+      bodyCardIdentity: sidebarCss.bodyCardIdentity,
+      bodyCardMeta: sidebarCss.bodyCardMeta,
+      bodyCardFooter: sidebarCss.bodyCardFooter,
+      bodyCardStats: sidebarCss.bodyCardStats,
+      itemActionButton: sidebarCss.itemActionButton,
+      itemEditAction: sidebarCss.itemEditAction,
+      itemDangerAction: sidebarCss.itemDangerAction,
       modalBackdrop: sidebarCss.modalBackdrop,
       modal: sidebarCss.modal,
       canvas: sidebarCss.canvas,

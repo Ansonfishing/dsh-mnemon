@@ -201,6 +201,7 @@ describe('MnemonView', () => {
         }
         return { ok: true, value: { ...target } }
       }
+      if (endpoint === 'body-delete') return { ok: true, value: { ...body } }
       if (endpoint === 'body-create') return { ok: true, value: { ...body, id: 'new-body', name: String(payload?.name ?? '') } }
       return { ok: false, error: { code: 'unexpected', message: endpoint } }
     })
@@ -312,7 +313,7 @@ describe('MnemonView', () => {
   })
 
   it('keeps shared functionality but applies the minimal unbranded sidebar appearance', async () => {
-    const { connection } = createConnection()
+    const { connection, call } = createConnection()
     const { container } = render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
 
     await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
@@ -335,7 +336,10 @@ describe('MnemonView', () => {
     expect(bodiesTab.getAttribute('aria-selected')).toBe('false')
     expect(screen.queryByRole('navigation', { name: 'Mnemon 页面' })).toBeNull()
 
+    const canvas = screen.getByTestId('mnemon-canvas')
+    canvas.scrollTop = 240
     fireEvent.click(bodiesTab)
+    expect(canvas.scrollTop).toBe(0)
     expect(statusTab.getAttribute('aria-selected')).toBe('false')
     expect(statusTab.hasAttribute('data-active')).toBe(false)
     expect(bodiesTab.getAttribute('aria-selected')).toBe('true')
@@ -348,8 +352,36 @@ describe('MnemonView', () => {
     expect(memoryTabs).toHaveLength(4)
     expect(overviewTab.getAttribute('aria-selected')).toBe('true')
     expect(rememberAction.className).toContain('primaryButton')
+    expect(screen.getByRole('heading', { name: '记忆体', level: 2 })).toBeTruthy()
+    expect(screen.getByText('管理全局记忆体的读取边界，并在一张实时四图快照中观察所有已激活记忆体。')).toBeTruthy()
     expect(screen.getByRole('heading', { name: '概览', level: 2 })).toBeTruthy()
     await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: '创建记忆体' }))
+    const bodyCreateDialog = screen.getByRole('dialog', { name: '创建记忆体' })
+    expect(within(bodyCreateDialog).getByRole('textbox', { name: '新记忆体名称' })).toBeTruthy()
+    expect(within(bodyCreateDialog).getByRole('textbox', { name: '新记忆体描述' })).toBeTruthy()
+    const bodyCreateCancel = within(bodyCreateDialog).getAllByRole('button', { name: '取消' }).at(-1)
+    if (bodyCreateCancel === undefined) throw new Error('memory body create cancel button missing')
+    fireEvent.click(bodyCreateCancel)
+    expect(screen.queryByRole('dialog', { name: '创建记忆体' })).toBeNull()
+
+    fireEvent.click(await screen.findByRole('button', { name: '编辑项目记忆体' }))
+    const bodyDialog = screen.getByRole('dialog', { name: '编辑项目记忆体' })
+    expect(within(bodyDialog).getByRole('textbox', { name: '名称' })).toBeTruthy()
+    expect(within(bodyDialog).getByRole('textbox', { name: '路由说明' })).toBeTruthy()
+    const bodyCancel = within(bodyDialog).getAllByRole('button', { name: '取消' }).at(-1)
+    if (bodyCancel === undefined) throw new Error('memory body cancel button missing')
+    fireEvent.click(bodyCancel)
+    expect(screen.queryByRole('dialog', { name: '编辑项目记忆体' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '删除项目记忆体' }))
+    const deleteDialog = screen.getByRole('dialog', { name: '删除“项目记忆体”？' })
+    expect(within(deleteDialog).getByText(/永久删除这个记忆体及其中的全部记忆与关系/)).toBeTruthy()
+    expect(document.activeElement).toBe(within(deleteDialog).getAllByRole('button', { name: '取消' }).at(-1))
+    fireEvent.click(within(deleteDialog).getByRole('button', { name: '确认删除' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '删除“项目记忆体”？' })).toBeNull())
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-delete', { memoryBodyId: 'project', sessionId: 'session-1' })
 
     fireEvent.click(rememberAction)
     const rememberDialog = screen.getByRole('dialog', { name: '沉淀记忆' })
@@ -381,6 +413,32 @@ describe('MnemonView', () => {
     if (runtimeCancel === undefined) throw new Error('runtime cancel button missing')
     fireEvent.click(runtimeCancel)
     expect(screen.queryByRole('dialog', { name: '添加热记忆' })).toBeNull()
+    const userRuntime = screen.getByRole('region', { name: '用户画像' })
+    fireEvent.click(await within(userRuntime).findByRole('button', { name: '编辑' }))
+    const runtimeEditDialog = screen.getByRole('dialog', { name: '编辑运行时记忆' })
+    expect(within(runtimeEditDialog).getByRole('textbox', { name: '编辑运行时记忆' })).toBeTruthy()
+    const runtimeEditCancel = within(runtimeEditDialog).getAllByRole('button', { name: '取消' }).at(-1)
+    if (runtimeEditCancel === undefined) throw new Error('runtime edit cancel button missing')
+    fireEvent.click(runtimeEditCancel)
+    expect(screen.queryByRole('dialog', { name: '编辑运行时记忆' })).toBeNull()
+    fireEvent.click(within(userRuntime).getByRole('button', { name: '移除' }))
+    const runtimeRemoveDialog = screen.getByRole('dialog', { name: '移除运行时记忆？' })
+    expect(within(runtimeRemoveDialog).getByText(/不再随每轮上下文加载/)).toBeTruthy()
+    const runtimeRemoveCancel = within(runtimeRemoveDialog).getAllByRole('button', { name: '取消' }).at(-1)
+    if (runtimeRemoveCancel === undefined) throw new Error('runtime remove cancel button missing')
+    fireEvent.click(runtimeRemoveCancel)
+    expect(screen.queryByRole('dialog', { name: '移除运行时记忆？' })).toBeNull()
+
+    fireEvent.click(bodiesTab)
+    const contentTab = within(screen.getByRole('tablist', { name: '记忆体页面' })).getByRole('tab', { name: '内容' })
+    fireEvent.click(contentTab)
+    fireEvent.click(await screen.findByRole('button', { name: '忘记' }))
+    const forgetDialog = screen.getByRole('dialog', { name: '软删除这条记忆？' })
+    expect(within(forgetDialog).getByText('项目选择 SQLite，因为需要单文件部署。')).toBeTruthy()
+    const forgetCancel = within(forgetDialog).getAllByRole('button', { name: '取消' }).at(-1)
+    if (forgetCancel === undefined) throw new Error('forget cancel button missing')
+    fireEvent.click(forgetCancel)
+    expect(screen.queryByRole('dialog', { name: '软删除这条记忆？' })).toBeNull()
 
     fireEvent.click(documentsTab)
     fireEvent.click(screen.getByRole('button', { name: '新建档案' }))
@@ -390,6 +448,21 @@ describe('MnemonView', () => {
     if (documentCancel === undefined) throw new Error('document cancel button missing')
     fireEvent.click(documentCancel)
     expect(screen.queryByRole('dialog', { name: '创建托管档案' })).toBeNull()
+    const documentReader = screen.getByRole('region', { name: '档案阅读器' })
+    fireEvent.click(await within(documentReader).findByRole('button', { name: '编辑' }))
+    const documentEditDialog = screen.getByRole('dialog', { name: '编辑活跃档案' })
+    expect(within(documentEditDialog).getByRole('textbox', { name: '标题' })).toBeTruthy()
+    const documentEditCancel = within(documentEditDialog).getAllByRole('button', { name: '取消' }).at(-1)
+    if (documentEditCancel === undefined) throw new Error('document edit cancel button missing')
+    fireEvent.click(documentEditCancel)
+    expect(screen.queryByRole('dialog', { name: '编辑活跃档案' })).toBeNull()
+    fireEvent.click(within(documentReader).getByRole('button', { name: '归档' }))
+    const documentArchiveDialog = screen.getByRole('dialog', { name: '确认建立 Mnemon 索引并迁移这份档案？' })
+    expect(within(documentArchiveDialog).getByText(/受限子 Agent 写入可检索的 Mnemon 摘要/)).toBeTruthy()
+    const documentArchiveCancel = within(documentArchiveDialog).getAllByRole('button', { name: '取消' }).at(-1)
+    if (documentArchiveCancel === undefined) throw new Error('document archive cancel button missing')
+    fireEvent.click(documentArchiveCancel)
+    expect(screen.queryByRole('dialog', { name: '确认建立 Mnemon 索引并迁移这份档案？' })).toBeNull()
     expect(screen.queryByRole('img', { name: 'Mnemon' })).toBeNull()
   })
 

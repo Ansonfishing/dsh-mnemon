@@ -190,6 +190,10 @@ describe('MnemonService', () => {
     service.updateBody(research.id, { active: false })
     await service.remember({ memoryBodyId: research.id, content: 'Durable cross-body write.' })
     expect(service.memoryBodies.get(research.id).active).toBe(true)
+
+    await expect(service.deleteBody(research.id)).resolves.toMatchObject({ id: research.id })
+    expect(service.memoryBodies.list().some(body => body.id === research.id)).toBe(false)
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--store', research.id, 'store', 'remove', research.id]), expect.anything())
   })
 
   it('rejects explicit reads from an inactive memory body', async () => {

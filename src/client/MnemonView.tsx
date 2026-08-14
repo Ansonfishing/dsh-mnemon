@@ -1,4 +1,4 @@
-import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { consumeMnemonAnchor, subscribeMnemonAnchor, type MnemonAnchor } from './anchor.ts'
 import Markdown from 'markdown-to-jsx'
 import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts'
@@ -146,7 +146,14 @@ function PageHeader(props: { title: string; description: string; meta?: string; 
 function SidebarModal(props: { title: string; description?: string; busy?: boolean; onClose: () => void; children: ReactNode }): JSX.Element {
   const t = useT()
   const appearance = useMnemonViewAppearance()
+  const dialogRef = useRef<HTMLElement | null>(null)
   const close = useCallback(() => { if (props.busy !== true) props.onClose() }, [props.busy, props.onClose])
+  useLayoutEffect(() => {
+    const firstControl = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]')
+      ?? dialogRef.current?.querySelector<HTMLElement>('input:not(:disabled), textarea:not(:disabled), select:not(:disabled)')
+      ?? dialogRef.current?.querySelector<HTMLElement>('div:last-child button:not(:disabled)')
+    firstControl?.focus({ preventScroll: true })
+  }, [])
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') close() }
     window.addEventListener('keydown', onKey)
@@ -154,7 +161,7 @@ function SidebarModal(props: { title: string; description?: string; busy?: boole
   }, [close])
   return (
     <div className={appearance.classes.modalBackdrop} onPointerDown={event => { if (event.target === event.currentTarget) close() }}>
-      <section className={appearance.classes.modal} role="dialog" aria-modal="true" aria-label={props.title}>
+      <section ref={dialogRef} className={appearance.classes.modal} role="dialog" aria-modal="true" aria-label={props.title}>
         <header><div><h2>{props.title}</h2>{props.description !== undefined && <p>{props.description}</p>}</div><button type="button" className={css.iconButton} disabled={props.busy} onClick={close} aria-label={t('common.cancel')}>×</button></header>
         <div>{props.children}</div>
       </section>
@@ -198,15 +205,17 @@ function MemoryNavigation(props: { page: Page; writeEnabled: boolean; onSelect: 
   const appearance = useMnemonViewAppearance()
   if (appearance.surface !== 'sidebar' || !isMemoryPage(props.page)) return null
   return (
-    <div className={appearance.classes.memoryNavigation}>
-      <div className={appearance.classes.memoryTabs} role="tablist" aria-label={t('nav.memory.aria')}>
-        {MEMORY_PAGE_TABS.map(item => {
-          const active = props.page === item.id
-          return <button key={item.id} type="button" role="tab" aria-selected={active} data-active={active ? '' : undefined} onClick={() => props.onSelect(item.id)}>{t(item.label)}</button>
-        })}
+    <section className={appearance.classes.memoryWorkspace}>
+      <PageHeader title={t('nav.bodies')} description={t('overview.description')} action={<button type="button" className={appearanceClass(css.primaryButton, appearance.classes.memoryWriteButton)} disabled={!props.writeEnabled} onClick={props.onRemember}>{t('nav.rememberAction')}</button>} />
+      <div className={appearance.classes.memoryNavigation}>
+        <div className={appearance.classes.memoryTabs} role="tablist" aria-label={t('nav.memory.aria')}>
+          {MEMORY_PAGE_TABS.map(item => {
+            const active = props.page === item.id
+            return <button key={item.id} type="button" role="tab" aria-selected={active} data-active={active ? '' : undefined} onClick={() => props.onSelect(item.id)}>{t(item.label)}</button>
+          })}
+        </div>
       </div>
-      <button type="button" className={appearanceClass(css.primaryButton, appearance.classes.memoryWriteButton)} disabled={!props.writeEnabled} onClick={props.onRemember}>{t('nav.rememberAction')}</button>
-    </div>
+    </section>
   )
 }
 
@@ -269,9 +278,17 @@ function InsightCard(props: {
   onClone?: (insight: Insight) => void
 }): JSX.Element {
   const t = useT()
+  const appearance = useMnemonViewAppearance()
   const [confirming, setConfirming] = useState(false)
   const [forgetting, setForgetting] = useState(false)
   const { insight } = props
+  const neutralActionClass = appearance.surface === 'sidebar'
+    ? appearanceClass(css.ghostButton, appearance.classes.itemActionButton)
+    : css.ghostButton
+  const forgetActionClass = appearance.surface === 'sidebar'
+    ? appearanceClass(css.dangerButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemDangerAction))
+    : css.dangerButton
+  const inlineConfirming = appearance.surface === 'buildin' && confirming
   const meta = [
     insight.memoryBodyName,
     insight.category !== undefined ? categoryLabel(t, insight.category) : undefined,
@@ -291,6 +308,7 @@ function InsightCard(props: {
   }
 
   return (
+    <>
     <article className={css.insightCard}>
       <div className={css.cardTop}>
         <div className={css.badges}>{meta.map(entry => <span key={entry} className={css.badge}>{entry}</span>)}</div>
@@ -300,7 +318,7 @@ function InsightCard(props: {
       {(insight.tags?.length ?? 0) > 0 && <div className={css.tags}>{insight.tags!.map(tag => <span key={tag}>#{tag}</span>)}</div>}
       {(insight.entities?.length ?? 0) > 0 && <div className={css.entities}>{insight.entities!.map(entity => <span key={entity}>{entity}</span>)}</div>}
       <div className={css.cardActions}>
-        {confirming ? (
+        {inlineConfirming ? (
           <div className={css.confirmBar} role="group" aria-label={t('card.confirmAria')}>
             <span>{t('card.confirmText')}</span>
             <button type="button" className={css.dangerSolidButton} disabled={forgetting} onClick={() => void forget()}>{forgetting ? t('card.processing') : t('card.confirmForget')}</button>
@@ -308,14 +326,16 @@ function InsightCard(props: {
           </div>
         ) : (
           <>
-            {props.onRelated !== undefined && <button type="button" className={css.ghostButton} onClick={() => props.onRelated?.(insight)}>{t('card.related')}</button>}
-            {props.onClone !== undefined && <button type="button" className={css.ghostButton} onClick={() => props.onClone?.(insight)}>{t('card.clone')}</button>}
-            <button type="button" className={css.ghostButton} onClick={() => void navigator.clipboard?.writeText(insight.id)}>{t('common.copyId')}</button>
-            {props.writeEnabled && <button type="button" className={css.dangerButton} onClick={() => setConfirming(true)}>{t('card.forget')}</button>}
+            {props.onRelated !== undefined && <button type="button" className={neutralActionClass} onClick={() => props.onRelated?.(insight)}>{t('card.related')}</button>}
+            {props.onClone !== undefined && <button type="button" className={neutralActionClass} onClick={() => props.onClone?.(insight)}>{t('card.clone')}</button>}
+            <button type="button" className={neutralActionClass} onClick={() => void navigator.clipboard?.writeText(insight.id)}>{t('common.copyId')}</button>
+            {props.writeEnabled && <button type="button" className={forgetActionClass} onClick={() => setConfirming(true)}>{t('card.forget')}</button>}
           </>
         )}
       </div>
     </article>
+    {appearance.surface === 'sidebar' && confirming && <SidebarModal title={t('card.confirmText')} description={`${insight.memoryBodyName ?? insight.memoryBodyId ?? ''}${insight.memoryBodyName === undefined && insight.memoryBodyId === undefined ? '' : ' · '}${insight.id}`} busy={forgetting} onClose={() => setConfirming(false)}><div className={css.bodyDeleteConfirm}><div className={css.bodyDeleteSummary}><strong>{insight.content}</strong><span>{meta.join(' · ')}</span></div><div className={css.bodyEditActions}><button type="button" data-autofocus className={css.ghostButton} disabled={forgetting} onClick={() => setConfirming(false)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={forgetting} onClick={() => void forget()}>{forgetting ? t('card.processing') : t('card.confirmForget')}</button></div></div></SidebarModal>}
+    </>
   )
 }
 
@@ -760,6 +780,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const [error, setError] = useState<string | null>(null)
   const [changing, setChanging] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [creatingBodyOpen, setCreatingBodyOpen] = useState(false)
   const [bodyName, setBodyName] = useState('')
   const [bodyDescription, setBodyDescription] = useState('')
   const [catalogUnavailable, setCatalogUnavailable] = useState(false)
@@ -767,6 +788,8 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [savingBody, setSavingBody] = useState<string | null>(null)
+  const [confirmingDeleteBody, setConfirmingDeleteBody] = useState<string | null>(null)
+  const [deletingBody, setDeletingBody] = useState<string | null>(null)
   const [preview, setPreview] = useState<MemoryGraphNode | null>(null)
 
   const load = useCallback(async (quiet = false) => {
@@ -835,9 +858,20 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
     try {
       await props.client.createBody({ name: bodyName, description: bodyDescription })
       setBodyName(''); setBodyDescription('')
+      if (appearance.surface === 'sidebar') setCreatingBodyOpen(false)
       await load(true)
       props.onMutate()
     } catch (reason) { setError(message(reason)) } finally { setCreating(false) }
+  }
+
+  const deleteBody = async (body: MemoryBodyView) => {
+    setDeletingBody(body.id); setError(null)
+    try {
+      await props.client.deleteBody(body.id)
+      setConfirmingDeleteBody(null)
+      await load(true)
+      props.onMutate()
+    } catch (reason) { setError(message(reason)) } finally { setDeletingBody(null) }
   }
 
   const generated = graph === null ? t('overview.waitingSnapshot') : t('overview.updatedAt', { time: new Date(graph.generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) })
@@ -845,38 +879,48 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const graphEntities = graph?.nodes.filter(node => graphNodeKind(node) === 'entity').length ?? 0
   const graphMemories = graph?.nodes.filter(node => graphNodeKind(node) === 'memory').length ?? 0
   const selectedKind = selected === null ? null : graphNodeKind(selected)
+  const editingBodyView = editingBody === null ? undefined : catalog?.items.find(body => body.id === editingBody)
+  const deletingBodyView = confirmingDeleteBody === null ? undefined : catalog?.items.find(body => body.id === confirmingDeleteBody)
+  const bodyEditForm = (body: MemoryBodyView) => <form className={css.bodyEdit} onSubmit={event => void saveEdit(event, body)}>
+    <label>{t('overview.editName')}<input aria-label={t('overview.editName')} value={editName} onChange={event => setEditName(event.target.value)} maxLength={100} required /></label>
+    <label>{t('overview.editDescription')}<textarea aria-label={t('overview.editDescription')} value={editDescription} onChange={event => setEditDescription(event.target.value)} rows={4} maxLength={1000} /></label>
+    <div className={css.bodyEditActions}>{appearance.surface === 'sidebar' && <button type="button" className={css.ghostButton} disabled={savingBody === body.id} onClick={() => setEditingBody(null)}>{t('common.cancel')}</button>}<button type="submit" className={css.primaryButton} disabled={savingBody === body.id || editName.trim() === ''}>{savingBody === body.id ? t('overview.savingBody') : t('overview.saveBody')}</button>{appearance.surface === 'buildin' && <button type="button" className={css.ghostButton} onClick={() => setEditingBody(null)}>{t('common.cancel')}</button>}</div>
+  </form>
+  const bodyCreateForm = <form className={css.bodyEdit} onSubmit={event => void create(event)}>
+    <label>{t('overview.createName')}<input aria-label={t('overview.createName')} value={bodyName} onChange={event => setBodyName(event.target.value)} placeholder={t('overview.createNamePlaceholder')} maxLength={100} required /></label>
+    <label>{t('overview.createDescription')}<textarea aria-label={t('overview.createDescription')} value={bodyDescription} onChange={event => setBodyDescription(event.target.value)} placeholder={t('overview.createDescriptionPlaceholder')} rows={5} maxLength={1000} required /></label>
+    <div className={css.bodyEditActions}><button type="button" className={css.ghostButton} disabled={creating} onClick={() => setCreatingBodyOpen(false)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={creating || bodyName.trim() === '' || bodyDescription.trim() === ''}>{creating ? t('overview.creating') : t('overview.createAction')}</button></div>
+  </form>
+  const bodyToggle = (body: MemoryBodyView) => <button type="button" className={css.bodySwitch} role="switch" aria-checked={body.active} aria-label={t('overview.toggleAria', { name: body.name })} disabled={!props.writeEnabled || changing === body.id || deletingBody === body.id} onClick={() => void toggle(body)}><span className={css.bodySwitchTrack} aria-hidden="true"><i /></span><span>{changing === body.id ? t('overview.toggling') : body.active ? t('common.active') : t('common.inactive')}</span></button>
+  const bodyEditActionClass = appearanceClass(css.ghostButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemEditAction))
+  const bodyDeleteActionClass = appearanceClass(css.dangerButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemDangerAction))
   return (
     <div className={css.page}>
-      <PageHeader title={appearance.surface === 'sidebar' ? t('nav.overview') : t('overview.title')} description={t('overview.description')} meta={t('overview.interval')}
+      <PageHeader title={appearance.surface === 'sidebar' ? t('nav.overview') : t('overview.title')} description={t(appearance.surface === 'sidebar' ? 'overview.pageDescription' : 'overview.description')} meta={t('overview.interval')}
         action={<button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void load()}>{loading ? t('overview.syncing') : t('overview.syncNow')}</button>} />
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
       <section className={css.bodyDirectory} aria-label={t('overview.directory')}>
         <div className={css.bodyDirectoryHeader}>
           <div><h3>{t('overview.directory')}</h3><p>{t('overview.directory.description')}</p><code className={css.bodyDirectoryPath}>{catalogUnavailable ? t('overview.directory.unsynced') : catalog?.directory || props.fallbackDirectory || t('overview.directory.waiting')}</code></div>
-          <strong>{catalogUnavailable ? t('overview.directory.unsyncedBadge') : `${catalog?.activeCount ?? '—'} / ${catalog?.total ?? '—'} ${t('common.active')}`}</strong>
+          {appearance.surface === 'sidebar' ? <div className={appearance.classes.bodyDirectoryActions}><strong>{catalogUnavailable ? t('overview.directory.unsyncedBadge') : `${catalog?.activeCount ?? '—'} / ${catalog?.total ?? '—'} ${t('common.active')}`}</strong>{props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} onClick={() => setCreatingBodyOpen(true)}>{t('overview.createTitle')}</button>}</div> : <strong>{catalogUnavailable ? t('overview.directory.unsyncedBadge') : `${catalog?.activeCount ?? '—'} / ${catalog?.total ?? '—'} ${t('common.active')}`}</strong>}
         </div>
         <div className={css.bodyGrid}>
           {catalog?.items.map(body => (
-            <article key={body.id} className={css.bodyCard} data-active={body.active || undefined} data-healthy={body.healthy || undefined} data-editing={editingBody === body.id || undefined} title={body.error}>
-              {editingBody === body.id ? (
-                <form className={css.bodyEdit} onSubmit={event => void saveEdit(event, body)}>
-                  <label>{t('overview.editName')}<input aria-label={t('overview.editName')} value={editName} onChange={event => setEditName(event.target.value)} maxLength={100} required /></label>
-                  <label>{t('overview.editDescription')}<textarea aria-label={t('overview.editDescription')} value={editDescription} onChange={event => setEditDescription(event.target.value)} rows={3} maxLength={1000} /></label>
-                  <div className={css.bodyEditActions}><button type="submit" className={css.primaryButton} disabled={savingBody === body.id || editName.trim() === ''}>{savingBody === body.id ? t('overview.savingBody') : t('overview.saveBody')}</button><button type="button" className={css.ghostButton} onClick={() => setEditingBody(null)}>{t('common.cancel')}</button></div>
-                </form>
-              ) : (
-                <>
-                  <div className={css.bodyCardTop}><span className={css.bodySignal} /><div><strong>{body.name}</strong><code>{body.id}</code><small className={css.bodyHealth}>{body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small></div><div className={css.bodyCardActions}><button type="button" className={css.bodySwitch} role="switch" aria-checked={body.active} aria-label={t('overview.toggleAria', { name: body.name })} disabled={!props.writeEnabled || changing === body.id} onClick={() => void toggle(body)}><span className={css.bodySwitchTrack} aria-hidden="true"><i /></span><span>{changing === body.id ? t('overview.toggling') : body.active ? t('common.active') : t('common.inactive')}</span></button><button type="button" className={css.bodyEditButton} aria-label={t('overview.editBodyAria', { name: body.name })} title={t('overview.editBody')} disabled={!props.writeEnabled} onClick={() => beginEdit(body)}>✎</button></div></div>
-                  <p>{body.description || t('overview.noDescription')}</p>
-                  <footer><span>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></footer>
-                </>
-              )}
+            <article key={body.id} className={css.bodyCard} data-active={body.active || undefined} data-healthy={body.healthy || undefined} data-editing={(appearance.surface === 'buildin' && editingBody === body.id) || undefined} title={body.error}>
+              {appearance.surface === 'buildin'
+                ? editingBody === body.id
+                  ? bodyEditForm(body)
+                  : <><div className={css.bodyCardTop}><span className={css.bodySignal} /><div><strong>{body.name}</strong><code>{body.id}</code><small className={css.bodyHealth}>{body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small></div><div className={css.bodyCardActions}>{bodyToggle(body)}<button type="button" className={css.bodyEditButton} aria-label={t('overview.editBodyAria', { name: body.name })} title={t('overview.editBody')} disabled={!props.writeEnabled} onClick={() => beginEdit(body)}>✎</button></div></div><p>{body.description || t('overview.noDescription')}</p><footer><span>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></footer></>
+                : <><div className={appearance.classes.bodyCardHeader}><div className={appearance.classes.bodyCardIdentity}><span className={css.bodySignal} /><div><strong>{body.name}</strong><div className={appearance.classes.bodyCardMeta}><code>{body.id}</code><small className={css.bodyHealth}>{body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small></div></div></div>{bodyToggle(body)}</div><p title={body.description || t('overview.noDescription')}>{body.description || t('overview.noDescription')}</p><footer className={appearance.classes.bodyCardFooter}><div className={appearance.classes.bodyCardStats}><span>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></div><div className={css.bodyCardActions}><button type="button" className={bodyEditActionClass} aria-label={t('overview.editBodyAria', { name: body.name })} disabled={!props.writeEnabled || deletingBody === body.id} onClick={() => beginEdit(body)}>{t('overview.editBody')}</button><button type="button" className={bodyDeleteActionClass} aria-label={t('overview.deleteBodyAria', { name: body.name })} disabled={!props.writeEnabled || deletingBody === body.id} onClick={() => setConfirmingDeleteBody(body.id)}>{t('overview.deleteBody')}</button></div></footer></>}
             </article>
           ))}
           {catalog?.total === 0 && <div className={css.bodyDirectoryEmpty}><span>◇</span><div><strong>{catalogUnavailable ? t('overview.unsyncedTitle') : t('overview.emptyTitle')}</strong><p>{catalogUnavailable ? t('overview.unsyncedShort') : t('overview.emptyShort')}</p></div></div>}
         </div>
-        {props.writeEnabled && !catalogUnavailable && <details className={css.bodyCreate} open={catalog?.total === 0 ? true : undefined}><summary>{t('overview.create')}</summary><form onSubmit={event => void create(event)}><input aria-label={t('overview.createName')} value={bodyName} onChange={event => setBodyName(event.target.value)} placeholder={t('overview.createNamePlaceholder')} required /><input aria-label={t('overview.createDescription')} value={bodyDescription} onChange={event => setBodyDescription(event.target.value)} placeholder={t('overview.createDescriptionPlaceholder')} required /><button type="submit" className={css.secondaryButton} disabled={creating}>{creating ? t('overview.creating') : t('overview.createAction')}</button></form></details>}
+        {appearance.surface === 'buildin' && props.writeEnabled && !catalogUnavailable && <details className={css.bodyCreate} open={catalog?.total === 0 ? true : undefined}><summary>{t('overview.create')}</summary><form onSubmit={event => void create(event)}><input aria-label={t('overview.createName')} value={bodyName} onChange={event => setBodyName(event.target.value)} placeholder={t('overview.createNamePlaceholder')} required /><input aria-label={t('overview.createDescription')} value={bodyDescription} onChange={event => setBodyDescription(event.target.value)} placeholder={t('overview.createDescriptionPlaceholder')} required /><button type="submit" className={css.secondaryButton} disabled={creating}>{creating ? t('overview.creating') : t('overview.createAction')}</button></form></details>}
       </section>
+      {appearance.surface === 'sidebar' && creatingBodyOpen && <SidebarModal title={t('overview.createTitle')} description={catalog?.directory || props.fallbackDirectory || t('overview.directory.waiting')} busy={creating} onClose={() => setCreatingBodyOpen(false)}>{bodyCreateForm}</SidebarModal>}
+      {appearance.surface === 'sidebar' && editingBodyView !== undefined && <SidebarModal title={t('overview.editBodyAria', { name: editingBodyView.name })} description={editingBodyView.id} busy={savingBody === editingBodyView.id} onClose={() => setEditingBody(null)}>{bodyEditForm(editingBodyView)}</SidebarModal>}
+      {appearance.surface === 'sidebar' && deletingBodyView !== undefined && <SidebarModal title={t('overview.deleteTitle', { name: deletingBodyView.name })} description={deletingBodyView.id} busy={deletingBody === deletingBodyView.id} onClose={() => setConfirmingDeleteBody(null)}><div className={css.bodyDeleteConfirm}><p>{t('overview.deleteWarning')}</p><div className={css.bodyDeleteSummary}><strong>{deletingBodyView.name}</strong><span>{t('common.memories', { count: deletingBodyView.stats?.totalInsights ?? 0 })} · {t('common.edges', { count: deletingBodyView.stats?.edgeCount ?? 0 })} · {humanBytes(deletingBodyView.stats?.dbSizeBytes ?? 0)}</span></div><div className={css.bodyEditActions}><button type="button" data-autofocus className={css.ghostButton} disabled={deletingBody === deletingBodyView.id} onClick={() => setConfirmingDeleteBody(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={deletingBody === deletingBodyView.id} onClick={() => void deleteBody(deletingBodyView)}>{deletingBody === deletingBodyView.id ? t('overview.deletingBody') : t('overview.deleteAction')}</button></div></div></SidebarModal>}
       {!catalogUnavailable && graph !== null && graph.nodes.length > 0 ? (
         <div className={css.graphLayout}>
           <section className={css.graphPanel}>
@@ -1096,6 +1140,12 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
       setRemoving(null)
     } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
   }
+  const runtimeEditActionClass = appearance.surface === 'sidebar'
+    ? appearanceClass(css.ghostButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemEditAction))
+    : css.ghostButton
+  const runtimeRemoveActionClass = appearance.surface === 'sidebar'
+    ? appearanceClass(css.dangerButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemDangerAction))
+    : css.dangerButton
 
   const targetPanel = (value: RuntimeMemoryTarget) => {
     const view = snapshot?.targets[value]
@@ -1113,13 +1163,15 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
           {entries.map(entry => {
             const key = entryKey(entry)
             const isEditing = editing === key
+            const isInlineEditing = appearance.surface === 'buildin' && isEditing
             const isRemoving = removing === key
+            const isInlineRemoving = appearance.surface === 'buildin' && isRemoving
             return <article key={key} className={css.runtimeEntry} data-importance={entry.importance}>
               <div className={css.runtimeEntryMeta}><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span><time dateTime={entry.updated_at}>{new Date(entry.updated_at).toLocaleString()}</time></div>
-              {isEditing ? <textarea aria-label={t('runtime.editContent')} value={editContent} onChange={event => setEditContent(event.target.value)} rows={4} /> : <p>{entry.content}</p>}
-              {isEditing && <select aria-label={t('runtime.importance')} value={editImportance} onChange={event => setEditImportance(event.target.value as RuntimeMemoryImportance)}><option value="critical">{t('runtime.importance.critical')}</option><option value="normal">{t('runtime.importance.normal')}</option><option value="low">{t('runtime.importance.low')}</option></select>}
+              {isInlineEditing ? <textarea aria-label={t('runtime.editContent')} value={editContent} onChange={event => setEditContent(event.target.value)} rows={4} /> : <p>{entry.content}</p>}
+              {isInlineEditing && <select aria-label={t('runtime.importance')} value={editImportance} onChange={event => setEditImportance(event.target.value as RuntimeMemoryImportance)}><option value="critical">{t('runtime.importance.critical')}</option><option value="normal">{t('runtime.importance.normal')}</option><option value="low">{t('runtime.importance.low')}</option></select>}
               <footer>
-                {isRemoving ? <><span>{t('runtime.removeConfirm')}</span><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void remove(entry)}>{t('runtime.removeAction')}</button><button type="button" className={css.ghostButton} onClick={() => setRemoving(null)}>{t('common.cancel')}</button></> : isEditing ? <><button type="button" className={css.primaryButton} disabled={saving || editContent.trim() === ''} onClick={() => void replace(entry)}>{t('runtime.saveEdit')}</button><button type="button" className={css.ghostButton} onClick={() => setEditing(null)}>{t('common.cancel')}</button></> : props.writeEnabled ? <><button type="button" className={css.ghostButton} onClick={() => beginEdit(entry)}>{t('runtime.editAction')}</button><button type="button" className={css.dangerButton} onClick={() => { setRemoving(key); setEditing(null) }}>{t('runtime.removeAction')}</button></> : null}
+                {isInlineRemoving ? <><span>{t('runtime.removeConfirm')}</span><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void remove(entry)}>{t('runtime.removeAction')}</button><button type="button" className={css.ghostButton} onClick={() => setRemoving(null)}>{t('common.cancel')}</button></> : isInlineEditing ? <><button type="button" className={css.primaryButton} disabled={saving || editContent.trim() === ''} onClick={() => void replace(entry)}>{t('runtime.saveEdit')}</button><button type="button" className={css.ghostButton} onClick={() => setEditing(null)}>{t('common.cancel')}</button></> : props.writeEnabled ? <><button type="button" className={runtimeEditActionClass} disabled={saving && isRemoving} onClick={() => beginEdit(entry)}>{t('runtime.editAction')}</button><button type="button" className={runtimeRemoveActionClass} disabled={saving && isRemoving} onClick={() => { setRemoving(key); setEditing(null) }}>{t('runtime.removeAction')}</button></> : null}
               </footer>
             </article>
           })}
@@ -1138,6 +1190,13 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
     <textarea aria-label={t('runtime.content')} value={content} onChange={event => setContent(event.target.value)} rows={3} placeholder={t('runtime.placeholder')} />
     <div className={css.runtimeComposerActions}><label>{t('runtime.target')}<select value={target} onChange={event => setTarget(event.target.value as RuntimeMemoryTarget)}><option value="memory">{t('runtime.target.memory')}</option><option value="user">{t('runtime.target.user')}</option></select></label><label>{t('runtime.importance')}<select value={importance} onChange={event => setImportance(event.target.value as RuntimeMemoryImportance)}><option value="critical">{t('runtime.importance.critical')}</option><option value="normal">{t('runtime.importance.normal')}</option><option value="low">{t('runtime.importance.low')}</option></select></label>{appearance.surface === 'sidebar' && <button type="button" className={css.ghostButton} disabled={saving} onClick={closeComposer}>{t('common.cancel')}</button>}<button type="submit" className={css.primaryButton} disabled={saving || content.trim() === ''}>{saving ? t('runtime.saving') : t('runtime.addAction')}</button></div>
   </form>
+  const editingEntry = editing === null ? undefined : snapshot?.entries.find(entry => entryKey(entry) === editing)
+  const removingEntry = removing === null ? undefined : snapshot?.entries.find(entry => entryKey(entry) === removing)
+  const editForm = editingEntry === undefined ? null : <form className={css.bodyEdit} onSubmit={event => { event.preventDefault(); void replace(editingEntry) }}>
+    <label>{t('runtime.editContent')}<textarea aria-label={t('runtime.editContent')} value={editContent} onChange={event => setEditContent(event.target.value)} rows={7} /></label>
+    <label>{t('runtime.importance')}<select aria-label={t('runtime.importance')} value={editImportance} onChange={event => setEditImportance(event.target.value as RuntimeMemoryImportance)}><option value="critical">{t('runtime.importance.critical')}</option><option value="normal">{t('runtime.importance.normal')}</option><option value="low">{t('runtime.importance.low')}</option></select></label>
+    <div className={css.bodyEditActions}><button type="button" className={css.ghostButton} disabled={saving} onClick={() => setEditing(null)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving || editContent.trim() === ''}>{t('runtime.saveEdit')}</button></div>
+  </form>
 
   return (
     <div className={css.page}>
@@ -1149,6 +1208,8 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
       <div className={css.runtimeGrid}>{targetPanel('user')}{targetPanel('memory')}</div>
       <p className={css.runtimeFootnote}>{t('runtime.footnote')}</p>
       {appearance.surface === 'sidebar' && adding && <SidebarModal title={t('runtime.addTitle')} description={t('runtime.addDescription')} busy={saving} onClose={closeComposer}>{composer}</SidebarModal>}
+      {appearance.surface === 'sidebar' && editingEntry !== undefined && <SidebarModal title={t('runtime.editContent')} description={t(`runtime.target.${editingEntry.target}` as MnemonKey)} busy={saving} onClose={() => setEditing(null)}>{editForm}</SidebarModal>}
+      {appearance.surface === 'sidebar' && removingEntry !== undefined && <SidebarModal title={t('runtime.removeTitle')} description={t(`runtime.target.${removingEntry.target}` as MnemonKey)} busy={saving} onClose={() => setRemoving(null)}><div className={css.bodyDeleteConfirm}><p>{t('runtime.removeWarning')}</p><div className={css.bodyDeleteSummary}><strong>{removingEntry.content}</strong><span>{t(`runtime.importance.${removingEntry.importance}` as MnemonKey)}</span></div><div className={css.bodyEditActions}><button type="button" data-autofocus className={css.ghostButton} disabled={saving} onClick={() => setRemoving(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void remove(removingEntry)}>{t('runtime.removeAction')}</button></div></div></SidebarModal>}
     </div>
   )
 }
@@ -1354,6 +1415,18 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
     <label>{t('documents.markdown')}<textarea value={content} onChange={event => setContent(event.target.value)} rows={10} required /></label>
     <footer><button type="button" className={css.ghostButton} disabled={saving} onClick={resetComposer}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving || title.trim() === '' || content.trim() === ''}>{saving ? t('documents.saving') : t('documents.create')}</button></footer>
   </form>
+  const editComposer = selected === null ? null : <form className={css.documentEditor} onSubmit={event => void update(event)}>
+    <header><div><h3>{t('documents.editTitle')}</h3><p>{t('documents.editorHint')}</p></div><code>{selected.id}</code></header>
+    <div className={css.documentEditorMeta}><label>{t('documents.name')}<input value={title} onChange={event => setTitle(event.target.value)} required /></label><label>{t('documents.routing')}<input value={description} onChange={event => setDescription(event.target.value)} /></label></div>
+    <label>{t('documents.sources')}<input value={sources} onChange={event => setSources(event.target.value)} /></label><label>{t('documents.markdown')}<textarea value={content} onChange={event => setContent(event.target.value)} rows={18} required /></label>
+    <footer><button type="button" className={css.ghostButton} disabled={saving} onClick={() => setEditing(false)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving}>{saving ? t('documents.saving') : t('documents.save')}</button></footer>
+  </form>
+  const documentEditActionClass = appearance.surface === 'sidebar'
+    ? appearanceClass(css.ghostButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemEditAction))
+    : css.secondaryButton
+  const documentArchiveActionClass = appearance.surface === 'sidebar'
+    ? appearanceClass(css.dangerButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemDangerAction))
+    : css.dangerButton
 
   return (
     <div className={css.page}>
@@ -1384,23 +1457,20 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
         </aside>
 
         <section className={css.documentReader} aria-label={t('documents.reader')}>
-          {selected === null ? <EmptyState glyph="▤" title={t('documents.selectTitle')}>{t('documents.selectText')}</EmptyState> : editing ? <form className={css.documentEditor} onSubmit={event => void update(event)}>
-            <header><div><h3>{t('documents.editTitle')}</h3><p>{t('documents.editorHint')}</p></div><code>{selected.id}</code></header>
-            <div className={css.documentEditorMeta}><label>{t('documents.name')}<input value={title} onChange={event => setTitle(event.target.value)} required /></label><label>{t('documents.routing')}<input value={description} onChange={event => setDescription(event.target.value)} /></label></div>
-            <label>{t('documents.sources')}<input value={sources} onChange={event => setSources(event.target.value)} /></label><label>{t('documents.markdown')}<textarea value={content} onChange={event => setContent(event.target.value)} rows={18} required /></label>
-            <footer><button type="button" className={css.ghostButton} onClick={() => setEditing(false)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving}>{saving ? t('documents.saving') : t('documents.save')}</button></footer>
-          </form> : <article className={css.documentDetail}>
-            <header><div><span>{selected.status === 'active' ? t('documents.active') : t('documents.coldArchive')}</span><h3>{selected.title}</h3><p>{selected.description || t('documents.noDescription')}</p></div><div>{props.writeEnabled && selected.status === 'active' && <button type="button" className={css.secondaryButton} onClick={beginEdit}>{t('documents.edit')}</button>}</div></header>
+          {selected === null ? <EmptyState glyph="▤" title={t('documents.selectTitle')}>{t('documents.selectText')}</EmptyState> : editing && appearance.surface === 'buildin' ? editComposer : <article className={css.documentDetail}>
+            <header><div><span>{selected.status === 'active' ? t('documents.active') : t('documents.coldArchive')}</span><h3>{selected.title}</h3><p>{selected.description || t('documents.noDescription')}</p></div><div>{props.writeEnabled && selected.status === 'active' && <button type="button" className={documentEditActionClass} onClick={beginEdit}>{t('documents.edit')}</button>}</div></header>
             <dl><div><dt>{t('documents.path')}</dt><dd><code>{selected.relativePath}</code></dd></div><div><dt>{t('documents.revision')}</dt><dd>{selected.revision}</dd></div><div><dt>{t('documents.hash')}</dt><dd><code>{selected.contentHash.slice(0, 16)}</code></dd></div><div><dt>{t('documents.size')}</dt><dd>{humanBytes(selected.sizeBytes)}</dd></div></dl>
             {selected.sourcePaths.length > 0 && <div className={css.documentSources}><span>{t('documents.sources')}</span>{selected.sourcePaths.map(path => <code key={path}>{path}</code>)}</div>}
             {selected.status === 'archived' && <div className={css.documentArchiveReceipt}><strong>{t('documents.archiveReceipt')}</strong><p>{selected.archiveSummary}</p><div>{selected.memoryBodyIds.map(id => <code key={id}>{id}</code>)}</div></div>}
             <DocumentMarkdown content={selected.content} />
-            {props.writeEnabled && selected.status === 'active' && <footer className={css.documentDanger}>{confirmArchive ? <><span>{t('documents.archiveConfirm')}</span><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void archive()}>{saving ? t('documents.archiving') : t('documents.archiveNow')}</button><button type="button" className={css.ghostButton} onClick={() => setConfirmArchive(false)}>{t('common.cancel')}</button></> : <><div><strong>{t('documents.archiveTitle')}</strong><p>{t('documents.archiveDescription')}</p></div><button type="button" className={css.dangerButton} onClick={() => setConfirmArchive(true)}>{t('documents.archive')}</button></>}</footer>}
+            {props.writeEnabled && selected.status === 'active' && <footer className={css.documentDanger}>{appearance.surface === 'buildin' && confirmArchive ? <><span>{t('documents.archiveConfirm')}</span><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void archive()}>{saving ? t('documents.archiving') : t('documents.archiveNow')}</button><button type="button" className={css.ghostButton} onClick={() => setConfirmArchive(false)}>{t('common.cancel')}</button></> : <><div><strong>{t('documents.archiveTitle')}</strong><p>{t('documents.archiveDescription')}</p></div><button type="button" className={documentArchiveActionClass} onClick={() => setConfirmArchive(true)}>{t('documents.archive')}</button></>}</footer>}
           </article>}
         </section>
       </div>
       <p className={css.runtimeFootnote}>{t('documents.footnote')}</p>
       {composing && appearance.surface === 'sidebar' && <SidebarModal title={t('documents.newTitle')} description={t('documents.editorHint')} busy={saving} onClose={resetComposer}>{composer}</SidebarModal>}
+      {editing && appearance.surface === 'sidebar' && selected !== null && <SidebarModal title={t('documents.editTitle')} description={selected.title} busy={saving} onClose={() => setEditing(false)}>{editComposer}</SidebarModal>}
+      {confirmArchive && appearance.surface === 'sidebar' && selected !== null && <SidebarModal title={t('documents.archiveConfirm')} description={selected.title} busy={saving} onClose={() => setConfirmArchive(false)}><div className={css.bodyDeleteConfirm}><p>{t('documents.archiveDescription')}</p><div className={css.bodyDeleteSummary}><strong>{selected.title}</strong><span>{selected.relativePath} · {humanBytes(selected.sizeBytes)}</span></div><div className={css.bodyEditActions}><button type="button" data-autofocus className={css.ghostButton} disabled={saving} onClick={() => setConfirmArchive(false)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void archive()}>{saving ? t('documents.archiving') : t('documents.archiveNow')}</button></div></div></SidebarModal>}
     </div>
   )
 }
@@ -1510,12 +1580,9 @@ function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelectio
     if (canvas !== null) canvas.scrollTop = 0
   }, [])
 
-  useEffect(() => { resetViewportScroll() }, [page, resetViewportScroll])
-  useEffect(() => {
-    // Clear only this view's offset after layout; the host owns every ancestor.
-    const frame = window.requestAnimationFrame(() => resetViewportScroll())
-    return () => window.cancelAnimationFrame(frame)
-  }, [resetViewportScroll])
+  // Reset before paint so a newly selected page never flashes at the previous
+  // page's scroll offset for one frame. The host still owns every ancestor.
+  useLayoutEffect(() => { resetViewportScroll() }, [page, resetViewportScroll])
   const [status, setStatus] = useState<StatusView | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
   const [statusError, setStatusError] = useState<string | null>(null)

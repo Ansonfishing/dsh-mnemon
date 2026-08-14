@@ -176,6 +176,10 @@ export class MnemonClient {
     return this.call(MNEMON_WRITE_CHANNEL, 'body-update', this.scoped({ memoryBodyId, ...request }))
   }
 
+  deleteBody(memoryBodyId: string): Promise<MemoryBody> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'body-delete', this.scoped({ memoryBodyId }))
+  }
+
   packTarget(): Promise<{ root: string; scope: 'global' | 'workspace' | 'custom' }> {
     return this.call(MNEMON_PACK_CHANNEL, 'target', {})
   }

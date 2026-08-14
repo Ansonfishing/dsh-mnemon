@@ -329,6 +329,8 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
             ...(payload.description === undefined ? {} : { description: String(payload.description) }),
             ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
           }))
+        case 'body-delete':
+          return success(await service.deleteBody(String(payload.memoryBodyId ?? '')))
         default:
           return badRequest(`unknown write endpoint: ${endpoint}`)
       }

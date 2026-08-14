@@ -51,6 +51,8 @@ root Agent calls mnemon_recall
 
 Long-term semantic writes, relationships, soft deletion, and Memory Space creation, updates, and merges use the same pattern. Ordinary Runtime Memory and Document mutations first pass through the coordinator but are usually committed directly by the deterministic control layer; only capacity maintenance or archiving requires an additional worker.
 
+Physical Memory Space deletion is a separate deterministic destructive action. The WebUI must show a second confirmation, then invoke native Mnemon `store remove` through the loopback write RPC; the directory registration is removed only after the CLI deletion succeeds.
+
 ## Two Types of Subagent
 
 ### `spawn`

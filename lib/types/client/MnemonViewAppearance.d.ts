@@ -1,6 +1,6 @@
 import type { MnemonTranslate } from './locales.ts';
 export type MnemonViewSurface = 'buildin' | 'sidebar';
-type AppearanceSlot = 'shell' | 'masthead' | 'brand' | 'headerActions' | 'workspacePicker' | 'statusCluster' | 'workspaceMismatch' | 'topNavigation' | 'nav' | 'navGroup' | 'memoryNavigation' | 'memoryTabs' | 'memoryWriteButton' | 'modalBackdrop' | 'modal' | 'canvas' | 'pageHeader' | 'inspectorGlyph';
+type AppearanceSlot = 'shell' | 'masthead' | 'brand' | 'headerActions' | 'workspacePicker' | 'statusCluster' | 'workspaceMismatch' | 'topNavigation' | 'nav' | 'navGroup' | 'memoryWorkspace' | 'memoryNavigation' | 'memoryTabs' | 'memoryWriteButton' | 'bodyCardHeader' | 'bodyDirectoryActions' | 'bodyCardIdentity' | 'bodyCardMeta' | 'bodyCardFooter' | 'bodyCardStats' | 'itemActionButton' | 'itemEditAction' | 'itemDangerAction' | 'modalBackdrop' | 'modal' | 'canvas' | 'pageHeader' | 'inspectorGlyph';
 export interface MnemonViewAppearance {
     surface: MnemonViewSurface;
     title: string;

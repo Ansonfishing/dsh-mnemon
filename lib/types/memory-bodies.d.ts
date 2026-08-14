@@ -38,6 +38,7 @@ export declare class MemoryBodyRegistry {
     get(id: string): MemoryBody;
     create(request: CreateMemoryBodyRequest, signal?: AbortSignal): Promise<MemoryBody>;
     update(id: string, request: UpdateMemoryBodyRequest): MemoryBody;
+    remove(id: string, signal?: AbortSignal): Promise<MemoryBody>;
     setActive(id: string, active: boolean): MemoryBody;
     /** Refresh metadata after an atomic Pack import replaced the data component. */
     reload(): void;

@@ -475,6 +475,11 @@ export class MnemonService {
     return this.memoryBodies.update(id, request)
   }
 
+  async deleteBody(id: string, signal?: AbortSignal): Promise<MemoryBody> {
+    this.assertWritable()
+    return this.memoryBodies.remove(id, signal)
+  }
+
   async mergeBodies(targetBodyId: string, sourceBodyIds: string[], deactivateSources = true, signal?: AbortSignal): Promise<JsonValue> {
     this.assertWritable()
     const target = this.memoryBodies.get(targetBodyId)

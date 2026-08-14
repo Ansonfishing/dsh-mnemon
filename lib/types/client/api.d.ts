@@ -72,6 +72,7 @@ export declare class MnemonClient {
         description?: string;
         active?: boolean;
     }): Promise<MemoryBody>;
+    deleteBody(memoryBodyId: string): Promise<MemoryBody>;
     packTarget(): Promise<{
         root: string;
         scope: 'global' | 'workspace' | 'custom';

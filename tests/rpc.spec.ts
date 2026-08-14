@@ -23,6 +23,7 @@ function fakeService(writeEnabled = true): MnemonService {
     forget: vi.fn(async () => ({ status: 'deleted' })),
     createBody: vi.fn(async request => ({ id: '00000000-0000-4000-8000-000000000001', name: request.name, description: request.description, active: request.active ?? false })),
     updateBody: vi.fn((id, request) => ({ id, name: request.name ?? id, description: request.description ?? '', active: request.active ?? false })),
+    deleteBody: vi.fn(async id => ({ id, name: id, description: '', active: false })),
   } as unknown as MnemonService
 }
 
@@ -85,6 +86,12 @@ describe('Mnemon RPC', () => {
     const service = fakeService()
     await createWriteHandler(service)('remember', { content: 'A durable preference' })
     expect(service.remember).toHaveBeenCalledWith(expect.objectContaining({ source: 'user' }))
+  })
+
+  it('deletes a Memory Space through the loopback write channel', async () => {
+    const service = fakeService()
+    await expect(createWriteHandler(service)('body-delete', { memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { id: 'project' } })
+    expect(service.deleteBody).toHaveBeenCalledWith('project')
   })
 
   it('routes supervised Tab writeback through an isolated memory subagent', async () => {

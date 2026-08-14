@@ -69,6 +69,7 @@ export declare const zh: {
     'sidebar.activeSpaces': string;
     'overview.title': string;
     'overview.description': string;
+    'overview.pageDescription': string;
     'overview.interval': string;
     'overview.syncing': string;
     'overview.syncNow': string;
@@ -93,6 +94,7 @@ export declare const zh: {
     'overview.noContentTitle': string;
     'overview.noContentText': string;
     'overview.create': string;
+    'overview.createTitle': string;
     'overview.createName': string;
     'overview.createNamePlaceholder': string;
     'overview.createDescription': string;
@@ -105,6 +107,12 @@ export declare const zh: {
     'overview.editDescription': string;
     'overview.saveBody': string;
     'overview.savingBody': string;
+    'overview.deleteBody': string;
+    'overview.deleteBodyAria': string;
+    'overview.deleteTitle': string;
+    'overview.deleteWarning': string;
+    'overview.deleteAction': string;
+    'overview.deletingBody': string;
     'overview.snapshot': string;
     'overview.waitingSnapshot': string;
     'overview.updatedAt': string;
@@ -157,6 +165,8 @@ export declare const zh: {
     'runtime.saveEdit': string;
     'runtime.removeAction': string;
     'runtime.removeConfirm': string;
+    'runtime.removeTitle': string;
+    'runtime.removeWarning': string;
     'runtime.result.add': string;
     'runtime.result.replace': string;
     'runtime.result.remove': string;
@@ -609,6 +619,7 @@ export declare const en: {
     'sidebar.activeSpaces': string;
     'overview.title': string;
     'overview.description': string;
+    'overview.pageDescription': string;
     'overview.interval': string;
     'overview.syncing': string;
     'overview.syncNow': string;
@@ -633,6 +644,7 @@ export declare const en: {
     'overview.noContentTitle': string;
     'overview.noContentText': string;
     'overview.create': string;
+    'overview.createTitle': string;
     'overview.createName': string;
     'overview.createNamePlaceholder': string;
     'overview.createDescription': string;
@@ -645,6 +657,12 @@ export declare const en: {
     'overview.editDescription': string;
     'overview.saveBody': string;
     'overview.savingBody': string;
+    'overview.deleteBody': string;
+    'overview.deleteBodyAria': string;
+    'overview.deleteTitle': string;
+    'overview.deleteWarning': string;
+    'overview.deleteAction': string;
+    'overview.deletingBody': string;
     'overview.snapshot': string;
     'overview.waitingSnapshot': string;
     'overview.updatedAt': string;
@@ -697,6 +715,8 @@ export declare const en: {
     'runtime.saveEdit': string;
     'runtime.removeAction': string;
     'runtime.removeConfirm': string;
+    'runtime.removeTitle': string;
+    'runtime.removeWarning': string;
     'runtime.result.add': string;
     'runtime.result.replace': string;
     'runtime.result.remove': string;

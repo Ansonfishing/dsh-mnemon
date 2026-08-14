@@ -173,6 +173,11 @@
 .bodyEdit textarea { resize: vertical; }
 .bodyEdit input:focus, .bodyEdit textarea:focus { border-color: var(--mn-accent); }
 .bodyEditActions { display: flex; justify-content: flex-end; gap: 7px; }
+.bodyDeleteConfirm { display: grid; gap: 16px; }
+.bodyDeleteConfirm > p { margin: 0; color: var(--mn-muted); font-size: 12px; line-height: 1.6; }
+.bodyDeleteSummary { display: grid; gap: 3px; padding: 12px; border: 1px solid color-mix(in srgb, var(--mn-danger) 22%, var(--mn-line)); border-radius: 8px; background: color-mix(in srgb, var(--mn-danger) 5%, var(--mn-layer-1)); }
+.bodyDeleteSummary strong { font-size: 13px; }
+.bodyDeleteSummary span { color: var(--mn-muted); font-size: 11px; }
 .bodyCard > p { min-height: 15px; margin: 7px 0; color: var(--mn-muted); font-size: 10px; line-height: 1.45; }
 .bodyCard footer { display: flex; flex-wrap: wrap; gap: 5px 11px; padding-top: 6px; border-top: 1px solid var(--mn-line); color: var(--mn-faint); font-size: 9px; }
 .bodyCreate { margin-top: 10px; border-top: 1px solid var(--mn-line); padding-top: 8px; }
