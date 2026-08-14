@@ -556,6 +556,9 @@
   scrollbar-gutter: stable;
 }
 
+.shell [class*='bodyGrid'] {
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+}
 .shell article[class*='bodyCard'] {
   display: flex;
   height: 100%;
@@ -640,24 +643,26 @@
   line-height: 1.55;
 }
 .shell .bodyCardFooter {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr) max-content;
   min-width: 0;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   margin-top: auto;
   padding-top: 9px;
+  white-space: nowrap;
 }
 .shell .bodyCardStats {
   display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
+  min-width: max-content;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 4px 10px;
+  gap: 10px;
 }
 .shell .bodyCardFooter [class*='bodyCardActions'] {
   display: flex;
   flex: 0 0 auto;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
 }

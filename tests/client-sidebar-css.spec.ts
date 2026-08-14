@@ -20,4 +20,12 @@ describe('Sidebar layout invariants', () => {
     expect(sidebarCss).toContain(".shell textarea { font-family: var(--dsw-font-family); font-size: 13px; font-weight: 400; }")
     expect(sidebarCss).toContain('.shell select { cursor: pointer; font-weight: 400; }')
   })
+
+  it('keeps every memory-space footer on one aligned row', () => {
+    expect(sidebarCss).toContain(".shell [class*='bodyGrid'] {\n  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));")
+    expect(sidebarCss).toContain('grid-template-columns: minmax(max-content, 1fr) max-content;')
+    expect(sidebarCss).toContain(".shell .bodyCardFooter {\n  display: grid;")
+    expect(sidebarCss).toContain('white-space: nowrap;')
+    expect(sidebarCss).toContain(".shell .bodyCardStats {\n  display: flex;\n  min-width: max-content;\n  flex-wrap: nowrap;")
+  })
 })
