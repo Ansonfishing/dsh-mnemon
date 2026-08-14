@@ -14,7 +14,7 @@ You need:
 
 Regular semantic work prefers a provider named `spawn` with `outputSchema`, `toolFilter`, `persona`, and `depthLimit`. Optional score-based background review additionally requires a provider named `fork` with `inheritsParentContext=true`. Missing `fork` does not block deterministic pages or regular manual actions.
 
-The project does not declare a fixed minimum DSH / Mnemon matrix. This guide and its screenshots target dsh-mnemon v0.1.2. Back up and repeat this verification against an isolated root before upgrading.
+The project does not declare a fixed minimum DSH / Mnemon matrix. This guide and its screenshots target dsh-mnemon v0.1.3. Back up and repeat this verification against an isolated root before upgrading.
 
 ## 2. Install Mnemon
 

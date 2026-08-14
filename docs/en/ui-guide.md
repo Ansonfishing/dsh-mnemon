@@ -2,7 +2,7 @@
 
 [简体中文](../zh-CN/ui-guide.md) | **English** | [Documentation hub](./README.md)
 
-This guide follows the default `sidebar` presentation and a real user path through Memory System. Screenshots come from the v0.1.2 interface and use the Chinese locale; names, counts, and content vary with your data.
+This guide follows the default `sidebar` presentation and a real user path through Memory System. Screenshots come from the v0.1.3 interface and use the Chinese locale; names, counts, and content vary with your data.
 
 ## Start with the two display modes
 
