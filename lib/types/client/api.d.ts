@@ -4,6 +4,7 @@ import type { DocumentMutation, DocumentMutationResult, DocumentSearchResult, Do
 import type { RuntimeMemoryImportance, RuntimeMemoryMutationResult, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts';
 import type { EntityView, Insight, MemoryBodyCatalog, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts';
 import type { AssistantMessageText, TurnMemoryActivity } from '../lifecycle.ts';
+import type { MnemonPackComponent, MnemonPackExport, MnemonPackImportMode, MnemonPackImportResult, MnemonPackPreview, MnemonPackScope } from '../pack.ts';
 export interface SearchResponse {
     query: string;
     mode: string;
@@ -69,5 +70,13 @@ export declare class MnemonClient {
         description?: string;
         active?: boolean;
     }): Promise<MemoryBody>;
+    packTarget(): Promise<{
+        root: string;
+        scope: 'global' | 'workspace' | 'custom';
+        customPackId?: string;
+    }>;
+    exportPack(scope: MnemonPackScope): Promise<MnemonPackExport>;
+    inspectPack(base64: string, fileName?: string): Promise<MnemonPackPreview>;
+    importPack(base64: string, mode: MnemonPackImportMode, components?: MnemonPackComponent[]): Promise<MnemonPackImportResult>;
 }
 //# sourceMappingURL=api.d.ts.map

@@ -8,6 +8,10 @@ export interface Config {
     cliPath?: string;
     /** Custom Mnemon base directory; also retained as a legacy dataDir-only scope selection. */
     dataDir?: string;
+    /** Selected entry from customPacks. The resolved entry is mirrored to dataDir for compatibility. */
+    customPackId?: string;
+    /** Named custom Mnemon roots available from the settings dropdown. */
+    customPacks?: CustomPackConfig[];
     /** Legacy store hint used to bootstrap or discover the initial Memory Space. */
     store?: string;
     /** Hard deadline for one CLI process. */
@@ -38,6 +42,11 @@ export interface Config {
         saveAction?: boolean;
     };
 }
+export interface CustomPackConfig {
+    id: string;
+    name: string;
+    dataDir: string;
+}
 /** Browser-only interaction settings, registered live under `mnemon-ui`. */
 export interface InteractionConfig {
     toolviews?: boolean;
@@ -50,6 +59,8 @@ export interface ResolvedConfig {
     storageScope: 'global' | 'workspace' | 'custom';
     cliPath?: string;
     dataDir?: string;
+    customPackId?: string;
+    customPacks: CustomPackConfig[];
     store?: string;
     timeoutMs: number;
     defaultRecallLimit: number;
