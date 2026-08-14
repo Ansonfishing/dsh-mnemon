@@ -80,6 +80,8 @@ const PAGE_NAV: NavGroup[] = [
   },
 ]
 
+const PAGE_TABS = PAGE_NAV.flatMap(group => group.entries)
+
 const CATEGORY_KEYS: Record<string, MnemonKey> = {
   decision: 'category.decision',
   preference: 'category.preference',
@@ -126,6 +128,24 @@ function EmptyState(props: { glyph: string; title: string; children: string }): 
     <div className={css.emptyState}>
       <div className={css.emptyGlyph} aria-hidden="true"><span>{props.glyph}</span></div>
       <div><h3>{props.title}</h3><p>{props.children}</p></div>
+    </div>
+  )
+}
+
+/** Sidebar mirrors the SSH panel's flat tab model; Buildin keeps the grouped navigation unchanged. */
+function WorkspaceNavigation(props: { page: Page; onSelect: (page: Page) => void; activeBodies: number; bodyCount: number; catalogKnown: boolean; writeEnabled: boolean }): JSX.Element {
+  const t = useT()
+  const appearance = useMnemonViewAppearance()
+  return (
+    <div className={appearanceClass(css.topNavigation, appearance.classes.topNavigation)}>
+      {appearance.surface === 'sidebar'
+        ? <div className={appearanceClass(css.nav, appearance.classes.nav)} role="tablist" aria-label={t('nav.aria')}>
+          {PAGE_TABS.map(item => <button key={item.id} type="button" role="tab" aria-selected={props.page === item.id} data-active={props.page === item.id ? '' : undefined} onClick={() => props.onSelect(item.id)}>{t(item.label)}</button>)}
+        </div>
+        : <nav className={appearanceClass(css.nav, appearance.classes.nav)} aria-label={t('nav.aria')}>
+          {PAGE_NAV.map((group, groupIndex) => <Fragment key={group.aria}><div className={appearanceClass(css.navGroup, appearance.classes.navGroup)} role="group" aria-label={t(group.aria)}>{group.entries.map(item => <button key={item.id} type="button" aria-current={props.page === item.id ? 'page' : undefined} onClick={() => props.onSelect(item.id)}>{appearance.showNavigationGlyphs && <span className={css.navGlyph} aria-hidden="true">{item.glyph}</span>}<span><strong>{t(item.label)}</strong>{appearance.showNavigationDetails && <small>{t(item.detail)}</small>}</span></button>)}</div>{appearance.showNavigationDividers && groupIndex < PAGE_NAV.length - 1 && <span className={css.navGroupDivider} aria-hidden="true" />}</Fragment>)}
+        </nav>}
+      {appearance.showSpaceSummary && <div className={css.spaceSummary}><span>{t('sidebar.activeSpaces')}</span><code>{props.catalogKnown ? `${props.activeBodies} / ${props.bodyCount}` : '— / —'}</code><small>{props.writeEnabled ? t('common.agentSupervised') : t('common.readOnly')}</small></div>}
     </div>
   )
 }
@@ -1470,7 +1490,7 @@ function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelectio
       {(statusError !== null || status?.healthy === false) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
       {workspaceContext?.mode === 'workspace' && !workspaceContext.aligned && <div className={appearanceClass(css.workspaceMismatch, appearance.classes.workspaceMismatch)} role="status"><div><strong>{t('workspace.mismatchTitle')}</strong><span>{t('workspace.mismatchDescription')}</span><div><code>{t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}</code><code>{t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}</code></div></div>{workspaceSelection?.effectiveWorkspaceId !== undefined && <button type="button" className={css.secondaryButton} onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button>}</div>}
       <div className={css.workspace}>
-        <div className={appearanceClass(css.topNavigation, appearance.classes.topNavigation)}><nav className={appearanceClass(css.nav, appearance.classes.nav)} aria-label={t('nav.aria')}>{PAGE_NAV.map((group, groupIndex) => <Fragment key={group.aria}><div className={appearanceClass(css.navGroup, appearance.classes.navGroup)} role="group" aria-label={t(group.aria)}>{group.entries.map(item => <button key={item.id} type="button" aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}>{appearance.showNavigationGlyphs && <span className={css.navGlyph} aria-hidden="true">{item.glyph}</span>}<span><strong>{t(item.label)}</strong>{appearance.showNavigationDetails && <small>{t(item.detail)}</small>}</span></button>)}</div>{appearance.showNavigationDividers && groupIndex < PAGE_NAV.length - 1 && <span className={css.navGroupDivider} aria-hidden="true" />}</Fragment>)}</nav>{appearance.showSpaceSummary && <div className={css.spaceSummary}><span>{t('sidebar.activeSpaces')}</span><code>{catalogKnown ? `${activeBodies} / ${memoryBodies.length}` : '— / —'}</code><small>{writeEnabled ? t('common.agentSupervised') : t('common.readOnly')}</small></div>}</div>
+        <WorkspaceNavigation page={page} onSelect={setPage} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} writeEnabled={writeEnabled} />
         <section className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas">
           {page === 'overview' && <OverviewPage client={client} revision={revision} writeEnabled={writeEnabled} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onExplore={explore} />}
           {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}
