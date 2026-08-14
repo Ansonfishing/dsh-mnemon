@@ -620,7 +620,7 @@
   .telemetry { grid-column: 1 / -1; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--mn-line); }
   .telemetryMetric { min-width: 0; flex: 1; justify-items: center; gap: 3px; padding: 0 5px; text-align: center; }
   .telemetryMetric:first-child { border-left: 0; }
-  .topNavigation { position: sticky; position: -webkit-sticky; top: 0; z-index: 8; padding: 0 10px; background: var(--mn-bg); box-shadow: 0 1px 0 var(--mn-line); }
+  .topNavigation { position: relative; padding: 0 10px; }
   .topNavigation::after { position: absolute; z-index: 2; top: 0; right: 0; bottom: 0; width: 34px; pointer-events: none; content: "›"; display: grid; place-items: center end; padding-right: 5px; color: var(--mn-faint); background: linear-gradient(90deg, transparent, var(--mn-layer-1) 72%); font: 16px var(--mn-code); }  .nav { flex: 1; padding-right: 26px; scroll-padding-inline: 10px 34px; }
   .navGroup { gap: 3px; }
   .navGroupDivider { height: 18px; }
