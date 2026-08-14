@@ -1,40 +1,46 @@
 # dsh-mnemon Documentation
 
-[简体中文](../zh-CN/README.md) | **English** | [Back to project home](../../README.en.md)
+[简体中文](../zh-CN/README.md) | **English** | [Project home](../../README.en.md)
 
-These documents use the current implementation as the source of truth. The root README provides a quick overview; this section expands on design rationale, boundaries, transactional workflows, configuration, and operations.
+This hub is organized by what you need to accomplish. New users should follow Getting Started, then use the visual guide for the interface. Reference documents are for deployment, integration, and development work.
 
-## Recommended Reading Path
+## New-user path
 
-1. [Project Overview](./project-overview.md): project positioning, the Mnemon-to-DSH integration boundary, the three-tier model, system architecture, and good fits.
-2. [Getting Started](./getting-started.md): installation, initial configuration, and basic verification.
-3. [Architecture](./architecture.md): boundaries between the DSH Host, Web Client, control layer, subagents, and the Mnemon CLI.
-4. [Storage and the Three-Layer Memory Model](./storage-model.md): semantics and directory layout of Runtime Memory, Documents, and Memory Spaces.
-5. [Lifecycle and Core Workflows](./workflows.md): recall, writes, background review, capacity maintenance, and archiving.
-6. [Configuration Reference](./configuration.md): all settings, defaults, precedence, and provider requirements.
-7. [WebUI, Tools, Commands, and RPC](./interfaces.md): all user-facing and model-facing entry points.
-8. [Operations, Security, and Troubleshooting](./operations.md): locks, permissions, backup, recovery, and known limitations.
-9. [Development and Verification](./development.md): module structure, tests, builds, and release checks.
-10. [Roadmap](./roadmap.md): unfinished reliability, operations, and internationalization work.
-11. [Security Policy](../../SECURITY.md): supported versions, private vulnerability-reporting channels, and scope.
+1. [Getting Started](./getting-started.md): install Mnemon and the plugin, choose storage, and complete first-run verification.
+2. [Sidebar and conversation UI guide](./ui-guide.md): learn Status, Runtime, Memory Spaces, Documents, and in-conversation entry points.
+3. [Project overview](./project-overview.md): understand the three-tier model, read/write boundaries, and complete flow.
 
-## Terminology
+## Find a task
 
-| 中文 | English | Meaning |
+| I want to… | Document |
+|---|---|
+| Decide which tier should retain something | [Storage and the three-tier model](./storage-model.md) |
+| Learn when injection, recall, remembering, and archiving happen | [Lifecycle and workflows](./workflows.md) |
+| Switch Sidebar / Buildin or global / workspace / custom storage | [Configuration reference](./configuration.md) |
+| Understand workspace inspection versus the Agent's effective directory | [UI guide: Workspace mode](./ui-guide.md#workspace-mode-separating-inspection-from-execution) |
+| Check or update Mnemon and dsh-mnemon | [Operations: Version checks and updates](./operations.md#version-checks-and-updates) |
+| Back up, restore, or migrate the complete memory root | [Operations: Backup and recovery](./operations.md#backup-and-recovery) |
+| Troubleshoot empty recall, misalignment, CLI, or provider errors | [Operations and troubleshooting](./operations.md#troubleshooting) |
+| Use model tools, `/mnemon` commands, or internal RPC | [Interface reference](./interfaces.md) |
+| Understand Host, workers, control plane, and data plane | [Architecture](./architecture.md) |
+| Modify code, screenshots, tests, or releases | [Development and verification](./development.md) |
+| See planned work | [Roadmap](./roadmap.md) |
+
+## Core terms
+
+| Term | Code / alternate name | Meaning |
 |---|---|---|
-| 记忆体 | Memory Space | A native named Mnemon Store with its own `mnemon.db` |
-| 运行时热记忆 | Runtime Memory / hot memory | Compact user profile and working memory injected directly into every turn |
-| 项目档案 | Project Documents | Complete Markdown project knowledge managed by the plugin |
-| 活跃档案 | Active Document | A Document included in default near-field search |
-| 归档 | Archive | Original text that has a long-term index and does not count toward active capacity |
-| 沉淀 | Distill / supervised writeback | Persistent writes after LLM judgment, deduplication, and routing |
-| 召回 | Recall | Reading historical evidence from active Memory Spaces |
+| Memory System | 记忆系统 | The complete dsh-mnemon entry in DSH |
+| Runtime Memory | USER / MEMORY | Hot memory projected into every turn |
+| Project Documents | Documents / 档案 | Managed, searchable project knowledge that keeps full Markdown structure |
+| Memory Space | 记忆体 | An independent, activatable, on-demand Mnemon Store |
+| Remember | Distill / 沉淀 | Submit a candidate to a supervised subagent for qualification, dedupe, and writing |
+| Recall | 召回 | Retrieve bounded evidence from active Memory Spaces |
+| Archive | 归档 | Create a cold reference before moving an infrequently used Document out of active storage |
 
-Brand names, commands, tool names, configuration keys, RPC endpoints, and code symbols remain untranslated.
+## Documentation boundaries
 
-## Documentation Boundaries
-
-- Current user instructions and repository facts take precedence over historical memory.
-- `state/` is currently reserved; background review watermarks still exist only in Host process memory.
-- The main Web workspace is available in Chinese and English; command output, tool cards, and some backend diagnostics are not yet fully internationalized.
-- `docs/sedimentation-research.md` is a historical research record, not a specification or user guide.
+- User documentation targets the v0.1.3 Sidebar-default experience while covering the compatible Buildin presentation.
+- Architecture diagrams describe stable execution boundaries, not live monitoring. Use Status for current counts and versions.
+- RPC is an internal Host-to-client protocol, not a promised stable external API.
+- There is no formal fixed DSH / Mnemon version matrix yet. Back up and validate in an isolated root before upgrading.

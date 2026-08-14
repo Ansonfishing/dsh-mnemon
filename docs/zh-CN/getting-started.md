@@ -2,33 +2,19 @@
 
 **简体中文** | [English](../en/getting-started.md) | [文档中心](./README.md)
 
+本页从空白环境走到第一次可验证召回。默认采用 Sidebar 和全局存储；如果你已经安装完成，可直接跳到[首次验证](#6-完成第一次验证)。
+
 ## 1. 前置条件
 
 你需要：
 
 - 一个可以启动的 DSH Web profile；
 - 本地可执行的 `mnemon` CLI；
-- 可用于受限子任务的 DSH subagent provider。
+- 一个可用于隔离记忆任务的 DSH subagent Provider。
 
-provider 的准确要求如下：
+普通语义任务优先使用名为 `spawn` 的 Provider，并要求 `outputSchema`、`toolFilter`、`persona` 与 `depthLimit`。可选的评分后台审查还要求名为 `fork`、且 `inheritsParentContext=true` 的 Provider。缺少 `fork` 不影响确定性页面读取和普通手动操作。
 
-```text
-regular semantic operations
-  -> prefer provider named "spawn"
-  -> may fall back to another compatible provider
-
-scored background review
-  -> requires provider named "fork"
-  -> inheritsParentContext = true
-
-both paths require
-  -> outputSchema
-  -> toolFilter
-  -> persona
-  -> depthLimit
-```
-
-插件没有在代码中声明固定的 DSH/Mnemon 最低版本矩阵。**已验证基线**：`dsh-mnemon` 0.1.0 在 `@deepseek-ai/dsh` 0.1.0-rc.6（2026-08-13 快照）的 live web profile 上实测通过，最后验证日期 2026-08-14。升级前应先在隔离数据目录中运行本页的验证步骤。
+项目当前不声明固定的 DSH / Mnemon 最低版本矩阵。本文与截图以 dsh-mnemon v0.1.3 为基线；升级前先备份，并在隔离目录重复本页验证。
 
 ## 2. 安装 Mnemon
 
@@ -38,7 +24,7 @@ macOS 推荐 Homebrew Cask：
 brew install --cask mnemon-dev/tap/mnemon
 ```
 
-macOS 或 Linux 也可以通过 Go 安装：
+macOS 或 Linux 也可通过 Go 安装：
 
 ```sh
 go install github.com/mnemon-dev/mnemon@latest
@@ -50,11 +36,9 @@ go install github.com/mnemon-dev/mnemon@latest
 mnemon --version
 ```
 
-如果还要直接检查上游 Store，可以运行 `mnemon status`。该命令会打开有效 Store，可能初始化默认数据或执行迁移；不要把它当作完全无副作用的安装探测。
+如果 DSH 无法从 `PATH` 找到它，可设置 `MNEMON_CLI_PATH`，或把绝对路径写入 `mnemon.cliPath`。`mnemon status` 会打开有效 Store，可能初始化数据或执行上游迁移，不要把它当作完全无副作用的安装探测。
 
-如果 DSH 无法从 `PATH` 找到它，可以设置 `MNEMON_CLI_PATH`，或在 `mnemon.cliPath` 中配置绝对路径。
-
-## 3. 安装插件
+## 3. 安装 dsh-mnemon
 
 安装到 Web profile：
 
@@ -62,104 +46,110 @@ mnemon --version
 dsh plugin --profile web add dsh-mnemon
 ```
 
-未发布到 npm 的预发布版本可从 git 安装：
-
-```sh
-dsh plugin --profile web add "github:omdsh-dev/dsh-mnemon"
-```
-
-本地开发检出：
+开发检出使用绝对路径：
 
 ```sh
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
-插件包中的 `cordis.patch.yml` 会挂载 Host 插件；Web client bundle 会注册会话工作台和插件设置卡。
-
-### 升级与卸载
-
-`dsh plugin` 是 pnpm 转发器，在 profile 目录下执行：
-
-```sh
-# 升级
-dsh plugin --profile web update dsh-mnemon
-
-# 卸载（同时从 profile 移除其 bundle 注册）
-dsh plugin --profile web remove dsh-mnemon
-```
-
-卸载不会删除记忆数据：`global` 范围数据留在 `~/.mnemon`，`workspace` / `custom` 范围数据留在对应目录，重新安装后继续可用。
-
-临时停用自动读写而不卸载：在插件配置里关闭 `writebackMode` / `recallMode` / `lifecycleEnabled`（见[配置参考](./configuration.md)的“开关交互”）。只想隐藏 Web 工作台时设置 `tabEnabled=false`；Host RPC、命令和 Agent 工具保持可用。
-
-## 4. 选择存储范围
-
-启动 DSH Web profile：
+然后启动或重启 profile：
 
 ```sh
 dsh --profile web
 ```
 
-在“设置 -> 记忆系统”独立配置页先选择展示形态：默认 `sidebar` 使用左侧栏独立工作台，`buildin` 使用原有对话区内嵌标签页；保存后实时切换。再选择存储范围：
+升级与卸载：
+
+```sh
+dsh plugin --profile web update dsh-mnemon
+dsh plugin --profile web remove dsh-mnemon
+```
+
+卸载只移除插件注册，不删除全局、工作区或自定义目录中的记忆数据。
+
+## 4. 选择入口与存储位置
+
+打开“设置 → 记忆系统”：
+
+[![记忆系统设置：展示形态、存储位置、对话界面与备份](../assets/screenshots/settings-memory-system.png)](../assets/screenshots/settings-memory-system.png)
+
+### 展示形态
+
+- **Sidebar**（默认）：从 DSH 左侧栏进入独立工作台；适合绝大多数用户。
+- **Buildin**：使用原有对话区标签页，并保留既有视觉。
+
+### 存储位置
 
 | 范围 | 根目录 | 适合场景 |
 |---|---|---|
-| `global` | `MNEMON_DATA_DIR` 或 `~/.mnemon` | 多个工作区共享同一套记忆 |
-| `workspace` | 每个 DSH 工作区根目录下的 `.mnemon` | 项目隔离与跨工作区查看 |
-| `custom` | `dataDir` | 显式磁盘、挂载卷或专用数据目录 |
+| **全局**（默认） | `MNEMON_DATA_DIR` 或 `~/.mnemon` | 多个工作区共享同一套记忆 |
+| **工作区** | `<workspace>/.mnemon` | 项目隔离，并允许在工作台切换查看其他工作区 |
+| **自定义** | `dataDir` | 专用磁盘、挂载卷或明确的数据目录 |
 
-设置写入 `$DSH_HOME/settings.yaml`，保存后 Host 原子切换存储根，工作台立即清理旧页面状态并自动重新读取当前页，无需手动刷新浏览器。切换范围不会搬运旧数据；需要保留时先停止写入并通过整体 ZIP 备份迁移。
+点击保存后会先初始化新运行图，再原子切换 Host；页面自动清理旧状态并重新读取，无需刷新浏览器。切换范围不会自动迁移、合并或删除旧数据。
 
-选择 `workspace` 后，工作台顶部可以切换要查看的工作区。这个选择只决定工作台正在查看和维护哪一套数据；Agent 实际使用的目录始终跟随当前会话。两者不同时会出现全局提示，可一键对齐。
+在工作区模式下，工作台选择器只决定“正在查看哪套数据”；Agent、工具与生命周期实际使用的目录始终跟随当前会话。两者不一致时顶部会提示并提供一键对齐。
 
-## 5. 创建第一个记忆体
+## 5. 打开 Sidebar 工作台
 
-使用默认 `sidebar` 时点击 DSH 左侧栏的“记忆系统”入口；使用 `buildin` 时打开对话区的“记忆系统”标签页：
+点击左侧栏“记忆系统”，先查看“状态”：
 
-1. 打开“记忆体”页。
-2. 创建一个主题明确的记忆体，例如“项目决策”。
-3. description 应说明“哪些内容属于这里，以及什么任务应召回它”。
-4. 开启读取开关，或在第一次写入后让插件自动激活它。
+[![状态页：CLI、版本、运行时、记忆体、档案与存储根](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
 
-空白记忆体默认可以保持未激活。激活只控制读取范围；写入可以选择任意已登记记忆体，写入成功后会自动激活目标。
+确认：
 
-## 6. 验证完整链路
+- 右上角显示“已连接”；
+- Mnemon 与 dsh-mnemon 能显示当前版本；
+- 存储根与刚才选择的范围一致；
+- Runtime、Memory Spaces 和 Documents 没有错误提示。
 
-先检查确定性状态：
+如果 Mnemon 不可用，先运行 `command -v mnemon` 与 `mnemon --version`。更多症状见[故障排查](./operations.md#故障排查)。
+
+## 6. 完成第一次验证
+
+### 创建记忆体
+
+1. 打开“记忆体 → 概览”。
+2. 点击“创建记忆体”。
+3. 使用主题明确的名称，例如“项目决策”。
+4. 在说明中写清“哪些内容属于这里，以及什么任务应召回它”。
+5. 开启读取激活开关。
+
+### 沉淀一条测试信息
+
+点击右上角“沉淀记忆”，填写一条稳定、自包含、未来仍有用且不含秘密的信息。默认不要展开高级选项，让记忆子 Agent 自己选择目标、查重与提炼。
+
+只有点击“调度子 Agent 判断并沉淀”才会启动写入；取消弹窗不会改变状态。
+
+### 验证召回
+
+1. 打开“记忆体 → 检索”。
+2. 输入一个能命中刚才内容的具体问题。
+3. 先用“直接检索”检查原始证据。
+4. 确认结果包含记忆体来源、分类、重要性、分数和 ID。
+
+也可以在对话中运行：
 
 ```text
 /mnemon status
+/mnemon recall <聚焦查询>
 ```
 
-再在“沉淀”页提交一条稳定、自包含、未来仍有用的内容。worker 会选择记忆体、查重并返回结构化回执。随后验证：
+## 7. 验证对话内记忆
 
-```text
-/mnemon recall <一个能命中新内容的聚焦查询>
-```
+在一个确实依赖历史信息的问题中，让 Agent 自主判断是否需要召回。完成后：
 
-最后检查：
+- 若本轮调用了记忆工具，回复下方会出现“本回合记忆”；
+- 展开后可以看到具体工具名，并点击跳到对应页面；
+- “存入记忆”会先打开可编辑确认弹窗，取消不会写入。
 
-- “记忆体”页能看到已激活记忆体和图谱；
-- “内容”能看到写入项及所属记忆体；
-- “状态”中 CLI、运行时、记忆体目录和 subagent 均正常；
-- 召回结果包含完整 `memoryBodyId` 和记忆 ID。
-
-## 7. 推荐的第一次真实对话
-
-选择一个确实依赖历史决策的问题，而不是要求模型无条件调用记忆工具。预期流程是：
-
-```text
-user asks a history-dependent question
-  -> pre-step adds a short optional cue
-  -> main Agent decides whether history matters
-  -> recall worker selects active Memory Spaces
-  -> only useful evidence returns to the main Agent
-```
+[![本回合记忆与工具跳转](../assets/screenshots/conversation-turn-memory.png)](../assets/screenshots/conversation-turn-memory.png)
 
 普通聊天不应强制召回。当前请求、现有源文件和实时工具结果应优先于历史内容。
 
 ## 8. 下一步
 
-- 阅读[存储模型](./storage-model.md)，再决定 `storageScope`。
-- 阅读[配置参考](./configuration.md)，配置只读模式或关闭生命周期提示。
-- 阅读[运维指南](./operations.md)，建立备份和升级前验证流程。
+- 用 [Sidebar 与对话交互指南](./ui-guide.md) 认识全部页面。
+- 用[存储模型](./storage-model.md)决定信息应进入运行时、档案还是记忆体。
+- 用[配置参考](./configuration.md)设置工作区范围、只读模式或生命周期开关。
+- 用[运维指南](./operations.md)导出第一份 ZIP 备份并建立升级前检查流程。

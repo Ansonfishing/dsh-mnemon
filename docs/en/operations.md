@@ -1,10 +1,10 @@
 # Operations, Security, and Troubleshooting
 
-[简体中文](../zh-CN/operations.md) | **English** | [Documentation Center](./README.md)
+[简体中文](../zh-CN/operations.md) | **English** | [Documentation hub](./README.md)
 
-## Health Checks
+## Health checks
 
-Check the binary first, then the plugin's aggregated status:
+Check the binary, then open **Status** in the workbench:
 
 ```sh
 command -v mnemon
@@ -15,153 +15,152 @@ mnemon --version
 /mnemon status
 ```
 
-`mnemon status` opens the effective Store, so the upstream CLI may initialize default data or run migrations. It is not a completely side-effect-free read probe. The plugin's Status page also checks active Memory Spaces, Documents, lifecycle state, and subagent counts.
+[![Status with component versions, three-tier data, and effective directories](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
 
-## Version Checks and Updates
+Status shows Mnemon / dsh-mnemon versions, Runtime, Memory Spaces, Documents, and effective directories. `mnemon status` opens the effective Store and may initialize data or run upstream migrations, so it is not a completely side-effect-free probe.
 
-The Sidebar Status page checks two independently installed components through **Check versions**:
+## Version checks and updates
 
-- **Mnemon CLI**: the installed version comes from local `mnemon --version`, while the latest version comes from Mnemon GitHub Releases;
-- **dsh-mnemon**: the installed version comes from the running plugin package, while the latest version comes from the npm registry.
+**Check versions** on Status opens the version panel:
 
-Checking is read-only and never installs anything automatically. An **Update** button appears only when a newer release exists and the installation source can be identified safely. Mnemon supports Homebrew Cask, Homebrew Formula, and `go install`; dsh-mnemon supports npm installs managed by pnpm in the owning DSH Profile. Local `link:` / `file:` development builds and unrecognized manual installs show guidance only, preventing source overwrite or use of the wrong package manager.
+[![Check and update Mnemon CLI and dsh-mnemon](../assets/screenshots/version-check.png)](../assets/screenshots/version-check.png)
 
-The Host chooses fixed update commands: the browser cannot supply executable names or arguments, no shell is enabled, and execution time and output are bounded. Checks use the existing read-only RPC channel; explicit updates remain on the loopback write channel. After a successful update, the UI automatically checks both versions again and refreshes System Status. Restart `dsh web` after updating dsh-mnemon to load the new plugin code. A Mnemon CLI update applies from the next CLI invocation.
+- **Mnemon CLI**: installed from `mnemon --version`; latest from Mnemon GitHub Releases.
+- **dsh-mnemon**: installed from the running package; latest from the npm registry.
 
-## Security Boundaries
+Checking is read-only and never installs automatically. Update appears only when a newer version exists and the source is safely recognized. Mnemon supports Homebrew Cask / Formula and `go install`; dsh-mnemon supports npm installations managed by pnpm in the owning DSH Profile. `link:` / `file:` development builds and unrecognized manual installs show guidance only.
 
-### Process
+The Host fixes update commands and arguments. The browser cannot supply either; shell is disabled and execution/output are bounded. After an update, the UI rechecks both components and refreshes Status automatically. Mnemon applies on the next CLI call. Restart `dsh web` after updating dsh-mnemon.
 
-- `spawn(command, args, { shell: false })`; shell commands are never concatenated.
-- stdout + stderr have a combined default limit of 2 MiB.
-- Every CLI call is governed by `timeoutMs` and an AbortSignal.
-- On timeout or cancellation, the process first receives `SIGTERM`, then `SIGKILL` if it has not exited after 1.5 seconds.
-- CLI calls within one `MnemonRunner` are serialized to avoid SQLite lock conflicts from concurrent migrations in the same process.
+## Backup and recovery
 
-The serial queue does not replace coordination across DSH processes. When multiple Hosts access the same Mnemon Store concurrently, they still rely on Mnemon/SQLite's own concurrency semantics.
+### Recommended: Settings ZIP
 
-### Files
+**Settings → Memory System → Backup and migration** operates on the **currently effective root**:
 
-- Runtime and Documents both use an in-process queue and a cross-instance lock file.
-- Lock acquisition waits up to 5 seconds by default; a lock is considered stale only after 30 seconds.
-- Writes use temporary files and rename.
-- Runtime uses a revision to prevent stale compaction from overwriting concurrent changes.
-- Document archiving uses a numeric revision to prevent moving active source text that has since been updated.
-- `sourcePaths` cannot escape the initiating session's workspace or point into the managed Documents directory.
+- **Export ZIP** includes Runtime, Documents, and every Memory Space.
+- **Import ZIP** previews, validates, then merges into the effective root.
+- Packs include `manifest.json`, SHA-256 inventory, and component summaries.
+- Export/import hold component locks; a Memory Space with an uncheckpointed WAL is rejected.
+- Import checks paths, counts, compressed/expanded limits, JSON schemas, Document hashes, registry consistency, and SQLite headers.
+- Merge is staged before replacing component directories; commit failure restores pre-import directories.
 
-### Web
+The UI offers safe merge, not “overwrite everything”:
 
-- Read RPC: `trusted-host`.
-- Memory write RPC: `loopback`.
-- Settings RPC: `loopback`.
-- The WebUI neither reads SQLite directly nor starts processes.
+- Runtime deduplicates by target and content.
+- Identical Document ID + hash is skipped; conflicting content receives a new ID.
+- Identical Memory Space ID + database is skipped; conflicting content receives a new ID.
 
-### Model
+Import is governed by `writeEnabled` and is rejected in read-only deployments. A ZIP contains private memory—encrypt it, restrict access, and rehearse recovery.
 
-- Workers use a persona, a tool allowlist, structured output, and `maxDepth: 1`.
-- User queries, candidate content, Document bodies, and historical memories are all treated as untrusted data.
-- The evidence-answer worker has no Mnemon tools and can use only the hits supplied by the Host.
+### Recovery rehearsal
 
-These boundaries are not a secret scanner. There is currently no deterministic credential/secret detection. Do not submit keys, tokens, private keys, or raw sensitive logs to hot memory, Documents, or Memory Spaces.
+1. Select an isolated `custom` directory and save.
+2. Confirm **Current directory ZIP** points to that root.
+3. Select the backup, review its preview, then import.
+4. Check Runtime, Documents, Memory Spaces, and directories on Status.
+5. Run one focused direct recall and read one Document.
+6. Only after verification decide whether to switch a production scope.
 
-### Security reporting
+Never restore directly into the only production root without another backup.
 
-Report vulnerabilities privately through the channels in [SECURITY.md](../../SECURITY.md) (GitHub Security Advisories or maintainer email) — do not open a public issue. Typical in-scope issues include data loss, path traversal, lock/revision-check bypasses, subagent isolation breaks, and injection via memory content rendered by the WebUI.
+### Filesystem snapshot
 
-## Backup
-
-All three tiers share `storageRoot`. A consistent backup should cover the entire root, not just `mnemon.db`:
+To preserve reserved `state` or take an offline complete snapshot, stop every DSH / Mnemon process using the root and copy:
 
 ```text
 <storageRoot>/runtime
 <storageRoot>/documents
 <storageRoot>/data
-<storageRoot>/state    # when present
+<storageRoot>/state    # when present; outside the built-in Pack's three data components
 ```
 
-Recommended procedure:
+Generate an inventory or checksums and rehearse recovery in isolation. A normal directory copy while writers are running is not a consistent snapshot.
 
-1. Stop the DSH Host and any other process writing to the same root.
-2. Record the current plugin, DSH, and `mnemon --version` versions.
-3. Copy the entire root to a new timestamped directory.
-4. Generate a file inventory or checksums for the backup.
-5. Complete a recovery rehearsal in an isolated path before relying on the backup.
+## Changing storage scope
 
-The project currently has no built-in consistent snapshot, export, or recovery command. Copying while the system is running may capture an inconsistent state across files.
-
-## Recovery
-
-1. Stop every DSH/Mnemon process using the target root.
-2. Preserve a second copy of the existing root; do not overwrite the only copy of the data.
-3. Restore the complete backup to a new directory.
-4. First point `storageScope=custom` at the new directory.
-5. Start the system and inspect the Runtime projections, Document index, Memory Space directory, and recall.
-6. After verification, decide whether to replace the original root.
-
-If `USER.md` / `MEMORY.md` is damaged, the control layer can repair it from a valid `memories.json`. There is no general automatic repair flow for damaged JSON, the Document index, or SQLite.
-
-## Changing Storage Scope
-
-The plugin does not migrate data automatically:
+Saving `global` / `workspace` / `custom` initializes a new runtime graph before switching atomically. The page reloads automatically, but **data is not migrated**:
 
 ```text
-old scope -- change setting + save --> new empty or existing scope
+old scope -- save --> new empty or existing root
 
-no implicit copy
-no implicit merge
-no implicit delete
+no automatic copy
+no automatic merge
+no automatic delete
 ```
 
-When migration is required, stop writes and copy the complete root. Two roots cannot be merged by overwriting directories because JSON indexes, the registry, and multiple databases may conflict. Design an explicit merge procedure against backups instead.
+Recommended migration: export from the old scope → switch and confirm the new root → import → verify. In Workspace mode, confirm both inspection and execution targets.
+
+## Security boundaries
+
+### Process
+
+- CLI uses `spawn(command, args, { shell: false })`.
+- stdout + stderr are capped at 2 MiB by default.
+- Calls use `timeoutMs` and AbortSignal; cancellation sends `SIGTERM`, then `SIGKILL` after 1.5 seconds.
+- One Runner serializes calls; separate DSH processes still rely on Mnemon / SQLite concurrency.
+
+### Files
+
+- Runtime, Documents, and Pack operations use in-process queues or component locks.
+- Lock wait defaults to 5 seconds; stale threshold is 30 seconds.
+- Writes use temporary files, staging, and rename.
+- Runtime revisions block stale compaction; Document revisions block movement of updated originals.
+- `sourcePaths` cannot escape the initiating workspace or point into managed Documents.
+
+### Web and model
+
+- Read RPC is `trusted-host`; write, settings, and backup RPC are `loopback`.
+- The WebUI neither reads SQLite directly, starts processes, nor supplies arbitrary update commands.
+- Workers use persona, tool allowlists, structured output, and `maxDepth: 1`.
+- Queries, candidates, Document bodies, and historical memory are treated as untrusted data.
+
+These boundaries are not a secret scanner. There is no deterministic credential detection; never submit keys, tokens, private keys, or raw sensitive logs.
+
+### Security reporting
+
+Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md), not a public issue. Data loss, path traversal, lock/revision bypasses, subagent-isolation breaks, and injection through rendered memory are in scope.
 
 ## Troubleshooting
 
-| Symptom | Check and Resolution |
+| Symptom | Check and resolution |
 |---|---|
-| Mnemon is unavailable | Run `command -v mnemon` and `mnemon --version`; set `MNEMON_CLI_PATH` or `cliPath`, then restart |
-| Status is healthy but recall is empty | Check that a Memory Space is active, inspect `storageScope`, the workbench inspection root, the current session's effective root, and make sure the query is focused enough |
-| Workbench reports a directory mismatch | This is a safety notice: the workbench is inspecting another workspace while the Agent still follows the current session; align with the session or intentionally keep cross-workspace inspection |
-| `memoryBodyId is required...` | The active count is not exactly 1; have the worker or caller select a target explicitly |
-| `memory body is not active for reading` | Activate the target in Overview; writing to an inactive space is allowed, but reading is not |
-| Subagent provider error | Regular tasks require the full isolation capabilities; background review additionally requires `fork + inheritsParentContext` |
-| Settings have no effect after saving | Check the UI error; all options should apply live after a successful Save |
-| Custom directory is rejected | Use an absolute path, `~`, or `~/...` |
-| Document has no workspace | The session must correspond to a live root Agent and include cwd in its session header |
-| Source path is rejected | The path must stay within the session workspace and must not reference the managed Documents directory |
-| Runtime replace exceeds capacity | Shorten the replacement or organize it explicitly first; current automatic maintenance handles only add overflow |
-| CLI timeout | Increase `timeoutMs`; status and graph exports for large Stores may take longer than 10 seconds |
-| Lock timeout | Check whether another instance is writing; do not delete a lock that still belongs to a live process |
-| Invalid JSON / unexpected viz | The CLI output protocol may be incompatible; validate the version against an isolated root and do not continue writing production data |
-| A remote page can read but not write | Write RPC enforces loopback by design |
-| “Memory System” is missing from the sidebar | Check `tabEnabled=true` and `displayMode=sidebar`; `buildin` appears as a conversation-area tab; after changing a local link, run `pnpm run build` and restart the DSH profile |
-| Local link does not reflect source | Run `pnpm run build`, then restart the DSH profile |
+| Mnemon unavailable | Run `command -v mnemon`, `mnemon --version`; set `MNEMON_CLI_PATH` or `cliPath`, then restart |
+| Memory System missing from sidebar | Check `tabEnabled=true`, `displayMode=sidebar`; Buildin is in the conversation area; for a local link run `pnpm run build`, then restart |
+| Status healthy but recall empty | Check active spaces, storage scope, inspected root, effective session root, and query focus |
+| Header reports misalignment | The workbench is inspecting another workspace; align or keep deliberate read-only inspection; Agent-backed actions are rejected |
+| Saved settings appear unchanged | Inspect the save error; success applies live and reloads automatically without refresh |
+| Custom directory rejected | Use an absolute path, `~`, or `~/...` |
+| `memoryBodyId is required...` | Active count is not exactly one; select a target explicitly |
+| `memory body is not active for reading` | Activate it in Overview; inactive writes are allowed, reads are not |
+| Provider error | Semantic work needs full isolation capabilities; background review additionally needs `fork + inheritsParentContext` |
+| Runtime replace exceeds capacity | Shorten it or organize first; automatic maintenance handles add overflow only |
+| Document source path rejected | Keep it inside the session workspace and outside managed Documents |
+| CLI timeout | Increase `timeoutMs`; large Stores may need more than 10 seconds for status or graph |
+| Lock timeout | Check other writers; never delete a lock owned by a live process |
+| ZIP export reports WAL busy | Wait for Memory Space writes to settle; do not bypass the uncheckpointed-WAL guard |
+| ZIP import checksum/schema failure | The backup is damaged or incompatible; preserve the current root and never unzip over it manually |
+| No Update button | Already current, remote check failed, or the source is link/manual; follow panel guidance |
+| Remote page reads but cannot write | Write, settings, and backup RPC enforce loopback by design |
 
-## Known Limitations
+## Known limitations
 
-### Feature Read-Only Is Not Disk Read-Only
+### Feature read-only is not disk read-only
 
-`writeEnabled=false` disables semantic mutations, but startup may still create or repair Runtime files, Document search updates `lastAccessedAt`, and Mnemon reads may trigger upstream migrations. Do not assume it can operate without writes on a genuinely read-only filesystem.
+`writeEnabled=false` disables semantic mutation and Pack import, but startup may initialize/repair Runtime, Document search updates `lastAccessedAt`, and Mnemon reads may migrate a database.
 
-### Shared Scope of Documents
+### Shared Documents scope
 
-`global` and `custom` may cause multiple workspaces to share one Document index; records do not have a separate workspace-ownership field. `sourcePaths` are validated against the initiating session's cwd only when written.
+`global` and `custom` can share one Document index across workspaces; records have no independent workspace-ownership field. `sourcePaths` are checked against the initiating cwd only when written.
 
-### Cold-Reference Paths
+### Cross-system transactions
 
-The current archive-worker prompt uses `.mnemon/documents/archived/<filename>` as its planned reference. Under global/custom scope, the actual file is at `<storageRoot>/documents/archived/<filename>`. When locating the original, use `documents/index.json` or the `relativePath` shown in the UI as the source of truth. This path-expression difference remains to be fixed.
+Cold-index-first protects active content but is not a rollback-capable distributed transaction across Mnemon SQLite and the filesystem. A revision conflict after indexing may leave a duplicate reference; the system preserves data.
 
-### Cross-System Transactions
+### Background watermark
 
-“Index first, move second” protects the active source text but is not a rollback-capable distributed transaction across Mnemon SQLite and the filesystem. If a revision conflict occurs after indexing succeeds, the index may retain a duplicate reference; the plugin chooses to preserve data instead of rolling back a completed long-term write.
+Activity score, latest checkpoint, and retry state are not persisted. Host restart clears unprocessed activity. Failure backoff, circuit breaking, and manual retry are not implemented yet.
 
-### Background Watermarks
+### Versions and internationalization
 
-Scores, the latest checkpoint, and retry state are not persisted. Restarting the Host clears activity that has not yet been processed. Failure backoff, circuit breaking, and a manual retry entry point are not yet implemented either.
-
-### Version Matrix
-
-The project does not yet declare a formal DSH/Mnemon support matrix or schema-migration policy. Back up first and validate against an isolated root before upgrading.
-
-### Internationalization
-
-The main Web workspace is bilingual in Chinese and English, but commands, tool cards, compatibility default metadata, and some error messages are not yet fully internationalized.
+There is no formal fixed DSH / Mnemon support matrix. The main Web interface is bilingual, while commands, tool cards, compatibility metadata, and some errors remain partially untranslated.

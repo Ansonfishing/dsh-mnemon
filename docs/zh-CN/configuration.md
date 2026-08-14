@@ -12,7 +12,7 @@ $DSH_HOME/settings.yaml
 
 默认通常是 `~/.dsh/settings.yaml`。当前全部配置标记为 `live` 生效；保存后会先初始化候选运行图，再原子切换 Host 服务。
 
-Web 设置卡编辑 `displayMode`、`storageScope` 和 `dataDir`。其他高级项需要直接修改 YAML。
+Web 设置页编辑 `displayMode`、`storageScope`、`dataDir`，以及 `mnemon-ui` 下的回合记忆条和存入记忆按钮；同页还提供当前有效目录的 ZIP 导入 / 导出。其他高级项需要直接修改 YAML。
 
 ## 完整示例
 

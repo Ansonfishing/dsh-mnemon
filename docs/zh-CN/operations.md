@@ -4,7 +4,7 @@
 
 ## 健康检查
 
-先检查二进制，再检查插件聚合状态：
+先检查二进制，再查看工作台“状态”：
 
 ```sh
 command -v mnemon
@@ -15,153 +15,152 @@ mnemon --version
 /mnemon status
 ```
 
-`mnemon status` 会打开有效 Store，上游 CLI 可能初始化默认数据或执行迁移；它不是完全无副作用的只读探测。插件状态页还会检查 active Memory Spaces、Documents、生命周期和 subagent 计数。
+[![状态页：组件版本、三层数据与实际存储目录](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
+
+状态页显示 Mnemon / dsh-mnemon 版本、Runtime、Memory Spaces、Documents 和当前实际目录。`mnemon status` 会打开有效 Store，上游 CLI 可能初始化数据或执行迁移，因此不是完全无副作用的只读探测。
 
 ## 版本检查与更新
 
-Sidebar「状态」页的「检查版本」同时检查两个独立组件：
+状态页的“检查版本”打开“检查与更新版本”面板：
 
-- **Mnemon CLI**：当前版本来自本地 `mnemon --version`，最新版本来自 Mnemon GitHub Releases；
-- **dsh-mnemon**：当前版本来自正在运行的插件包，最新版本来自 npm registry。
+[![检查与更新 Mnemon CLI 和 dsh-mnemon](../assets/screenshots/version-check.png)](../assets/screenshots/version-check.png)
 
-点击检查只执行只读探测，不会自动安装。只有发现更高版本且安装来源能够安全识别时，组件行才显示「更新」按钮：Mnemon 支持 Homebrew Cask、Homebrew Formula 和 `go install`；dsh-mnemon 支持当前 DSH Profile 中由 pnpm 管理的 npm 安装。本地 `link:` / `file:` 开发版本及无法识别来源的手工安装只显示操作提示，避免覆盖源码或采用错误的包管理器。
+- **Mnemon CLI**：本地版本来自 `mnemon --version`，最新版本来自 Mnemon GitHub Releases。
+- **dsh-mnemon**：运行版本来自当前插件包，最新版本来自 npm registry。
 
-更新命令由 Host 固定选择，不接受浏览器传入命令或参数、不启用 shell，并限制执行时间与输出大小。版本检查使用既有只读 RPC 通道；显式更新只允许走 loopback 写通道。更新成功后界面会自动重新检查版本并刷新系统状态。dsh-mnemon 更新完成后仍需要重启 `dsh web` 以加载新插件代码，Mnemon CLI 更新则从下一次 CLI 调用起生效。
+检查只读，不会自动安装。只有发现更高版本并安全识别安装来源时才显示“更新”：Mnemon 支持 Homebrew Cask / Formula 与 `go install`；dsh-mnemon 支持当前 DSH Profile 中由 pnpm 管理的 npm 安装。`link:` / `file:` 开发版本与无法识别的手工安装只显示说明，避免覆盖源码。
 
-## 安全边界
+更新命令由 Host 固定选择：浏览器不能传入命令或参数，执行禁用 shell，并限制时间与输出。更新完成后界面自动重新检查两个组件并刷新状态。Mnemon CLI 从下一次调用起生效；dsh-mnemon 仍需重启 `dsh web` 才能加载新插件代码。
 
-### 进程
+## 备份与恢复
 
-- `spawn(command, args, { shell: false })`，不拼接 shell 命令。
-- stdout + stderr 默认合计限制 2 MiB。
-- 每次 CLI 调用受 `timeoutMs` 和 AbortSignal 控制。
-- 超时或取消先发送 `SIGTERM`，1.5 秒后仍未退出则发送 `SIGKILL`。
-- 一个 `MnemonRunner` 内的 CLI 调用串行，避免同一进程内并发迁移导致 SQLite 锁冲突。
+### 推荐：设置页 ZIP
 
-串行队列不替代跨 DSH 进程协调；多个 Host 同时访问同一 Mnemon Store 时仍依赖 Mnemon/SQLite 自身的并发语义。
+“设置 → 记忆系统 → 备份与迁移”针对**当前有效根**工作：
 
-### 文件
+- **导出 ZIP**：包含 Runtime、Documents 和全部 Memory Spaces；
+- **导入 ZIP**：先预检，再合并到当前有效根；
+- 包内包含 `manifest.json`、SHA-256 清单和三类数据摘要；
+- 导出与导入持有组件锁，Memory Space 仍有未 checkpoint 的 WAL 时会拒绝；
+- 导入检查路径、数量、压缩 / 展开大小、JSON schema、Document 哈希、registry 与 SQLite 头；
+- 合并先写 staging，再替换目标组件；提交失败会恢复导入前目录。
 
-- Runtime 和 Documents 都有进程内队列及跨实例 lock file。
-- 等待锁默认最多 5 秒；锁超过 30 秒才被视为 stale。
-- 写入使用临时文件和 rename。
-- Runtime 用 revision 阻止过期压缩覆盖并发修改。
-- Document 归档用数字 revision 阻止移动已被更新的 active 原文。
-- `sourcePaths` 不能逃出发起会话工作区，也不能指向受管 Documents 目录。
+当前 UI 只提供安全合并，不做“覆盖一切”：
 
-### Web
+- Runtime 按目标与内容去重；
+- 相同 Document ID + 相同内容跳过，ID 冲突且内容不同则生成新 ID；
+- 相同 Memory Space ID + 相同数据库跳过，内容不同则生成新 ID。
 
-- 读 RPC：`trusted-host`。
-- 记忆写 RPC：`loopback`。
-- 设置 RPC：`loopback`。
-- WebUI 不直接读取 SQLite 或启动进程。
+导入受 `writeEnabled` 控制，只读部署会拒绝。ZIP 包含私有记忆，应像源代码与凭据备份一样加密、限制访问并验证恢复。
 
-### 模型
+### 恢复演练
 
-- worker 使用 persona、工具白名单、结构化输出和 `maxDepth: 1`。
-- 用户查询、候选内容、Document 正文和历史记忆均按不可信数据处理。
-- 证据回答 worker 无 Mnemon 工具，只能使用 Host 提供的命中内容。
+1. 先选择一个隔离的 `custom` 目录并保存。
+2. 确认设置页显示的“当前目录 ZIP”正是隔离根。
+3. 选择备份，阅读预检摘要后执行导入。
+4. 在状态页检查 Runtime、Documents、Memory Spaces 与目录。
+5. 用一个聚焦查询验证直接检索，再阅读一份档案。
+6. 验证无误后再决定是否切换正式范围。
 
-这些边界不等于秘密扫描器。当前还没有确定性的凭据/秘密检测；不要向热记忆、Documents 或 Memory Spaces 提交密钥、token、私钥和原始敏感日志。
+不要在没有备份时把恢复直接指向唯一生产根。
 
-### 安全问题报告
+### 文件系统级快照
 
-发现安全漏洞请按 [SECURITY.md](../../SECURITY.md) 的渠道私下报告（GitHub Security Advisories 或维护者邮箱），不要开公开 issue。范围内的典型问题包括：数据丢失、路径穿越、锁与 revision 检查绕过、子 Agent 隔离破坏、WebUI 对记忆内容的注入。
-
-## 备份
-
-三层数据共用 `storageRoot`，一致备份应覆盖整个根，而不是只复制 `mnemon.db`：
+需要保留预留 `state` 或做离线完整快照时，可以停止所有使用该根的 DSH / Mnemon 进程后复制：
 
 ```text
 <storageRoot>/runtime
 <storageRoot>/documents
 <storageRoot>/data
-<storageRoot>/state    # when present
+<storageRoot>/state    # 若存在；不在内置 ZIP 的三类数据组件中
 ```
 
-推荐过程：
-
-1. 停止 DSH Host 和其他写入同一根的进程。
-2. 记录当前插件、DSH 和 `mnemon --version`。
-3. 复制整个根到新的、带时间戳的目录。
-4. 对备份执行文件清单或校验和。
-5. 在隔离路径中完成恢复演练后再依赖它。
-
-项目当前没有内置一致快照、导出或恢复命令；运行中直接复制可能捕获跨文件不一致状态。
-
-## 恢复
-
-1. 停止所有使用目标根的 DSH/Mnemon 进程。
-2. 保留现有根的第二份副本，不要直接覆盖唯一数据。
-3. 把完整备份恢复到一个新目录。
-4. 先用 `storageScope=custom` 指向新目录。
-5. 启动并检查 Runtime 投影、Document index、Memory Space 目录和 recall。
-6. 验证后再决定是否替换原根。
-
-`USER.md` / `MEMORY.md` 损坏时，控制层可从有效的 `memories.json` 修复；损坏的 JSON、Document index 或 SQLite 不存在自动通用修复流程。
+复制完成后生成文件清单或校验和，并在隔离路径演练恢复。不要在多个进程仍写入时把普通目录复制当作一致快照。
 
 ## 切换存储范围
 
-插件不会自动迁移数据：
+保存 `global` / `workspace` / `custom` 后，Host 先初始化新运行图，再原子切换；页面自动重新读取，但**不会迁移数据**：
 
 ```text
-old scope -- change setting + save --> new empty or existing scope
+旧范围 -- 保存设置 --> 新的空目录或既有目录
 
-no implicit copy
-no implicit merge
-no implicit delete
+不自动复制
+不自动合并
+不自动删除
 ```
 
-需要迁移时，停止写入后复制完整根。合并两套根不能靠目录覆盖，因为 JSON index、registry 和多个数据库都可能冲突；应在备份上设计显式合并方案。
+推荐迁移流程：在旧范围导出 ZIP → 切换到新范围并确认显示目录 → 导入 ZIP → 验证。工作区模式下先确认查看工作区与会话执行工作区是否是预期目标。
+
+## 安全边界
+
+### 进程
+
+- CLI 使用 `spawn(command, args, { shell: false })`，不拼接 shell。
+- stdout + stderr 默认合计限制 2 MiB。
+- 每次调用受 `timeoutMs` 与 AbortSignal 控制；取消先 `SIGTERM`，1.5 秒后 `SIGKILL`。
+- 单个 Runner 内调用串行；跨 DSH 进程仍依赖 Mnemon / SQLite 并发语义。
+
+### 文件
+
+- Runtime、Documents 和 Pack 操作使用进程内队列或组件锁。
+- lock 默认等待 5 秒，超过 30 秒才视为 stale。
+- 写入使用临时文件、staging 与 rename。
+- Runtime revision 阻止过期压缩覆盖；Document revision 阻止移动已更新原文。
+- `sourcePaths` 不能逃出发起会话工作区，也不能指向受管 Documents 目录。
+
+### Web 与模型
+
+- 读 RPC 为 `trusted-host`；写、设置与备份 RPC 为 `loopback`。
+- WebUI 不直接读取 SQLite、启动进程或指定任意更新命令。
+- worker 使用 persona、工具白名单、结构化输出与 `maxDepth: 1`。
+- 查询、候选、档案正文与历史记忆全部按不可信数据处理。
+
+这些边界不是秘密扫描器。当前没有确定性的凭据检测；不要提交密钥、token、私钥和原始敏感日志。
+
+### 安全问题报告
+
+按 [SECURITY.md](../../SECURITY.md) 私下报告漏洞，不要创建公开 issue。数据丢失、路径穿越、锁 / revision 绕过、子 Agent 隔离破坏和 WebUI 记忆内容注入都在范围内。
 
 ## 故障排查
 
 | 现象 | 检查与处理 |
 |---|---|
 | Mnemon 不可用 | 运行 `command -v mnemon`、`mnemon --version`；设置 `MNEMON_CLI_PATH` 或 `cliPath` 后重启 |
-| 状态正常但召回为空 | 检查是否有 active Memory Space、当前 `storageScope`、工作台查看目录、会话实际生效目录和查询是否足够聚焦 |
-| 工作台提示目录未对齐 | 这是安全提示：工作台正在查看另一工作区，而 Agent 仍跟随当前会话；点击“对齐当前会话”或有意保留跨工作区查看 |
-| `memoryBodyId is required...` | active 数量不是恰好 1；让 worker 或调用方显式选择目标 |
-| `memory body is not active for reading` | 在记忆体页激活目标；写入 inactive 可以，但读取不行 |
-| subagent provider 错误 | 普通任务需要完整隔离能力；后台审查另需 `fork + inheritsParentContext` |
-| 设置保存后无变化 | 检查界面错误提示；所有选项应在保存成功后实时生效 |
-| custom 目录被拒绝 | 使用绝对路径、`~` 或 `~/...` |
-| Document 无 workspace | 会话必须对应 live root Agent，并在 session header 中带 cwd |
-| source path 被拒绝 | 路径必须留在会话工作区内，且不能引用托管 Documents 目录 |
-| Runtime replace 超容量 | 缩短 replacement 或先显式整理；当前自动维护只处理 add 溢出 |
-| CLI timeout | 增大 `timeoutMs`；大 Store 的状态和图谱导出可能超过 10 秒 |
-| lock timeout | 检查是否有另一个实例正在写；不要删除仍属于活跃进程的 lock |
-| invalid JSON / unexpected viz | CLI 输出协议可能不兼容；在隔离根中验证版本，不要继续写生产数据 |
-| 远程页面可以读但不能写 | 写 RPC 强制 loopback，这是权限设计 |
-| 左侧栏不显示“记忆系统” | 检查 `tabEnabled=true` 且 `displayMode=sidebar`；`buildin` 会显示在对话区标签页；本地 link 修改后先运行 `pnpm run build` 并重启 DSH profile |
-| 本地 link 不反映源码 | 先运行 `pnpm run build`，再重启 DSH profile |
+| 左侧栏没有“记忆系统” | 检查 `tabEnabled=true`、`displayMode=sidebar`；Buildin 位于对话区；本地 link 先 `pnpm run build` 再重启 profile |
+| 状态正常但召回为空 | 检查 active 记忆体、存储范围、查看目录、会话实际目录和查询是否足够聚焦 |
+| 顶部提示目录未对齐 | 工作台正在查看另一个工作区；点击一键对齐，或有意保留只读查看；Agent-backed 操作在未对齐时拒绝 |
+| 设置保存后无变化 | 查看保存错误；成功保存应实时切换并自动重新读取，不需要刷新 |
+| 自定义目录被拒绝 | 使用绝对路径、`~` 或 `~/...` |
+| `memoryBodyId is required...` | active 数量不是恰好 1；显式选择目标 |
+| `memory body is not active for reading` | 在概览激活目标；写入 inactive 可以，读取不行 |
+| Provider 错误 | 普通语义任务需要完整隔离能力；后台审查另需 `fork + inheritsParentContext` |
+| Runtime replace 超容量 | 缩短 replacement 或先显式整理；自动维护只处理 add 溢出 |
+| Document source path 被拒绝 | 路径必须在会话工作区内，且不能引用受管 Documents 目录 |
+| CLI timeout | 增大 `timeoutMs`；大 Store 的状态与图谱可能超过 10 秒 |
+| lock timeout | 检查其他写进程，不要删除仍属于活跃进程的 lock |
+| ZIP 导出提示 WAL busy | 等待 Memory Space 写入完成并重试；不要绕过未 checkpoint WAL 检查 |
+| ZIP 导入 checksum / schema 失败 | 备份损坏或格式不兼容；保留当前根，不要手工解压覆盖 |
+| 更新按钮不出现 | 当前已是最新、远程检查失败，或安装来源是 link / 手工模式；按面板提示沿原方式更新 |
+| 远程页面能读不能写 | 写、设置与备份 RPC 强制 loopback，这是权限设计 |
 
 ## 已知限制
 
 ### 功能只读不等于磁盘只读
 
-`writeEnabled=false` 禁用语义 mutation，但启动时仍可能创建/修复 Runtime 文件，Document 搜索会更新 `lastAccessedAt`，Mnemon 读取也可能触发上游 migration。不要在真正只读文件系统上假设它能无写运行。
+`writeEnabled=false` 禁用语义 mutation 与 Pack 导入，但启动可能初始化 / 修复 Runtime 投影，Document 搜索更新 `lastAccessedAt`，Mnemon 读命令也可能迁移数据库。
 
 ### Documents 的共享范围
 
-`global` 和 `custom` 可能让多个工作区共享同一 Document index；记录没有独立 workspace ownership 字段。`sourcePaths` 仅在写入时相对发起会话 cwd 校验。
-
-### 冷引用路径
-
-当前 archive worker 的提示使用 `.mnemon/documents/archived/<filename>` 作为计划引用；在 global/custom scope 中实际文件位于 `<storageRoot>/documents/archived/<filename>`。定位原文时应以 `documents/index.json` 或 UI 展示的 `relativePath` 为准。这是待修复的路径表达差异。
+`global` 与 `custom` 可能让多个工作区共享同一 Document index；记录没有独立 workspace ownership 字段。`sourcePaths` 只在写入时相对发起会话 cwd 校验。
 
 ### 跨系统事务
 
-“先索引、后移动”保护 active 原文，但不是跨 Mnemon SQLite 与文件系统的可回滚分布式事务。索引成功后若 revision 冲突，索引可能保留为重复引用；插件选择保留数据而不是回滚已完成的长期写入。
+“先冷索引、后移动”保护 active 原文，但不是跨 Mnemon SQLite 与文件系统的可回滚分布式事务。索引后发生 revision 冲突时可能保留重复引用；系统选择保留数据。
 
 ### 后台水位
 
-评分、最近 checkpoint 和重试状态没有持久化。Host 重启会清空尚未处理的活动；失败退避、熔断和人工重试入口也尚未实现。
+活动评分、最近 checkpoint 与重试状态未持久化；Host 重启会清空未处理活动。失败退避、熔断和人工重试入口尚未实现。
 
-### 版本矩阵
+### 版本与国际化
 
-项目尚未声明正式的 DSH/Mnemon 支持矩阵和 schema migration 策略。升级必须先备份并在隔离根中验证。
-
-### 国际化
-
-主要 Web 工作台为中英文双语，但命令、工具卡、兼容默认元数据和部分错误信息尚未完整国际化。
+尚无正式固定的 DSH / Mnemon 支持矩阵。主要 Web 界面为中英文双语，但命令、工具卡、兼容元数据和部分错误仍未完全国际化。

@@ -106,9 +106,28 @@ Recommended scenarios:
 7. Documents: create, retrieve, update, manually archive, and leave original project files unchanged.
 8. Score-based review: light tasks do not trigger it; after reaching the threshold it waits for idle; a new turn can cancel it while preserving the watermark.
 9. Read-only: write tools, write commands, and write RPC are rejected while reads remain available.
-10. Status and browser console: no unhandled errors or warnings.
+10. Sidebar: all four primary tabs, four Memory Space secondary tabs, stable headings, filters, and progressive loading work.
+11. Conversation UI: Turn memory appears only for completed turns with activity; links land correctly; canceling Save to memory performs no write.
+12. Settings: Sidebar / Buildin, storage scopes, and both conversation switches apply live without refresh.
+13. ZIP: export can be previewed and merged into an isolated custom root; damaged checksums are rejected.
+14. Versions: checking never installs; link/manual sources offer no unsafe update; successful updates trigger a fresh status check.
+15. Status and browser console: no unhandled errors or warnings.
 
 Capacity limits, CLI timeouts, revision conflicts, and Host restarts should be verified in a dedicated fault-injection environment.
+
+## Maintaining Documentation Visuals
+
+Public UI screenshots live under `docs/assets/screenshots/`, shared by both language editions. Language-specific architecture diagrams live under `docs/assets/diagrams/zh-CN/` and `docs/assets/diagrams/en/`. When layout, primary copy, or defaults change:
+
+1. Use a real DSH Web profile, but first check that the frame contains no token, credential, or private personal data.
+2. Limit capture to inspection, filtering, expansion, and opening dialogs. When showing a write flow, stop before final confirmation.
+3. Replace screenshots with the same responsibility instead of accumulating versioned filenames. Add an asset only for a new user task.
+4. Refresh the README poster, GIF / MP4 demo, and both `ui-guide.md` files.
+5. Confirm PNG / JPEG extensions match actual encoding and that text is readable at original resolution.
+6. Remove unreferenced assets, stale Buildin layouts, and obsolete terminology.
+7. Run link/image checks, then open both READMEs and UI guides manually.
+
+README demo assets are `docs/assets/media/dsh-mnemon-memory-system-demo.*`. The demo should cover Status, Runtime, Memory Spaces, Documents, and in-conversation confirmation without actually submitting memory, updating components, or changing settings through automation.
 
 ## Modifying Subagent Schemas
 
@@ -142,7 +161,8 @@ There is currently no formal schema-migration framework, so persistent formats m
 - keep commands, configuration keys, paths, and code symbols exactly the same;
 - cross-link corresponding language pages with relative paths;
 - prefer accessible SVGs with no scripts or external resources for architecture overviews; keep directory trees, commands, formulas, and short protocols as copyable `text` / ASCII;
-- keep only summaries in the root READMEs and place details on one authoritative docs page.
+- keep only summaries in the root READMEs and place details on one authoritative docs page;
+- for every user-visible interface change, also inspect `ui-guide.md`, `getting-started.md`, `configuration.md`, and `operations.md`.
 
 When the Web locale changes, the Chinese key set remains the type source of truth. The English dictionary must satisfy `Record<MnemonKey, string>` and preserve the same placeholders.
 
@@ -151,7 +171,7 @@ When the Web locale changes, the Chinese key set remains the type source of trut
 ```text
 [ ] pnpm run verify
 [ ] review source and generated lib diffs
-[ ] validate package file list includes README.en.md and docs
+[ ] validate package file list includes README.en.md, docs/assets, and bilingual docs
 [ ] install the built/local bundle into an isolated Web profile
 [ ] run real Mnemon CLI and WebUI smoke tests
 [ ] verify Chinese and English workspaces
@@ -160,7 +180,7 @@ When the Web locale changes, the Chinese key set remains the type source of trut
 [ ] back up any data root used for upgrade testing
 ```
 
-`package.json.files` currently publishes `lib`, the patch, both root READMEs, the public bilingual docs, and the License; the historical research ledger is excluded from the installed package.
+`package.json.files` currently publishes `lib`, the patch, both root READMEs, centrally managed documentation visuals, the public bilingual docs, and the License.
 
 ## Publishing to npm
 

@@ -1,76 +1,61 @@
 # WebUI, Tools, Commands, and RPC
 
-[简体中文](../zh-CN/interfaces.md) | **English** | [Documentation Center](./README.md)
+[简体中文](../zh-CN/interfaces.md) | **English** | [Documentation hub](./README.md)
 
-## Web Workspace
+This page is an integration reference. For daily use, start with the [Sidebar and conversation UI guide](./ui-guide.md).
 
-`displayMode=sidebar` (the default) opens a dedicated workbench from the sidebar, while `displayMode=buildin` opens the same functional interface through the original DSH `conversation.view` tab. The settings page switches the two modes live and never mounts both simultaneously. Both modes share all functionality, data requests, and workspace state while using isolated appearance definitions. The sidebar entry, workbench title, functional copy, and date formatting subscribe to DSH's global locale and update immediately; the interface also follows the global light/dark theme.
+## User-facing entry points
 
-Sidebar uses a minimal skin aligned with official DSH panels: its title is “Memory System,” and it omits the Mnemon logo, header telemetry, and navigation decoration. From the first frame after the title it shows the storage-location mode, the inspection-workspace selector when that mode is Workspace, and a one-click alignment module only when the inspected target differs from the conversation's effective workspace; the status on the right simply says “Connected” and remains visible at compact widths. Its primary tabs are Status, Runtime, Memory Spaces, and Documents. Memory Spaces retains its title and purpose statement above the Overview, Recall, Content, and Entities secondary tabs, with Remember as the primary heading action. Runtime, Memory Spaces, and Documents share one structure — add on the right of the heading, then inspect or search below — and every add or edit flow opens a DSH-style modal. Modal focus stays inside the dialog and returns to the trigger after close. Directory cards pin activation to the top right, place edit and delete in a stable footer, and open a separate destructive confirmation before physical deletion. The Remember modal starts with only the candidate field and optionally expands advanced constraints. Status, Runtime, Memory Spaces, and Documents pin their primary headings to a constant canvas coordinate with no pre-stick settling distance; the Overview, Recall, Content, and Entities content headings are not locked and scroll normally within Memory Spaces. Recall and related results, entity entries, entity memories, and content lists mount in batches with visible/total counters and “show more” controls. Sidebar Runtime is one USER / MEMORY list with visibly chip-shaped labels plus scope and content filters. The Document directory is progressive; desktop Markdown uses an independent reader that resets on selection, while mobile keeps natural page scrolling. Switching the inspected workspace or saving a core setting unmounts the prior page subtree before the new request, clearing cards, filters, dialogs, and scroll state, then reloads the active page automatically without a manual refresh. Primary actions use solid blue, edit uses blue outlines, remove/delete/archive use the red destructive tier, view/related/copy actions remain neutral, and final destructive confirmations use solid red. Typography, buttons, selects, and form density follow the readable conventions used by the Task Board and SSH panels; field content and options keep normal weight, reserving emphasis for necessary headings and labels. Page switches reset the workspace scroll before browser paint so the prior page offset cannot flash. Buildin preserves the Mnemon brand header, status summary, original eight-page grouped navigation, inline forms, and existing visuals. Status opens by default.
+| Entry | Default | Description |
+|---|---:|---|
+| Sidebar | Yes | Dedicated Memory System workbench with Status, Runtime, Memory Spaces, and Documents |
+| Buildin | No | Original `conversation.view` tab with established visuals |
+| Turn memory | Yes | Memory-tool summary for a completed turn, with exact page links |
+| Save to memory | Yes | Action beside finalized assistant replies; confirmation invokes supervised writing |
+| `/mnemon` | — | Conversation command entry |
+| Model tools | — | Structured Root Agent read/write entry |
 
-| Page / action | Purpose | Call Boundary |
+Sidebar and Buildin are live, mutually exclusive mounts that share functionality, data, and Host services. The two conversation entries can be disabled independently through `mnemon-ui` settings.
+
+## Model tools
+
+### Read-only tools
+
+| Tool | Purpose | Root Agent path |
 |---|---|---|
-| Status | Health of the CLI, runtime hot memory, storage scope, Memory Spaces, and Documents | Aggregated reads |
-| Runtime | Inspect capacity, then filter and progressively maintain one USER / MEMORY list by scope or content | Regular mutations are deterministic; capacity maintenance may start a worker |
-| Memory Spaces | Directory, activation switches, modal editing, confirmed deletion, a live multi-space graph, and node inspection | Deterministic RPC reads; switches and edits use write RPC; confirmation invokes native Mnemon `store remove` for physical deletion |
-| Documents | Progressively browse the directory, then search, read, create, update, and archive in an independent reader | Search/edit operations use the control layer; archiving starts a worker |
-| Distill (Sidebar primary action / Buildin page) | Let a memory worker select scope, deduplicate, and write; supports optional expandable constraints | `spawn` semantic write |
-| Recall | Direct smart / keyword / basic retrieval; optional evidence-bounded Agent answers | Direct service reads; Agent answers use a worker with no tools |
-| Entities | Frequent entities and entity-related context | Direct service reads |
-| Content | Browse active Memory Spaces without recall side effects, copy or clone content, or soft-delete it | Graph reads; deletion uses a worker |
-
-The graph synchronizes every 15 seconds and can also be refreshed manually. Natural layout, uniform reset, dragging, and keyboard adjustments affect only client-side presentation and do not modify Mnemon data.
-
-### In-Conversation Interaction
-
-The memory system surfaces inside the conversation flow through two native DSH slots, both purely additive registrations that replace no official rendering:
-
-| Slot | Presentation | Data and interaction |
-|---|---|---|
-| `conversation.chat.turnTail` (chain) | One “Turn memory · recalled N · wrote M · document search K” line above the turn-tail actions; expanding lists clickable exact tool names | The read-only RPC `turn-activity` counts `mnemon_*` calls per turn from the Host's durable session log; the chain `select` declines open turns, and turns without memory activity render nothing; tool names use `mnemon:anchor` to open the corresponding Memory page |
-| `conversation.chat.assistant-actions` (list, id `mnemon-save`) | A single-icon “Save to memory” action beside finalized assistant replies (next to feedback); hovering shows a short description and clicking opens a centered confirmation dialog | It reuses DSH's native Tooltip, Modal, and 16px data icon; the dialog extracts message text by messageId through the read-only RPC `assistant-message` into an editable candidate with an independent scroll region and explicit cancel/confirm actions; only confirmation calls the existing `supervise` write RPC (supervised writeback: memory subagent judgment, dedupe, Memory Space choice) and shows the subagent receipt; read-only deployments are disabled up front with a note |
-
-`turn-activity` and `assistant-message` are new read-only endpoints sharing the existing Host channel and error semantics. The rendering-extension contracts behind the in-conversation interaction and the follow-up inline memory-highlight plan are recorded in the Mnemon document “dsh-mnemon 对话内记忆交互侦察”.
-
-## Model Tools
-
-### Read-Only Tools
-
-| Tool | Purpose | Root Agent Path |
-|---|---|---|
-| `mnemon_memory_bodies` | Read the Memory Space directory and statistics | Direct service |
+| `mnemon_status` | Aggregated CLI, configuration, storage, and directory status | Direct service |
+| `mnemon_memory_bodies` | Read Memory Space directory and statistics | Direct service |
 | `mnemon_recall` | Recall from one or more active spaces | `spawn` recall worker |
-| `mnemon_related` | Traverse relationships from a known ID | `spawn` related worker; the root path always requests two hops |
-| `mnemon_status` | Aggregate CLI, configuration, and active-space status | Direct service |
-| `mnemon_document_search` | Deterministically search managed Documents | Direct Documents control layer |
+| `mnemon_related` | Traverse from a known ID | `spawn` related worker; Root defaults to two hops |
+| `mnemon_document_search` | Deterministically search managed Documents | Documents control layer |
 
-Here, “read-only” means that managed bodies and long-term semantic content are not modified. After a hit, `mnemon_document_search` still updates `lastAccessedAt` and rewrites the Document index for LRU ordering.
+“Read only” means managed bodies and durable semantics do not change. `mnemon_document_search` still updates `lastAccessedAt` for LRU ordering, so feature read-only is not disk read-only.
 
-### Tools Available When `writeEnabled=true`
+### Tools available with `writeEnabled=true`
 
-| Tool | Purpose | Root Agent Path |
+| Tool | Purpose | Root Agent path |
 |---|---|---|
-| `mnemon_runtime_memory` | `add` / `replace` / `remove` hot memory | Deterministic control layer; a worker is used when add overflows |
-| `mnemon_document_manage` | Create, update, or archive a Document | Create/update are deterministic; archive uses a worker |
-| `mnemon_remember` | Distill one insight into long-term memory | `spawn` write worker |
+| `mnemon_runtime_memory` | `add` / `replace` / `remove` hot memory | Deterministic control; add overflow may start a worker |
+| `mnemon_document_manage` | Create, update, or archive a Document | Create/update deterministic; archive uses a worker |
+| `mnemon_remember` | Retain one durable insight | `spawn` write worker |
 | `mnemon_link` | Create a typed relationship | `spawn` write worker |
-| `mnemon_forget` | Soft-delete by exact ID | `spawn` write worker |
+| `mnemon_forget` | Soft-delete an exact ID | `spawn` write worker |
 | `mnemon_memory_body_create` | Create an independent Memory Space | `spawn` write worker |
 | `mnemon_memory_body_update` | Update name, description, or active state | `spawn` write worker |
-| `mnemon_memory_body_merge` | Perform a non-destructive import merge | `spawn` write worker |
+| `mnemon_memory_body_merge` | Non-destructive import merge | `spawn` write worker |
 
-When a worker calls a tool with the same name, the call goes directly to the service layer and is not delegated again.
+When a worker invokes the same tool name, it reaches the service directly and is not delegated recursively.
 
-## Tool Admission Guidelines
+## Tool admission
 
-- Hot memory: explicit user preferences, stable project conventions, environment facts, and frequently useful lessons.
-- Document: designs, investigations, procedures, or handoffs with complete structure and rationale.
-- Long-term Memory Space: stable insights that explicitly need to persist across tasks or benefit from graph relationships and deep recall.
-- Skip: questions, guesses, temporary progress, completion logs, raw output, secrets, and repository facts that are easy to rediscover.
+- **Runtime**: explicit preferences, stable project conventions, environment facts, and high-frequency lessons.
+- **Documents**: designs, investigations, procedures, postmortems, or handoffs with complete structure and rationale.
+- **Memory Spaces**: stable facts, decisions, and insights that must survive across tasks or benefit from graph relationships.
+- **Skip**: questions, guesses, temporary progress, completion logs, raw output, secrets, and ordinary repository facts that are easy to rediscover.
 
-`mnemon_forget` is a destructive semantic operation. It should run only when the user explicitly requests it or when content has been verified as incorrect or obsolete.
+`mnemon_forget` is a destructive semantic action. Use it only on explicit request or after confirming that content is wrong or obsolete.
 
-## `/mnemon` Commands
+## `/mnemon` commands
 
 ```text
 /mnemon
@@ -81,20 +66,35 @@ When a worker calls a tool with the same name, the call goes directly to the ser
 /mnemon forget <exact ID>
 ```
 
-- An empty `/mnemon` is equivalent to `status`.
-- `status` is a deterministic read and does not start a model.
-- `recall`, `related`, `remember`, and `forget` use the live Agent containing the command as the worker parent.
+- Empty `/mnemon` equals `status`.
+- `status` is deterministic and starts no model.
+- `recall`, `related`, `remember`, and `forget` use the live Agent containing the command as worker parent.
 - Command recall returns at most 10 results.
-- The `forget` argument must be one exact ID containing no spaces.
-- Current command help and results are primarily in Chinese and do not yet follow the Web locale.
+- `forget` requires one exact ID without spaces.
 
-## RPC Channels
+## In-conversation contracts
 
-RPC is the internal bridge between the DSH Host and this plugin's Web client. It is not a promised stable external HTTP API.
+| DSH slot | Registration | Behavior |
+|---|---|---|
+| `conversation.chat.turnTail` | chain | `turn-activity` summarizes `mnemon_*` calls from completed turns; open turns and turns without activity render nothing |
+| `conversation.chat.assistant-actions` | list, `id=mnemon-save` | `assistant-message` reads finalized text; `supervise` runs only after confirmation |
 
-Workbench data requests carry `sessionId` and an optional `workspaceId`. The Host accepts only workspace IDs registered in `workspaceRegistry`: deterministic reads and human maintenance route to the inspected root selected by `workspaceId`, while agents, tools, and lifecycle hooks continue to route by the Agent cwd for `sessionId`. `status.workspaceContext` returns both roots and their `aligned` state; Agent-backed writes are rejected while they differ.
+Both are additive and replace no official DSH rendering. The assistant-message candidate is editable and long replies are bounded by the UI preview limit. Persistence is complete only after a memory-subagent receipt.
 
-### Read Channel
+## Workspace routing
+
+Workbench requests carry `sessionId` and an optional `workspaceId`. The Host accepts only IDs registered in `workspaceRegistry`:
+
+- deterministic reads and manual maintenance may route to the inspected root selected by `workspaceId`;
+- Agents, tools, commands, and lifecycle hooks still route by the Agent cwd associated with `sessionId`;
+- `status.workspaceContext` returns selected / effective roots and `aligned`;
+- Agent-backed operations are rejected while misaligned.
+
+## RPC channels
+
+RPC is an internal Host-to-client bridge, not a stable external HTTP API.
+
+### Read channel
 
 ```text
 channel:   /dsh-mnemon-read
@@ -103,20 +103,17 @@ authority: trusted-host
 
 | Endpoint | Behavior |
 |---|---|
+| `status` | Aggregated service, version, lifecycle, Documents, and workspace/storage context |
+| `versions` | Check installed/latest Mnemon and dsh-mnemon versions and installation sources |
 | `runtime-memory` | Runtime snapshot |
-| `status` | Aggregated service, lifecycle, Documents, and storage-scope status |
-| `documents` | Document directory snapshot |
-| `document` | Read one Document |
-| `document-search` | Deterministic search; hits update LRU metadata |
-| `graph` | Aggregated graph of active Memory Spaces |
-| `bodies` | Memory Space directory |
-| `list` | Content list |
-| `entities` | Entity statistics or entity-related context |
-| `search` | Direct Mnemon retrieval |
-| `agent-search` | Evidence-bounded answer after direct retrieval |
-| `related` | Direct relationship traversal |
+| `documents` / `document` / `document-search` | Directory, body, and deterministic search |
+| `graph` / `bodies` | Active multi-space graph and Memory Space directory |
+| `list` / `entities` | Durable content list and entity aggregation |
+| `search` / `agent-search` / `related` | Direct retrieval, evidence answer, and relation traversal |
+| `turn-activities` / `turn-activity` | Session-wide or single-turn memory-tool activity |
+| `assistant-message` | Finalized assistant text by messageId |
 
-### Write Channel
+### Write channel
 
 ```text
 channel:   /dsh-mnemon-write
@@ -126,29 +123,44 @@ authority: loopback
 | Endpoint | Behavior |
 |---|---|
 | `runtime-memory` | Hot-memory mutation |
-| `supervise` | Submit a workspace candidate to a memory worker |
+| `supervise` | Submit a candidate to the memory worker |
 | `document` | create / update / archive |
-| `remember` | Semantic write with optional advanced constraints |
-| `link` | Create a relationship |
-| `forget` | Soft-delete |
-| `body-create` | Create a Memory Space |
-| `body-update` | Update metadata or active state |
+| `remember` / `link` / `forget` | Durable semantic write, relation, and soft deletion |
+| `body-create` / `body-update` / `body-delete` | Create, edit, or physically delete a confirmed Memory Space |
+| `version-update` | Update a named component with Host-fixed commands and arguments |
 
-When `writeEnabled=false`, the write channel remains stably registered but every mutation is rejected at the Host boundary.
+With `writeEnabled=false`, the channel remains registered but mutations are rejected at the Host boundary.
 
-### Settings Channel
+### Backup channel
+
+```text
+channel:   /dsh-mnemon-pack
+authority: loopback
+```
+
+| Endpoint | Behavior |
+|---|---|
+| `target` | Effective root and scope |
+| `export` | Export a complete ZIP with manifest and SHA-256 checksums |
+| `inspect` | Parse and verify an import ZIP, returning component and occupancy preview |
+| `import` | Safely merge into the effective root; rejected in read-only mode |
+
+Backups contain private memory, so the entire channel is loopback-only.
+
+### Settings channel
 
 ```text
 channel:   /dsh-mnemon-settings
 authority: loopback
+namespaces: mnemon, mnemon-ui
 endpoints: get, mutate
 ```
 
-Mutations use the settings revision to prevent overwriting concurrent edits.
+Mutations use settings revisions to prevent overwriting concurrent edits. `mnemon` owns Host/storage settings; `mnemon-ui` owns `turnBar` and `saveAction`.
 
-## npm Exports
+## npm exports
 
-The root package exposes Host-side composition and core classes:
+The root package exposes Host composition and core classes:
 
 ```text
 apply
@@ -162,13 +174,8 @@ MnemonSubagentCoordinator
 MnemonLifecycle
 ```
 
-`dsh-mnemon/client` provides `apply` and `inject` for the DSH client bundle. `MnemonClient` and the RPC endpoints are currently internal implementations and should not be treated as a stable public SDK.
+`dsh-mnemon/client` exports `apply` and `inject` for the DSH client bundle. Client implementation classes and RPC endpoints are internal and should not be treated as a stable public SDK.
 
-## Internationalization Scope
+## Internationalization
 
-The Web dictionaries keep Chinese and English keys in one-to-one correspondence. Brand names, tool names, and configuration keys are not translated. Surfaces that are not yet fully internationalized include:
-
-- `/mnemon` command output;
-- model-tool card titles;
-- some Host validation and diagnostic errors;
-- default names and descriptions written during legacy Store compatibility discovery.
+The main Sidebar / Buildin workbench, settings, and conversation entries support Chinese and English and follow DSH locale live. Brand names, tool names, and configuration keys are not translated. `/mnemon` commands, model-tool cards, some Host errors, and compatibility metadata remain partially untranslated.

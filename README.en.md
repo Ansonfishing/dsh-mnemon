@@ -1,85 +1,33 @@
 <h1 align="center">dsh-mnemon</h1>
 
-<p align="center"><a href="./README.md">简体中文</a> | <strong>English</strong></p>
+<p align="center"><a href="./README.md">简体中文</a> · <strong>English</strong></p>
 
 <p align="center">
-  <a href="./docs/en/project-overview.md">
-    <img src="./docs/assets/dsh-mnemon-memory-system-demo-poster.jpg" alt="Mnemon Memory Spaces page with the multi-space catalog, activation state, and live relationship graph" width="720">
+  <a href="./docs/en/ui-guide.md">
+    <img src="./docs/assets/media/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon Sidebar Memory System with Memory Space catalog and relationship graph" width="760">
   </a>
 </p>
 
-> **A deep integration of [Mnemon](https://github.com/mnemon-dev/mnemon) and DSH that gives DSH comprehensive memory capabilities.**
+<p align="center"><strong>Local, layered, supervised long-term memory for DeepSeek Harness.</strong></p>
 
-`dsh-mnemon` is a local Mnemon memory plugin for DeepSeek Harness (DSH). It organizes always-available runtime memory, readable project Documents, and on-demand long-term Memory Spaces into a supervised, searchable, maintainable three-tier system.
+`dsh-mnemon` integrates [Mnemon](https://github.com/mnemon-dev/mnemon) with DeepSeek Harness (DSH). It brings hot memory needed every turn, full project Documents, and on-demand long-term Memory Spaces into one workbench.
 
-The plugin brings Mnemon's durable Memory Space capabilities into DSH and adds Runtime Memory, Documents, lifecycle integration, bounded subagents, the WebUI, commands, and permission boundaries. Current user instructions and repository facts always take precedence over historical memory.
+- **Local first**: memory stays in local SQLite, JSON, and Markdown; no remote memory service is required.
+- **Three cooperating tiers**: Runtime Memory, Project Documents, and Memory Spaces retain information at the right granularity.
+- **Supervised writes**: isolated memory subagents make semantic decisions; the Host enforces paths, permissions, capacity, locks, and revisions.
+- **Native DSH experience**: a Sidebar workbench by default, turn memory, a Save-to-memory dialog, bilingual copy, and global themes.
 
-> **What's more?** More DSH-native capabilities are on the way. **Memory to View.**
+Current user instructions, repository files, and live tool results always take precedence over historical memory.
 
 ## Live demo
 
-![dsh-mnemon memory system walkthrough covering status, Runtime Memory, the multi-space graph, Documents, recall, entities, and supervised writeback](./docs/assets/dsh-mnemon-memory-system-demo.gif)
+![dsh-mnemon Sidebar Memory System and in-conversation interaction demo](./docs/assets/media/dsh-mnemon-memory-system-demo.gif)
 
-## Three memory tiers
+See the [Sidebar and conversation UI guide](./docs/en/ui-guide.md) for the complete visual walkthrough.
 
-| Tier | What belongs here | How it is retained | How it reaches context |
-|---|---|---|---|
-| Runtime Memory | User preferences, stable conventions, environment facts, frequently used lessons | Explicit operations or an eligible background review update `memories.json`, then generate `USER.md` / `MEMORY.md` projections | Injected directly every turn |
-| Project Documents | Designs, investigations, procedures, rationale, and handoffs | Create or update managed Markdown and `index.json`; capacity maintenance creates a Mnemon cold reference before moving the original | Search active Documents first, then read full text on demand |
-| Memory Spaces | Cross-session facts, decisions, entities, and relationships | A bounded `spawn` worker selects the narrowest space, checks duplicates, and writes four-graph memory through Mnemon `remember` / `link` | Recalled on demand from active Memory Spaces only |
+## Start in five minutes
 
-```text
-Reusable knowledge produced by current work
-          |
-          +-- Compact, stable, useful every turn
-          |      root Agent / eligible fork review
-          |                 |
-          |      add | replace | remove
-          |                 v
-          |      memories.json (source of truth)
-          |                 |
-          |      USER.md + MEMORY.md ----------> every prompt
-          |
-          +-- Complete designs, research, procedures, handoffs
-          |      root Agent / eligible fork review
-          |                 |
-          |          create | update
-          |                 v
-          |      index.json + active/*.md ------> full text after search
-          |                 |
-          |      Mnemon cold reference -> archived/*.md (maintenance)
-          |
-          `-- Cross-session facts, decisions, entities, relations
-                    root Agent
-                       |
-              spawn: route / deduplicate / write
-                       v
-              Mnemon CLI -> <space>/mnemon.db
-                       |
-              spawn: recall active spaces only -> bounded evidence
-```
-
-## Highlights
-
-- Proactive memory routing: built-in prompts, lifecycle cues, and tool descriptions encourage the LLM to use every read/write surface when useful; explicit requests to revisit, retain, correct, forget, or document are routed to the matching tier and operation.
-- One `global`, `workspace`, or `custom` storage scope for all three tiers.
-- A Memory Space directory in which each space has a stable ID, name, routing description, activation state, and its own `mnemon.db`.
-- Bounded subagents: isolated `spawn` workers handle durable recall and semantic writes; a `fork` worker inherits a completed checkpoint for background review.
-- Safe capacity maintenance: USER memory is compacted locally, MEMORY entries are archived before compaction, and Documents are cold-indexed before migration; revision conflicts preserve the original data.
-- Native DSH integration through model tools, `/mnemon` commands, a bilingual Web workspace, global light/dark themes, and diagnostics.
-- Local-first execution: the CLI is started with argument arrays and no shell, and no remote memory service is required.
-
-## Prerequisites
-
-- A working DSH Web profile.
-- A local `mnemon` CLI.
-- A subagent provider supporting `outputSchema`, `toolFilter`, `persona`, and `depthLimit`. Regular semantic work prefers `spawn`; the default background review also requires a provider named `fork` that inherits parent context.
-
-**Compatibility baseline**: `dsh-mnemon` 0.1.0 has been verified end-to-end on a live web profile running `@deepseek-ai/dsh` 0.1.0-rc.6 (2026-08-13 snapshot); last verified 2026-08-14. The plugin declares no fixed minimum-version matrix. DSH moves fast: before upgrading, re-run the [Getting Started](./docs/en/getting-started.md) verification steps in an isolated profile or a backed-up data directory.
-
-## Quick start
-
-Install Mnemon:
+### 1. Install Mnemon
 
 ```sh
 # macOS
@@ -91,42 +39,66 @@ go install github.com/mnemon-dev/mnemon@latest
 mnemon --version
 ```
 
-Install the plugin and restart the DSH Web profile:
+### 2. Install the plugin
 
 ```sh
 dsh plugin --profile web add dsh-mnemon
 dsh --profile web
 ```
 
-Pre-release builds not yet published to npm can be installed from git:
-
-```sh
-dsh plugin --profile web add "github:omdsh-dev/dsh-mnemon"
-```
-
-For a local checkout, use an absolute path:
+Use an absolute path for a local development checkout:
 
 ```sh
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
-Open the dedicated “Settings -> Memory System” page to choose both a display mode and storage scope. The default `sidebar` mode opens a dedicated “Memory System” workbench with a plain-text title, no Mnemon logo, and a minimal skin aligned with official DSH panels. Switching to `buildin` restores the original conversation-area tab and preserves its existing visuals. Both modes share all functionality and data flows while keeping appearance definitions isolated. Saving switches live without mounting duplicate entries. The Sidebar header shows the storage-location mode next to its title from the first frame. Under the `workspace` scope it then provides an independent inspection-workspace selector and, when that target differs from the conversation's effective workspace, a compact one-click alignment module. Switching the inspected workspace first unmounts the prior workspace's cards, filters, dialogs, and scroll state before loading the new root, so stale content can never share a frame with the new operation target. Both paths remain available in the alignment module's accessible label and hover text; agents, tools, and lifecycle hooks still follow the current session workspace. The Sidebar status simply says “Connected,” while Buildin keeps its original summary. The storage root switches atomically after the new directory initializes successfully. After a storage scope, directory, or another core setting is saved, the client immediately clears the previous page state and reloads the active page automatically; no manual browser refresh is required. Changing the scope never migrates, merges, or deletes old data automatically.
+### 3. Open Memory System
 
-Upgrade and uninstall (`dsh plugin` forwards to pnpm inside the profile directory):
+New installations use `sidebar` by default. Click **Memory System** in the DSH sidebar, then follow this first-run path:
 
-```sh
-# Upgrade
-dsh plugin --profile web update dsh-mnemon
+1. Confirm the Mnemon CLI, Runtime, Memory Spaces, and Documents are healthy under **Status**.
+2. Create a narrowly scoped Memory Space under **Memory Spaces → Overview**.
+3. Submit one stable, future-useful item through **Remember**.
+4. Verify it with a focused question under **Recall**.
+5. Return to the conversation and expand **Turn memory** below the answer.
 
-# Uninstall (also removes its bundle registration from the profile)
-dsh plugin --profile web remove dsh-mnemon
-```
+See [Getting Started](./docs/en/getting-started.md) for provider requirements and complete verification.
 
-Uninstalling never deletes memory data: `global` data stays in `~/.mnemon`, and `workspace` / `custom` data stays in their directories, so reinstalling picks up where you left off. To pause automatic reads/writes without uninstalling, turn off `writebackMode` / `recallMode` / `lifecycleEnabled`; set `tabEnabled=false` to hide the currently selected Web entry (see the [configuration reference](./docs/en/configuration.md)).
+## One workbench, three memory tiers
 
-## Minimal configuration
+| Tier | Best for | How it reaches context |
+|---|---|---|
+| **Runtime** | User preferences, collaboration rules, project conventions, environment facts | Compact `USER.md` / `MEMORY.md` projections on every turn |
+| **Documents** | Designs, investigations, procedures, postmortems, and handoffs | Deterministic search of active Documents, then full text on demand |
+| **Memory Spaces** | Cross-session facts, decisions, entities, and relations | Bounded evidence recalled on demand from active spaces only |
 
-Configuration lives in `$DSH_HOME/settings.yaml` (commonly `~/.dsh/settings.yaml` by default):
+The tiers are not simple copies of the same content. Knowledge is routed by frequency, narrative length, and retrieval needs. See [Storage and the three-tier model](./docs/en/storage-model.md).
+
+## Sidebar workbench
+
+| Page | Main purpose |
+|---|---|
+| **Status** | Inspect connection, storage root, tier summaries, and Mnemon / dsh-mnemon versions |
+| **Runtime** | Inspect USER / MEMORY capacity; filter, add, edit, or remove hot memory |
+| **Memory Spaces** | Manage activation; switch among Overview, Recall, Content, and Entities; open Remember |
+| **Documents** | Search, read, create, edit, and archive managed Markdown documents |
+
+Add and edit use consistent dialogs, destructive actions require confirmation, long collections expose filters and progressive loading, and Documents use a dedicated reader.
+
+### Memory inside conversations
+
+| Turn memory | Save to memory |
+|---|---|
+| [![Expanded Turn memory with exact tool links](./docs/assets/screenshots/conversation-turn-memory.png)](./docs/assets/screenshots/conversation-turn-memory.png) | [![Confirm save to memory dialog](./docs/assets/screenshots/conversation-save-dialog.png)](./docs/assets/screenshots/conversation-save-dialog.png) |
+
+- **Turn memory** summarizes recalls, writes, and Document searches for the turn; expand it to jump to the matching page.
+- **Save to memory** loads an editable candidate. Only confirmation sends it to the memory subagent for qualification, deduplication, distillation, and writing.
+
+Both are on by default. Disable them independently under **Settings → Memory System → Conversation interface**; saved changes apply live.
+
+## Display and storage
+
+Configuration lives in `$DSH_HOME/settings.yaml` (commonly `~/.dsh/settings.yaml`):
 
 ```yaml
 mnemon:
@@ -134,22 +106,17 @@ mnemon:
   storageScope: global # global | workspace | custom
 ```
 
-- `global`: `MNEMON_DATA_DIR`, or `~/.mnemon` when unset.
-- `workspace`: `.mnemon` under each DSH workspace root; Agent execution follows the current session workspace while the Web workbench may inspect another target.
-- `custom`: an absolute or `~/...` path supplied through `dataDir`.
+| Choice | Behavior |
+|---|---|
+| `sidebar` | Default dedicated workbench aligned with official DSH panel styling |
+| `buildin` | Preserves the original conversation-area presentation and visuals |
+| `global` | Shares `~/.mnemon` (or `MNEMON_DATA_DIR`) across workspaces |
+| `workspace` | Uses `<workspace>/.mnemon`; the workbench may inspect another workspace while the Agent still follows the current session |
+| `custom` | Uses an absolute or `~/...` path supplied through `dataDir` |
 
-See the [configuration reference](./docs/en/configuration.md) for every option, precedence rules, and read-only mode.
+Saved settings apply live without a manual refresh. Changing scope never migrates, merges, or deletes old data. If the inspected workspace differs from the session's effective workspace, the header explains the mismatch and offers one-click alignment.
 
-## Entry points
-
-The default Sidebar workbench uses four primary tabs — Status, Runtime, Memory Spaces, and Documents. Memory Spaces retains its title and purpose statement above the Overview, Recall, Content, and Entities secondary tabs, with Remember as the primary action on the right. Runtime, Memory Spaces, and Documents share one structure: add on the right of the heading, then inspect or search below; both add and edit flows open DSH-style modals. Directory cards pin activation at the top right and keep edit and delete in a stable footer; physical deletion always requires destructive-action confirmation. Sidebar primary page headings remain visible while content scrolls, while the Overview, Recall, Content, and Entities content headings scroll normally inside Memory Spaces. Recall results, entity collections, and content lists use visible/total counters plus progressive “show more” controls. Runtime becomes one filterable USER / MEMORY list with visibly chip-shaped labels, while the Document directory loads progressively and desktop Markdown uses an independent reader scroll region. Primary, edit, destructive, and view actions use solid blue, blue outline, red, and neutral tiers respectively. Typography, buttons, selects, and form density align with the Task Board and SSH panels; field values and options use normal weight, reserving emphasis for headings and labels that need it. Page switches reset scroll before paint. Buildin preserves the original eight-page grouped navigation, inline forms, and existing visuals. The sidebar entry, workbench title, all functional copy, and date formatting update immediately with DSH's global Chinese/English locale without a reload.
-
-Memory also surfaces inside the conversation flow (conversation interface, **on by default**; disable either surface under Settings → Memory System → Conversation interface — changes apply live on save):
-
-- **Turn memory bar**: completed calls are separated into successful recalls, writes, document searches, and inspections, with failures reported independently; expand it and click an exact tool name to open its corresponding Memory page;
-- **Save to memory**: every finalized assistant reply carries a memory icon aligned with the native action strip; hovering shows a short description, clicking opens an editable confirmation, and only confirmation routes the candidate through the isolated memory subagent (judgment, dedupe, distillation) without filling the main conversation context.
-
-Common commands:
+## Common commands
 
 ```text
 /mnemon status
@@ -159,30 +126,31 @@ Common commands:
 /mnemon forget <full memory ID>
 ```
 
-The recommended lookup order is: hot memory -> active Documents -> active Memory Spaces -> the archived original referenced by a hit. Do not persist temporary progress, raw logs, secrets, or ordinary facts that can be recovered directly from the repository.
+Recommended lookup order: Runtime Memory → active Documents → active Memory Spaces → archived original referenced by a hit.
 
-## Permissions & data
+## Data and security boundaries
 
-- **Files**: reads/writes data directories through the local `mnemon` CLI — `~/.mnemon` for the `global` scope, a user-chosen directory for `workspace` / `custom`. The plugin never writes those directories directly, and the WebUI never reads SQLite directly. `sourcePaths` cannot escape the originating session workspace or point into the managed Documents directory.
-- **Processes**: `mnemon` is started as an argument array with shell disabled, bounded output, and `SIGTERM` then `SIGKILL` on timeout.
-- **Network**: the plugin and Mnemon both run locally and make no remote calls; subagent model inference uses DSH's existing provider connection.
-- **Credentials**: the plugin stores and reads no credentials or API keys; model credentials are fully managed by DSH and your provider.
-- **User data**: all memory content (user profile, project Documents, long-term memory) stays in local SQLite / JSON and is never uploaded.
-- **Honest disclosure**: there is no deterministic credential/secret scanner yet — do not write keys, tokens, or private keys into hot memory, Documents, or Memory Spaces. For the full boundaries (process/file/Web/model) and backup/restore, see [Operations, security, and troubleshooting](./docs/en/operations.md).
+- The plugin reaches durable memory through the local `mnemon` CLI. The WebUI neither reads SQLite directly nor starts processes.
+- CLI calls use argument arrays with shell disabled, bounded output, timeouts, and cancellation.
+- The plugin stores no API keys. Subagent inference uses the provider already configured in DSH.
+- There is no deterministic secret scanner yet. Never store keys, tokens, private keys, or raw sensitive logs in any tier.
+- Uninstalling the plugin does not remove data under `~/.mnemon`, workspace `.mnemon` roots, or custom directories.
+
+See [Operations, security, and troubleshooting](./docs/en/operations.md) for complete boundaries, backup, recovery, and diagnostics.
 
 ## Documentation
 
-- [Documentation hub](./docs/en/README.md)
-- [Project overview](./docs/en/project-overview.md)
-- [Getting started](./docs/en/getting-started.md)
-- [Architecture](./docs/en/architecture.md)
-- [Storage and three-tier memory model](./docs/en/storage-model.md)
-- [Lifecycle and workflows](./docs/en/workflows.md)
-- [Configuration reference](./docs/en/configuration.md)
-- [WebUI, tools, commands, and RPC](./docs/en/interfaces.md)
-- [Operations, security, and troubleshooting](./docs/en/operations.md)
-- [Development and verification](./docs/en/development.md)
-- [Roadmap](./docs/en/roadmap.md)
+| I want to… | Start here |
+|---|---|
+| Install and complete first-run verification | [Getting Started](./docs/en/getting-started.md) |
+| Learn every page and conversation entry | [Sidebar and conversation UI guide](./docs/en/ui-guide.md) |
+| Understand the three tiers and complete flow | [Project overview](./docs/en/project-overview.md) · [Lifecycle and workflows](./docs/en/workflows.md) |
+| Choose storage scope or advanced switches | [Configuration reference](./docs/en/configuration.md) |
+| Back up, update, or troubleshoot | [Operations, security, and troubleshooting](./docs/en/operations.md) |
+| Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |
+| Develop, test, or publish | [Development and verification](./docs/en/development.md) |
+
+See the [documentation hub](./docs/en/README.md) for the full map.
 
 ## Development
 
@@ -191,8 +159,8 @@ pnpm install
 pnpm run verify
 ```
 
-`verify` runs TypeScript checks, Vitest, and the production build. Generated artifacts are written to and committed under `lib/`. See the [development guide](./docs/en/development.md) for release and real-WebUI validation procedures.
+`verify` runs TypeScript checks, Vitest, and the production build. Generated artifacts are committed under `lib/`.
 
 ## License
 
-MIT. For security issues, please report privately through the channels in [SECURITY.md](./SECURITY.md) instead of opening a public issue.
+MIT. Report security issues privately through [SECURITY.md](./SECURITY.md), not a public issue.

@@ -12,7 +12,7 @@ $DSH_HOME/settings.yaml
 
 The default is commonly `~/.dsh/settings.yaml`. All current settings are marked `live`; after Save, the Host initializes a candidate runtime graph and then switches to it atomically.
 
-The Web settings card edits `displayMode`, `storageScope`, and `dataDir`. Other advanced settings must be changed directly in YAML.
+The Web settings page edits `displayMode`, `storageScope`, and `dataDir`, plus the Turn memory and Save-to-memory switches under `mnemon-ui`. The same page also imports or exports a ZIP for the effective root. Other advanced settings must be changed directly in YAML.
 
 ## Complete Example
 

@@ -12,7 +12,7 @@
 
 ## Component Diagram
 
-[![dsh-mnemon runtime architecture](./assets/project-architecture.svg)](./assets/project-architecture.svg)
+[![dsh-mnemon runtime architecture](../assets/diagrams/en/project-architecture.svg)](../assets/diagrams/en/project-architecture.svg)
 
 Solid lines show deterministic data or control paths; purple dashed lines show LLM-supervised paths. Runtime Memory and Documents use managed files directly. Only Memory Spaces call the local Mnemon CLI through `MnemonRunner`. Click the image to open the original SVG.
 

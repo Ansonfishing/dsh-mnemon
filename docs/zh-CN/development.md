@@ -106,9 +106,28 @@ local link installation
 7. Documents：创建、检索、更新、人工归档和原项目文件不变。
 8. 评分审查：轻任务不触发；达标后等待 idle；新 turn 能取消并保留水位。
 9. 只读：写工具、写命令和写 RPC 被拒绝，读取仍可用。
-10. 状态和浏览器控制台：无未处理错误或警告。
+10. Sidebar：四个一级标签、记忆体四个二级标签、固定页头、筛选与加载更多均正常。
+11. 对话内交互：本回合记忆只在已完成且有活动的回合出现；跳转目标正确；存入记忆取消不写入。
+12. 设置：Sidebar / Buildin、存储范围与两个对话开关保存后实时生效，不需要刷新。
+13. ZIP：导出后可预检，并能在隔离 custom 根完成合并恢复；损坏 checksum 必须拒绝。
+14. 版本：检查不会安装；link / 手工来源不显示不安全更新；更新完成后自动重新检查状态。
+15. 状态和浏览器控制台：无未处理错误或警告。
 
 容量极限、CLI 超时、revision 冲突和 Host 重启应在专用故障注入环境验证。
+
+## 维护文档视觉素材
+
+公开 UI 截图统一位于 `docs/assets/screenshots/`，中英文文档复用同一组实机画面；语言相关架构图分别保存在 `docs/assets/diagrams/zh-CN/` 与 `docs/assets/diagrams/en/`。界面结构、主要文案或默认行为变化时：
+
+1. 使用真实 DSH Web profile，但先检查画面中没有 token、凭据或不应公开的个人数据；
+2. 只做查看、筛选、展开与打开弹窗等可逆交互；需要展示写入前流程时停在最终确认之前；
+3. 覆盖同职责截图，避免按版本不断累积文件名；只有新增用户任务时才增加素材；
+4. 同步 README 海报、GIF / MP4 演示和 `ui-guide.md`；
+5. 检查 PNG / JPEG 扩展名与真实编码一致，并在原始分辨率下确认文字可读；
+6. 删除已无引用、展示旧 Buildin 布局或术语过时的截图；
+7. 运行链接与图片检查，再人工打开中英文 README 和 UI 指南。
+
+README 演示资源位于 `docs/assets/media/dsh-mnemon-memory-system-demo.*`。演示应覆盖状态、运行时、记忆体、档案和对话内确认，但不要用自动化真正提交记忆、更新组件或更改设置。
 
 ## 修改 subagent schema
 
@@ -142,7 +161,8 @@ Runtime、Documents 和 Memory Space registry 都带版本字段或固定结构�
 - 保持命令、配置键、路径和代码符号完全一致；
 - 使用相对路径互链对应语言页面；
 - 架构总览优先使用可访问、无脚本和无外部资源的 SVG；目录树、命令、公式与短协议仍使用可复制的 `text` / ASCII；
-- 根 README 只保留摘要，把细节放到单一权威 docs 页面。
+- 根 README 只保留摘要，把细节放到单一权威 docs 页面；
+- 所有用户可感知界面变化同步检查 `ui-guide.md`、`getting-started.md`、`configuration.md` 与 `operations.md`。
 
 Web locale 变更时，中文键集合仍是类型事实源；英文词典必须满足 `Record<MnemonKey, string>`，并保持占位符一致。
 
@@ -151,7 +171,7 @@ Web locale 变更时，中文键集合仍是类型事实源；英文词典必须
 ```text
 [ ] pnpm run verify
 [ ] review source and generated lib diffs
-[ ] validate package file list includes README.en.md and docs
+[ ] validate package file list includes README.en.md, docs/assets and bilingual docs
 [ ] install the built/local bundle into an isolated Web profile
 [ ] run real Mnemon CLI and WebUI smoke tests
 [ ] verify Chinese and English workspaces
@@ -160,7 +180,7 @@ Web locale 变更时，中文键集合仍是类型事实源；英文词典必须
 [ ] back up any data root used for upgrade testing
 ```
 
-`package.json.files` 当前发布 `lib`、patch、两份根 README、双语公开 docs 和 License；历史研究台账不进入安装包。
+`package.json.files` 当前发布 `lib`、patch、两份根 README、统一管理的文档视觉素材、双语公开 docs 和 License。
 
 ## 发布到 npm
 
