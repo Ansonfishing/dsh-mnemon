@@ -28,7 +28,7 @@ export interface Config {
     writebackMode?: 'guided' | 'off';
     /** Continuous root-agent idle time after the QoderWork activity gate is met. */
     idleReviewMs?: number;
-    /** In-conversation interaction surfaces; each toggle binds live on the client. */
+    /** In-conversation interaction surfaces; all default off (opt-in, still stabilizing). */
     conversationInteraction?: {
         /** Memory-flavoured toolview cards for mnemon_* tool calls. */
         toolviews?: boolean;
