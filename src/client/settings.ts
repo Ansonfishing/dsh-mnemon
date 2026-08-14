@@ -25,7 +25,7 @@ export class MnemonSettingsScope<T extends object> implements ClientSettingsScop
     return this.mutate([{ op: 'unset', path: [field] }])
   }
 
-  /** Set a nested field (e.g. ['conversationInteraction', 'toolviews']). */
+  /** Set a nested field. */
   setPath(path: string[], value: unknown): Promise<void> {
     return this.mutate([{ op: 'set', path, value }])
   }

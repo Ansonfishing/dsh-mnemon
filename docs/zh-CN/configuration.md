@@ -52,9 +52,8 @@ mnemon:
 | `idleReviewMs` | `30000` | 5000–600000 ms | 达标后需要连续空闲的时间 |
 | `tabEnabled` | `true` | boolean | 是否挂载 `displayMode` 指定的 Web 入口；关闭后 Host RPC、命令和 Agent 工具保持注册 |
 | `writeEnabled` | `true` | boolean | 是否暴露语义写工具、写 RPC 和写命令 |
-| `mnemon-ui.toolviews` | `false` | boolean | 对话内记忆工具卡（`mnemon_*` 调用的记忆风格卡片）；默认关闭（opt-in），**保存后实时生效** |
-| `mnemon-ui.turnBar` | `false` | boolean | 回合尾记忆活动条；默认关闭（opt-in），**保存后实时生效** |
-| `mnemon-ui.saveAction` | `false` | boolean | 已定稿助手回复旁的「存入记忆」按钮；默认关闭（opt-in），**保存后实时生效** |
+| `mnemon-ui.turnBar` | `true` | boolean | 回合尾记忆活动条；默认开启，**保存后实时生效** |
+| `mnemon-ui.saveAction` | `true` | boolean | 已定稿助手回复旁的「存入记忆」图标与确认弹窗；默认开启，**保存后实时生效** |
 
 `mnemon` Host/存储命名空间和 `mnemon-ui` 浏览器呈现命名空间都实时生效。存储根只会在新运行图初始化成功后原子切换；旧版 `mnemon.conversationInteraction` 仍会作为迁移默认值读取，但新保存只写入 `mnemon-ui`。
 
@@ -173,7 +172,7 @@ routingGuidance=false
 
 ## 展示形态与 `tabEnabled` 界面开关
 
-`displayMode=sidebar`（默认）会挂载“记忆系统”侧边栏入口和独立主内容区工作台；`displayMode=buildin` 会改为注册原有的 DSH `conversation.view` 内嵌标签页。设置页保存后会先卸载当前入口再挂载目标入口，因此两种形态不会同时出现。
+`displayMode=sidebar`（默认）会挂载“记忆系统”侧边栏入口和独立主内容区工作台，并使用无 Mnemon Logo 的 DSH 官方风格极简皮肤；`displayMode=buildin` 会改为注册原有的 DSH `conversation.view` 内嵌标签页并保持既有视觉。两者共享功能工作台，但外观定义隔离。设置页保存后会先卸载当前入口再挂载目标入口，因此两种形态不会同时出现。
 
 `tabEnabled=false` 会实时移除当前形态的 Web 入口。为避免运行中的 Agent 或命令因界面设置变化而失效，Host RPC、命令和工具不会随展示形态或总开关卸载。
 

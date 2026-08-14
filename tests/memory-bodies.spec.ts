@@ -83,6 +83,23 @@ describe('MemoryBodyRegistry', () => {
     expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--store', created.id, 'store', 'create', created.id]), expect.anything())
   })
 
+  it('removes the native store before deleting its catalog entry', async () => {
+    const dataDir = temporaryDirectory()
+    const storeDirectory = join(dataDir, 'data', 'project')
+    mkdirSync(storeDirectory, { recursive: true })
+    writeFileSync(join(storeDirectory, 'mnemon.db'), 'existing database')
+    const process = vi.fn<ProcessRunner>(async (_command, args) => {
+      if (args.includes('remove')) rmSync(storeDirectory, { recursive: true, force: true })
+      return { stdout: 'Removed store', stderr: '', exitCode: 0 }
+    })
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir, store: 'project' }), process)
+    const registry = new MemoryBodyRegistry(runner, true)
+
+    await expect(registry.remove('project')).resolves.toMatchObject({ id: 'project', name: 'project' })
+    expect(registry.list()).toEqual([])
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', ['--data-dir', dataDir, '--store', 'project', 'store', 'remove', 'project'], expect.anything())
+  })
+
   it('requires a routing description and never derives a new id from model-authored text', async () => {
     const dataDir = temporaryDirectory()
     const process = vi.fn<ProcessRunner>(async () => ({ stdout: 'Created store', stderr: '', exitCode: 0 }))

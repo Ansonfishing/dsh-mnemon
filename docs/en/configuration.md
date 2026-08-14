@@ -52,9 +52,8 @@ mnemon:
 | `idleReviewMs` | `30000` | 5000–600000 ms | Required continuous idle time after the threshold is reached |
 | `tabEnabled` | `true` | boolean | Whether to mount the Web entry selected by `displayMode`; Host RPC, commands, and Agent tools remain registered when off |
 | `writeEnabled` | `true` | boolean | Whether to expose semantic write tools, write RPC, and write commands |
-| `mnemon-ui.toolviews` | `false` | boolean | In-conversation memory tool cards for `mnemon_*` calls; off by default (opt-in), **applies live after saving** |
-| `mnemon-ui.turnBar` | `false` | boolean | Turn-tail memory activity bar; off by default (opt-in), **applies live after saving** |
-| `mnemon-ui.saveAction` | `false` | boolean | “Save to memory” action on finalized assistant replies; off by default (opt-in), **applies live after saving** |
+| `mnemon-ui.turnBar` | `true` | boolean | Turn-tail memory activity bar; on by default, **applies live after saving** |
+| `mnemon-ui.saveAction` | `true` | boolean | “Save to memory” icon and confirmation on finalized assistant replies; on by default, **applies live after saving** |
 
 Both the `mnemon` Host/storage namespace and the `mnemon-ui` browser-presentation namespace apply live. The storage root switches atomically only after the new runtime graph initializes successfully. Legacy `mnemon.conversationInteraction` values remain a migration default, but new saves write only to `mnemon-ui`.
 
@@ -173,7 +172,7 @@ routingGuidance=false
 
 ## Display Mode and the `tabEnabled` UI Switch
 
-`displayMode=sidebar` (the default) mounts the “Memory System” sidebar entry and its dedicated center-column workbench. `displayMode=buildin` instead registers the original DSH `conversation.view` tab. Saving first disposes the active entry and then mounts the target, so the two modes never appear simultaneously.
+`displayMode=sidebar` (the default) mounts the “Memory System” sidebar entry and its dedicated center-column workbench with a minimal, logo-free skin aligned with official DSH panels. `displayMode=buildin` instead registers the original DSH `conversation.view` tab and preserves its existing visuals. The modes share the functional workbench while keeping appearance definitions isolated. Saving first disposes the active entry and then mounts the target, so the two modes never appear simultaneously.
 
 `tabEnabled=false` removes the currently selected Web entry live. Host RPC, commands, and tools remain registered across display-mode and enablement changes so an Agent or command already in progress stays valid.
 

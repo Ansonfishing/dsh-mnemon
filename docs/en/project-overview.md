@@ -41,6 +41,54 @@ The architecture has four useful boundaries:
 3. **Deterministic control boundary**: the Host validates inputs, paths, permissions, revisions, UTF-8 capacity, locks, timeouts, and process arguments.
 4. **Local data boundary**: Runtime, Documents, and Memory Spaces share the selected `storageRoot`; memory persistence does not depend on a remote memory service.
 
+### Memory System Flow
+
+The following flow is a stable architecture diagram, not a live monitoring panel. Solid edges represent deterministic Host paths; dashed edges represent supervised worker paths that require LLM judgment. Nodes intentionally omit current counts, recent activity, and health state.
+
+```mermaid
+flowchart TB
+  subgraph CONTEXT["01 · Per-turn Context"]
+    direction LR
+    C1["Runtime Memory<br/>USER.md + MEMORY.md"] -->|"every-turn prompt assembly"| C2["Root Agent<br/>routes tools; never opens SQLite directly"]
+    C2 <--> C3["User / Current Task<br/>current input and tool trace"]
+    C2 -->|"on demand; no full-content injection"| C4["Deterministic Document Search"]
+    C4 --> C5["Project Documents<br/>active Documents"]
+    C5 --> C6["Evidence / Receipt<br/>returns to the Root Agent with sources"]
+    C6 --> C2
+  end
+
+  subgraph SEMANTIC["02 · On-demand Semantic Operations"]
+    direction LR
+    S1["Root Agent<br/>recall · write · related"] -.-> S2["spawn Isolated Worker<br/>semantic judgment · minimal tool allowlist"]
+    S2 -.-> S3["Mnemon Host Bridge<br/>Service → Runner → local CLI"]
+    S3 <--> S4["Memory Spaces<br/>durable memories and relationship graph"]
+    S4 --> S5["Evidence / Receipt<br/>returns to the Root Agent with sources"]
+    S5 --> S1
+  end
+
+  subgraph MAINTENANCE["03 · Idle Maintenance and Archive"]
+    direction TB
+    M1["Ordinary Runtime and Document changes<br/>add / replace / remove · create / update"] --> M2["Deterministic Host Control<br/>locks · atomic writes · revision · capacity"] --> M3["Runtime Memory / active Documents"]
+    M4["Activity score and idle gate"] -.-> M5["fork completed checkpoint<br/>Runtime / Document maintenance only"] --> M6["Runtime / active Document<br/>conservative upkeep · new turns cancel review"] --> M7["Evidence / Receipt"]
+    M8["Project Documents"] -.-> M9["spawn Archive Worker<br/>capacity maintenance / manual archive"] -.-> M10["Mnemon Host Bridge"] --> M11["1 · write and verify the Mnemon cold index"] --> M12["2 · move the original after the revision fence<br/>failure or conflict keeps active content"]
+  end
+
+  classDef host fill:#eef5ff,stroke:#4b77be,color:#17233a
+  classDef worker fill:#f7f3ff,stroke:#8b6ce7,stroke-dasharray:5 3,color:#28203d
+  classDef store fill:#f1faf4,stroke:#55a36f,color:#173321
+  classDef task fill:#fafafa,stroke:#8a8a8a,color:#222
+  class C2,C4,S3,M2,M10 host
+  class S2,M5,M9 worker
+  class C1,C5,S4,M3,M6,M8,M11,M12 store
+  class C3,C6,S1,S5,M1,M4,M7 task
+```
+
+[![Original English Memory System Flow interface covering per-turn context, on-demand semantic operations, idle maintenance, and archive](./assets/architecture/memory-system-flow.en.png)](./assets/architecture/memory-system-flow.en.png)
+
+*The original English interface screenshot preserves the complete pre-migration layout as a visual and implementation reference for the architecture diagram.*
+
+The three lanes answer where per-turn context comes from, how semantic operations execute in isolation, and how ordinary writes, idle review, and cold archival protect original data. See [Lifecycle and Core Workflows](./workflows.md) for exact gates, tool permissions, and failure semantics.
+
 See [Architecture](./architecture.md) for detailed module ownership, root/worker dual paths, and RPC trust boundaries.
 
 Architecture boundaries determine who may execute an operation, the built-in prompt determines when the LLM should use a capability proactively, and the three-tier model determines the granularity of retained information and when it reaches context.
@@ -170,17 +218,17 @@ These workflows can be initiated proactively through Agent tools and can also be
 
 ### Web Workspace
 
-The default `sidebar` mode opens a dedicated center-column workspace from the “Memory System” sidebar entry. Settings can switch to `buildin`, which restores the original conversation-area tab. Both modes reuse the same functional interface and are mounted mutually exclusively. It contains eight pages in three divider-separated groups: “Status” stands alone; “Runtime, Memory Spaces, Documents” cover the three storage tiers; “Distill, Recall, Entities, Content” are the read/write tools:
+The default `sidebar` mode opens a dedicated center-column workspace from the “Memory System” sidebar entry with a minimal, logo-free skin aligned with official DSH panels. Settings can switch to `buildin`, which restores the original conversation-area tab and its existing visuals. Both modes share the functional workbench, isolate their appearance definitions, and are mounted mutually exclusively. Sidebar uses Status, Runtime, Memory Spaces, and Documents as primary tabs; Memory Spaces retains its purpose statement above Overview, Recall, Content, and Entities, with Remember as the primary action on the right. Add and edit flows for all three memory tiers use DSH-style modals; directory cards pin activation at the top right and move edit/delete into the footer. Primary headings remain visible while content scrolls, while Memory Spaces secondary content headings are not locked. Recall, Entities, Content, and the Document directory render progressively; Runtime is one USER / MEMORY list with scope and content filters; desktop Documents use an independent reader scroll region. Primary, edit, destructive, and view actions use solid blue, blue outline, red, and neutral tiers; typography and control density align with the Task Board and SSH panels; and page-scroll reset happens before paint. Buildin retains the original eight-page grouped navigation and inline forms:
 
-Under the `workspace` storage scope, the header selector is an independent inspection context: it can display and maintain another registered DSH workspace without changing the current conversation. The execution context used by agents, tools, and lifecycle hooks always follows the current session cwd. When inspection and execution differ, the whole workbench shows both paths and a one-click alignment action; operations that need to start an Agent do not run while misaligned.
+The Sidebar header derives the storage-location mode directly from the settings snapshot after “Memory System,” so it does not insert the element after a status round-trip. Under the `workspace` scope, the selector that follows is an independent inspection context: it can display and maintain another registered DSH workspace without changing the current conversation. Changing its target first unmounts the previous workspace's page subtree, so cards, filters, dialogs, and scroll positions cannot leak into the new root. The execution context used by agents, tools, and lifecycle hooks always follows the current session cwd. When inspection and execution differ, a compact one-click alignment module appears after the selector, while both paths remain in its accessible label and hover text; operations that need to start an Agent do not run while misaligned. The Sidebar status on the right reports only “Connected,” without mixing in Memory Space activation counts; Buildin retains its original summary.
 
-| Page | Primary purpose |
+| Page / action | Primary purpose |
 |---|---|
-| Status | CLI, runtime hot memory, storage scope, lifecycle, and subagent diagnostics |
-| Runtime | USER / MEMORY hot context, capacity, and deterministic maintenance |
+| Status | Health of the CLI, runtime hot memory, storage scope, Memory Spaces, and Documents |
+| Runtime | USER / MEMORY capacity, one filterable list, and deterministic maintenance |
 | Memory Spaces | Memory Space catalog, activation controls, metadata editing, and a live multi-space graph |
-| Documents | Search, read, edit, and archive managed Documents |
-| Distill | Give a candidate to a bounded worker for deduplication, routing, and writing |
+| Documents | Progressive directory, independent reader, editing, and archive |
+| Distill (Sidebar primary action / Buildin page) | Give a candidate to a bounded worker for deduplication, routing, and writing; advanced constraints expand optionally |
 | Recall | Direct recall, related traversal, and evidence-only Agent search |
 | Entities | Frequent entities and their cross-graph context |
 | Content | Browse, copy, clone, or soft-delete durable memories |

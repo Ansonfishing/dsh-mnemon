@@ -17,6 +17,17 @@ mnemon --version
 
 `mnemon status` 会打开有效 Store，上游 CLI 可能初始化默认数据或执行迁移；它不是完全无副作用的只读探测。插件状态页还会检查 active Memory Spaces、Documents、生命周期和 subagent 计数。
 
+## 版本检查与更新
+
+Sidebar「状态」页的「检查版本」同时检查两个独立组件：
+
+- **Mnemon CLI**：当前版本来自本地 `mnemon --version`，最新版本来自 Mnemon GitHub Releases；
+- **dsh-mnemon**：当前版本来自正在运行的插件包，最新版本来自 npm registry。
+
+点击检查只执行只读探测，不会自动安装。只有发现更高版本且安装来源能够安全识别时，组件行才显示「更新」按钮：Mnemon 支持 Homebrew Cask、Homebrew Formula 和 `go install`；dsh-mnemon 支持当前 DSH Profile 中由 pnpm 管理的 npm 安装。本地 `link:` / `file:` 开发版本及无法识别来源的手工安装只显示操作提示，避免覆盖源码或采用错误的包管理器。
+
+更新命令由 Host 固定选择，不接受浏览器传入命令或参数、不启用 shell，并限制执行时间与输出大小。版本检查使用既有只读 RPC 通道；显式更新只允许走 loopback 写通道。更新成功后界面会自动重新检查版本并刷新系统状态。dsh-mnemon 更新完成后仍需要重启 `dsh web` 以加载新插件代码，Mnemon CLI 更新则从下一次 CLI 调用起生效。
+
 ## 安全边界
 
 ### 进程

@@ -115,7 +115,7 @@ describe('dsh-mnemon plugin composition', () => {
     ]))
     expect(fixture.registrations).toEqual([
       expect.arrayContaining(['mnemon', expect.anything(), expect.objectContaining({ applies: 'live' })]),
-      expect.arrayContaining(['mnemon-ui', expect.anything(), expect.objectContaining({ applies: 'live', base: { toolviews: false, turnBar: false, saveAction: false } })]),
+      expect.arrayContaining(['mnemon-ui', expect.anything(), expect.objectContaining({ applies: 'live', base: { turnBar: true, saveAction: true } })]),
     ])
   })
 

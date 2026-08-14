@@ -77,6 +77,7 @@ export interface StatusView {
     healthy: boolean;
     error?: string;
     version?: string;
+    dshMnemonVersion?: string;
     cliPath: string;
     commandFound: boolean;
     dataDir: string;
@@ -173,6 +174,7 @@ export declare class MnemonService {
     forget(id: string, signal?: AbortSignal, memoryBodyId?: string): Promise<JsonValue>;
     createBody(request: CreateMemoryBodyRequest, signal?: AbortSignal): Promise<MemoryBody>;
     updateBody(id: string, request: UpdateMemoryBodyRequest): MemoryBody;
+    deleteBody(id: string, signal?: AbortSignal): Promise<MemoryBody>;
     mergeBodies(targetBodyId: string, sourceBodyIds: string[], deactivateSources?: boolean, signal?: AbortSignal): Promise<JsonValue>;
     private bodyStatus;
     private parseStats;

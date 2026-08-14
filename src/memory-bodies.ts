@@ -128,6 +128,14 @@ export class MemoryBodyRegistry {
     return this.view(body)
   }
 
+  async remove(id: string, signal?: AbortSignal): Promise<MemoryBody> {
+    const body = this.get(id)
+    await this.runner.runText(['store', 'remove', body.id], { ...(signal === undefined ? {} : { signal }), store: body.id })
+    this.bodies = this.bodies.filter(entry => entry.id !== body.id)
+    this.save()
+    return body
+  }
+
   setActive(id: string, active: boolean): MemoryBody {
     return this.update(id, { active })
   }

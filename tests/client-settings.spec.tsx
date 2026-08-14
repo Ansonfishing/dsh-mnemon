@@ -285,7 +285,7 @@ describe('MnemonSettingsCard', () => {
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof coreSnapshot }
     const interactionSnapshot = {
       status: 'ready' as const,
-      value: { toolviews: true, turnBar: true, saveAction: true },
+      value: { turnBar: true, saveAction: true },
       base: {},
       user: {},
       revision: 0,
@@ -305,22 +305,19 @@ describe('MnemonSettingsCard', () => {
 
     const view = render(<MnemonSettingsCard scope={scope} interactionScope={interactionScope} />)
 
-    const toolviews = view.getByLabelText('记忆工具卡') as HTMLInputElement
     const turnBar = view.getByLabelText('回合记忆条') as HTMLInputElement
-    expect(toolviews.checked).toBe(true)
     expect(turnBar.checked).toBe(true)
+    expect(view.queryByLabelText('记忆工具卡')).toBeNull()
 
-    fireEvent.click(toolviews)
     fireEvent.click(turnBar)
     fireEvent.click(view.getByRole('button', { name: '保存' }))
 
     await waitFor(() => expect(interactionMutate).toHaveBeenCalledWith([
-      { op: 'set', path: ['toolviews'], value: false },
       { op: 'set', path: ['turnBar'], value: false },
     ]))
   })
 
-  it('presents interaction toggles unchecked by default (opt-in)', () => {
+  it('presents the two remaining interaction toggles checked by default', () => {
     const snapshot = {
       status: 'ready' as const,
       value: { storageScope: 'global' as const },
@@ -342,9 +339,9 @@ describe('MnemonSettingsCard', () => {
 
     const view = render(<MnemonSettingsCard scope={scope} />)
 
-    expect((view.getByLabelText('记忆工具卡') as HTMLInputElement).checked).toBe(false)
-    expect((view.getByLabelText('回合记忆条') as HTMLInputElement).checked).toBe(false)
-    expect((view.getByLabelText('存入记忆按钮') as HTMLInputElement).checked).toBe(false)
+    expect(view.queryByLabelText('记忆工具卡')).toBeNull()
+    expect((view.getByLabelText('回合记忆条') as HTMLInputElement).checked).toBe(true)
+    expect((view.getByLabelText('存入记忆按钮') as HTMLInputElement).checked).toBe(true)
   })
 
   it('previews and safely imports one complete directory ZIP', async () => {

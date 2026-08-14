@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClientConnectionHandle } from '../src/contracts.ts'
 import { MnemonSaveAction } from '../src/client/MnemonSaveAction.tsx'
-import { MnemonToolView } from '../src/client/MnemonToolviews.tsx'
+import { MnemonTurnTail, memoryPageForTool } from '../src/client/MnemonTurnTail.tsx'
 import { consumeMnemonAnchor, dispatchMnemonAnchor, subscribeMnemonAnchor } from '../src/client/anchor.ts'
 
 afterEach(() => {
@@ -42,28 +42,31 @@ describe('conversation interaction surfaces', () => {
     expect(consumeMnemonAnchor('session-b')).toBeNull()
   })
 
-  it('renders expanded tool evidence outside the fixed-height interactive row', () => {
-    render(<MnemonToolView
-      callId="call-1"
-      toolName="mnemon_recall"
-      block={{
-        kind: 'tool-result',
-        call: { argsRaw: JSON.stringify({ query: 'project architecture', limit: 5 }) },
-        content: [{ type: 'text', text: JSON.stringify({ results: [{ id: 'memory-1' }] }, null, 2) }],
-      }}
-      t={translate as never}
-    />)
+  it('opens each turn-memory tool on its corresponding workbench page', async () => {
+    const rpcCall = vi.fn(async (_channel: string, endpoint: string) => {
+      if (endpoint !== 'turn-activities') throw new Error(`unexpected endpoint: ${endpoint}`)
+      return {
+        ok: true as const,
+        value: {
+          cursor: 12,
+          activities: [{ turn: 2, count: 2, names: ['mnemon_document_search', 'mnemon_runtime_memory'], recalls: 0, writes: 1, documentSearches: 1, inspections: 0, failures: 0 }],
+        },
+      }
+    })
+    const connection = { rpc: { call: rpcCall } } as ClientConnectionHandle
+    const received: string[] = []
+    const unsubscribe = subscribeMnemonAnchor('session-a', anchor => received.push(anchor.page))
+    render(<MnemonTurnTail turn={{ turn: 2, status: 'closed' }} seq={12} openFile={vi.fn()} sessionId="session-a" connection={connection} t={translate as never} />)
 
-    const row = screen.getByRole('button', { name: /toolview\.recallTitle/ })
-    fireEvent.click(row)
+    fireEvent.click(await screen.findByRole('button', { name: /turnTail\.label/ }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'turnTail.openTool' })[0]!)
 
-    const argumentBlock = screen.getAllByText(/project architecture/)[0]!
-    expect(row.contains(argumentBlock)).toBe(false)
-    expect(argumentBlock.textContent).toContain('\n')
-    expect(screen.queryByRole('button', { name: 'toolview.inspect' })).toBeNull()
+    expect(received).toEqual(['documents'])
+    expect(memoryPageForTool('mnemon_runtime_memory')).toBe('runtime')
+    unsubscribe()
   })
 
-  it('prevents a second supervised write while a closed panel still has one in flight', async () => {
+  it('opens a centered modal and prevents a second supervised write while it is closed', async () => {
     const status = deferred<{ ok: true; value: { writeEnabled: boolean } }>()
     const supervision = deferred<{ ok: true; value: { summary: string; action: string } }>()
     let statusCalls = 0
@@ -79,7 +82,19 @@ describe('conversation interaction surfaces', () => {
     const connection = { rpc: { call: rpcCall } } as ClientConnectionHandle
 
     render(<MnemonSaveAction messageId="message-1" sessionId="session-a" connection={connection} t={translate as never} />)
-    fireEvent.click(screen.getByRole('button', { name: 'saveAction.button' }))
+    const action = screen.getByRole('button', { name: 'saveAction.button' })
+    expect(action.textContent).toBe('')
+    expect(action.getAttribute('aria-haspopup')).toBe('dialog')
+    expect(action.getAttribute('title')).toBeNull()
+    fireEvent.mouseEnter(action)
+    expect(screen.getByRole('tooltip').textContent).toBe('saveAction.tooltip')
+    fireEvent.click(action)
+    const dialog = screen.getByRole('dialog', { name: 'saveAction.title' })
+    expect(dialog.getAttribute('aria-modal')).toBe('true')
+    expect(action.parentElement?.contains(dialog)).toBe(false)
+    expect(screen.getByRole('button', { name: 'common.cancel' })).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull())
+    expect(rpcCall.mock.calls.filter(call => call[1] === 'supervise')).toHaveLength(0)
 
     const submit = await screen.findByRole('button', { name: 'saveAction.submit' }) as HTMLButtonElement
     expect(submit.disabled).toBe(true)

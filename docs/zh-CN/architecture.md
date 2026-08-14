@@ -51,6 +51,8 @@ root Agent calls mnemon_recall
 
 长期语义写入、关系、软删除以及记忆体创建/更新/合并采用相同模式。运行时记忆和 Documents 的普通变更先经过 coordinator，但通常由确定性控制层直接提交；只有容量维护或归档需要额外 worker。
 
+记忆体目录的物理删除是单独的确定性危险操作：WebUI 必须先展示二次确认，随后经 loopback 写 RPC 调用 Mnemon 原生 `store remove`；只有 CLI 删除成功后才移除目录登记。
+
 ## 两类子 Agent
 
 ### `spawn`

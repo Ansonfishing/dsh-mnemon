@@ -15,7 +15,7 @@ export interface MnemonSettingsCardProps {
 }
 
 type CoreField = 'displayMode' | 'storageScope' | 'dataDir'
-type InteractionField = 'toolviews' | 'turnBar' | 'saveAction'
+type InteractionField = 'turnBar' | 'saveAction'
 type Field = CoreField | InteractionField
 interface Draft extends Record<InteractionField, boolean> {
   displayMode: 'sidebar' | 'buildin'
@@ -24,7 +24,7 @@ interface Draft extends Record<InteractionField, boolean> {
 }
 
 const CORE_FIELDS: CoreField[] = ['displayMode', 'storageScope', 'dataDir']
-const INTERACTION_FIELDS: InteractionField[] = ['toolviews', 'turnBar', 'saveAction']
+const INTERACTION_FIELDS: InteractionField[] = ['turnBar', 'saveAction']
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -49,9 +49,8 @@ function coreDraft(value: Config | undefined): Pick<Draft, CoreField> {
 
 function interactionDraft(value: InteractionConfig | undefined): Pick<Draft, InteractionField> {
   return {
-    toolviews: value?.toolviews === true,
-    turnBar: value?.turnBar === true,
-    saveAction: value?.saveAction === true,
+    turnBar: value?.turnBar !== false,
+    saveAction: value?.saveAction !== false,
   }
 }
 
@@ -214,7 +213,6 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
             <div><h2 id="mnemon-interaction-heading">{t('config.interactionTitle')}</h2><p>{t('config.interactionHint')}</p></div>
           </div>
           <div className={css.rowGroup}>
-            <ToggleRow id="mnemon-interaction-toolviews" label={t('config.interactionToolviews')} hint={t('config.interactionToolviewsHint')} checked={draft.toolviews} disabled={interactionDisabled} onChange={value => edit('toolviews', value)} />
             <ToggleRow id="mnemon-interaction-turn-bar" label={t('config.interactionTurnBar')} hint={t('config.interactionTurnBarHint')} checked={draft.turnBar} disabled={interactionDisabled} onChange={value => edit('turnBar', value)} />
             <ToggleRow id="mnemon-interaction-save-action" label={t('config.interactionSaveAction')} hint={t('config.interactionSaveActionHint')} checked={draft.saveAction} disabled={interactionDisabled} onChange={value => edit('saveAction', value)} />
           </div>

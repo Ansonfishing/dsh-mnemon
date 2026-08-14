@@ -75,7 +75,11 @@ function placeEntry(root: HTMLElement, entry: HTMLButtonElement): boolean {
 }
 
 /** Mount a self-healing official-style entry under the New Session row. */
-export function mountMnemonSidebarEntry(controller: MnemonWorkspaceController, t: MnemonTranslate): () => void {
+export function mountMnemonSidebarEntry(
+  controller: MnemonWorkspaceController,
+  t: MnemonTranslate,
+  subscribeLocale?: (listener: () => void) => () => void,
+): () => void {
   const { entry, label } = createEntry(controller)
   let root: HTMLElement | undefined
   let placed = false
@@ -123,6 +127,7 @@ export function mountMnemonSidebarEntry(controller: MnemonWorkspaceController, t
     else delete entry.dataset.active
   }
   const unsubscribe = controller.subscribe(syncActive)
+  const unsubscribeLocale = subscribeLocale?.(syncLabel) ?? (() => {})
   syncActive()
   tryPlace()
 
@@ -130,6 +135,7 @@ export function mountMnemonSidebarEntry(controller: MnemonWorkspaceController, t
     waitObserver.disconnect()
     rootObserver.disconnect()
     unsubscribe()
+    unsubscribeLocale()
     entry.remove()
   }
 }

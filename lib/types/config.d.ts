@@ -36,7 +36,7 @@ export interface Config {
     idleReviewMs?: number;
     /** @deprecated Migration source for pre-0.2 settings; new writes use the live `mnemon-ui` namespace. */
     conversationInteraction?: {
-        /** Memory-flavoured toolview cards for mnemon_* tool calls. */
+        /** @deprecated Removed. Mnemon now uses DSH's standard tool presentation. */
         toolviews?: boolean;
         /** Per-turn memory activity bar under completed turns. */
         turnBar?: boolean;
@@ -51,7 +51,6 @@ export interface CustomPackConfig {
 }
 /** Browser-only interaction settings, registered live under `mnemon-ui`. */
 export interface InteractionConfig {
-    toolviews?: boolean;
     turnBar?: boolean;
     saveAction?: boolean;
 }
@@ -79,7 +78,6 @@ export interface ResolvedConfig {
     };
 }
 export interface ResolvedInteractionConfig {
-    toolviews: boolean;
     turnBar: boolean;
     saveAction: boolean;
 }

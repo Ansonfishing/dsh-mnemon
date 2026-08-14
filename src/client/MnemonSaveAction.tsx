@@ -1,4 +1,5 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react'
+import { memo, useEffect, useRef, useState, type JSX } from 'react'
+import { Button, IconDataOutline16, Modal, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ClientConnectionHandle } from '../contracts.ts'
 import { MnemonClient } from './api.ts'
 import type { MnemonKey } from './locales.ts'
@@ -31,9 +32,6 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
   const [outcome, setOutcome] = useState<SuperviseOutcome | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
-  const wrapRef = useRef<HTMLDivElement | null>(null)
-  const buttonRef = useRef<HTMLButtonElement | null>(null)
-  const panelRef = useRef<HTMLDivElement | null>(null)
   const openRef = useRef(false)
   const requestVersionRef = useRef(0)
   const submitActiveRef = useRef(false)
@@ -75,53 +73,6 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
     return () => { alive = false }
   }, [open, connection, sessionId, messageId])
 
-  useEffect(() => {
-    if (!open) return
-    const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setPanelOpen(false)
-    }
-    const closeOutside = (event: PointerEvent): void => {
-      if (event.target instanceof Node && !wrapRef.current?.contains(event.target)) setPanelOpen(false)
-    }
-    document.addEventListener('keydown', closeOnEscape)
-    document.addEventListener('pointerdown', closeOutside)
-    return () => {
-      document.removeEventListener('keydown', closeOnEscape)
-      document.removeEventListener('pointerdown', closeOutside)
-    }
-  }, [open])
-
-  useLayoutEffect(() => {
-    if (!open) return
-    const panel = panelRef.current
-    const button = buttonRef.current
-    if (panel === null || button === null || typeof panel.showPopover !== 'function') return
-
-    const reposition = (): void => {
-      const anchor = button.getBoundingClientRect()
-      const padding = 16
-      const width = Math.min(340, Math.max(240, window.innerWidth - padding * 2))
-      panel.style.setProperty('--mn-save-panel-width', `${width}px`)
-      const left = Math.min(Math.max(padding, anchor.right - width), Math.max(padding, window.innerWidth - width - padding))
-      panel.style.setProperty('--mn-save-panel-left', `${left}px`)
-      const below = anchor.bottom + 4
-      const above = anchor.top - panel.getBoundingClientRect().height - 4
-      const top = below + panel.getBoundingClientRect().height <= window.innerHeight - padding || above < padding ? below : above
-      panel.style.setProperty('--mn-save-panel-top', `${Math.max(padding, top)}px`)
-    }
-
-    panel.setAttribute('popover', 'manual')
-    panel.showPopover()
-    reposition()
-    window.addEventListener('resize', reposition)
-    document.addEventListener('scroll', reposition, true)
-    return () => {
-      window.removeEventListener('resize', reposition)
-      document.removeEventListener('scroll', reposition, true)
-      if (panel.matches(':popover-open')) panel.hidePopover()
-    }
-  }, [open])
-
   const submit = (): void => {
     const content = textareaRef.current?.value.trim() ?? ''
     if (content === '' || writeEnabled !== true || submitActiveRef.current) return
@@ -147,44 +98,56 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
   }
 
   return (
-    <div ref={wrapRef} className={css.wrap}>
-      <button
-        ref={buttonRef}
-        type="button"
-        className={css.button}
-        aria-expanded={open}
-        title={t('saveAction.button')}
-        onClick={() => setPanelOpen(!openRef.current)}
-      >
-        <span className={css.glyph} aria-hidden="true">◈</span>
-        <span className={css.label}>{t('saveAction.button')}</span>
-      </button>
-      {open && (
-        <div ref={panelRef} className={css.panel} role="dialog" aria-label={t('saveAction.title')}>
-          <header className={css.panelHeader}>
-            <strong>{t('saveAction.title')}</strong>
-            <button type="button" className={css.close} aria-label={t('saveAction.close')} onClick={() => setPanelOpen(false)}>×</button>
-          </header>
-          <p className={css.hint}>{t('saveAction.hint')}</p>
-          {writeEnabled === false && <div className={css.readOnly} role="status">{t('saveAction.readOnly')}</div>}
-          {candidate === undefined && !missing && <div className={css.status}>{t('saveAction.fetching')}</div>}
-          {missing && <div className={css.status} role="status">{t('saveAction.missing')}</div>}
-          {candidate !== undefined && (
-            <label className={css.candidate}>
-              <span>{t('saveAction.candidate')}</span>
-              <textarea ref={textareaRef} rows={5} defaultValue={candidate} />
-              {truncated && <small className={css.truncated}>{t('saveAction.truncated', { limit: PREVIEW_LIMIT })}</small>}
-            </label>
-          )}
-          {outcome !== null && <div className={css.outcome} role="status">{t('saveAction.result', { summary: outcome.summary })}</div>}
-          {failure !== null && <div className={css.failure} role="alert">{t('saveAction.failed', { error: failure })}</div>}
-          {candidate !== undefined && (
-            <button type="button" className={css.submit} disabled={submitting || writeEnabled !== true} onClick={submit}>
+    <div className={css.wrap}>
+      <Tooltip label={t('saveAction.tooltip')} side="bottom" disabled={open}>
+        <button
+          type="button"
+          className={css.button}
+          aria-label={t('saveAction.button')}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={() => setPanelOpen(!openRef.current)}
+        >
+          <IconDataOutline16 size={16} className={css.icon} />
+        </button>
+      </Tooltip>
+      <Modal
+        open={open}
+        onClose={() => setPanelOpen(false)}
+        title={t('saveAction.title')}
+        closeLabel={t('saveAction.close')}
+        description={t('saveAction.hint')}
+        className={css.modal as string}
+        contentClassName={css.modalContent as string}
+        footer={(
+          <>
+            <Button variant="outline" className={css.modalAction} disabled={submitting} onClick={() => setPanelOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              className={css.modalAction}
+              disabled={candidate === undefined || submitting || writeEnabled !== true}
+              onClick={submit}
+            >
               {submitting ? t('saveAction.submitting') : t('saveAction.submit')}
-            </button>
-          )}
-        </div>
-      )}
+            </Button>
+          </>
+        )}
+      >
+        {writeEnabled === false && <div className={css.readOnly} role="status">{t('saveAction.readOnly')}</div>}
+        {candidate === undefined && !missing && <div className={css.status}>{t('saveAction.fetching')}</div>}
+        {missing && <div className={css.status} role="status">{t('saveAction.missing')}</div>}
+        {candidate !== undefined && (
+          <label className={css.candidate}>
+            <span>{t('saveAction.candidate')}</span>
+            <textarea ref={textareaRef} rows={12} defaultValue={candidate} autoFocus />
+            {truncated && <small className={css.truncated}>{t('saveAction.truncated', { limit: PREVIEW_LIMIT })}</small>}
+          </label>
+        )}
+        {outcome !== null && <div className={css.outcome} role="status">{t('saveAction.result', { summary: outcome.summary })}</div>}
+        {failure !== null && <div className={css.failure} role="alert">{t('saveAction.failed', { error: failure })}</div>}
+      </Modal>
     </div>
   )
 })

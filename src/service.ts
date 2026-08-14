@@ -90,6 +90,7 @@ export interface StatusView {
   healthy: boolean
   error?: string
   version?: string
+  dshMnemonVersion?: string
   cliPath: string
   commandFound: boolean
   dataDir: string
@@ -473,6 +474,11 @@ export class MnemonService {
   updateBody(id: string, request: UpdateMemoryBodyRequest): MemoryBody {
     this.assertWritable()
     return this.memoryBodies.update(id, request)
+  }
+
+  async deleteBody(id: string, signal?: AbortSignal): Promise<MemoryBody> {
+    this.assertWritable()
+    return this.memoryBodies.remove(id, signal)
   }
 
   async mergeBodies(targetBodyId: string, sourceBodyIds: string[], deactivateSources = true, signal?: AbortSignal): Promise<JsonValue> {

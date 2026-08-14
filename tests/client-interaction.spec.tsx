@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { waitFor } from '@testing-library/react'
 import { apply } from '../src/client/index.ts'
 import { selectMnemonTurnTail } from '../src/client/MnemonTurnTail.tsx'
+import { consumeMnemonAnchor, dispatchMnemonAnchor } from '../src/client/anchor.ts'
 
 const mountedEffects: Array<() => void> = []
 
@@ -19,7 +20,7 @@ interface SlotOptions {
   inject?: (...args: unknown[]) => Record<string, unknown>
 }
 
-function makeCtx(initialValue: unknown) {
+function makeCtx(initialValue: unknown, coreValue: Record<string, unknown> = {}) {
   const injects: string[] = []
   /** Registrations that have not been disposed yet. */
   let active: string[] = []
@@ -27,6 +28,7 @@ function makeCtx(initialValue: unknown) {
   const registeredOptions: SlotOptions[] = []
   let uiValue = initialValue as Record<string, unknown>
   let revision = 1
+  const localeSnapshot = { active: 'zh' as const, locales: [] as const, revision: 0 }
 
   const ctx = {
     slots: {
@@ -61,7 +63,7 @@ function makeCtx(initialValue: unknown) {
               }
               revision += 1
             }
-            return { ok: true, value: { status: 'ready', value: namespace === 'mnemon-ui' ? uiValue : {}, base: {}, user: namespace === 'mnemon-ui' ? uiValue : {}, revision, writable: true, mode: 'host' } }
+            return { ok: true, value: { status: 'ready', value: namespace === 'mnemon-ui' ? uiValue : coreValue, base: {}, user: namespace === 'mnemon-ui' ? uiValue : coreValue, revision, writable: true, mode: 'host' } }
           }
           return { ok: false, error: { code: 'internal', message: 'unexpected', details: {} } }
         }),
@@ -70,6 +72,8 @@ function makeCtx(initialValue: unknown) {
     locale: {
       register: vi.fn(() => () => {}),
       bind: vi.fn(() => (key: string) => key),
+      getSnapshot: vi.fn(() => localeSnapshot),
+      subscribe: vi.fn(() => () => {}),
     },
     effect: vi.fn((callback: () => unknown) => {
       const dispose = callback()
@@ -103,37 +107,49 @@ describe('interaction surfaces binding', () => {
     expect(selectMnemonTurnTail(owner('closed') as never)).toEqual({})
   })
 
-  it('registers no interaction surface by default (opt-in off)', async () => {
+  it('registers both remaining interaction surfaces by default', async () => {
     const { ctx, injects, activeRegistrations } = makeCtx({})
     apply(ctx)
     // The standalone sidebar workspace does not occupy conversation.view; the
-    // interaction surfaces must not register until settings enable them.
+    // Both supported interaction surfaces register from the ready default.
     expect(injects).toContain('settings.section')
     expect(injects).not.toContain('conversation.view')
-    await waitFor(() => {
-      expect(activeRegistrations()).not.toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
-    })
-    expect(activeRegistrations()).not.toContain('conversation.chat.turnTail')
-    expect(activeRegistrations()).not.toContain('mnemon-save')
+    await waitFor(() => expect(activeRegistrations()).toEqual(expect.arrayContaining(['conversation.chat.turnTail', 'mnemon-save'])))
+    expect(activeRegistrations()).not.toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
   })
 
   it('registers explicitly enabled surfaces after settings load', async () => {
     const { ctx, activeRegistrations } = makeCtx({ toolviews: true, turnBar: true, saveAction: true })
     apply(ctx)
-    await waitFor(() => {
-      expect(activeRegistrations()).toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
-    })
+    await waitFor(() => expect(activeRegistrations()).toEqual(expect.arrayContaining(['conversation.chat.turnTail', 'mnemon-save'])))
     expect(activeRegistrations()).toEqual(expect.arrayContaining(['conversation.chat.turnTail', 'mnemon-save']))
+    expect(activeRegistrations()).not.toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
   })
 
   it('registers only the enabled surfaces when toggles are mixed', async () => {
     const { ctx, activeRegistrations } = makeCtx({ toolviews: true, turnBar: false, saveAction: true })
     apply(ctx)
-    await waitFor(() => {
-      expect(activeRegistrations()).toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
-    })
+    await waitFor(() => expect(activeRegistrations()).toEqual(expect.arrayContaining(['mnemon-save'])))
     expect(activeRegistrations()).toEqual(expect.arrayContaining(['mnemon-save']))
+    expect(activeRegistrations()).not.toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
     expect(activeRegistrations()).not.toContain('conversation.chat.turnTail')
+  })
+
+  it('activates the built-in Memory tab before delivering a conversation anchor', async () => {
+    const { ctx, injects } = makeCtx({}, { displayMode: 'buildin' })
+    const tab = document.createElement('button')
+    tab.setAttribute('role', 'tab')
+    tab.textContent = 'tab.label'
+    const clicked = vi.fn()
+    tab.addEventListener('click', clicked)
+    document.body.append(tab)
+
+    apply(ctx)
+    await waitFor(() => expect(injects).toContain('conversation.view'))
+    dispatchMnemonAnchor({ page: 'documents', sessionId: 'session-a' })
+
+    expect(clicked).toHaveBeenCalledTimes(1)
+    expect(consumeMnemonAnchor('session-a')).toMatchObject({ page: 'documents' })
   })
 
   it('registers and disposes interaction surfaces when mnemon-ui changes live', async () => {

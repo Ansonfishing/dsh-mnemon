@@ -3,7 +3,7 @@ import type { ClientConnectionHandle } from '../contracts.ts'
 import type { TurnMemoryActivity } from '../lifecycle.ts'
 import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { MnemonClient } from './api.ts'
-import { dispatchMnemonAnchor } from './anchor.ts'
+import { dispatchMnemonAnchor, type MnemonAnchorPage } from './anchor.ts'
 import type { MnemonKey } from './locales.ts'
 import css from './MnemonTurnTail.module.css'
 
@@ -21,6 +21,15 @@ export interface MnemonTurnTailProps {
 function turnNumber(turn: unknown): number | undefined {
   const value = (turn as { turn?: unknown } | null)?.turn
   return typeof value === 'number' ? value : undefined
+}
+
+/** Route a settled tool name to the workbench page that explains its effect. */
+export function memoryPageForTool(name: string): MnemonAnchorPage {
+  if (name === 'mnemon_document_search' || name === 'mnemon_document_manage') return 'documents'
+  if (name === 'mnemon_runtime_memory') return 'runtime'
+  if (name === 'mnemon_recall' || name === 'mnemon_related') return 'explore'
+  if (name === 'mnemon_status') return 'status'
+  return 'overview'
 }
 
 /** Whether this entry renders for the owner; chain selectors decline quietly. */
@@ -51,9 +60,9 @@ export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, seq, sessionI
   if (activity === undefined || activity === null) return null
   if (number === undefined) return null
 
-  const openView = (event: ReactMouseEvent): void => {
+  const openTool = (name: string, event: ReactMouseEvent): void => {
     event.stopPropagation()
-    dispatchMnemonAnchor({ page: 'status', ...(sessionId === undefined ? {} : { sessionId }) })
+    dispatchMnemonAnchor({ page: memoryPageForTool(name), ...(sessionId === undefined ? {} : { sessionId }) })
   }
 
   return (
@@ -74,9 +83,18 @@ export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, seq, sessionI
         <div className={css.details}>
           <span className={css.detailLabel}>{t('turnTail.toolList')}</span>
           <div className={css.tools}>
-            {activity.names.map((name, index) => <code key={`${name}-${index}`} className={css.toolChip}>{name}</code>)}
+            {activity.names.map((name, index) => (
+              <button
+                key={`${name}-${index}`}
+                type="button"
+                className={css.toolChip}
+                aria-label={t('turnTail.openTool', { tool: name })}
+                onClick={event => openTool(name, event)}
+              >
+                {name}
+              </button>
+            ))}
           </div>
-          <button type="button" className={css.viewButton} onClick={openView}>{t('turnTail.openView')}</button>
         </div>
       )}
     </div>

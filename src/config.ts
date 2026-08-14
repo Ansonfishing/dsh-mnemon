@@ -40,7 +40,7 @@ export interface Config {
   idleReviewMs?: number
   /** @deprecated Migration source for pre-0.2 settings; new writes use the live `mnemon-ui` namespace. */
   conversationInteraction?: {
-    /** Memory-flavoured toolview cards for mnemon_* tool calls. */
+    /** @deprecated Removed. Mnemon now uses DSH's standard tool presentation. */
     toolviews?: boolean
     /** Per-turn memory activity bar under completed turns. */
     turnBar?: boolean
@@ -57,15 +57,13 @@ export interface CustomPackConfig {
 
 /** Browser-only interaction settings, registered live under `mnemon-ui`. */
 export interface InteractionConfig {
-  toolviews?: boolean
   turnBar?: boolean
   saveAction?: boolean
 }
 
 export const InteractionConfig: z<InteractionConfig> = z.object({
-  toolviews: z.boolean().default(false),
-  turnBar: z.boolean().default(false),
-  saveAction: z.boolean().default(false),
+  turnBar: z.boolean().default(true),
+  saveAction: z.boolean().default(true),
 })
 
 export const Config: z<Config> = z.object({
@@ -91,12 +89,12 @@ export const Config: z<Config> = z.object({
   recallMode: z.union(['guided', 'off'] as const).default('guided'),
   writebackMode: z.union(['guided', 'off'] as const).default('guided'),
   idleReviewMs: z.number().step(1).min(5_000).max(600_000).default(DEFAULT_IDLE_REVIEW_MS),
-  // Each interaction surface is opt-in and defaults off; users enable them live.
+  // Conversation surfaces default on and remain independently switchable live.
   conversationInteraction: z.object({
     toolviews: z.boolean().default(false),
-    turnBar: z.boolean().default(false),
-    saveAction: z.boolean().default(false),
-  }).default({ toolviews: false, turnBar: false, saveAction: false }),
+    turnBar: z.boolean().default(true),
+    saveAction: z.boolean().default(true),
+  }).default({ toolviews: false, turnBar: true, saveAction: true }),
 })
 
 export interface ResolvedConfig {
@@ -122,16 +120,14 @@ export interface ResolvedConfig {
 }
 
 export interface ResolvedInteractionConfig {
-  toolviews: boolean
   turnBar: boolean
   saveAction: boolean
 }
 
 export function resolveInteractionConfig(config: InteractionConfig = {}): ResolvedInteractionConfig {
   return {
-    toolviews: config.toolviews ?? false,
-    turnBar: config.turnBar ?? false,
-    saveAction: config.saveAction ?? false,
+    turnBar: config.turnBar ?? true,
+    saveAction: config.saveAction ?? true,
   }
 }
 
@@ -207,8 +203,8 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     idleReviewMs: config.idleReviewMs ?? DEFAULT_IDLE_REVIEW_MS,
     conversationInteraction: {
       toolviews: config.conversationInteraction?.toolviews ?? false,
-      turnBar: config.conversationInteraction?.turnBar ?? false,
-      saveAction: config.conversationInteraction?.saveAction ?? false,
+      turnBar: config.conversationInteraction?.turnBar ?? true,
+      saveAction: config.conversationInteraction?.saveAction ?? true,
     },
   }
 }

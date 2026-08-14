@@ -19,7 +19,13 @@ describe('Mnemon config and resolution', () => {
       idleReviewMs: 30_000,
       tabEnabled: true,
       writeEnabled: true,
+      conversationInteraction: { turnBar: true, saveAction: true },
     })
+  })
+
+  it('keeps explicit conversation-surface opt-outs', () => {
+    expect(resolveConfig({ conversationInteraction: { turnBar: false, saveAction: false } }).conversationInteraction)
+      .toMatchObject({ turnBar: false, saveAction: false })
   })
 
   it('supports sidebar and buildin display modes with sidebar as the default', () => {
