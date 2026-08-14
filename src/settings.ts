@@ -42,6 +42,25 @@ function object(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
+const MUTABLE_FIELDS = [
+  'storageScope', 'cliPath', 'dataDir', 'store', 'timeoutMs', 'defaultRecallLimit',
+  'routingGuidance', 'lifecycleEnabled', 'recallMode', 'writebackMode', 'idleReviewMs',
+  'tabEnabled', 'writeEnabled',
+]
+
+/** Nested paths of the live in-conversation interaction toggles. */
+const INTERACTION_PATHS: string[][] = [
+  ['conversationInteraction', 'toolviews'],
+  ['conversationInteraction', 'turnBar'],
+  ['conversationInteraction', 'saveAction'],
+]
+
+/** Whether one mutation path targets a supported Mnemon settings field. */
+function mutablePath(path: string[]): boolean {
+  if (path.length === 1) return MUTABLE_FIELDS.includes(path[0]!)
+  return INTERACTION_PATHS.some(allowed => allowed.length === path.length && allowed.every((segment, index) => segment === path[index]))
+}
+
 export function createSettingsHandler(settings: HostSettingsService): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
@@ -52,13 +71,11 @@ export function createSettingsHandler(settings: HostSettingsService): HostRpcHan
       if (!Array.isArray(payload.ops) || payload.ops.length === 0 || payload.ops.length > 16) throw new Error('ops must contain 1..16 settings edits')
       const ops = payload.ops.map((raw) => {
         const op = object(raw)
-        const field = Array.isArray(op.path) && op.path.length === 1 ? String(op.path[0]) : ''
-        if (!['storageScope', 'cliPath', 'dataDir', 'store', 'timeoutMs', 'defaultRecallLimit', 'routingGuidance', 'lifecycleEnabled', 'recallMode', 'writebackMode', 'idleReviewMs', 'tabEnabled', 'writeEnabled'].includes(field)) {
-          throw new Error(`unsupported Mnemon settings field: ${field}`)
-        }
-        if (op.op === 'unset') return { op: 'unset' as const, path: [field] }
+        const path = Array.isArray(op.path) && op.path.length > 0 ? op.path.map(segment => String(segment)) : []
+        if (!mutablePath(path)) throw new Error(`unsupported Mnemon settings field: ${path.join('.')}`)
+        if (op.op === 'unset') return { op: 'unset' as const, path }
         if (op.op !== 'set') throw new Error(`unsupported settings operation: ${String(op.op)}`)
-        return { op: 'set' as const, path: [field], value: op.value }
+        return { op: 'set' as const, path, value: op.value }
       })
       const revision = payload.expectedRevision === undefined ? undefined : Number(payload.expectedRevision)
       await settings.mutate(MNEMON_SETTINGS_NAMESPACE, ops, revision)

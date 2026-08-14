@@ -127,11 +127,13 @@ export function apply(rawContext: unknown): void {
       }
     }
   }
-  const unsubscribe = settings.subscribe(reconcile)
-  reconcile()
   ctx.effect(() => {
-    unsubscribe()
-    for (const dispose of [...active.values()].reverse()) dispose()
-    active.clear()
+    const unsubscribe = settings.subscribe(reconcile)
+    reconcile()
+    return () => {
+      unsubscribe()
+      for (const dispose of [...active.values()].reverse()) dispose()
+      active.clear()
+    }
   }, 'dsh-mnemon: interaction surfaces')
 }

@@ -50,6 +50,9 @@ mnemon:
 | `idleReviewMs` | `30000` | 5000–600000 ms | Required continuous idle time after the threshold is reached |
 | `tabEnabled` | `true` | boolean | Currently gates only Host Mnemon data RPC; the client Tab is still registered—see the limitation below |
 | `writeEnabled` | `true` | boolean | Whether to expose semantic write tools, write RPC, and write commands |
+| `conversationInteraction.toolviews` | `true` | boolean | In-conversation memory tool cards for `mnemon_*` calls; **applies live after saving** |
+| `conversationInteraction.turnBar` | `true` | boolean | Turn-tail memory activity bar; **applies live after saving** |
+| `conversationInteraction.saveAction` | `true` | boolean | “Save to memory” action on finalized assistant replies; **applies live after saving** |
 
 ## Storage Scopes
 
