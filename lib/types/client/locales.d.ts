@@ -255,6 +255,8 @@ export declare const zh: {
     'turnTail.recall': string;
     'turnTail.write': string;
     'turnTail.documents': string;
+    'turnTail.inspect': string;
+    'turnTail.failed': string;
     'turnTail.toolList': string;
     'turnTail.openView': string;
     'saveAction.button': string;
@@ -830,6 +832,8 @@ export declare const en: {
     'turnTail.recall': string;
     'turnTail.write': string;
     'turnTail.documents': string;
+    'turnTail.inspect': string;
+    'turnTail.failed': string;
     'turnTail.toolList': string;
     'turnTail.openView': string;
     'saveAction.button': string;

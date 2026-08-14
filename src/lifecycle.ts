@@ -11,6 +11,9 @@ import type { RuntimeMemoryMutation } from './runtime-memory.ts'
 import type { DocumentMutation } from './documents.ts'
 import { MnemonSubagentCoordinator, type DelegatedWriteResult, type SubagentCounters } from './subagent.ts'
 import { scoreReviewActivity, type ReviewActivityScore } from './review-activity.ts'
+import { TurnActivityProjection, type TurnMemoryActivity, type TurnMemoryActivitySnapshot } from './activity.ts'
+
+export type { TurnMemoryActivity, TurnMemoryActivitySnapshot } from './activity.ts'
 
 export const MNEMON_PLUGIN_SOURCE = 'dsh-mnemon'
 
@@ -121,38 +124,6 @@ function completedToolActivity(events: readonly HostSessionEvent[], turn: number
   return { count, names }
 }
 
-const MNEMON_READ_TOOLS = new Set(['mnemon_recall', 'mnemon_related', 'mnemon_document_search', 'mnemon_status', 'mnemon_memory_bodies'])
-const MNEMON_WRITE_TOOLS = new Set(['mnemon_remember', 'mnemon_forget', 'mnemon_link', 'mnemon_document_manage', 'mnemon_runtime_memory', 'mnemon_memory_body_create', 'mnemon_memory_body_update', 'mnemon_memory_body_merge'])
-
-/** Per-turn Mnemon tool activity, derived from the durable session log. */
-export interface TurnMemoryActivity {
-  turn: number
-  count: number
-  names: string[]
-  recalls: number
-  writes: number
-  documentSearches: number
-}
-
-/** Classify one turn's mnemon tool calls for the turnTail memory-activity bar. */
-function turnMemoryActivity(events: readonly HostSessionEvent[], turn: number): TurnMemoryActivity | null {
-  const names: string[] = []
-  let recalls = 0
-  let writes = 0
-  let documentSearches = 0
-  for (const event of events) {
-    if (event.type !== 'tool/call' || eventTurn(event) !== turn || typeof event.data.name !== 'string') continue
-    const name = event.data.name
-    if (!name.startsWith('mnemon_')) continue
-    names.push(name)
-    if (MNEMON_READ_TOOLS.has(name)) recalls += 1
-    else if (MNEMON_WRITE_TOOLS.has(name)) writes += 1
-    if (name === 'mnemon_document_search') documentSearches += 1
-  }
-  if (names.length === 0) return null
-  return { turn, count: names.length, names, recalls, writes, documentSearches }
-}
-
 /** Extracted plain text of one finalized assistant message, when present in the session log. */
 export interface AssistantMessageText {
   messageId: string
@@ -187,6 +158,7 @@ class MnemonAgentLifecycle {
   private primePending = true
   private startSource: LifecycleAgentSnapshot['startSource']
   private readonly guidedTurns = new Set<number>()
+  private readonly memoryActivity = new TurnActivityProjection()
   private readonly turnActivity = new Map<number, {
     messageIds: Set<string>
     userTextLength: number
@@ -219,6 +191,7 @@ class MnemonAgentLifecycle {
       this.agent.ctx.on('agent/session-start', ((payload: SessionStartPayload) => {
         this.cancelIdleReview(true)
         this.turnActivity.clear()
+        this.memoryActivity.reset()
         this.startSource = payload.source
         this.primePending = true
         this.mark('prime')
@@ -258,9 +231,9 @@ class MnemonAgentLifecycle {
     this.mark('supervised')
   }
 
-  /** Memory-tool activity of one turn, from this agent's durable session log. */
-  turnMemoryActivity(turn: number): TurnMemoryActivity | null {
-    return turnMemoryActivity(this.agent.session.events, turn)
+  /** Incremental snapshot of settled Mnemon activity in this durable log. */
+  turnMemoryActivities(): TurnMemoryActivitySnapshot {
+    return this.memoryActivity.snapshot(this.agent.session.events)
   }
 
   /** Plain text of one finalized assistant message, from this agent's session log. */
@@ -440,11 +413,11 @@ export class MnemonLifecycle {
     return this.ctx.agents.get(sessionId.trim())?.session.header?.cwd
   }
 
-  /** Memory-tool activity of one turn, resolved per session; null while the agent is absent. */
-  turnActivity(sessionId: string, turn: number): TurnMemoryActivity | null {
+  /** Settled memory-tool activity for all turns, resolved per session. */
+  turnActivities(sessionId: string): TurnMemoryActivitySnapshot {
     const agent = this.ctx.agents.get(sessionId.trim())
     const owner = agent === undefined ? undefined : this.owners.get(agent)?.lifecycle
-    return owner === undefined ? null : owner.turnMemoryActivity(turn)
+    return owner === undefined ? { cursor: 0, activities: [] } : owner.turnMemoryActivities()
   }
 
   /** Plain text of one finalized assistant message, resolved per session; null while absent. */

@@ -53,6 +53,10 @@
   white-space: nowrap;
 }
 
+.failureMetric {
+  color: var(--dsw-alias-state-error-primary, #d44);
+}
+
 .chevron {
   flex: none;
   width: 8px;

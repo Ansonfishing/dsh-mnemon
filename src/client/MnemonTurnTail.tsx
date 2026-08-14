@@ -29,7 +29,7 @@ export function selectMnemonTurnTail(owner: unknown): boolean {
 }
 
 /** One-line memory-activity bar under a completed turn; hides when the turn touched no memory. */
-export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, sessionId, connection, t }: MnemonTurnTailProps): JSX.Element | null {
+export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, seq, sessionId, connection, t }: MnemonTurnTailProps): JSX.Element | null {
   const [activity, setActivity] = useState<TurnMemoryActivity | null | undefined>(undefined)
   const [open, setOpen] = useState(false)
   const number = turnNumber(turn)
@@ -41,11 +41,11 @@ export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, sessionId, co
     }
     let alive = true
     const client = new MnemonClient(connection, sessionId)
-    client.turnActivity(number)
+    client.turnActivity(number, seq)
       .then(result => { if (alive) setActivity(result) })
       .catch(() => { if (alive) setActivity(null) })
     return () => { alive = false }
-  }, [connection, sessionId, number])
+  }, [connection, sessionId, number, seq])
 
   if (activity === undefined || activity === null) return null
   if (number === undefined) return null
@@ -64,6 +64,8 @@ export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, sessionId, co
           {activity.recalls > 0 && <span>{t('turnTail.recall', { count: activity.recalls })}</span>}
           {activity.writes > 0 && <span>{t('turnTail.write', { count: activity.writes })}</span>}
           {activity.documentSearches > 0 && <span>{t('turnTail.documents', { count: activity.documentSearches })}</span>}
+          {activity.inspections > 0 && <span>{t('turnTail.inspect', { count: activity.inspections })}</span>}
+          {activity.failures > 0 && <span className={css.failureMetric}>{t('turnTail.failed', { count: activity.failures })}</span>}
         </span>
         <span className={`${css.chevron} ${open ? css.chevronOpen : ''}`} aria-hidden="true" />
       </button>
@@ -71,7 +73,7 @@ export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, sessionId, co
         <div className={css.details}>
           <span className={css.detailLabel}>{t('turnTail.toolList')}</span>
           <div className={css.tools}>
-            {activity.names.map(name => <code key={name} className={css.toolChip}>{name}</code>)}
+            {activity.names.map((name, index) => <code key={`${name}-${index}`} className={css.toolChip}>{name}</code>)}
           </div>
           <button type="button" className={css.viewButton} onClick={openView}>{t('turnTail.openView')}</button>
         </div>

@@ -5,6 +5,8 @@ import type { RuntimeMemoryMutation } from './runtime-memory.ts';
 import type { DocumentMutation } from './documents.ts';
 import { MnemonSubagentCoordinator, type DelegatedWriteResult, type SubagentCounters } from './subagent.ts';
 import { type ReviewActivityScore } from './review-activity.ts';
+import { type TurnMemoryActivitySnapshot } from './activity.ts';
+export type { TurnMemoryActivity, TurnMemoryActivitySnapshot } from './activity.ts';
 export declare const MNEMON_PLUGIN_SOURCE = "dsh-mnemon";
 export type LifecyclePhase = 'idle' | 'prime' | 'recall' | 'writeback' | 'review' | 'supervised' | 'error';
 export interface LifecycleCounters {
@@ -46,15 +48,6 @@ export interface LifecycleSnapshot {
 export interface SupervisedWritebackResult extends DelegatedWriteResult {
     sessionId: string;
 }
-/** Per-turn Mnemon tool activity, derived from the durable session log. */
-export interface TurnMemoryActivity {
-    turn: number;
-    count: number;
-    names: string[];
-    recalls: number;
-    writes: number;
-    documentSearches: number;
-}
 /** Extracted plain text of one finalized assistant message, when present in the session log. */
 export interface AssistantMessageText {
     messageId: string;
@@ -71,8 +64,8 @@ export declare class MnemonLifecycle {
     start(): () => void;
     snapshot(sessionId?: string): LifecycleSnapshot;
     workspaceRoot(sessionId?: string): string | undefined;
-    /** Memory-tool activity of one turn, resolved per session; null while the agent is absent. */
-    turnActivity(sessionId: string, turn: number): TurnMemoryActivity | null;
+    /** Settled memory-tool activity for all turns, resolved per session. */
+    turnActivities(sessionId: string): TurnMemoryActivitySnapshot;
     /** Plain text of one finalized assistant message, resolved per session; null while absent. */
     assistantMessage(sessionId: string, messageId: string): AssistantMessageText | null;
     recall(sessionId: string, request: SearchRequest, signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedRecallResult>;

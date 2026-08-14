@@ -52,6 +52,20 @@ describe('Mnemon RPC', () => {
     })
   })
 
+  it('returns one cached turn-activity projection while preserving the legacy endpoint', async () => {
+    const service = fakeService()
+    const lifecycle = {
+      turnActivities: vi.fn(() => ({
+        cursor: 12,
+        activities: [{ turn: 2, count: 1, names: ['mnemon_recall'], recalls: 1, writes: 0, documentSearches: 0, inspections: 0, failures: 0 }],
+      })),
+    } as unknown as MnemonLifecycle
+
+    await expect(createReadHandler(service, lifecycle)('turn-activities', { sessionId: 'session-1' })).resolves.toMatchObject({ ok: true, value: { cursor: 12 } })
+    await expect(createReadHandler(service, lifecycle)('turn-activity', { sessionId: 'session-1', turn: 2 })).resolves.toMatchObject({ ok: true, value: { recalls: 1 } })
+    expect(lifecycle.turnActivities).toHaveBeenCalledTimes(2)
+  })
+
   it('rejects malformed enum values at the service boundary', async () => {
     const config = resolveConfig({ cliPath: '/fake/mnemon' })
     const service = Object.create(MnemonService.prototype) as MnemonService

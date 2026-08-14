@@ -4,7 +4,46 @@ import type { MemoryBody } from '../memory-bodies.ts'
 import type { DocumentMutation, DocumentMutationResult, DocumentSearchResult, DocumentSnapshot, DocumentView } from '../documents.ts'
 import type { RuntimeMemoryImportance, RuntimeMemoryMutationResult, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts'
 import type { EntityView, Insight, MemoryBodyCatalog, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts'
-import type { AssistantMessageText, TurnMemoryActivity } from '../lifecycle.ts'
+import type { AssistantMessageText, TurnMemoryActivity, TurnMemoryActivitySnapshot } from '../lifecycle.ts'
+
+interface TurnActivityCacheEntry {
+  cursor: number
+  activities: Map<number, TurnMemoryActivity>
+  inFlight?: Promise<TurnMemoryActivitySnapshot>
+}
+
+const turnActivityCache = new WeakMap<ClientConnectionHandle, Map<string, TurnActivityCacheEntry>>()
+
+async function loadTurnActivities(connection: ClientConnectionHandle, sessionId: string | undefined, requiredCursor: number): Promise<TurnMemoryActivitySnapshot> {
+  let sessions = turnActivityCache.get(connection)
+  if (sessions === undefined) {
+    sessions = new Map()
+    turnActivityCache.set(connection, sessions)
+  }
+  const key = sessionId ?? ''
+  let entry = sessions.get(key)
+  if (entry === undefined) {
+    entry = { cursor: -1, activities: new Map() }
+    sessions.set(key, entry)
+  }
+  if (entry.cursor >= requiredCursor) return { cursor: entry.cursor, activities: [...entry.activities.values()] }
+  if (entry.inFlight !== undefined) {
+    const snapshot = await entry.inFlight
+    return snapshot.cursor >= requiredCursor ? snapshot : loadTurnActivities(connection, sessionId, requiredCursor)
+  }
+
+  const request = connection.rpc.call(MNEMON_READ_CHANNEL, 'turn-activities', sessionId === undefined ? {} : { sessionId })
+    .then(response => {
+      if (!response.ok) throw new Error(response.error.message)
+      const snapshot = response.value as TurnMemoryActivitySnapshot
+      entry!.cursor = snapshot.cursor
+      entry!.activities = new Map(snapshot.activities.map(activity => [activity.turn, activity]))
+      return snapshot
+    })
+    .finally(() => { delete entry!.inFlight })
+  entry.inFlight = request
+  return request
+}
 
 export interface SearchResponse {
   query: string
@@ -98,9 +137,10 @@ export class MnemonClient {
     return this.call(MNEMON_READ_CHANNEL, 'related', { id, depth: 2, sessionId: this.sessionId, ...(memoryBodyId === undefined ? {} : { memoryBodyId }) })
   }
 
-  /** Memory-tool activity of one turn; null when the turn had none or the agent is gone. */
-  turnActivity(turn: number): Promise<TurnMemoryActivity | null> {
-    return this.call(MNEMON_READ_CHANNEL, 'turn-activity', { sessionId: this.sessionId, turn })
+  /** Settled memory-tool activity of one turn, shared across all mounted tails. */
+  async turnActivity(turn: number, cursor = 0): Promise<TurnMemoryActivity | null> {
+    const snapshot = await loadTurnActivities(this.connection, this.sessionId, cursor)
+    return snapshot.activities.find(activity => activity.turn === turn) ?? null
   }
 
   /** Plain text of one finalized assistant message; null when absent or empty. */

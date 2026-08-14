@@ -44,8 +44,8 @@ export declare class MnemonClient {
     search(request: SearchRequest): Promise<SearchResponse>;
     agentSearch(request: SearchRequest): Promise<AgentSearchResponse>;
     related(id: string, memoryBodyId?: string): Promise<Insight[]>;
-    /** Memory-tool activity of one turn; null when the turn had none or the agent is gone. */
-    turnActivity(turn: number): Promise<TurnMemoryActivity | null>;
+    /** Settled memory-tool activity of one turn, shared across all mounted tails. */
+    turnActivity(turn: number, cursor?: number): Promise<TurnMemoryActivity | null>;
     /** Plain text of one finalized assistant message; null when absent or empty. */
     assistantMessageText(messageId: string): Promise<AssistantMessageText | null>;
     remember(request: RememberRequest): Promise<Record<string, unknown>>;

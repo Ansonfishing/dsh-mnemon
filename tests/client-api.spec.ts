@@ -1,0 +1,36 @@
+import { describe, expect, it, vi } from 'vitest'
+import type { ClientConnectionHandle } from '../src/contracts.ts'
+import { MnemonClient } from '../src/client/api.ts'
+
+describe('MnemonClient turn activity batching', () => {
+  it('shares one bulk projection across all turn tails until the durable cursor advances', async () => {
+    let cursor = 7
+    const call = vi.fn(async (_channel: string, endpoint: string) => {
+      expect(endpoint).toBe('turn-activities')
+      return {
+        ok: true as const,
+        value: {
+          cursor,
+          activities: [
+            { turn: 1, count: 1, names: ['mnemon_recall'], recalls: 1, writes: 0, documentSearches: 0, inspections: 0, failures: 0 },
+            { turn: 2, count: 1, names: ['mnemon_status'], recalls: 0, writes: 0, documentSearches: 0, inspections: 1, failures: 0 },
+          ],
+        },
+      }
+    })
+    const connection = { rpc: { call } } as ClientConnectionHandle
+    const client = new MnemonClient(connection, 'session-1')
+
+    const [first, second] = await Promise.all([client.turnActivity(1, 5), client.turnActivity(2, 7)])
+    expect(first?.recalls).toBe(1)
+    expect(second?.inspections).toBe(1)
+    expect(call).toHaveBeenCalledTimes(1)
+
+    await client.turnActivity(1, 7)
+    expect(call).toHaveBeenCalledTimes(1)
+
+    cursor = 10
+    await client.turnActivity(2, 10)
+    expect(call).toHaveBeenCalledTimes(2)
+  })
+})
