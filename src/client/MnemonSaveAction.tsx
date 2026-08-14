@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type JSX } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react'
 import type { ClientConnectionHandle } from '../contracts.ts'
 import { MnemonClient } from './api.ts'
 import type { MnemonKey } from './locales.ts'
@@ -32,6 +32,8 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
   const [failure, setFailure] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const wrapRef = useRef<HTMLDivElement | null>(null)
+  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
   const openRef = useRef(false)
   const requestVersionRef = useRef(0)
   const submitActiveRef = useRef(false)
@@ -89,6 +91,37 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
     }
   }, [open])
 
+  useLayoutEffect(() => {
+    if (!open) return
+    const panel = panelRef.current
+    const button = buttonRef.current
+    if (panel === null || button === null || typeof panel.showPopover !== 'function') return
+
+    const reposition = (): void => {
+      const anchor = button.getBoundingClientRect()
+      const padding = 16
+      const width = Math.min(340, Math.max(240, window.innerWidth - padding * 2))
+      panel.style.setProperty('--mn-save-panel-width', `${width}px`)
+      const left = Math.min(Math.max(padding, anchor.right - width), Math.max(padding, window.innerWidth - width - padding))
+      panel.style.setProperty('--mn-save-panel-left', `${left}px`)
+      const below = anchor.bottom + 4
+      const above = anchor.top - panel.getBoundingClientRect().height - 4
+      const top = below + panel.getBoundingClientRect().height <= window.innerHeight - padding || above < padding ? below : above
+      panel.style.setProperty('--mn-save-panel-top', `${Math.max(padding, top)}px`)
+    }
+
+    panel.setAttribute('popover', 'manual')
+    panel.showPopover()
+    reposition()
+    window.addEventListener('resize', reposition)
+    document.addEventListener('scroll', reposition, true)
+    return () => {
+      window.removeEventListener('resize', reposition)
+      document.removeEventListener('scroll', reposition, true)
+      if (panel.matches(':popover-open')) panel.hidePopover()
+    }
+  }, [open])
+
   const submit = (): void => {
     const content = textareaRef.current?.value.trim() ?? ''
     if (content === '' || writeEnabled !== true || submitActiveRef.current) return
@@ -98,7 +131,7 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
     setFailure(null)
     setOutcome(null)
     const client = new MnemonClient(connection, sessionId)
-    client.supervise(content)
+    client.supervise(content, messageId)
       .then(result => {
         if (!openRef.current || requestVersionRef.current !== requestVersion) return
         setOutcome({ summary: result.summary, action: result.action })
@@ -116,6 +149,7 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
   return (
     <div ref={wrapRef} className={css.wrap}>
       <button
+        ref={buttonRef}
         type="button"
         className={css.button}
         aria-expanded={open}
@@ -126,7 +160,7 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
         <span className={css.label}>{t('saveAction.button')}</span>
       </button>
       {open && (
-        <div className={css.panel} role="dialog" aria-label={t('saveAction.title')}>
+        <div ref={panelRef} className={css.panel} role="dialog" aria-label={t('saveAction.title')}>
           <header className={css.panelHeader}>
             <strong>{t('saveAction.title')}</strong>
             <button type="button" className={css.close} aria-label={t('saveAction.close')} onClick={() => setPanelOpen(false)}>×</button>

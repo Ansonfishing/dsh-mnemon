@@ -90,8 +90,8 @@ describe('Mnemon RPC', () => {
     const lifecycle = {
       supervise: vi.fn(async () => ({ delegated: true, sessionId: 'session-1', runId: 'child-1', provider: 'spawn', summary: 'stored', action: 'stored', memoryBodyIds: ['project'] })),
     } as unknown as MnemonLifecycle
-    await expect(createWriteHandler(service, lifecycle)('supervise', { sessionId: 'session-1', content: 'A candidate' })).resolves.toMatchObject({ ok: true, value: { delegated: true, runId: 'child-1' } })
-    expect(lifecycle.supervise).toHaveBeenCalledWith('session-1', 'A candidate')
+    await expect(createWriteHandler(service, lifecycle)('supervise', { sessionId: 'session-1', content: 'A candidate', idempotencyKey: 'message-1' })).resolves.toMatchObject({ ok: true, value: { delegated: true, runId: 'child-1' } })
+    expect(lifecycle.supervise).toHaveBeenCalledWith('session-1', 'A candidate', 'message-1')
     expect(service.remember).not.toHaveBeenCalled()
   })
 

@@ -152,8 +152,8 @@ export class MnemonClient {
     return this.call(MNEMON_WRITE_CHANNEL, 'remember', { ...request, sessionId: this.sessionId })
   }
 
-  supervise(content: string): Promise<{ delegated: true; sessionId: string; runId: string; provider: string; summary: string; action: string; memoryBodyIds: string[] }> {
-    return this.call(MNEMON_WRITE_CHANNEL, 'supervise', { sessionId: this.sessionId, content })
+  supervise(content: string, idempotencyKey?: string): Promise<{ delegated: true; sessionId: string; runId: string; provider: string; summary: string; action: string; memoryBodyIds: string[] }> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'supervise', { sessionId: this.sessionId, content, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) })
   }
 
   forget(id: string, memoryBodyId?: string): Promise<Record<string, unknown>> {

@@ -1515,20 +1515,15 @@ function MnemonWorkspace({ connection, sessionId }: MnemonViewProps): JSX.Elemen
   const [page, setPage] = useState<Page>('status')
   const canvasRef = useRef<HTMLElement | null>(null)
 
-  /** Pages share one scroll container; drop any carried-over offset so each tab opens at its top. */
+  /** Pages share one plugin-owned scroll container; never mutate DSH ancestor scrollports. */
   const resetViewportScroll = useCallback(() => {
     const canvas = canvasRef.current
     if (canvas !== null) canvas.scrollTop = 0
-    let node: HTMLElement | null = canvas?.parentElement ?? null
-    while (node !== null && node !== document.body && node !== document.documentElement) {
-      if (node.scrollTop > 0) node.scrollTop = 0
-      node = node.parentElement
-    }
   }, [])
 
   useEffect(() => { resetViewportScroll() }, [page, resetViewportScroll])
   useEffect(() => {
-    // DSH's resident scrollport may restore a stale offset when this view remounts; clear it after layout.
+    // Clear only this view's offset after layout; the host owns every ancestor.
     const frame = window.requestAnimationFrame(() => resetViewportScroll())
     return () => window.cancelAnimationFrame(frame)
   }, [resetViewportScroll])

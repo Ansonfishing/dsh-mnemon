@@ -158,7 +158,11 @@ export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLif
           }
         case 'supervise':
           if (lifecycle === undefined) throw new Error('Mnemon lifecycle integration is unavailable')
-          return success(await lifecycle.supervise(String(payload.sessionId ?? ''), String(payload.content ?? '')))
+          return success(await lifecycle.supervise(
+            String(payload.sessionId ?? ''),
+            String(payload.content ?? ''),
+            payload.idempotencyKey === undefined ? undefined : String(payload.idempotencyKey),
+          ))
         case 'document':
           if (lifecycle === undefined) throw new Error('Mnemon Documents require lifecycle integration')
           {

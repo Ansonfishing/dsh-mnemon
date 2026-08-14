@@ -282,6 +282,24 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.lifecycle.snapshot('session-1').counters.supervisedRequests).toBe(1)
   })
 
+  it('deduplicates replayed assistant-message supervision by session and message id', async () => {
+    const value = fixture()
+
+    const [first, replay] = await Promise.all([
+      value.lifecycle.supervise('session-1', 'Keep the release checklist durable.', 'message-1'),
+      value.lifecycle.supervise('session-1', 'Keep the release checklist durable.', 'message-1'),
+    ])
+
+    expect(replay).toEqual(first)
+    expect(value.coordinator.write).toHaveBeenCalledTimes(1)
+    expect(value.coordinator.write).toHaveBeenCalledWith(value.agent, 'supervised-writeback', {
+      content: 'Keep the release checklist durable.',
+      source: 'explicit assistant memory action',
+    }, expect.any(AbortSignal))
+    expect(value.lifecycle.snapshot('session-1').counters.supervisedRequests).toBe(1)
+    await expect(value.lifecycle.supervise('session-1', 'Different content.', 'message-1')).rejects.toThrow('different content')
+  })
+
   it('keeps disabled lifecycle hooks out of model input while retaining manual supervision', async () => {
     const value = fixture(resolveConfig({ lifecycleEnabled: false, recallMode: 'off', writebackMode: 'off' }))
     const prompt = userMessage()

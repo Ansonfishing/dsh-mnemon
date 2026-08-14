@@ -375,6 +375,8 @@ class MnemonAgentLifecycle {
 export class MnemonLifecycle {
   private readonly owners = new Map<HostAgent, { lifecycle: MnemonAgentLifecycle; dispose: () => unknown }>()
   private readonly counters: LifecycleCounters = { primes: 0, recallCues: 0, writebackCues: 0, supervisedRequests: 0, failures: 0 }
+  /** Bounded process-local replay fence for finalized-message write actions. */
+  private readonly supervisedWritebacks = new Map<string, { content: string; result: Promise<SupervisedWritebackResult> }>()
 
   constructor(
     private readonly ctx: HostContextShape,
@@ -471,22 +473,45 @@ export class MnemonLifecycle {
     return this.coordinator.write(this.liveAgent(sessionId), operation, request, signal)
   }
 
-  async supervise(sessionId: string, content: string, signal = new AbortController().signal): Promise<SupervisedWritebackResult> {
+  async supervise(sessionId: string, content: string, idempotencyKey?: string, signal = new AbortController().signal): Promise<SupervisedWritebackResult> {
     if (!this.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
     const normalizedSessionId = sessionId.trim()
     const normalizedContent = content.trim()
     if (normalizedSessionId === '') throw new Error('current DSH session is unavailable')
     if (normalizedContent === '') throw new Error('memory candidate is required')
     if (normalizedContent.length > 8000) throw new Error('memory candidate is too long (max 8000 characters)')
-    const agent = this.liveAgent(normalizedSessionId)
-    const owner = this.owners.get(agent)?.lifecycle
-    if (owner === undefined) this.counters.supervisedRequests += 1
-    else owner.markSupervised()
-    const result = await this.coordinator.write(agent, 'supervised-writeback', {
-      content: normalizedContent,
-      source: 'explicit Mnemon tab submission',
-    }, signal)
-    return { ...result, sessionId: normalizedSessionId }
+    const normalizedKey = idempotencyKey?.trim()
+    if (normalizedKey !== undefined && normalizedKey.length > 200) throw new Error('idempotency key is too long (max 200 characters)')
+
+    const execute = async (): Promise<SupervisedWritebackResult> => {
+      const agent = this.liveAgent(normalizedSessionId)
+      const owner = this.owners.get(agent)?.lifecycle
+      if (owner === undefined) this.counters.supervisedRequests += 1
+      else owner.markSupervised()
+      const result = await this.coordinator.write(agent, 'supervised-writeback', {
+        content: normalizedContent,
+        source: normalizedKey === undefined || normalizedKey === '' ? 'explicit Mnemon tab submission' : 'explicit assistant memory action',
+      }, signal)
+      return { ...result, sessionId: normalizedSessionId }
+    }
+
+    if (normalizedKey === undefined || normalizedKey === '') return execute()
+    const replayKey = `${normalizedSessionId}\u0000${normalizedKey}`
+    const existing = this.supervisedWritebacks.get(replayKey)
+    if (existing !== undefined) {
+      if (existing.content !== normalizedContent) throw new Error('idempotency key was already used for different content')
+      return existing.result
+    }
+    if (this.supervisedWritebacks.size >= 256) {
+      const oldest = this.supervisedWritebacks.keys().next().value as string | undefined
+      if (oldest !== undefined) this.supervisedWritebacks.delete(oldest)
+    }
+    const result = execute()
+    this.supervisedWritebacks.set(replayKey, { content: normalizedContent, result })
+    void result.catch(() => {
+      if (this.supervisedWritebacks.get(replayKey)?.result === result) this.supervisedWritebacks.delete(replayKey)
+    })
+    return result
   }
 
   private liveAgent(sessionId: string): HostAgent {

@@ -87,6 +87,11 @@ describe('conversation interaction surfaces', () => {
     await waitFor(() => expect(submit.disabled).toBe(false))
     fireEvent.click(submit)
     expect(rpcCall.mock.calls.filter(call => call[1] === 'supervise')).toHaveLength(1)
+    expect(rpcCall).toHaveBeenCalledWith(expect.anything(), 'supervise', {
+      sessionId: 'session-a',
+      content: 'A durable project decision.',
+      idempotencyKey: 'message-1',
+    })
 
     fireEvent.click(screen.getByRole('button', { name: 'saveAction.close' }))
     fireEvent.click(screen.getByRole('button', { name: 'saveAction.button' }))

@@ -337,16 +337,20 @@ describe('MnemonView', () => {
 
   it('resets the shared canvas scroll position when switching pages', async () => {
     const { connection } = createConnection()
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<div data-testid="dsh-host-scrollport"><MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" /></div>)
 
     await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
     const canvas = screen.getByTestId('mnemon-canvas')
+    const hostScrollport = screen.getByTestId('dsh-host-scrollport')
+    hostScrollport.scrollTop = 240
     canvas.scrollTop = 900
     fireEvent.click(screen.getByRole('button', { name: /运行时 热记忆与上下文/ }))
     expect(canvas.scrollTop).toBe(0)
+    expect(hostScrollport.scrollTop).toBe(240)
     canvas.scrollTop = 900
     fireEvent.click(screen.getByRole('button', { name: /记忆体 记忆体目录与实时图谱/ }))
     expect(canvas.scrollTop).toBe(0)
+    expect(hostScrollport.scrollTop).toBe(240)
   })
 
   it('progressively renders long content lists instead of mounting every card', async () => {
