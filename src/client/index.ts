@@ -3,6 +3,7 @@ import { MnemonSettingsCard } from './MnemonSettingsCard.tsx'
 import { MnemonView } from './MnemonView.tsx'
 import { MnemonToolView, MNEMON_TOOLVIEW_NAMES } from './MnemonToolviews.tsx'
 import { MnemonTurnTail, selectMnemonTurnTail } from './MnemonTurnTail.tsx'
+import { MnemonSaveAction } from './MnemonSaveAction.tsx'
 import { en, zh, type MnemonKey } from './locales.ts'
 import { MnemonSettingsScope } from './settings.ts'
 
@@ -62,4 +63,17 @@ export function apply(rawContext: unknown): void {
       t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
     }),
   }, MnemonTurnTail as never))
+  // Save-to-memory action on finalized assistant messages, routed through the
+  // supervised writeback gate (memory subagent review).
+  ctx.slots.inject('conversation.chat.assistant-actions', () => ctx.slots.register({
+    name: 'conversation.chat.assistant-actions',
+    id: 'mnemon-save',
+    order: 90,
+    locale: namespace,
+    inject: (sessionId: unknown): { sessionId?: string; connection: ClientConnectionHandle; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+      ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
+      connection: ctx.connection,
+      t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
+    }),
+  }, MnemonSaveAction as never))
 }
