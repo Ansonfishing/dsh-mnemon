@@ -10,6 +10,10 @@ export declare class MnemonSettingsScope implements ClientSettingsScope<Config> 
     subscribe: (listener: () => void) => (() => void);
     set(field: string, value: unknown): Promise<void>;
     unset(field: string): Promise<void>;
+    /** Set a nested field (e.g. ['conversationInteraction', 'toolviews']). */
+    setPath(path: string[], value: unknown): Promise<void>;
+    /** Unset a nested field, falling back to its schema default. */
+    unsetPath(path: string[]): Promise<void>;
     private load;
     private write;
     private publish;

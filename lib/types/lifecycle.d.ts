@@ -46,6 +46,20 @@ export interface LifecycleSnapshot {
 export interface SupervisedWritebackResult extends DelegatedWriteResult {
     sessionId: string;
 }
+/** Per-turn Mnemon tool activity, derived from the durable session log. */
+export interface TurnMemoryActivity {
+    turn: number;
+    count: number;
+    names: string[];
+    recalls: number;
+    writes: number;
+    documentSearches: number;
+}
+/** Extracted plain text of one finalized assistant message, when present in the session log. */
+export interface AssistantMessageText {
+    messageId: string;
+    text: string;
+}
 /** DSH-native owner for per-agent Mnemon lifecycle hooks and UI-triggered LLM work. */
 export declare class MnemonLifecycle {
     private readonly ctx;
@@ -57,6 +71,10 @@ export declare class MnemonLifecycle {
     start(): () => void;
     snapshot(sessionId?: string): LifecycleSnapshot;
     workspaceRoot(sessionId?: string): string | undefined;
+    /** Memory-tool activity of one turn, resolved per session; null while the agent is absent. */
+    turnActivity(sessionId: string, turn: number): TurnMemoryActivity | null;
+    /** Plain text of one finalized assistant message, resolved per session; null while absent. */
+    assistantMessage(sessionId: string, messageId: string): AssistantMessageText | null;
     recall(sessionId: string, request: SearchRequest, signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedRecallResult>;
     related(sessionId: string, id: string, memoryBodyId?: string, signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedRecallResult>;
     answer(sessionId: string, query: string, evidence: Insight[], signal?: AbortSignal): Promise<import("./subagent.ts").DelegatedAnswerResult>;

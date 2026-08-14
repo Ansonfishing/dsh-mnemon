@@ -234,11 +234,20 @@ export interface SlotsService {
     inject(name: string, factory: () => unknown): unknown;
     register(options: {
         name: string;
-        id: string;
+        /** list slots: stable contributor id. */
+        id?: string;
+        /** keyed slots: dispatch key (chat node kind, tool name). */
+        key?: string;
+        /** chain slots: owner-predicate deciding whether this entry renders. */
+        select?: (owner: unknown) => unknown;
         order?: number;
+        /** keyed/list/single shadowing: lowest priority renders; chain ignores it. */
+        priority?: number;
         label?: string | (() => string);
         locale?: string;
-        inject?: () => Record<string, unknown>;
+        children?: Record<string, unknown>;
+        /** session-scope slots receive (sessionId, actions); root-scope none. */
+        inject?: (...args: unknown[]) => Record<string, unknown>;
     }, component: (props: never) => unknown): unknown;
 }
 export interface ClientLocaleService {
@@ -262,6 +271,8 @@ export interface ClientSettingsScope<T> {
     subscribe(listener: () => void): () => void;
     set(field: string, value: unknown): Promise<void>;
     unset(field: string): Promise<void>;
+    setPath(path: string[], value: unknown): Promise<void>;
+    unsetPath(path: string[]): Promise<void>;
 }
 export interface ClientContextShape {
     slots: SlotsService;

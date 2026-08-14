@@ -28,6 +28,15 @@ export interface Config {
     writebackMode?: 'guided' | 'off';
     /** Continuous root-agent idle time after the QoderWork activity gate is met. */
     idleReviewMs?: number;
+    /** In-conversation interaction surfaces; each toggle binds live on the client. */
+    conversationInteraction?: {
+        /** Memory-flavoured toolview cards for mnemon_* tool calls. */
+        toolviews?: boolean;
+        /** Per-turn memory activity bar under completed turns. */
+        turnBar?: boolean;
+        /** Save-to-memory action on finalized assistant messages. */
+        saveAction?: boolean;
+    };
 }
 export declare const Config: z<Config>;
 export interface ResolvedConfig {
@@ -44,6 +53,11 @@ export interface ResolvedConfig {
     recallMode: 'guided' | 'off';
     writebackMode: 'guided' | 'off';
     idleReviewMs: number;
+    conversationInteraction: {
+        toolviews: boolean;
+        turnBar: boolean;
+        saveAction: boolean;
+    };
 }
 export declare function resolveConfig(config?: Config): ResolvedConfig;
 //# sourceMappingURL=config.d.ts.map
