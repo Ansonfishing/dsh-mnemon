@@ -357,7 +357,7 @@
   letter-spacing: 0;
 }
 .shell .pageHeader p { font-size: 13px; line-height: 1.55; }
-.shell .canvas [class*='pageHeader'] {
+.shell .canvas[data-lock-page-header] [class*='pageHeader'] {
   position: sticky;
   z-index: 12;
   top: -14px;

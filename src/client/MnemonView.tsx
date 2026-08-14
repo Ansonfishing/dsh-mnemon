@@ -1658,7 +1658,7 @@ function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelectio
       <div className={css.workspace}>
         <WorkspaceNavigation page={page} onSelect={selectPrimaryPage} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} writeEnabled={writeEnabled} />
         <MemoryNavigation page={page} writeEnabled={writeEnabled} onSelect={selectPage} onRemember={() => openRemember()} />
-        <section className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas">
+        <section className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={!isMemoryPage(page) ? '' : undefined}>
           {page === 'overview' && <OverviewPage client={client} revision={revision} writeEnabled={writeEnabled} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onExplore={explore} />}
           {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}
           {page === 'documents' && <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} />}

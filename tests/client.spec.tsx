@@ -337,9 +337,11 @@ describe('MnemonView', () => {
     expect(screen.queryByRole('navigation', { name: 'Mnemon 页面' })).toBeNull()
 
     const canvas = screen.getByTestId('mnemon-canvas')
+    expect(canvas.hasAttribute('data-lock-page-header')).toBe(true)
     canvas.scrollTop = 240
     fireEvent.click(bodiesTab)
     expect(canvas.scrollTop).toBe(0)
+    expect(canvas.hasAttribute('data-lock-page-header')).toBe(false)
     expect(statusTab.getAttribute('aria-selected')).toBe('false')
     expect(statusTab.hasAttribute('data-active')).toBe(false)
     expect(bodiesTab.getAttribute('aria-selected')).toBe('true')
@@ -406,6 +408,7 @@ describe('MnemonView', () => {
     expect(screen.getByRole('heading', { name: '检索记忆', level: 2 })).toBeTruthy()
 
     fireEvent.click(runtimeTab)
+    expect(canvas.hasAttribute('data-lock-page-header')).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: '添加记忆' }))
     const runtimeDialog = screen.getByRole('dialog', { name: '添加热记忆' })
     expect(within(runtimeDialog).getByRole('textbox', { name: '运行时记忆内容' })).toBeTruthy()
@@ -430,6 +433,7 @@ describe('MnemonView', () => {
     expect(screen.queryByRole('dialog', { name: '移除运行时记忆？' })).toBeNull()
 
     fireEvent.click(bodiesTab)
+    expect(canvas.hasAttribute('data-lock-page-header')).toBe(false)
     const contentTab = within(screen.getByRole('tablist', { name: '记忆体页面' })).getByRole('tab', { name: '内容' })
     fireEvent.click(contentTab)
     fireEvent.click(await screen.findByRole('button', { name: '忘记' }))
@@ -441,6 +445,7 @@ describe('MnemonView', () => {
     expect(screen.queryByRole('dialog', { name: '软删除这条记忆？' })).toBeNull()
 
     fireEvent.click(documentsTab)
+    expect(canvas.hasAttribute('data-lock-page-header')).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: '新建档案' }))
     const documentDialog = screen.getByRole('dialog', { name: '创建托管档案' })
     expect(within(documentDialog).getByRole('textbox', { name: '标题' })).toBeTruthy()
