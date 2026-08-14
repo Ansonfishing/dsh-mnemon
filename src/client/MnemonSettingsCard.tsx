@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type JSX } from 'react'
 import type { Config, CustomPackConfig, InteractionConfig } from '../config.ts'
-import type { ClientSettingsScope, ClientSettingsSnapshot, SettingsOperation } from '../contracts.ts'
+import type { ClientConnectionHandle, ClientSettingsScope, ClientSettingsSnapshot, SettingsOperation } from '../contracts.ts'
 import css from './MnemonSettingsCard.module.css'
 import { translateZh, type MnemonTranslate } from './locales.ts'
+import { MnemonPackSection } from './MnemonPackSection.tsx'
 
 export interface MnemonSettingsCardProps {
   scope: ClientSettingsScope<Config>
   /** Separate live namespace; falls back to the core scope for older hosts. */
   interactionScope?: ClientSettingsScope<InteractionConfig>
+  /** Loopback RPC used for Pack import/export; older hosts may omit it. */
+  connection?: ClientConnectionHandle
   t?: MnemonTranslate
 }
 
@@ -100,7 +103,7 @@ async function commit<T>(scope: ClientSettingsScope<T>, edits: SettingsOperation
 }
 
 /** Dedicated Mnemon page contributed directly to DSH's settings navigation. */
-export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, t = translateZh }: MnemonSettingsCardProps): JSX.Element | null {
+export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, connection, t = translateZh }: MnemonSettingsCardProps): JSX.Element | null {
   const interactionScope = suppliedInteractionScope ?? scope as unknown as ClientSettingsScope<InteractionConfig>
   const coreSnapshot = useScope(scope)
   const interactionSnapshot = useScope(interactionScope)
@@ -300,6 +303,14 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
             <ToggleCard id="mnemon-interaction-save-action" label={t('config.interactionSaveAction')} hint={t('config.interactionSaveActionHint')} checked={draft.saveAction} disabled={interactionDisabled} onChange={value => edit('saveAction', value)} />
           </div>
         </section>
+
+        <MnemonPackSection
+          {...(connection === undefined ? {} : { connection })}
+          configuredScope={draft.storageScope}
+          configuredDirectory={draft.dataDir}
+          storageDirty={CORE_FIELDS.some(field => dirty.has(field))}
+          t={t}
+        />
 
         <div className={css.feedback} aria-live="polite">
           {error !== null && <p id="mnemon-settings-validation" className={css.error} role="alert">{error}</p>}

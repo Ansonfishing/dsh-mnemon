@@ -376,6 +376,426 @@
   font-size: inherit;
 }
 
+.packTarget {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  padding: 9px 11px;
+  background: var(--dsw-alias-bg-layer-3);
+}
+
+.packTarget[data-pending-restart] {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-warning-primary, #b7791f) 40%, var(--dsw-alias-border-l2));
+}
+
+.packTargetGlyph {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-2);
+  font-size: 13px;
+}
+
+.packTarget > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 9px;
+  align-items: baseline;
+}
+
+.packTarget strong {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.packTarget code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code, monospace);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.packTarget small {
+  grid-column: 1 / -1;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.packTarget em {
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--dsw-alias-state-warning-primary, #9a6700);
+  background: color-mix(in srgb, var(--dsw-alias-state-warning-primary, #b7791f) 10%, transparent);
+  font-size: 10px;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.packGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.packCard {
+  display: flex;
+  min-width: 0;
+  min-height: 76px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--dsw-alias-bg-layer-3);
+}
+
+.packCardHeading {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+}
+
+.packCardHeading > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-2);
+  font: 600 9px/1 var(--ds-font-family-code, monospace);
+  letter-spacing: .04em;
+}
+
+.packCardHeading > div {
+  display: grid;
+  min-width: 0;
+}
+
+.packCardHeading strong {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.packCardHeading small {
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.packCardActions {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.packCardActions button,
+.packImportActions button,
+.packReplaceConfirm button,
+.packPreview header button {
+  appearance: none;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.packCardActions button {
+  min-width: 58px;
+  padding: 3px 8px;
+}
+
+.packCardActions button:hover:not(:disabled),
+.packImportActions button:hover:not(:disabled),
+.packReplaceConfirm button:hover:not(:disabled),
+.packPreview header button:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.packCardActions button:disabled,
+.packImportActions button:disabled,
+.packReplaceConfirm button:disabled,
+.packPreview header button:disabled {
+  cursor: default;
+  opacity: .4;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.packFormatHint {
+  margin: -3px 0 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.packPreview {
+  display: grid;
+  gap: 11px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 9px;
+  padding: 12px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.packPreview header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.packPreview header > div {
+  display: grid;
+  min-width: 0;
+}
+
+.packPreview header span {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 9px;
+  line-height: 14px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.packPreview header strong {
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code, monospace);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.packPreview header button {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-color: transparent;
+  font-size: 17px;
+  line-height: 20px;
+}
+
+.packPreview dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+}
+
+.packPreview dl > div {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.packPreview dt {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 9px;
+}
+
+.packPreview dd {
+  min-width: 0;
+  overflow: hidden;
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.packPreview dd code {
+  font-family: var(--ds-font-family-code, monospace);
+}
+
+.packComponentChoices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.packComponentChoices label {
+  display: grid;
+  position: relative;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 6px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  padding: 7px 8px;
+  background: var(--dsw-alias-bg-layer-3);
+  cursor: pointer;
+}
+
+.packComponentChoices label:has(input:disabled) {
+  cursor: default;
+}
+
+.packComponentChoices input {
+  margin: 3px 0 0;
+}
+
+.packComponentChoices span {
+  display: grid;
+  min-width: 0;
+}
+
+.packComponentChoices strong {
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.packComponentChoices small {
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.packComponentChoices em {
+  grid-column: 2;
+  width: max-content;
+  border-radius: 999px;
+  padding: 1px 5px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-2);
+  font-size: 8px;
+  font-style: normal;
+}
+
+.packImportActions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  padding-top: 10px;
+}
+
+.packImportActions > div {
+  display: grid;
+}
+
+.packImportActions strong {
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.packImportActions small {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 9px;
+}
+
+.packImportActions button,
+.packReplaceConfirm button {
+  min-height: 30px;
+  padding: 4px 10px;
+}
+
+.packPrimary {
+  border-color: var(--dsw-alias-label-primary) !important;
+  color: var(--dsw-alias-bg-layer-3) !important;
+  background: var(--dsw-alias-label-primary) !important;
+}
+
+.packDangerLink {
+  border-color: transparent !important;
+  color: var(--dsw-alias-state-error-primary) !important;
+}
+
+.packReplaceConfirm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 32%, var(--dsw-alias-border-l2));
+  border-radius: 7px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 5%, var(--dsw-alias-bg-layer-3));
+}
+
+.packReplaceConfirm > div {
+  display: grid;
+}
+
+.packReplaceConfirm strong {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.packReplaceConfirm span {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 9px;
+}
+
+.packDanger {
+  border-color: var(--dsw-alias-state-error-primary) !important;
+  color: var(--dsw-alias-bg-layer-3) !important;
+  background: var(--dsw-alias-state-error-primary) !important;
+}
+
+.packFeedback {
+  display: grid;
+  gap: 4px;
+}
+
+.packFeedback:empty {
+  display: none;
+}
+
+.packFeedback p {
+  margin: 0;
+}
+
+.packSuccess {
+  color: var(--dsw-alias-state-success-primary);
+  font-size: 11px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 620px) {
   .choiceGrid {
     grid-template-columns: minmax(0, 1fr);
@@ -393,6 +813,36 @@
 
   .addPackFields {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .packGrid,
+  .packPreview dl,
+  .packComponentChoices,
+  .packImportActions,
+  .packReplaceConfirm {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .packCard {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .packCardActions {
+    flex-direction: row;
+  }
+
+  .packCardActions button {
+    flex: 1;
+  }
+
+  .packTarget {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .packTarget em {
+    grid-column: 2;
+    width: max-content;
   }
 }
 

@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MnemonSettingsCard } from '../src/client/MnemonSettingsCard.tsx'
 import { translateEn } from '../src/client/locales.ts'
-import type { ClientSettingsScope } from '../src/contracts.ts'
+import type { ClientConnectionHandle, ClientSettingsScope } from '../src/contracts.ts'
 import type { Config, InteractionConfig } from '../src/config.ts'
 
 afterEach(cleanup)
@@ -285,5 +285,65 @@ describe('MnemonSettingsCard', () => {
     expect((view.getByLabelText('记忆工具卡') as HTMLInputElement).checked).toBe(false)
     expect((view.getByLabelText('回合记忆条') as HTMLInputElement).checked).toBe(false)
     expect((view.getByLabelText('存入记忆按钮') as HTMLInputElement).checked).toBe(false)
+  })
+
+  it('previews a complete Pack and requires explicit confirmation before atomic replacement', async () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+    const call = vi.fn(async (_channel: string, endpoint: string, payload: unknown) => {
+      if (endpoint === 'target') return { ok: true as const, value: { root: '/active/.mnemon', scope: 'global' } }
+      if (endpoint === 'inspect') return {
+        ok: true as const,
+        value: {
+          fileName: 'backup.mnemonpack', archiveBytes: 4, expandedBytes: 2048,
+          targetRoot: '/active/.mnemon', targetScope: 'global',
+          occupied: { runtime: true, documents: true, 'memory-spaces': true },
+          manifest: {
+            format: 'mnemonpack', version: 1, scope: 'full', exportedAt: '2026-08-14T12:00:00.000Z',
+            source: { plugin: 'dsh-mnemon', pluginVersion: '0.1.0' },
+            components: ['runtime', 'documents', 'memory-spaces'],
+            summary: [
+              { component: 'runtime', files: 3, bytes: 600, items: 2 },
+              { component: 'documents', files: 2, bytes: 700, items: 1 },
+              { component: 'memory-spaces', files: 2, bytes: 748, items: 1 },
+            ],
+          },
+        },
+      }
+      if (endpoint === 'import') return {
+        ok: true as const,
+        value: { imported: true, mode: 'replace', targetRoot: '/active/.mnemon', components: ['runtime', 'memory-spaces'], summary: [] },
+      }
+      throw new Error(`unexpected endpoint ${endpoint}: ${JSON.stringify(payload)}`)
+    })
+    const connection = { rpc: { call } } as ClientConnectionHandle
+
+    render(<MnemonSettingsCard scope={scope} connection={connection} />)
+    await waitFor(() => expect(screen.getByText('/active/.mnemon')).toBeTruthy())
+
+    const file = new File(['pack'], 'backup.mnemonpack', { type: 'application/vnd.mnemon.pack+zip' })
+    fireEvent.change(screen.getByLabelText('选择整体 Pack文件'), { target: { files: [file] } })
+    await waitFor(() => expect(screen.getByText('backup.mnemonpack')).toBeTruthy())
+    expect(screen.getAllByText('目标已有数据')).toHaveLength(3)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Documents/ }))
+    fireEvent.click(screen.getByRole('button', { name: '覆盖导入…' }))
+    expect(call.mock.calls.some(([, endpoint]) => endpoint === 'import')).toBe(false)
+    expect(screen.getByRole('alert').textContent).toContain('所选组件会被 Pack 内容原子替换')
+
+    fireEvent.click(screen.getByRole('button', { name: '确认覆盖' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-pack', 'import', {
+      base64: 'cGFjaw==', mode: 'replace', components: ['runtime', 'memory-spaces'],
+    }))
+    expect(screen.getByText(/已将 Runtime、记忆体 导入/)).toBeTruthy()
   })
 })
