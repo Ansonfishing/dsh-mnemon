@@ -1,44 +1,30 @@
 # Getting Started
 
-[简体中文](../zh-CN/getting-started.md) | **English** | [Documentation Center](./README.md)
+[简体中文](../zh-CN/getting-started.md) | **English** | [Documentation hub](./README.md)
+
+This guide goes from a blank environment to the first verified recall. It uses Sidebar and global storage by default. If installation is complete, jump to [First verification](#6-complete-first-verification).
 
 ## 1. Prerequisites
 
 You need:
 
-- a DSH Web profile that can start successfully;
+- a DSH Web profile that starts successfully;
 - a locally executable `mnemon` CLI;
-- a DSH subagent provider available for bounded subtasks.
+- a DSH subagent provider for isolated memory tasks.
 
-The exact provider requirements are:
+Regular semantic work prefers a provider named `spawn` with `outputSchema`, `toolFilter`, `persona`, and `depthLimit`. Optional score-based background review additionally requires a provider named `fork` with `inheritsParentContext=true`. Missing `fork` does not block deterministic pages or regular manual actions.
 
-```text
-regular semantic operations
-  -> prefer provider named "spawn"
-  -> may fall back to another compatible provider
-
-scored background review
-  -> requires provider named "fork"
-  -> inheritsParentContext = true
-
-both paths require
-  -> outputSchema
-  -> toolFilter
-  -> persona
-  -> depthLimit
-```
-
-The plugin does not declare a fixed minimum-version matrix for DSH and Mnemon in its code. **Verified baseline**: `dsh-mnemon` 0.1.0 has been verified end-to-end on a live web profile running `@deepseek-ai/dsh` 0.1.0-rc.6 (2026-08-13 snapshot); last verified 2026-08-14. Before upgrading, run the verification steps on this page against an isolated data directory.
+The project does not declare a fixed minimum DSH / Mnemon matrix. This guide and its screenshots target dsh-mnemon v0.1.2. Back up and repeat this verification against an isolated root before upgrading.
 
 ## 2. Install Mnemon
 
-On macOS, the recommended installation method is Homebrew Cask:
+Homebrew Cask is recommended on macOS:
 
 ```sh
 brew install --cask mnemon-dev/tap/mnemon
 ```
 
-On macOS or Linux, you can also install it with Go:
+On macOS or Linux, Go is another option:
 
 ```sh
 go install github.com/mnemon-dev/mnemon@latest
@@ -50,116 +36,120 @@ Verify the binary:
 mnemon --version
 ```
 
-To inspect an upstream Store directly, you can also run `mnemon status`. This command opens the effective Store and may initialize default data or run migrations; do not treat it as a completely side-effect-free installation probe.
+If DSH cannot find it on `PATH`, set `MNEMON_CLI_PATH` or configure an absolute `mnemon.cliPath`. `mnemon status` opens the effective Store and may initialize data or run upstream migrations, so it is not a side-effect-free installation probe.
 
-If DSH cannot find it on `PATH`, set `MNEMON_CLI_PATH` or configure an absolute path in `mnemon.cliPath`.
+## 3. Install dsh-mnemon
 
-## 3. Install the Plugin
-
-Install it into the Web profile:
+Install into the Web profile:
 
 ```sh
 dsh plugin --profile web add dsh-mnemon
 ```
 
-Pre-release builds not yet published to npm can be installed from git:
-
-```sh
-dsh plugin --profile web add "github:omdsh-dev/dsh-mnemon"
-```
-
-For a local development checkout:
+Use an absolute path for a development checkout:
 
 ```sh
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
-The plugin package's `cordis.patch.yml` mounts the Host plugin; the Web client bundle registers the session workspace and plugin settings card.
-
-### Upgrade and uninstall
-
-`dsh plugin` is a pnpm forwarder that runs inside the profile directory:
-
-```sh
-# Upgrade
-dsh plugin --profile web update dsh-mnemon
-
-# Uninstall (also removes its bundle registration from the profile)
-dsh plugin --profile web remove dsh-mnemon
-```
-
-Uninstalling never deletes memory data: `global` data stays in `~/.mnemon`, and `workspace` / `custom` data stays in their directories, so reinstalling picks up where you left off.
-
-To pause automatic reads/writes without uninstalling, turn off `writebackMode` / `recallMode` / `lifecycleEnabled` in the plugin configuration (see the [configuration reference](./configuration.md), “Toggle interactions”). To hide only the Web workspace, set `tabEnabled=false`; Host RPC, commands, and Agent tools remain available.
-
-## 4. Choose a Storage Scope
-
-Start the DSH Web profile:
+Then start or restart the profile:
 
 ```sh
 dsh --profile web
 ```
 
-On the dedicated “Settings -> Memory System” page, first choose a display mode: the default `sidebar` uses a dedicated sidebar workbench, while `buildin` uses the original conversation-area tab. Saving switches live. Then choose a storage scope:
+Upgrade and uninstall:
 
-| Scope | Root directory | Best suited for |
+```sh
+dsh plugin --profile web update dsh-mnemon
+dsh plugin --profile web remove dsh-mnemon
+```
+
+Uninstall removes the plugin registration, not memory data in global, workspace, or custom roots.
+
+## 4. Choose entry point and storage
+
+Open **Settings → Memory System**:
+
+[![Memory System settings for display, storage, conversation UI, and backup](../zh-CN/assets/screenshots/settings-memory-system.png)](../zh-CN/assets/screenshots/settings-memory-system.png)
+
+### Display mode
+
+- **Sidebar** (default): a dedicated workbench opened from the DSH sidebar; recommended for most users.
+- **Buildin**: the original conversation-area tab with its established visuals.
+
+### Storage location
+
+| Scope | Root | Best suited for |
 |---|---|---|
-| `global` | `MNEMON_DATA_DIR` or `~/.mnemon` | Sharing one memory set across multiple workspaces |
-| `workspace` | `.mnemon` under each DSH workspace root | Project isolation and cross-workspace inspection |
-| `custom` | `dataDir` | An explicit disk, mounted volume, or dedicated data directory |
+| **Global** (default) | `MNEMON_DATA_DIR` or `~/.mnemon` | Sharing one memory set across workspaces |
+| **Workspace** | `<workspace>/.mnemon` | Project isolation with cross-workspace inspection in the workbench |
+| **Custom** | `dataDir` | A dedicated disk, mounted volume, or explicit directory |
 
-Settings are written to `$DSH_HOME/settings.yaml`. After Save, the Host swaps the storage root atomically and the workbench immediately clears the old page state and reloads the active page automatically, with no manual browser refresh. Switching scopes does not move existing data; to preserve it, stop writes first and migrate with a complete ZIP backup.
+Save initializes a candidate runtime graph before atomically switching the Host. The page clears stale state and reloads automatically—no browser refresh is needed. Changing scope never migrates, merges, or deletes old data.
 
-After selecting `workspace`, the workbench header can switch the workspace being inspected. This choice controls only which memory set the workbench displays and maintains; Agent execution always follows the current session. A global warning appears when the two differ and offers one-click alignment.
+In Workspace mode, the workbench selector changes only what data is being inspected. Agents, tools, and lifecycle hooks always use the current conversation's effective root. The header reports a mismatch and offers one-click alignment.
 
-## 5. Create Your First Memory Space
+## 5. Open the Sidebar workbench
 
-With the default `sidebar` mode, click “Memory System” in the DSH sidebar. With `buildin`, open the “Memory System” tab in the conversation area:
+Click **Memory System** in the sidebar, then start on **Status**:
 
-1. Open the “Memory Spaces” page.
-2. Create a narrowly scoped Memory Space, such as “Project Decisions.”
-3. Its description should explain what belongs there and which tasks should recall it.
-4. Enable its read toggle, or let the plugin activate it automatically after the first write.
+[![Status with CLI, versions, Runtime, Memory Spaces, Documents, and storage root](../zh-CN/assets/screenshots/status-overview.png)](../zh-CN/assets/screenshots/status-overview.png)
 
-An empty Memory Space may remain inactive by default. Activation controls only the read scope; writes may target any registered Memory Space, and a successful write automatically activates the target.
+Confirm that:
 
-## 6. Verify the Complete Path
+- the top right says Connected;
+- Mnemon and dsh-mnemon show installed versions;
+- the storage root matches your chosen scope;
+- Runtime, Memory Spaces, and Documents report no errors.
 
-First inspect deterministic status:
+If Mnemon is unavailable, run `command -v mnemon` and `mnemon --version`. See [Troubleshooting](./operations.md#troubleshooting) for other symptoms.
+
+## 6. Complete first verification
+
+### Create a Memory Space
+
+1. Open **Memory Spaces → Overview**.
+2. Select **Create Memory Space**.
+3. Use a narrow name such as “Project Decisions.”
+4. Describe what belongs there and which tasks should recall it.
+5. Enable read activation.
+
+### Remember one test item
+
+Open **Remember** and enter something stable, self-contained, future-useful, and secret-free. Leave advanced options collapsed so the memory subagent can select a target, deduplicate, and distill.
+
+Writing starts only after confirmation. Canceling the dialog changes no state.
+
+### Verify recall
+
+1. Open **Memory Spaces → Recall**.
+2. Ask a concrete question that should match the item.
+3. Use **Direct recall** first to inspect raw evidence.
+4. Confirm the result retains its Memory Space, category, importance, score, and ID.
+
+You can also use conversation commands:
 
 ```text
 /mnemon status
+/mnemon recall <focused query>
 ```
 
-Then submit a stable, self-contained item that will remain useful in the future on the “Distill” page. The worker selects a Memory Space, checks for duplicates, and returns a structured receipt. Then verify recall:
+## 7. Verify memory inside a conversation
 
-```text
-/mnemon recall <a focused query that should match the new item>
-```
+Ask a question that genuinely depends on history and allow the Agent to decide whether recall helps. After completion:
 
-Finally, check that:
+- Turn memory appears below the reply if the turn used memory tools.
+- Expanding shows exact tools and links to their pages.
+- Save to memory opens an editable confirmation; canceling performs no write.
 
-- the “Memory Spaces” page shows the active Memory Space and graph;
-- “Content” shows the new item and its Memory Space;
-- CLI, runtime memory, Memory Space catalog, and subagent status are all healthy under “Status”;
-- the recall result includes a complete `memoryBodyId` and memory ID.
+[![Turn memory and exact tool navigation](../zh-CN/assets/screenshots/conversation-turn-memory.png)](../zh-CN/assets/screenshots/conversation-turn-memory.png)
 
-## 7. Recommended First Real Conversation
+Ordinary conversation should not force recall. Current requests, repository files, and live tool results outrank historical content.
 
-Choose a question that genuinely depends on a historical decision instead of instructing the model to invoke memory tools unconditionally. The expected flow is:
+## 8. Next steps
 
-```text
-user asks a history-dependent question
-  -> pre-step adds a short optional cue
-  -> main Agent decides whether history matters
-  -> recall worker selects active Memory Spaces
-  -> only useful evidence returns to the main Agent
-```
-
-Ordinary conversation should not force recall. The current request, existing source files, and live tool results should take precedence over historical content.
-
-## 8. Next Steps
-
-- Read the [storage model](./storage-model.md) before choosing `storageScope`.
-- Read the [configuration reference](./configuration.md) to configure read-only mode or disable lifecycle cues.
-- Read the [operations guide](./operations.md) to establish backup and pre-upgrade verification procedures.
+- Use the [Sidebar and conversation UI guide](./ui-guide.md) to learn every page.
+- Use the [storage model](./storage-model.md) to choose Runtime, Documents, or Memory Spaces.
+- Use the [configuration reference](./configuration.md) for Workspace scope, read-only behavior, and lifecycle switches.
+- Use the [operations guide](./operations.md) to export your first ZIP backup and establish a pre-upgrade checklist.
