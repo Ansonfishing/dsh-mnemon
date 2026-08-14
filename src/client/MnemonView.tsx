@@ -1,4 +1,4 @@
-import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { consumeMnemonAnchor, subscribeMnemonAnchor, type MnemonAnchor } from './anchor.ts'
 import Markdown from 'markdown-to-jsx'
 import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts'
@@ -49,6 +49,7 @@ export interface MnemonWorkspaceSelection {
 }
 
 type Page = 'overview' | 'runtime' | 'documents' | 'explore' | 'entities' | 'remember' | 'list' | 'status'
+type SidebarMemoryPage = Extract<Page, 'overview' | 'explore' | 'list' | 'entities'>
 
 type NavEntry = { id: Page; label: MnemonKey; detail: MnemonKey; glyph: string }
 type NavGroup = { aria: MnemonKey; entries: NavEntry[] }
@@ -80,7 +81,25 @@ const PAGE_NAV: NavGroup[] = [
   },
 ]
 
-const PAGE_TABS = PAGE_NAV.flatMap(group => group.entries)
+const SIDEBAR_PAGE_TABS: NavEntry[] = [
+  { id: 'status', label: 'nav.status', detail: 'nav.status.detail', glyph: '⌘' },
+  { id: 'runtime', label: 'nav.runtime', detail: 'nav.runtime.detail', glyph: '◫' },
+  { id: 'overview', label: 'nav.bodies', detail: 'nav.bodies.detail', glyph: '◇' },
+  { id: 'documents', label: 'nav.documents', detail: 'nav.documents.detail', glyph: '▤' },
+]
+
+const MEMORY_PAGE_TABS: Array<{ id: SidebarMemoryPage; label: MnemonKey }> = [
+  { id: 'overview', label: 'nav.overview' },
+  { id: 'explore', label: 'nav.search' },
+  { id: 'list', label: 'nav.content' },
+  { id: 'entities', label: 'nav.entities' },
+]
+
+const MEMORY_PAGES = new Set<Page>(MEMORY_PAGE_TABS.map(item => item.id))
+
+function isMemoryPage(page: Page): page is SidebarMemoryPage {
+  return MEMORY_PAGES.has(page)
+}
 
 const CATEGORY_KEYS: Record<string, MnemonKey> = {
   decision: 'category.decision',
@@ -123,6 +142,26 @@ function PageHeader(props: { title: string; description: string; meta?: string; 
   )
 }
 
+/** DSH-style action dialog shared by Sidebar add/write flows. */
+function SidebarModal(props: { title: string; description?: string; busy?: boolean; onClose: () => void; children: ReactNode }): JSX.Element {
+  const t = useT()
+  const appearance = useMnemonViewAppearance()
+  const close = useCallback(() => { if (props.busy !== true) props.onClose() }, [props.busy, props.onClose])
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') close() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [close])
+  return (
+    <div className={appearance.classes.modalBackdrop} onPointerDown={event => { if (event.target === event.currentTarget) close() }}>
+      <section className={appearance.classes.modal} role="dialog" aria-modal="true" aria-label={props.title}>
+        <header><div><h2>{props.title}</h2>{props.description !== undefined && <p>{props.description}</p>}</div><button type="button" className={css.iconButton} disabled={props.busy} onClick={close} aria-label={t('common.cancel')}>×</button></header>
+        <div>{props.children}</div>
+      </section>
+    </div>
+  )
+}
+
 function EmptyState(props: { glyph: string; title: string; children: string }): JSX.Element {
   return (
     <div className={css.emptyState}>
@@ -140,12 +179,33 @@ function WorkspaceNavigation(props: { page: Page; onSelect: (page: Page) => void
     <div className={appearanceClass(css.topNavigation, appearance.classes.topNavigation)}>
       {appearance.surface === 'sidebar'
         ? <div className={appearanceClass(css.nav, appearance.classes.nav)} role="tablist" aria-label={t('nav.aria')}>
-          {PAGE_TABS.map(item => <button key={item.id} type="button" role="tab" aria-selected={props.page === item.id} data-active={props.page === item.id ? '' : undefined} onClick={() => props.onSelect(item.id)}>{t(item.label)}</button>)}
+          {SIDEBAR_PAGE_TABS.map(item => {
+            const active = item.id === 'overview' ? isMemoryPage(props.page) : props.page === item.id
+            return <button key={item.id} type="button" role="tab" aria-selected={active} data-active={active ? '' : undefined} onClick={() => props.onSelect(item.id)}>{t(item.label)}</button>
+          })}
         </div>
         : <nav className={appearanceClass(css.nav, appearance.classes.nav)} aria-label={t('nav.aria')}>
           {PAGE_NAV.map((group, groupIndex) => <Fragment key={group.aria}><div className={appearanceClass(css.navGroup, appearance.classes.navGroup)} role="group" aria-label={t(group.aria)}>{group.entries.map(item => <button key={item.id} type="button" aria-current={props.page === item.id ? 'page' : undefined} onClick={() => props.onSelect(item.id)}>{appearance.showNavigationGlyphs && <span className={css.navGlyph} aria-hidden="true">{item.glyph}</span>}<span><strong>{t(item.label)}</strong>{appearance.showNavigationDetails && <small>{t(item.detail)}</small>}</span></button>)}</div>{appearance.showNavigationDividers && groupIndex < PAGE_NAV.length - 1 && <span className={css.navGroupDivider} aria-hidden="true" />}</Fragment>)}
         </nav>}
       {appearance.showSpaceSummary && <div className={css.spaceSummary}><span>{t('sidebar.activeSpaces')}</span><code>{props.catalogKnown ? `${props.activeBodies} / ${props.bodyCount}` : '— / —'}</code><small>{props.writeEnabled ? t('common.agentSupervised') : t('common.readOnly')}</small></div>}
+    </div>
+  )
+}
+
+/** Memory tools become a focused second-level tab set on the Sidebar surface. */
+function MemoryNavigation(props: { page: Page; writeEnabled: boolean; onSelect: (page: SidebarMemoryPage) => void; onRemember: () => void }): JSX.Element | null {
+  const t = useT()
+  const appearance = useMnemonViewAppearance()
+  if (appearance.surface !== 'sidebar' || !isMemoryPage(props.page)) return null
+  return (
+    <div className={appearance.classes.memoryNavigation}>
+      <div className={appearance.classes.memoryTabs} role="tablist" aria-label={t('nav.memory.aria')}>
+        {MEMORY_PAGE_TABS.map(item => {
+          const active = props.page === item.id
+          return <button key={item.id} type="button" role="tab" aria-selected={active} data-active={active ? '' : undefined} onClick={() => props.onSelect(item.id)}>{t(item.label)}</button>
+        })}
+      </div>
+      <button type="button" className={appearanceClass(css.primaryButton, appearance.classes.memoryWriteButton)} disabled={!props.writeEnabled} onClick={props.onRemember}>{t('nav.rememberAction')}</button>
     </div>
   )
 }
@@ -787,7 +847,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const selectedKind = selected === null ? null : graphNodeKind(selected)
   return (
     <div className={css.page}>
-      <PageHeader title={t('overview.title')} description={t('overview.description')} meta={t('overview.interval')}
+      <PageHeader title={appearance.surface === 'sidebar' ? t('nav.overview') : t('overview.title')} description={t('overview.description')} meta={t('overview.interval')}
         action={<button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void load()}>{loading ? t('overview.syncing') : t('overview.syncNow')}</button>} />
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
       <section className={css.bodyDirectory} aria-label={t('overview.directory')}>
@@ -975,6 +1035,7 @@ function EntitiesPage(props: { client: MnemonClient; revision: number; writeEnab
 
 function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; onMutate: () => void }): JSX.Element {
   const t = useT()
+  const appearance = useMnemonViewAppearance()
   const [snapshot, setSnapshot] = useState<RuntimeMemorySnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -987,6 +1048,7 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
   const [editContent, setEditContent] = useState('')
   const [editImportance, setEditImportance] = useState<RuntimeMemoryImportance>('normal')
   const [removing, setRemoving] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -1013,6 +1075,7 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
     try {
       await mutate({ action: 'add', target, content, importance })
       setContent('')
+      if (appearance.surface === 'sidebar') setAdding(false)
     } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
   }
   const beginEdit = (entry: RuntimeMemoryEntry) => {
@@ -1066,24 +1129,31 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
     )
   }
 
+  const closeComposer = () => {
+    setContent('')
+    setAdding(false)
+  }
+  const composer = <form className={css.runtimeComposer} onSubmit={event => void add(event)}>
+    <div className={css.runtimeComposerHeading}><div><h3>{t('runtime.addTitle')}</h3><p>{t('runtime.addDescription')}</p></div><span>{t('runtime.hotContext')}</span></div>
+    <textarea aria-label={t('runtime.content')} value={content} onChange={event => setContent(event.target.value)} rows={3} placeholder={t('runtime.placeholder')} />
+    <div className={css.runtimeComposerActions}><label>{t('runtime.target')}<select value={target} onChange={event => setTarget(event.target.value as RuntimeMemoryTarget)}><option value="memory">{t('runtime.target.memory')}</option><option value="user">{t('runtime.target.user')}</option></select></label><label>{t('runtime.importance')}<select value={importance} onChange={event => setImportance(event.target.value as RuntimeMemoryImportance)}><option value="critical">{t('runtime.importance.critical')}</option><option value="normal">{t('runtime.importance.normal')}</option><option value="low">{t('runtime.importance.low')}</option></select></label>{appearance.surface === 'sidebar' && <button type="button" className={css.ghostButton} disabled={saving} onClick={closeComposer}>{t('common.cancel')}</button>}<button type="submit" className={css.primaryButton} disabled={saving || content.trim() === ''}>{saving ? t('runtime.saving') : t('runtime.addAction')}</button></div>
+  </form>
+
   return (
     <div className={css.page}>
-      <PageHeader title={t('runtime.title')} description={t('runtime.description')} meta={snapshot === null ? t('common.loading') : t('runtime.total', { count: snapshot.entries.length })} action={<button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void load()}>{t('runtime.refresh')}</button>} />
+      <PageHeader title={t('runtime.title')} description={t('runtime.description')} meta={snapshot === null ? t('common.loading') : t('runtime.total', { count: snapshot.entries.length })} action={<><button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void load()}>{t('runtime.refresh')}</button>{appearance.surface === 'sidebar' && props.writeEnabled && <button type="button" className={css.primaryButton} onClick={() => setAdding(true)}>{t('runtime.addButton')}</button>}</>} />
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
       {notice !== null && <div className={css.runtimeNotice} role="status">{notice}</div>}
-      {props.writeEnabled && <form className={css.runtimeComposer} onSubmit={event => void add(event)}>
-        <div className={css.runtimeComposerHeading}><div><h3>{t('runtime.addTitle')}</h3><p>{t('runtime.addDescription')}</p></div><span>{t('runtime.hotContext')}</span></div>
-        <textarea aria-label={t('runtime.content')} value={content} onChange={event => setContent(event.target.value)} rows={3} placeholder={t('runtime.placeholder')} />
-        <div className={css.runtimeComposerActions}><label>{t('runtime.target')}<select value={target} onChange={event => setTarget(event.target.value as RuntimeMemoryTarget)}><option value="memory">{t('runtime.target.memory')}</option><option value="user">{t('runtime.target.user')}</option></select></label><label>{t('runtime.importance')}<select value={importance} onChange={event => setImportance(event.target.value as RuntimeMemoryImportance)}><option value="critical">{t('runtime.importance.critical')}</option><option value="normal">{t('runtime.importance.normal')}</option><option value="low">{t('runtime.importance.low')}</option></select></label><button type="submit" className={css.primaryButton} disabled={saving || content.trim() === ''}>{saving ? t('runtime.saving') : t('runtime.addAction')}</button></div>
-      </form>}
+      {props.writeEnabled && appearance.surface === 'buildin' && composer}
       {!props.writeEnabled && <div className={css.runtimeReadOnly}>{t('runtime.readOnly')}</div>}
       <div className={css.runtimeGrid}>{targetPanel('user')}{targetPanel('memory')}</div>
       <p className={css.runtimeFootnote}>{t('runtime.footnote')}</p>
+      {appearance.surface === 'sidebar' && adding && <SidebarModal title={t('runtime.addTitle')} description={t('runtime.addDescription')} busy={saving} onClose={closeComposer}>{composer}</SidebarModal>}
     </div>
   )
 }
 
-function RememberPage(props: { client: MnemonClient; sessionId: string | undefined; memoryBodies: MemoryBodyView[]; writeEnabled: boolean; seed: string; onMutate: () => void }): JSX.Element {
+function RememberPage(props: { client: MnemonClient; sessionId: string | undefined; memoryBodies: MemoryBodyView[]; writeEnabled: boolean; seed: string; onMutate: () => void; onClose?: () => void; onComplete?: () => void }): JSX.Element {
   const t = useT()
   const [content, setContent] = useState(props.seed)
   const [category, setCategory] = useState<Category>('general')
@@ -1106,8 +1176,11 @@ function RememberPage(props: { client: MnemonClient; sessionId: string | undefin
     try {
       const response = await props.client.supervise(content)
       setResult(`${t(response.action === 'skipped' ? 'remember.skipped' : 'remember.completed')}${response.memoryBodyIds.length === 0 ? '' : ` · ${response.memoryBodyIds.join(', ')}`}${response.summary === '' ? '' : ` · ${response.summary}`}`)
-      setContent('')
       props.onMutate()
+      if (response.action !== 'skipped') {
+        setContent('')
+        props.onComplete?.()
+      }
     } catch (reason) { setResult(t('remember.dispatchFailed', { error: message(reason) })) } finally { setSupervising(false) }
   }
 
@@ -1119,35 +1192,34 @@ function RememberPage(props: { client: MnemonClient; sessionId: string | undefin
       const action = typeof response.action === 'string' ? response.action : 'saved'
       const summary = typeof response.summary === 'string' ? response.summary : ''
       setResult(action === 'skipped' ? `${t('remember.skipped')}${summary === '' ? '' : ` · ${summary}`}` : `${t('remember.processed', { action })}${summary === '' ? '' : ` · ${summary}`}`)
-      if (action !== 'skipped') { setContent(''); setTags(''); setEntities(''); props.onMutate() }
+      if (action !== 'skipped') { setContent(''); setTags(''); setEntities(''); props.onMutate(); props.onComplete?.() }
     } catch (reason) { setResult(t('remember.saveFailed', { error: message(reason) })) } finally { setSaving(false) }
   }
 
-  return (
-    <div className={css.page}>
-      <PageHeader title={t('remember.title')} description={t('remember.description')} meta={props.writeEnabled ? t('remember.worker') : t('common.readOnly')} />
-      {!props.writeEnabled ? <EmptyState glyph="⊘" title={t('remember.readOnlyTitle')}>{t('remember.readOnlyText')}</EmptyState> : (
-        <div className={css.writebackLayout}>
-          <aside className={css.writeGuide}><h3>{t('remember.flowTitle')}</h3><ol><li><strong>{t('remember.routeTitle')}</strong><span>{t('remember.routeText')}</span></li><li><strong>{t('remember.dedupeTitle')}</strong><span>{t('remember.dedupeText')}</span></li><li><strong>{t('remember.writeTitle')}</strong><span>{t('remember.writeText')}</span></li></ol><p>{t('remember.flowText')}</p></aside>
-          <section className={css.supervisedComposer}>
-            <form className={css.supervisedForm} onSubmit={event => void supervise(event)}>
-              <div className={css.supervisedHeading}><div><h3>{t('remember.delegateTitle')}</h3></div><span className={props.sessionId === undefined ? css.sessionMissing : css.sessionReady}>{props.sessionId === undefined ? t('remember.noSession') : t('remember.ready')}</span></div>
-              <label className={css.fieldWide}>{t('remember.candidate')}<textarea aria-label={t('remember.candidateAria')} value={content} onChange={event => setContent(event.target.value)} maxLength={8000} rows={8} placeholder={t('remember.placeholder')} /></label>
-              {props.sessionId === undefined && <p className={css.sessionHint}>{t('remember.sessionHint')}</p>}
-              <div className={css.formActions}><button type="submit" className={css.primaryButton} disabled={supervising || content.trim() === '' || props.sessionId === undefined}>{supervising ? t('remember.processing') : t('remember.action')}</button>{result !== null && <span role="status">{result}</span>}</div>
-            </form>
-            <details className={css.advancedWrite}>
-              <summary><span><strong>{t('remember.advanced')}</strong><small>{t('remember.advancedHint')}</small></span><span>{t('remember.expand')}</span></summary>
-              <form className={css.manualForm} onSubmit={event => void manualSave(event)}>
-                <div className={css.formGrid}><label className={css.fieldWide}>{t('remember.target')}<select aria-label={t('remember.target')} value={memoryBodyId} onChange={event => setMemoryBodyId(event.target.value)}>{props.memoryBodies.map(body => <option key={body.id} value={body.id}>{body.name} · {body.id}{body.active ? ` · ${t('common.active')}` : ''}</option>)}</select></label><label>{t('common.category')}<select value={category} onChange={event => setCategory(event.target.value as Category)}>{CATEGORIES.map(value => <option key={value} value={value}>{categoryLabel(t, value)}</option>)}</select></label><label>{t('common.importanceLabel')}<select value={importance} onChange={event => setImportance(Number(event.target.value))}>{[1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value} / 5</option>)}</select></label><label className={css.fieldWide}>{t('remember.entities')}<input value={entities} onChange={event => setEntities(event.target.value)} placeholder="SQLite, DSH" /></label><label className={css.fieldWide}>{t('remember.tags')}<input value={tags} onChange={event => setTags(event.target.value)} placeholder="architecture, local-first" /></label></div>
-                <div className={css.manualActions}><p>{t('remember.advancedText')}</p><button type="submit" className={css.secondaryButton} disabled={saving || content.trim() === '' || props.sessionId === undefined || memoryBodyId === ''}>{saving ? t('remember.saving') : t('remember.advancedAction')}</button></div>
-              </form>
-            </details>
-          </section>
-        </div>
-      )}
-    </div>
-  )
+  const composer = <section className={css.supervisedComposer}>
+    <form className={css.supervisedForm} onSubmit={event => void supervise(event)}>
+      <div className={css.supervisedHeading}><div><h3>{t('remember.delegateTitle')}</h3></div><span className={props.sessionId === undefined ? css.sessionMissing : css.sessionReady}>{props.sessionId === undefined ? t('remember.noSession') : t('remember.ready')}</span></div>
+      <label className={css.fieldWide}>{t('remember.candidate')}<textarea aria-label={t('remember.candidateAria')} value={content} onChange={event => setContent(event.target.value)} maxLength={8000} rows={8} placeholder={t('remember.placeholder')} /></label>
+      {props.sessionId === undefined && <p className={css.sessionHint}>{t('remember.sessionHint')}</p>}
+      <div className={css.formActions}>{props.onClose !== undefined && <button type="button" className={css.ghostButton} disabled={supervising || saving} onClick={props.onClose}>{t('common.cancel')}</button>}<button type="submit" className={css.primaryButton} disabled={supervising || content.trim() === '' || props.sessionId === undefined}>{supervising ? t('remember.processing') : t('remember.action')}</button>{result !== null && <span role="status">{result}</span>}</div>
+    </form>
+    <details className={css.advancedWrite}>
+      <summary><span><strong>{t('remember.advanced')}</strong><small>{t('remember.advancedHint')}</small></span><span>{t('remember.expand')}</span></summary>
+      <form className={css.manualForm} onSubmit={event => void manualSave(event)}>
+        <div className={css.formGrid}><label className={css.fieldWide}>{t('remember.target')}<select aria-label={t('remember.target')} value={memoryBodyId} onChange={event => setMemoryBodyId(event.target.value)}>{props.memoryBodies.map(body => <option key={body.id} value={body.id}>{body.name} · {body.id}{body.active ? ` · ${t('common.active')}` : ''}</option>)}</select></label><label>{t('common.category')}<select value={category} onChange={event => setCategory(event.target.value as Category)}>{CATEGORIES.map(value => <option key={value} value={value}>{categoryLabel(t, value)}</option>)}</select></label><label>{t('common.importanceLabel')}<select value={importance} onChange={event => setImportance(Number(event.target.value))}>{[1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value} / 5</option>)}</select></label><label className={css.fieldWide}>{t('remember.entities')}<input value={entities} onChange={event => setEntities(event.target.value)} placeholder="SQLite, DSH" /></label><label className={css.fieldWide}>{t('remember.tags')}<input value={tags} onChange={event => setTags(event.target.value)} placeholder="architecture, local-first" /></label></div>
+        <div className={css.manualActions}><p>{t('remember.advancedText')}</p><button type="submit" className={css.secondaryButton} disabled={saving || content.trim() === '' || props.sessionId === undefined || memoryBodyId === ''}>{saving ? t('remember.saving') : t('remember.advancedAction')}</button></div>
+      </form>
+    </details>
+  </section>
+
+  if (props.onClose !== undefined) {
+    return <SidebarModal title={t('remember.title')} description={t('remember.description')} busy={supervising || saving} onClose={props.onClose}>{props.writeEnabled ? composer : <EmptyState glyph="⊘" title={t('remember.readOnlyTitle')}>{t('remember.readOnlyText')}</EmptyState>}</SidebarModal>
+  }
+
+  return <div className={css.page}>
+    <PageHeader title={t('remember.title')} description={t('remember.description')} meta={props.writeEnabled ? t('remember.worker') : t('common.readOnly')} />
+    {!props.writeEnabled ? <EmptyState glyph="⊘" title={t('remember.readOnlyTitle')}>{t('remember.readOnlyText')}</EmptyState> : <div className={css.writebackLayout}><aside className={css.writeGuide}><h3>{t('remember.flowTitle')}</h3><ol><li><strong>{t('remember.routeTitle')}</strong><span>{t('remember.routeText')}</span></li><li><strong>{t('remember.dedupeTitle')}</strong><span>{t('remember.dedupeText')}</span></li><li><strong>{t('remember.writeTitle')}</strong><span>{t('remember.writeText')}</span></li></ol><p>{t('remember.flowText')}</p></aside>{composer}</div>}
+  </div>
 }
 
 function ListPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; onForget: (insight: Insight) => Promise<void>; onClone: (insight: Insight) => void; onExplore: (query: string) => void }): JSX.Element {
@@ -1187,6 +1259,7 @@ type DocumentListItem = DocumentRecord & { healthy?: boolean; excerpt: string }
 
 function DocumentsPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; sessionId?: string; onMutate: () => void }): JSX.Element {
   const t = useT()
+  const appearance = useMnemonViewAppearance()
   const [snapshot, setSnapshot] = useState<DocumentSnapshot | null>(null)
   const [items, setItems] = useState<DocumentListItem[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -1233,6 +1306,7 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
   }, [props.client, selectedId, props.revision])
 
   const resetComposer = () => { setTitle(''); setDescription(''); setContent(''); setSources(''); setComposing(false) }
+  const startComposer = () => { setTitle(''); setDescription(''); setContent(''); setSources(''); setEditing(false); setComposing(true) }
   const sourcePaths = (value: string) => value.split(/\r?\n|,/gu).map(path => path.trim()).filter(Boolean)
 
   const create = async (event: FormEvent) => {
@@ -1273,10 +1347,17 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
   const usage = snapshot === null ? 0 : Math.min(100, snapshot.activeBytes / snapshot.limitBytes * 100)
   const activeCount = snapshot?.activeCount ?? 0
   const archivedCount = snapshot?.archivedCount ?? 0
+  const composer = <form className={css.documentEditor} onSubmit={event => void create(event)}>
+    <header><div><h3>{t('documents.newTitle')}</h3><p>{t('documents.editorHint')}</p></div><span>{t('documents.managedCopy')}</span></header>
+    <div className={css.documentEditorMeta}><label>{t('documents.name')}<input value={title} onChange={event => setTitle(event.target.value)} required /></label><label>{t('documents.routing')}<input value={description} onChange={event => setDescription(event.target.value)} /></label></div>
+    <label>{t('documents.sources')}<input value={sources} onChange={event => setSources(event.target.value)} placeholder={t('documents.sourcesPlaceholder')} /></label>
+    <label>{t('documents.markdown')}<textarea value={content} onChange={event => setContent(event.target.value)} rows={10} required /></label>
+    <footer><button type="button" className={css.ghostButton} disabled={saving} onClick={resetComposer}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving || title.trim() === '' || content.trim() === ''}>{saving ? t('documents.saving') : t('documents.create')}</button></footer>
+  </form>
 
   return (
     <div className={css.page}>
-      <PageHeader title={t('documents.title')} description={t('documents.description')} meta={snapshot === null ? t('common.loading') : t('documents.capacity', { used: humanBytes(snapshot.activeBytes), limit: humanBytes(snapshot.limitBytes) })} action={<button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void display(query, status)}>{t('documents.refresh')}</button>} />
+      <PageHeader title={t('documents.title')} description={t('documents.description')} meta={snapshot === null ? t('common.loading') : t('documents.capacity', { used: humanBytes(snapshot.activeBytes), limit: humanBytes(snapshot.limitBytes) })} action={<><button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void display(query, status)}>{t('documents.refresh')}</button>{appearance.surface === 'sidebar' && props.writeEnabled && props.sessionId !== undefined && <button type="button" className={css.primaryButton} onClick={startComposer}>{t('documents.new')}</button>}</>} />
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
       {notice !== null && <div className={css.runtimeNotice} role="status">{notice}</div>}
 
@@ -1289,16 +1370,10 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
       <section className={css.documentToolbar}>
         <form onSubmit={event => { event.preventDefault(); void display(query, status) }}><span aria-hidden="true">⌕</span><input aria-label={t('documents.searchAria')} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('documents.searchPlaceholder')} /><button type="submit" className={css.secondaryButton}>{t('documents.search')}</button></form>
         <div role="group" aria-label={t('documents.scope')}><button type="button" data-active={status === 'active' || undefined} onClick={() => setStatus('active')}>{t('documents.active')} <b>{activeCount}</b></button><button type="button" data-active={status === 'archived' || undefined} onClick={() => setStatus('archived')}>{t('documents.archivedCount')} <b>{archivedCount}</b></button></div>
-        {props.writeEnabled && props.sessionId !== undefined && <button type="button" className={css.primaryButton} onClick={() => { setComposing(value => !value); setEditing(false) }}>{composing ? t('common.cancel') : t('documents.new')}</button>}
+        {appearance.surface === 'buildin' && props.writeEnabled && props.sessionId !== undefined && <button type="button" className={css.primaryButton} onClick={() => { if (composing) resetComposer(); else startComposer() }}>{composing ? t('common.cancel') : t('documents.new')}</button>}
       </section>
 
-      {composing && <form className={css.documentEditor} onSubmit={event => void create(event)}>
-        <header><div><h3>{t('documents.newTitle')}</h3><p>{t('documents.editorHint')}</p></div><span>{t('documents.managedCopy')}</span></header>
-        <div className={css.documentEditorMeta}><label>{t('documents.name')}<input value={title} onChange={event => setTitle(event.target.value)} required /></label><label>{t('documents.routing')}<input value={description} onChange={event => setDescription(event.target.value)} /></label></div>
-        <label>{t('documents.sources')}<input value={sources} onChange={event => setSources(event.target.value)} placeholder={t('documents.sourcesPlaceholder')} /></label>
-        <label>{t('documents.markdown')}<textarea value={content} onChange={event => setContent(event.target.value)} rows={10} required /></label>
-        <footer><button type="button" className={css.ghostButton} onClick={resetComposer}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving || title.trim() === '' || content.trim() === ''}>{saving ? t('documents.saving') : t('documents.create')}</button></footer>
-      </form>}
+      {composing && appearance.surface === 'buildin' && composer}
 
       <div className={css.documentWorkspace}>
         <aside className={css.documentList} aria-label={t('documents.list')}>
@@ -1325,6 +1400,7 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
         </section>
       </div>
       <p className={css.runtimeFootnote}>{t('documents.footnote')}</p>
+      {composing && appearance.surface === 'sidebar' && <SidebarModal title={t('documents.newTitle')} description={t('documents.editorHint')} busy={saving} onClose={resetComposer}>{composer}</SidebarModal>}
     </div>
   )
 }
@@ -1417,7 +1493,16 @@ function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelectio
   const appearance = useMnemonViewAppearance()
   const client = useMemo(() => new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
   const [page, setPage] = useState<Page>('status')
+  const lastMemoryPage = useRef<SidebarMemoryPage>('overview')
   const canvasRef = useRef<HTMLElement | null>(null)
+
+  const selectPage = useCallback((next: Page) => {
+    if (isMemoryPage(next)) lastMemoryPage.current = next
+    setPage(next)
+  }, [])
+  const selectPrimaryPage = useCallback((next: Page) => {
+    selectPage(appearance.surface === 'sidebar' && next === 'overview' ? lastMemoryPage.current : next)
+  }, [appearance.surface, selectPage])
 
   /** Pages share one plugin-owned scroll container; never mutate DSH ancestor scrollports. */
   const resetViewportScroll = useCallback(() => {
@@ -1438,15 +1523,26 @@ function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelectio
   const [revision, setRevision] = useState(0)
   const [searchSeed, setSearchSeed] = useState('')
   const [rememberSeed, setRememberSeed] = useState('')
+  const [rememberOpen, setRememberOpen] = useState(false)
+
+  const openRemember = useCallback((seed = '') => {
+    setRememberSeed(seed)
+    setRememberOpen(true)
+  }, [])
 
   /** Conversation surfaces ask this view to open a page (optionally with a seed). */
   const applyAnchor = useCallback((anchor: MnemonAnchor) => {
+    if (anchor.page === 'remember' && appearance.surface === 'sidebar') {
+      openRemember(anchor.seed ?? '')
+      selectPage(lastMemoryPage.current)
+      return
+    }
     if (anchor.seed !== undefined && anchor.seed !== '') {
       if (anchor.page === 'explore') setSearchSeed(anchor.seed)
       if (anchor.page === 'remember') setRememberSeed(anchor.seed)
     }
-    setPage(anchor.page)
-  }, [])
+    selectPage(anchor.page)
+  }, [appearance.surface, openRemember, selectPage])
   useEffect(() => {
     const held = consumeMnemonAnchor(sessionId)
     if (held !== null) applyAnchor(held)
@@ -1469,8 +1565,11 @@ function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelectio
 
   const mutate = useCallback(() => { setRevision(value => value + 1); void loadStatus() }, [loadStatus])
   const forget = useCallback(async (insight: Insight) => { await client.forget(insight.id, insight.memoryBodyId); mutate() }, [client, mutate])
-  const explore = useCallback((query: string) => { setSearchSeed(query); setPage('explore') }, [])
-  const clone = useCallback((insight: Insight) => { setRememberSeed(insight.content); setPage('remember') }, [])
+  const explore = useCallback((query: string) => { setSearchSeed(query); selectPage('explore') }, [selectPage])
+  const clone = useCallback((insight: Insight) => {
+    if (appearance.surface === 'sidebar') openRemember(insight.content)
+    else { setRememberSeed(insight.content); selectPage('remember') }
+  }, [appearance.surface, openRemember, selectPage])
   const refreshAll = () => { setRevision(value => value + 1); void loadStatus() }
   const writeEnabled = status?.writeEnabled === true
   const stats = status?.stats
@@ -1490,17 +1589,19 @@ function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelectio
       {(statusError !== null || status?.healthy === false) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
       {workspaceContext?.mode === 'workspace' && !workspaceContext.aligned && <div className={appearanceClass(css.workspaceMismatch, appearance.classes.workspaceMismatch)} role="status"><div><strong>{t('workspace.mismatchTitle')}</strong><span>{t('workspace.mismatchDescription')}</span><div><code>{t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}</code><code>{t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}</code></div></div>{workspaceSelection?.effectiveWorkspaceId !== undefined && <button type="button" className={css.secondaryButton} onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button>}</div>}
       <div className={css.workspace}>
-        <WorkspaceNavigation page={page} onSelect={setPage} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} writeEnabled={writeEnabled} />
+        <WorkspaceNavigation page={page} onSelect={selectPrimaryPage} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} writeEnabled={writeEnabled} />
+        <MemoryNavigation page={page} writeEnabled={writeEnabled} onSelect={selectPage} onRemember={() => openRemember()} />
         <section className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas">
           {page === 'overview' && <OverviewPage client={client} revision={revision} writeEnabled={writeEnabled} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onExplore={explore} />}
           {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}
           {page === 'documents' && <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} />}
           {page === 'explore' && <ExplorePage client={client} status={status} seed={searchSeed} writeEnabled={writeEnabled} onForget={forget} />}
           {page === 'entities' && <EntitiesPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onExplore={explore} />}
-          {page === 'remember' && <RememberPage client={client} sessionId={sessionId} memoryBodies={status?.memoryBodies ?? []} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} />}
+          {page === 'remember' && appearance.surface === 'buildin' && <RememberPage client={client} sessionId={sessionId} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} />}
           {page === 'list' && <ListPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onClone={clone} onExplore={explore} />}
           {page === 'status' && <StatusPage status={status} loading={statusLoading} onRefresh={() => void loadStatus()} />}
         </section>
+        {appearance.surface === 'sidebar' && rememberOpen && <RememberPage client={client} sessionId={sessionId} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} onClose={() => setRememberOpen(false)} onComplete={() => setRememberOpen(false)} />}
       </div>
     </main>
   )

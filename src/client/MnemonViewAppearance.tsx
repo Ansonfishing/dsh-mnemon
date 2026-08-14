@@ -15,6 +15,11 @@ type AppearanceSlot =
   | 'topNavigation'
   | 'nav'
   | 'navGroup'
+  | 'memoryNavigation'
+  | 'memoryTabs'
+  | 'memoryWriteButton'
+  | 'modalBackdrop'
+  | 'modal'
   | 'canvas'
   | 'pageHeader'
   | 'inspectorGlyph'
@@ -66,6 +71,11 @@ export function resolveMnemonViewAppearance(surface: MnemonViewSurface, t: Mnemo
       topNavigation: sidebarCss.topNavigation,
       nav: sidebarCss.nav,
       navGroup: sidebarCss.navGroup,
+      memoryNavigation: sidebarCss.memoryNavigation,
+      memoryTabs: sidebarCss.memoryTabs,
+      memoryWriteButton: sidebarCss.memoryWriteButton,
+      modalBackdrop: sidebarCss.modalBackdrop,
+      modal: sidebarCss.modal,
       canvas: sidebarCss.canvas,
       pageHeader: sidebarCss.pageHeader,
       inspectorGlyph: sidebarCss.inspectorGlyph,

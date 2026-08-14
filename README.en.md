@@ -142,7 +142,7 @@ See the [configuration reference](./docs/en/configuration.md) for every option, 
 
 ## Entry points
 
-The Web workspace contains Status, Runtime, Memory Spaces, Documents, Distill, Recall, Entities, and Content pages in three logical groups: “Status” stands alone; “Runtime, Memory Spaces, Documents” cover the three storage tiers; “Distill, Recall, Entities, Content” are the read/write tools. Its main interface follows DSH's global Chinese/English locale.
+The default Sidebar workbench uses four primary tabs — Status, Runtime, Memory Spaces, and Documents. Memory Spaces adds Overview, Recall, Content, and Entities as secondary tabs, with Remember as the primary action on the right. Runtime, Memory Spaces, and Documents share one structure: add on the right of the heading, then inspect or search below; adding opens a DSH-style modal. Buildin preserves the original eight-page grouped navigation and inline-form visuals. The main interface follows DSH's global Chinese/English locale.
 
 Memory also surfaces inside the conversation flow (conversation interface, **off by default**; enable each surface under Settings → Memory System → Conversation interface — changes apply live on save):
 

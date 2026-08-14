@@ -13,6 +13,8 @@ export declare const zh: {
     'nav.group.system': string;
     'nav.group.storage': string;
     'nav.group.tools': string;
+    'nav.memory.aria': string;
+    'nav.overview': string;
     'nav.bodies': string;
     'nav.bodies.detail': string;
     'nav.runtime': string;
@@ -24,6 +26,7 @@ export declare const zh: {
     'nav.entities': string;
     'nav.entities.detail': string;
     'nav.remember': string;
+    'nav.rememberAction': string;
     'nav.remember.detail': string;
     'nav.content': string;
     'nav.content.detail': string;
@@ -139,6 +142,7 @@ export declare const zh: {
     'runtime.target': string;
     'runtime.importance': string;
     'runtime.saving': string;
+    'runtime.addButton': string;
     'runtime.addAction': string;
     'runtime.target.user': string;
     'runtime.target.user.description': string;
@@ -549,6 +553,8 @@ export declare const en: {
     'nav.group.system': string;
     'nav.group.storage': string;
     'nav.group.tools': string;
+    'nav.memory.aria': string;
+    'nav.overview': string;
     'nav.bodies': string;
     'nav.bodies.detail': string;
     'nav.runtime': string;
@@ -560,6 +566,7 @@ export declare const en: {
     'nav.entities': string;
     'nav.entities.detail': string;
     'nav.remember': string;
+    'nav.rememberAction': string;
     'nav.remember.detail': string;
     'nav.content': string;
     'nav.content.detail': string;
@@ -675,6 +682,7 @@ export declare const en: {
     'runtime.target': string;
     'runtime.importance': string;
     'runtime.saving': string;
+    'runtime.addButton': string;
     'runtime.addAction': string;
     'runtime.target.user': string;
     'runtime.target.user.description': string;

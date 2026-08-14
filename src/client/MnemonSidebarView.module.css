@@ -81,6 +81,109 @@
   font-weight: 600;
 }
 
+.shell .memoryNavigation {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 7px 16px 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-base);
+}
+
+.shell .memoryTabs {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.shell .memoryTabs::-webkit-scrollbar { display: none; }
+.shell .memoryTabs button {
+  min-width: max-content;
+  min-height: 0;
+  padding: 6px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+}
+.shell .memoryTabs button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.shell .memoryTabs button[data-active] {
+  border-bottom-color: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+.shell .memoryWriteButton { flex: none; margin-bottom: 6px; }
+
+.shell .modalBackdrop {
+  position: fixed;
+  z-index: 1300;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--dsw-alias-bg-mask-1);
+}
+
+.shell .modal {
+  display: flex;
+  width: min(680px, calc(100vw - 48px));
+  max-height: calc(100vh - 96px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 14px;
+  background: var(--dsw-alias-bg-base);
+  box-shadow: var(--dsw-shadow-lv3);
+}
+.shell .modal > header {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+.shell .modal > header h2 { margin: 0; font-size: 15px; line-height: 22px; }
+.shell .modal > header p {
+  max-width: 64ch;
+  margin: 3px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.shell .modal > div:last-child { min-height: 0; overflow-y: auto; padding: 18px; }
+.shell .modal form[class*='runtimeComposer'],
+.shell .modal form[class*='documentEditor'] {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.shell .modal form[class*='runtimeComposer'] > [class*='runtimeComposerHeading'],
+.shell .modal form[class*='documentEditor'] > header { display: none; }
+.shell .modal section[class*='supervisedComposer'] { overflow: visible; }
+.shell .modal form[class*='supervisedForm'] { padding: 0; }
+.shell .modal [class*='supervisedHeading'] { margin-bottom: 10px; }
+.shell .modal [class*='supervisedHeading'] h3 { display: none; }
+.shell .modal [class*='formActions'] { justify-content: flex-end; }
+.shell .modal details[class*='advancedWrite'] {
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
 /*
  * DSH action hierarchy, shared by the installed SSH and task-board panels.
  * The stable source-class suffixes let Sidebar restyle the existing controls
@@ -253,6 +356,8 @@
   .shell .headerActions { max-width: 68vw; }
   .shell .workspacePicker select { width: min(170px, 38vw); }
   .shell .topNavigation { padding: 0 12px; }
+  .shell .memoryNavigation { padding-inline: 12px; }
+  .shell .memoryTabs button { padding-inline: 10px; }
   .shell .nav button {
     min-width: max-content;
     flex-direction: row;
@@ -261,6 +366,9 @@
   }
   .shell .canvas > div { padding: 14px 12px calc(170px + env(safe-area-inset-bottom, 0px)); }
   .shell .workspaceMismatch { margin-inline: 12px; }
+  .shell .modalBackdrop { padding: 12px; }
+  .shell .modal { width: calc(100vw - 24px); max-height: calc(100vh - 24px); }
+  .shell .modal > div:last-child { padding: 14px; }
 }
 
 @media (max-width: 520px) {

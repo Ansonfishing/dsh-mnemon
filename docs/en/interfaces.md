@@ -6,15 +6,15 @@
 
 `displayMode=sidebar` (the default) opens a dedicated workbench from the sidebar, while `displayMode=buildin` opens the same functional interface through the original DSH `conversation.view` tab. The settings page switches the two modes live and never mounts both simultaneously. Both modes share all functionality, data requests, and workspace state while using isolated appearance definitions. The main Web interface follows DSH's global language and light/dark theme.
 
-Sidebar uses a minimal skin aligned with official DSH panels: its title is “Memory System,” and it omits the Mnemon logo, header telemetry, and navigation decoration in favor of compact text tabs. Buildin preserves the existing Mnemon brand header, telemetry, and grouped-navigation visuals. Both modes expose the same eight pages: “Status”; the three storage tiers “Runtime, Memory Spaces, Documents”; and the read/write tools “Distill, Recall, Entities, Content.” The “Status” page opens by default.
+Sidebar uses a minimal skin aligned with official DSH panels: its title is “Memory System,” and it omits the Mnemon logo, header telemetry, and navigation decoration. Its primary tabs are Status, Runtime, Memory Spaces, and Documents. Memory Spaces adds Overview, Recall, Content, and Entities as secondary tabs, with Remember as the primary action on the right. Runtime, Memory Spaces, and Documents share one structure — add on the right of the heading, then inspect or search below — and every add flow opens a DSH-style modal. The Remember modal starts with only the candidate field and optionally expands advanced constraints. Buildin preserves the Mnemon brand header, original eight-page grouped navigation, inline add forms, and existing visuals. Status opens by default.
 
-| Page | Purpose | Call Boundary |
+| Page / action | Purpose | Call Boundary |
 |---|---|---|
 | Status | Health of the CLI, runtime hot memory, storage scope, Memory Spaces, and Documents | Aggregated reads |
 | Runtime | Inspect and maintain USER / MEMORY hot memory and capacity | Regular mutations are deterministic; capacity maintenance may start a worker |
 | Memory Spaces | Memory Space directory, activation switches and metadata editing, a live multi-space graph, and node inspection | Deterministic RPC reads; switches and metadata edits use write RPC |
 | Documents | Search, read, create, update, and archive Documents | Search/edit operations use the control layer; archiving starts a worker |
-| Distill | Let a memory worker select scope, deduplicate, and write; supports advanced constraints | `spawn` semantic write |
+| Distill (Sidebar primary action / Buildin page) | Let a memory worker select scope, deduplicate, and write; supports optional expandable constraints | `spawn` semantic write |
 | Recall | Direct smart / keyword / basic retrieval; optional evidence-bounded Agent answers | Direct service reads; Agent answers use a worker with no tools |
 | Entities | Frequent entities and entity-related context | Direct service reads |
 | Content | Browse active Memory Spaces without recall side effects, copy or clone content, or soft-delete it | Graph reads; deletion uses a worker |
