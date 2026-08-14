@@ -22,8 +22,10 @@ export interface AgentSearchResponse extends SearchResponse {
 export declare class MnemonClient {
     private readonly connection;
     private readonly sessionId?;
-    constructor(connection: ClientConnectionHandle, sessionId?: string | undefined);
+    private readonly workspaceId?;
+    constructor(connection: ClientConnectionHandle, sessionId?: string | undefined, workspaceId?: string | undefined);
     private call;
+    private scoped;
     status(): Promise<StatusView>;
     runtimeMemory(): Promise<RuntimeMemorySnapshot>;
     mutateRuntimeMemory(request: {

@@ -90,7 +90,7 @@ dsh plugin --profile web remove dsh-mnemon
 
 Uninstalling never deletes memory data: `global` data stays in `~/.mnemon`, and `workspace` / `custom` data stays in their directories, so reinstalling picks up where you left off.
 
-To pause automatic reads/writes without uninstalling, turn off `writebackMode` / `recallMode` / `lifecycleEnabled` in the plugin configuration (see the [configuration reference](./configuration.md), “Toggle interactions”). Note that `tabEnabled=false` currently disables the RPC but does not hide the tab entry — do not rely on it for UI removal.
+To pause automatic reads/writes without uninstalling, turn off `writebackMode` / `recallMode` / `lifecycleEnabled` in the plugin configuration (see the [configuration reference](./configuration.md), “Toggle interactions”). To hide only the Web workspace, set `tabEnabled=false`; Host RPC, commands, and Agent tools remain available.
 
 ## 4. Choose a Storage Scope
 
@@ -100,19 +100,21 @@ Start the DSH Web profile:
 dsh --profile web
 ```
 
-On the dedicated “Settings -> Memory System” page, choose:
+On the dedicated “Settings -> Memory System” page, first choose a display mode: the default `sidebar` uses a dedicated sidebar workbench, while `buildin` uses the original conversation-area tab. Saving switches live. Then choose a storage scope:
 
 | Scope | Root directory | Best suited for |
 |---|---|---|
 | `global` | `MNEMON_DATA_DIR` or `~/.mnemon` | Sharing one memory set across multiple workspaces |
-| `workspace` | `.mnemon` under the DSH Host startup directory | Project isolation |
+| `workspace` | `.mnemon` under each DSH workspace root | Project isolation and cross-workspace inspection |
 | `custom` | `dataDir` | An explicit disk, mounted volume, or dedicated data directory |
 
 Settings are written to `$DSH_HOME/settings.yaml` and apply live after Save. Switching scopes does not move existing data; to preserve it, stop writes first and migrate with a complete ZIP backup.
 
+After selecting `workspace`, the workbench header can switch the workspace being inspected. This choice controls only which memory set the workbench displays and maintains; Agent execution always follows the current session. A global warning appears when the two differ and offers one-click alignment.
+
 ## 5. Create Your First Memory Space
 
-Open the “Memory System” tab in any session:
+With the default `sidebar` mode, click “Memory System” in the DSH sidebar. With `buildin`, open the “Memory System” tab in the conversation area:
 
 1. Open the “Memory Spaces” page.
 2. Create a narrowly scoped Memory Space, such as “Project Decisions.”

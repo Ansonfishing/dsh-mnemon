@@ -5,6 +5,7 @@
       name: dsh-mnemon
       config:
         routingGuidance: true
+        displayMode: sidebar
         lifecycleEnabled: true
         recallMode: guided
         writebackMode: guided

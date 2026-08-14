@@ -1,6 +1,16 @@
 import type { CommandDefinition, CommandInvocation, CommandResult, CommandService } from './contracts.ts'
 import type { Insight, MnemonService } from './service.ts'
 import type { MnemonSubagentCoordinator } from './subagent.ts'
+import type { HostAgent } from './contracts.ts'
+
+interface AgentServiceSource {
+  readonly config: MnemonService['config']
+  forAgent(agent: HostAgent): { service: MnemonService }
+}
+
+function isAgentServiceSource(value: MnemonService | AgentServiceSource): value is AgentServiceSource {
+  return 'forAgent' in value && typeof value.forAgent === 'function'
+}
 
 const USAGE = '用法：/mnemon [status|recall <查询>|related <ID>|remember <内容>|forget <ID>]'
 
@@ -31,7 +41,8 @@ function splitInput(rawInput: string): { verb: string; argument: string } {
     : { verb: input.slice(0, separator).toLowerCase(), argument: input.slice(separator).trim() }
 }
 
-async function execute(service: MnemonService, coordinator: MnemonSubagentCoordinator, invocation: CommandInvocation): Promise<CommandResult> {
+async function execute(serviceOrSource: MnemonService | AgentServiceSource, coordinator: MnemonSubagentCoordinator, invocation: CommandInvocation): Promise<CommandResult> {
+  const service = isAgentServiceSource(serviceOrSource) ? serviceOrSource.forAgent(invocation.agent).service : serviceOrSource
   const { verb, argument } = splitInput(invocation.rawInput)
   switch (verb) {
     case 'status': {
@@ -82,7 +93,7 @@ async function execute(service: MnemonService, coordinator: MnemonSubagentCoordi
   }
 }
 
-export function createMnemonCommand(service: MnemonService, coordinator: MnemonSubagentCoordinator): CommandDefinition {
+export function createMnemonCommand(service: MnemonService | AgentServiceSource, coordinator: MnemonSubagentCoordinator): CommandDefinition {
   return {
     name: 'mnemon',
     description: '查看、召回或管理 Mnemon 外置记忆',
@@ -94,6 +105,6 @@ export function createMnemonCommand(service: MnemonService, coordinator: MnemonS
   }
 }
 
-export function registerCommands(commands: CommandService, service: MnemonService, coordinator: MnemonSubagentCoordinator): void {
+export function registerCommands(commands: CommandService, service: MnemonService | AgentServiceSource, coordinator: MnemonSubagentCoordinator): void {
   commands.register(createMnemonCommand(service, coordinator))
 }

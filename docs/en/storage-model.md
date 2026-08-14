@@ -50,7 +50,7 @@ follow an exact cold reference when full text is required
 +-- state/                         # reserved; no persistent reviewer yet
 ```
 
-`storageScope` determines the entire root, not just the Mnemon databases. `state/` is currently recognized only by the status inspector; scored review watermarks remain in the running Host's memory.
+`storageScope` determines the entire root, not just the Mnemon databases. The `workspace` scope resolves an independent `<workspace>/.mnemon` for every registered DSH workspace. The Web inspection target and current-session execution target are independent; only the latter drives agents, tools, and lifecycle hooks. `state/` is currently recognized only by the status inspector; scored review watermarks remain in the running Host's memory.
 
 ## Runtime Memory
 

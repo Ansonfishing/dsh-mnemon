@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { apply } from '../src/index.ts'
+import { apply, inject } from '../src/index.ts'
 
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
   dsh: { client: { inject: string[]; platform: string } }
@@ -43,6 +43,7 @@ function context() {
     },
     connection,
     agents: { get: vi.fn(), roots: vi.fn(() => []) },
+    workspaceRegistry: { get: vi.fn(), list: vi.fn(() => []) },
     subagents: {
       list: vi.fn(() => ['spawn']),
       getProvider: vi.fn(() => ({ capabilities: { outputSchema: true, depthLimit: true, toolFilter: true, persona: true } })),
@@ -59,6 +60,10 @@ function context() {
 }
 
 describe('dsh-mnemon plugin composition', () => {
+  it('requests the Host workspace registry for authorized per-workspace routing', () => {
+    expect(inject).toEqual(['tools', 'settings', 'commands', 'agents', 'subagents', 'workspaceRegistry'])
+  })
+
   it('exports a DSH Web client with its ordering dependencies', () => {
     expect(manifest.dsh.client).toEqual({
       inject: [

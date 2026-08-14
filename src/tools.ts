@@ -1,4 +1,5 @@
 import type { HostContextShape, ToolDefinition, ToolExecution } from './contracts.ts'
+import type { HostAgent } from './contracts.ts'
 import type { DocumentManager, DocumentMutation } from './documents.ts'
 import type { RuntimeMemoryController, RuntimeMemoryImportance, RuntimeMemoryTarget } from './runtime-memory.ts'
 import { isSubagent, MnemonSubagentCoordinator } from './subagent.ts'
@@ -33,14 +34,29 @@ function requireAgent(exec: ToolExecution) {
   return exec.agent
 }
 
+interface AgentRuntimeSource {
+  readonly config: MnemonService['config']
+  forAgent(agent: HostAgent): { service: MnemonService; runtimeMemory: RuntimeMemoryController; documents: DocumentManager }
+}
+
+function isAgentRuntimeSource(value: MnemonService | AgentRuntimeSource): value is AgentRuntimeSource {
+  return 'forAgent' in value && typeof value.forAgent === 'function'
+}
+
 /** Root calls delegate to a bounded child; memory-worker calls reach the deterministic service. */
-export function registerTools(ctx: HostContextShape, service: MnemonService, coordinator: MnemonSubagentCoordinator, runtimeMemory: RuntimeMemoryController, documents: DocumentManager): void {
+export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonService | AgentRuntimeSource, coordinator: MnemonSubagentCoordinator, runtimeMemory?: RuntimeMemoryController, documents?: DocumentManager): void {
+  const runtimeFor = (exec: ToolExecution) => {
+    if (isAgentRuntimeSource(serviceOrSource)) return serviceOrSource.forAgent(requireAgent(exec))
+    if (runtimeMemory === undefined || documents === undefined) throw new Error('Mnemon runtime control plane is unavailable')
+    return { service: serviceOrSource, runtimeMemory, documents }
+  }
+  const config = serviceOrSource.config
   ctx.tools.register(definition({
     name: 'mnemon_memory_bodies',
     description: 'List the global Mnemon Memory Space catalog, including each space id, name, description, activation state, database path, and statistics. Read only. Use this before choosing a write target, or when the Prime summary is insufficient. Recall may only read active spaces; writes may target any space.',
     parameters: { type: 'object', properties: {} },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    execute: (_args: unknown, exec: ToolExecution) => service.bodies(exec.signal),
+    execute: (_args: unknown, exec: ToolExecution) => runtimeFor(exec).service.bodies(exec.signal),
     presentCall: () => ({ card: 'generic', title: 'Inspect Mnemon Memory Spaces', kind: 'search' }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon Memory Spaces ready' }),
   } as never))
@@ -67,7 +83,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     },
     async execute(args: { query: string; mode?: 'smart' | 'keyword' | 'basic'; limit?: number; category?: Category; source?: Source; intent?: Intent; memoryBodyIds?: string[] }, exec: ToolExecution) {
       return isSubagent(exec.agent)
-        ? service.search(args, exec.signal)
+        ? runtimeFor(exec).service.search(args, exec.signal)
         : coordinator.recall(requireAgent(exec), args, exec.signal)
     },
     presentCall: (args: { query: string }) => ({ card: 'generic', title: 'Recall Mnemon memory', kind: 'search', rawInput: args.query }),
@@ -90,7 +106,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     async execute(args: { id: string; depth?: number; edge?: EdgeType; memoryBodyId?: string }, exec: ToolExecution) {
       if (!isSubagent(exec.agent)) return coordinator.related(requireAgent(exec), args.id, args.memoryBodyId, exec.signal)
-      const results = await service.related(args.id, args.depth, args.edge, exec.signal, args.memoryBodyId)
+      const results = await runtimeFor(exec).service.related(args.id, args.depth, args.edge, exec.signal, args.memoryBodyId)
       // DSH tool output validation requires the declared object shape. Keep the
       // underlying service array internal and expose a stable traversal receipt.
       return {
@@ -110,7 +126,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     description: 'Check the local Mnemon integration, active Memory Spaces, aggregate database statistics, and configuration. Use when a Mnemon operation fails or the user asks about memory health.',
     parameters: { type: 'object', properties: {} },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    execute: (_args: unknown, exec: ToolExecution) => service.status(exec.signal),
+    execute: (_args: unknown, exec: ToolExecution) => runtimeFor(exec).service.status(exec.signal),
     presentCall: () => ({ card: 'generic', title: 'Check Mnemon status', kind: 'other' }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon status checked' }),
   } as never))
@@ -129,7 +145,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     async execute(args: { query: string; includeArchived?: boolean; limit?: number }, exec: ToolExecution) {
-      const controller = documents.forAgent(requireAgent(exec))
+      const controller = runtimeFor(exec).documents.forAgent(requireAgent(exec))
       const result = await controller.search(args.query, { ...(args.includeArchived === undefined ? {} : { includeArchived: args.includeArchived }), limit: Math.min(8, args.limit ?? 8) })
       const suggestions = result.results.length === 0 && args.query.trim() !== ''
         ? controller.snapshot().documents
@@ -177,7 +193,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     execute: (args: { action: 'create' | 'update' | 'archive'; id?: string; title?: string; description?: string; content?: string; sourcePaths?: string[] }, exec: ToolExecution) => {
-      if (!service.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
+      if (!config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
       const agent = requireAgent(exec)
       if (args.action === 'archive') {
         if (isSubagent(agent)) throw new Error('idle document workers cannot cold-archive directly')
@@ -187,7 +203,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
       const request: DocumentMutation = args.action === 'create'
         ? { action: 'create', title: args.title ?? '', content: args.content ?? '', ...(args.description === undefined ? {} : { description: args.description }), ...(args.sourcePaths === undefined ? {} : { sourcePaths: args.sourcePaths }), sessionIds: [agent.id] }
         : { action: 'update', id: args.id ?? '', ...(args.title === undefined ? {} : { title: args.title }), ...(args.description === undefined ? {} : { description: args.description }), ...(args.content === undefined ? {} : { content: args.content }), ...(args.sourcePaths === undefined ? {} : { sourcePaths: args.sourcePaths }), sessionIds: [agent.id] }
-      return isSubagent(agent) ? documents.forAgent(agent).mutate(request) : coordinator.document(agent, request, exec.signal)
+      return isSubagent(agent) ? runtimeFor(exec).documents.forAgent(agent).mutate(request) : coordinator.document(agent, request, exec.signal)
     },
     presentCall: (args: { action: string; title?: string }) => ({ card: 'generic', title: `${args.action} Mnemon Document`, kind: 'edit', ...(args.title === undefined ? {} : { rawInput: args.title }) }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon Document processed' }),
@@ -209,7 +225,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     execute: (args: { action: 'add' | 'replace' | 'remove'; target: RuntimeMemoryTarget; content?: string; old_text?: string; importance?: RuntimeMemoryImportance }, exec: ToolExecution) => {
-      if (!service.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
+      if (!config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
       const request = {
         action: args.action,
         target: args.target,
@@ -217,7 +233,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
         ...(args.old_text === undefined ? {} : { oldText: args.old_text }),
         ...(args.importance === undefined ? {} : { importance: args.importance }),
       }
-      return isSubagent(exec.agent) ? runtimeMemory.mutate(request) : coordinator.runtime(requireAgent(exec), request, exec.signal)
+      return isSubagent(exec.agent) ? runtimeFor(exec).runtimeMemory.mutate(request) : coordinator.runtime(requireAgent(exec), request, exec.signal)
     },
     presentCall: (args: { action: string; target: string }) => ({ card: 'generic', title: `${args.action} runtime ${args.target} memory`, kind: 'edit' }),
     presentResult: () => ({ card: 'generic', title: 'Runtime memory updated' }),
@@ -243,7 +259,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     async execute(args: { content: string; category?: Category; importance?: number; tags?: string[]; entities?: string[]; source?: Source; memoryBodyId?: string }, exec: ToolExecution) {
       const request = { ...args, source: args.source ?? 'agent' }
       return isSubagent(exec.agent)
-        ? service.remember(request, exec.signal)
+        ? runtimeFor(exec).service.remember(request, exec.signal)
         : coordinator.remember(requireAgent(exec), request, exec.signal)
     },
     presentCall: () => ({ card: 'generic', title: 'Write Mnemon memory', kind: 'edit' }),
@@ -268,7 +284,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     async execute(args: { sourceId: string; targetId: string; type?: EdgeType; weight?: number; reason?: string; memoryBodyId?: string }, exec: ToolExecution) {
       return isSubagent(exec.agent)
-        ? service.link(args.sourceId, args.targetId, args.type, args.weight, args.reason, exec.signal, args.memoryBodyId)
+        ? runtimeFor(exec).service.link(args.sourceId, args.targetId, args.type, args.weight, args.reason, exec.signal, args.memoryBodyId)
         : coordinator.write(requireAgent(exec), 'link', args, exec.signal)
     },
     presentCall: () => ({ card: 'generic', title: 'Link Mnemon insights', kind: 'edit' }),
@@ -285,7 +301,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     execute: (args: { id: string; memoryBodyId?: string }, exec: ToolExecution) => isSubagent(exec.agent)
-      ? service.forget(args.id, exec.signal, args.memoryBodyId)
+      ? runtimeFor(exec).service.forget(args.id, exec.signal, args.memoryBodyId)
       : coordinator.write(requireAgent(exec), 'forget', args, exec.signal),
     presentCall: (args: { id: string }) => ({ card: 'generic', title: 'Forget Mnemon insight', kind: 'edit', rawInput: args.id }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon insight forgotten' }),
@@ -304,7 +320,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     execute: (args: { name: string; description: string }, exec: ToolExecution) => isSubagent(exec.agent)
-      ? service.createBody(args, exec.signal)
+      ? runtimeFor(exec).service.createBody(args, exec.signal)
       : coordinator.write(requireAgent(exec), 'create-memory-body', args, exec.signal),
     presentCall: () => ({ card: 'generic', title: 'Create Mnemon Memory Space', kind: 'edit' }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon Memory Space created' }),
@@ -325,7 +341,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     execute: (args: { memoryBodyId: string; name?: string; description?: string; active?: boolean }, exec: ToolExecution) => isSubagent(exec.agent)
-      ? service.updateBody(args.memoryBodyId, args)
+      ? runtimeFor(exec).service.updateBody(args.memoryBodyId, args)
       : coordinator.write(requireAgent(exec), 'update-memory-body', args, exec.signal),
     presentCall: () => ({ card: 'generic', title: 'Update Mnemon Memory Space', kind: 'edit' }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon Memory Space updated' }),
@@ -345,7 +361,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     execute: (args: { targetMemoryBodyId: string; sourceMemoryBodyIds: string[]; deactivateSources?: boolean }, exec: ToolExecution) => isSubagent(exec.agent)
-      ? service.mergeBodies(args.targetMemoryBodyId, args.sourceMemoryBodyIds, args.deactivateSources ?? true, exec.signal)
+      ? runtimeFor(exec).service.mergeBodies(args.targetMemoryBodyId, args.sourceMemoryBodyIds, args.deactivateSources ?? true, exec.signal)
       : coordinator.write(requireAgent(exec), 'merge-memory-bodies', args, exec.signal),
     presentCall: () => ({ card: 'generic', title: 'Merge Mnemon Memory Spaces', kind: 'edit' }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon Memory Spaces merged' }),

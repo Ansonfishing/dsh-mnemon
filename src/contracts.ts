@@ -109,6 +109,7 @@ export type HostPreStepDecision = { kind: 'reject' } | { kind: 'enter'; messages
 export interface HostAgentContext {
   on(name: string, listener: (...args: never[]) => unknown): () => unknown
   effect(callback: () => (() => unknown) | void, label?: string): () => unknown
+  get?(name: string): unknown
 }
 
 export interface HostAgent {
@@ -128,6 +129,17 @@ export interface HostAgent {
 export interface HostAgentsService {
   get(id: string): HostAgent | undefined
   roots(): HostAgent[]
+}
+
+export interface HostWorkspace {
+  readonly id: string
+  readonly path: string
+  readonly title: string
+}
+
+export interface HostWorkspaceRegistry {
+  get(id: string): HostWorkspace | undefined
+  list(): HostWorkspace[]
 }
 
 export interface HostSubagentResult {
@@ -171,6 +183,7 @@ export interface HostContextShape {
   connection: HostConnectionHandle
   agents: HostAgentsService
   subagents: HostSubagentsService
+  workspaceRegistry: HostWorkspaceRegistry
   get(name: string): unknown
   inject(services: string[], callback: (ctx: HostContextShape) => void): unknown
   on(name: string, listener: (...args: never[]) => unknown): () => unknown

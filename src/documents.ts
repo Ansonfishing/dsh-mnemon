@@ -563,10 +563,12 @@ export class DocumentManager {
 
   forWorkspace(workspaceRoot: string): DocumentController {
     const root = resolve(workspaceRoot)
-    let controller = this.controllers.get(root)
+    const storageRoot = this.storageRoot?.()
+    const key = storageRoot === undefined ? root : `${resolve(storageRoot)}\0${root}`
+    let controller = this.controllers.get(key)
     if (controller === undefined) {
-      controller = new DocumentController(root, this.limitBytes, this.now)
-      this.controllers.set(root, controller)
+      controller = new DocumentController(root, this.limitBytes, this.now, storageRoot)
+      this.controllers.set(key, controller)
     }
     return controller
   }
@@ -574,15 +576,6 @@ export class DocumentManager {
   forAgent(agent: HostAgent): DocumentController {
     const cwd = agent.session.header?.cwd
     if (cwd === undefined || cwd.trim() === '') throw new Error('the current DSH session has no workspace for Mnemon Documents')
-    if (this.storageRoot === undefined) return this.forWorkspace(cwd)
-    const storageRoot = resolve(this.storageRoot())
-    const root = resolve(cwd)
-    const key = `${storageRoot}\0${root}`
-    let controller = this.controllers.get(key)
-    if (controller === undefined) {
-      controller = new DocumentController(root, this.limitBytes, this.now, storageRoot)
-      this.controllers.set(key, controller)
-    }
-    return controller
+    return this.forWorkspace(cwd)
   }
 }

@@ -9,8 +9,9 @@ import { MnemonSaveAction } from './MnemonSaveAction.tsx'
 import { en, zh, type MnemonKey } from './locales.ts'
 import { MnemonSettingsScope } from './settings.ts'
 import type { MnemonClientContext } from './dsh-compat.ts'
+import { mountMnemonWorkspace } from './workspace-mount.tsx'
 
-export const inject = ['slots', 'connection', 'locale']
+export const inject = ['slots', 'sessions', 'workspaces', 'connection', 'locale']
 
 /** Interaction surfaces: slot name, settings toggle, and the registrations it owns. */
 type MnemonNamespace = 'mnemon'
@@ -85,7 +86,24 @@ function enabledOf(value: unknown, key: 'toolviews' | 'turnBar' | 'saveAction'):
   return (value as Partial<Record<typeof key, boolean>> | undefined)?.[key] === true
 }
 
-/** Add one standard conversation.view entry; unloading the plugin removes it with the slot effect. */
+type DisplayMode = NonNullable<Config['displayMode']>
+
+function mountBuildinMemoryView(ctx: MnemonClientContext, settings: MnemonSettingsScope<Config>, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
+  return ctx.slots.inject('conversation.view', () => ctx.slots.register({
+    name: 'conversation.view',
+    id: 'mnemon',
+    order: 30,
+    label: () => translate('tab.label'),
+    locale: namespace,
+    inject: (): { connection: ClientConnectionHandle; settingsScope: MnemonSettingsScope<Config>; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+      connection: ctx.connection,
+      settingsScope: settings,
+      t: translate,
+    }),
+  }, MnemonView))
+}
+
+/** Mount the memory workspace plus the optional in-conversation interaction surfaces. */
 export function apply(rawContext: unknown): void {
   const ctx = rawContext as MnemonClientContext
   const settings = new MnemonSettingsScope<Config>(ctx.connection, MNEMON_SETTINGS_NAMESPACE)
@@ -93,36 +111,35 @@ export function apply(rawContext: unknown): void {
   const namespace: MnemonNamespace = 'mnemon'
   ctx.effect(() => ctx.locale.register(namespace, { zh, en }), 'dsh-mnemon: locale dictionaries')
   const translate = ctx.locale.bind(namespace)
-  let disposeMemoryTab: (() => void) | undefined
-  const reconcileMemoryTab = (): void => {
-    const enabled = settings.getSnapshot().value?.tabEnabled !== false
-    if (enabled && disposeMemoryTab === undefined) {
-      disposeMemoryTab = ctx.slots.inject('conversation.view', () => ctx.slots.register({
-        name: 'conversation.view',
-        id: 'mnemon',
-        order: 30,
-        label: () => translate('tab.label'),
-        locale: namespace,
-        inject: (): { connection: ClientConnectionHandle; settingsScope: MnemonSettingsScope<Config>; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
-          connection: ctx.connection,
-          settingsScope: settings,
-          t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
-        }),
-      }, MnemonView))
-    } else if (!enabled && disposeMemoryTab !== undefined) {
-      disposeMemoryTab()
-      disposeMemoryTab = undefined
-    }
+  let activeMemoryWorkspace: { mode: DisplayMode; dispose: () => void } | undefined
+  const reconcileMemoryWorkspace = (): void => {
+    const snapshot = settings.getSnapshot()
+    const value = snapshot.value
+    // Avoid briefly mounting the default sidebar for users whose persisted
+    // mode is buildin while the settings snapshot is still in flight.
+    const mode = snapshot.status === 'loading'
+      ? undefined
+      : value?.tabEnabled === false ? undefined : value?.displayMode ?? 'sidebar'
+    if (activeMemoryWorkspace?.mode === mode) return
+    activeMemoryWorkspace?.dispose()
+    activeMemoryWorkspace = mode === undefined
+      ? undefined
+      : {
+          mode,
+          dispose: mode === 'buildin'
+            ? mountBuildinMemoryView(ctx, settings, namespace, translate)
+            : mountMnemonWorkspace(ctx, settings, translate),
+        }
   }
   ctx.effect(() => {
-    const unsubscribe = settings.subscribe(reconcileMemoryTab)
-    reconcileMemoryTab()
+    const unsubscribe = settings.subscribe(reconcileMemoryWorkspace)
+    reconcileMemoryWorkspace()
     return () => {
       unsubscribe()
-      disposeMemoryTab?.()
-      disposeMemoryTab = undefined
+      activeMemoryWorkspace?.dispose()
+      activeMemoryWorkspace = undefined
     }
-  }, 'dsh-mnemon: memory tab')
+  }, 'dsh-mnemon: configurable memory workspace')
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'mnemon',

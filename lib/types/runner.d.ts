@@ -27,5 +27,5 @@ export interface MnemonRunner {
     effectiveDataDir(): string;
     effectiveStore(): string;
 }
-export declare function createRunner(config: ResolvedConfig, processRunner?: ProcessRunner): MnemonRunner;
+export declare function createRunner(config: ResolvedConfig, processRunner?: ProcessRunner, workspaceRoot?: string): MnemonRunner;
 //# sourceMappingURL=runner.d.ts.map

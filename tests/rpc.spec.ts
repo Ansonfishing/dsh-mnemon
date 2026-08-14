@@ -6,6 +6,7 @@ import { createPackHandler, createReadHandler, createWriteHandler, MNEMON_PACK_C
 import type { RuntimeMemoryController } from '../src/runtime-memory.ts'
 import { MnemonService } from '../src/service.ts'
 import type { MnemonPackManager } from '../src/pack.ts'
+import type { LiveMnemonRuntime, MnemonRuntimeGraph } from '../src/live-runtime.ts'
 
 function fakeService(writeEnabled = true): MnemonService {
   return {
@@ -162,6 +163,95 @@ describe('Mnemon RPC', () => {
       value: { healthy: true, lifecycle: { enabled: true, activeAgents: 1, sessionAvailable: true } },
     })
     expect(lifecycle.snapshot).toHaveBeenCalledWith('session-1')
+  })
+
+  it('reports inspection/execution divergence, keeps direct workbench writes on the inspected graph, and fences Agent work', async () => {
+    const selectedService = fakeService()
+    selectedService.config.storageScope = 'workspace'
+    const selectedGraph = {
+      config: selectedService.config,
+      service: selectedService,
+      runtimeMemory: { snapshot: vi.fn(() => ({ entries: [] })) },
+      documents: { forWorkspace: vi.fn(() => ({ snapshot: vi.fn(() => ({ workspaceRoot: '/tmp/workspace-two' })) })) },
+      storage: { catalog: vi.fn(() => ({ activeRoot: '/tmp/workspace-two/.mnemon' })) },
+      packs: {},
+    } as unknown as MnemonRuntimeGraph
+    const route = {
+      graph: selectedGraph,
+      selectedWorkspace: { id: 'workspace-2', title: 'Workspace Two', path: '/tmp/workspace-two' },
+      effectiveWorkspace: { id: 'workspace-1', title: 'Workspace One', path: '/tmp/workspace-one' },
+      selectedRoot: '/tmp/workspace-two/.mnemon',
+      effectiveRoot: '/tmp/workspace-one/.mnemon',
+      aligned: false,
+    }
+    const runtime = { route: vi.fn(() => route) } as unknown as LiveMnemonRuntime
+    const lifecycle = {
+      snapshot: vi.fn(() => ({ enabled: true })),
+      supervise: vi.fn(),
+      remember: vi.fn(async () => ({ delegated: true, runId: 'write-1' })),
+    } as unknown as MnemonLifecycle
+
+    await expect(createReadHandler(runtime, lifecycle)('status', { sessionId: 'session-1', workspaceId: 'workspace-2' })).resolves.toMatchObject({
+      ok: true,
+      value: {
+        workspaceContext: {
+          mode: selectedService.config.storageScope,
+          selectedRoot: '/tmp/workspace-two/.mnemon',
+          effectiveRoot: '/tmp/workspace-one/.mnemon',
+          aligned: false,
+          selectedWorkspace: { id: 'workspace-2' },
+          effectiveWorkspace: { id: 'workspace-1' },
+        },
+      },
+    })
+    await expect(createWriteHandler(runtime, lifecycle)('remember', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Inspect this workspace' })).resolves.toMatchObject({ ok: true })
+    expect(selectedService.remember).toHaveBeenCalledWith(expect.objectContaining({ content: 'Inspect this workspace', source: 'user' }))
+
+    await expect(createWriteHandler(runtime, lifecycle)('supervise', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Do not run in the wrong workspace' })).resolves.toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('align the workbench') },
+    })
+    expect(lifecycle.supervise).not.toHaveBeenCalled()
+
+    route.aligned = true
+    route.effectiveRoot = route.selectedRoot
+    route.effectiveWorkspace = route.selectedWorkspace
+    await expect(createWriteHandler(runtime, lifecycle)('remember', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Use the aligned Agent path' })).resolves.toMatchObject({ ok: true })
+    expect(lifecycle.remember).toHaveBeenCalledWith('session-1', expect.objectContaining({ content: 'Use the aligned Agent path' }))
+    expect(selectedService.remember).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not treat a browser workspace hint as an inspection override in global scope', async () => {
+    const service = fakeService()
+    const mutate = vi.fn()
+    const graph = {
+      config: service.config,
+      service,
+      runtimeMemory: { mutate },
+      documents: {},
+      storage: {},
+      packs: {},
+    } as unknown as MnemonRuntimeGraph
+    const route = {
+      graph,
+      selectedWorkspace: { id: 'workspace-2', title: 'Workspace Two', path: '/tmp/workspace-two' },
+      effectiveWorkspace: { id: 'workspace-1', title: 'Workspace One', path: '/tmp/workspace-one' },
+      selectedRoot: '/tmp/global',
+      effectiveRoot: '/tmp/global',
+      aligned: true,
+    }
+    const runtime = { route: vi.fn(() => route) } as unknown as LiveMnemonRuntime
+    const lifecycle = {
+      runtime: vi.fn(async () => ({ success: true })),
+      remember: vi.fn(async () => ({ delegated: true })),
+    } as unknown as MnemonLifecycle
+
+    await createWriteHandler(runtime, lifecycle)('runtime-memory', { sessionId: 'session-1', workspaceId: 'workspace-2', action: 'add', target: 'memory', content: 'Global hot memory' })
+    expect(lifecycle.runtime).toHaveBeenCalledWith('session-1', expect.objectContaining({ content: 'Global hot memory' }))
+    expect(mutate).not.toHaveBeenCalled()
+    await createWriteHandler(runtime, lifecycle)('remember', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Global durable memory' })
+    expect(lifecycle.remember).toHaveBeenCalledWith('session-1', expect.objectContaining({ content: 'Global durable memory' }))
+    expect(service.remember).not.toHaveBeenCalled()
   })
 
   it('fences read and write channels with different authorities', () => {

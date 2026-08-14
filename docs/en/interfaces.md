@@ -4,7 +4,7 @@
 
 ## Web Workspace
 
-The main Web interface follows DSH's global language and light/dark theme. The top navigation is split into three divider-separated groups: “Status” stands alone; “Runtime, Memory Spaces, Documents” cover the three storage tiers; “Distill, Recall, Entities, Content” are the read/write tools. The “Status” page opens by default.
+`displayMode=sidebar` (the default) opens a dedicated workbench from the sidebar, while `displayMode=buildin` opens the same functional interface through the original DSH `conversation.view` tab. The settings page switches the two modes live and never mounts both simultaneously. The main Web interface follows DSH's global language and light/dark theme. The top navigation is split into three divider-separated groups: “Status” stands alone; “Runtime, Memory Spaces, Documents” cover the three storage tiers; “Distill, Recall, Entities, Content” are the read/write tools. The “Status” page opens by default.
 
 | Page | Purpose | Call Boundary |
 |---|---|---|
@@ -91,6 +91,8 @@ When a worker calls a tool with the same name, the call goes directly to the ser
 
 RPC is the internal bridge between the DSH Host and this plugin's Web client. It is not a promised stable external HTTP API.
 
+Workbench data requests carry `sessionId` and an optional `workspaceId`. The Host accepts only workspace IDs registered in `workspaceRegistry`: deterministic reads and human maintenance route to the inspected root selected by `workspaceId`, while agents, tools, and lifecycle hooks continue to route by the Agent cwd for `sessionId`. `status.workspaceContext` returns both roots and their `aligned` state; Agent-backed writes are rejected while they differ.
+
 ### Read Channel
 
 ```text
@@ -123,7 +125,7 @@ authority: loopback
 | Endpoint | Behavior |
 |---|---|
 | `runtime-memory` | Hot-memory mutation |
-| `supervise` | Submit a Tab candidate to a memory worker |
+| `supervise` | Submit a workspace candidate to a memory worker |
 | `document` | create / update / archive |
 | `remember` | Semantic write with optional advanced constraints |
 | `link` | Create a relationship |
@@ -131,7 +133,7 @@ authority: loopback
 | `body-create` | Create a Memory Space |
 | `body-update` | Update metadata or active state |
 
-The entire write channel is not registered when `writeEnabled=false`.
+When `writeEnabled=false`, the write channel remains stably registered but every mutation is rejected at the Host boundary.
 
 ### Settings Channel
 

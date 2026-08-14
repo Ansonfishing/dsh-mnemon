@@ -90,7 +90,7 @@ dsh plugin --profile web remove dsh-mnemon
 
 卸载不会删除记忆数据：`global` 范围数据留在 `~/.mnemon`，`workspace` / `custom` 范围数据留在对应目录，重新安装后继续可用。
 
-临时停用自动读写而不卸载：在插件配置里关闭 `writebackMode` / `recallMode` / `lifecycleEnabled`（见[配置参考](./configuration.md)的“开关交互”）。注意 `tabEnabled=false` 目前只停掉 RPC 而不隐藏 Tab 入口，不应依赖它做 UI 卸载。
+临时停用自动读写而不卸载：在插件配置里关闭 `writebackMode` / `recallMode` / `lifecycleEnabled`（见[配置参考](./configuration.md)的“开关交互”）。只想隐藏 Web 工作台时设置 `tabEnabled=false`；Host RPC、命令和 Agent 工具保持可用。
 
 ## 4. 选择存储范围
 
@@ -100,19 +100,21 @@ dsh plugin --profile web remove dsh-mnemon
 dsh --profile web
 ```
 
-在“设置 -> 记忆系统”独立配置页选择：
+在“设置 -> 记忆系统”独立配置页先选择展示形态：默认 `sidebar` 使用左侧栏独立工作台，`buildin` 使用原有对话区内嵌标签页；保存后实时切换。再选择存储范围：
 
 | 范围 | 根目录 | 适合场景 |
 |---|---|---|
 | `global` | `MNEMON_DATA_DIR` 或 `~/.mnemon` | 多个工作区共享同一套记忆 |
-| `workspace` | DSH Host 启动目录下的 `.mnemon` | 项目隔离 |
+| `workspace` | 每个 DSH 工作区根目录下的 `.mnemon` | 项目隔离与跨工作区查看 |
 | `custom` | `dataDir` | 显式磁盘、挂载卷或专用数据目录 |
 
 设置写入 `$DSH_HOME/settings.yaml`，保存后实时应用。切换范围不会搬运旧数据；需要保留时先停止写入并通过整体 ZIP 备份迁移。
 
+选择 `workspace` 后，工作台顶部可以切换要查看的工作区。这个选择只决定工作台正在查看和维护哪一套数据；Agent 实际使用的目录始终跟随当前会话。两者不同时会出现全局提示，可一键对齐。
+
 ## 5. 创建第一个记忆体
 
-进入任意会话的“记忆系统”Tab：
+使用默认 `sidebar` 时点击 DSH 左侧栏的“记忆系统”入口；使用 `buildin` 时打开对话区的“记忆系统”标签页：
 
 1. 打开“记忆体”页。
 2. 创建一个主题明确的记忆体，例如“项目决策”。

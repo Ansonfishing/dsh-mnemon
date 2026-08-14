@@ -16,11 +16,13 @@ export interface Config {
     store?: string;
     /** Hard deadline for one CLI process. */
     timeoutMs?: number;
-    /** Default number of recall results exposed to the agent and the tab. */
+    /** Default number of recall results exposed to the agent and Web workspace. */
     defaultRecallLimit?: number;
     /** Add conservative recall/writeback guidance to the DSH system prompt. */
     routingGuidance?: boolean;
-    /** Register the Web conversation-view memory tab. */
+    /** Choose where the DSH Web memory workspace is mounted. */
+    displayMode?: 'sidebar' | 'buildin';
+    /** Register the configured DSH Web memory workspace. */
     tabEnabled?: boolean;
     /** Allow remember/link/forget mutations. Recall and status remain available when false. */
     writeEnabled?: boolean;
@@ -63,6 +65,7 @@ export interface ResolvedConfig {
     timeoutMs: number;
     defaultRecallLimit: number;
     routingGuidance: boolean;
+    displayMode: 'sidebar' | 'buildin';
     tabEnabled: boolean;
     writeEnabled: boolean;
     lifecycleEnabled: boolean;

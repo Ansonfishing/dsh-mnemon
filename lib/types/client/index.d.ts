@@ -1,4 +1,4 @@
 export declare const inject: string[];
-/** Add one standard conversation.view entry; unloading the plugin removes it with the slot effect. */
+/** Mount the memory workspace plus the optional in-conversation interaction surfaces. */
 export declare function apply(rawContext: unknown): void;
 //# sourceMappingURL=index.d.ts.map

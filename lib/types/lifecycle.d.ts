@@ -1,11 +1,17 @@
 import type { ResolvedConfig } from './config.ts';
-import type { HostContextShape } from './contracts.ts';
+import type { HostAgent, HostContextShape } from './contracts.ts';
 import type { Insight, RememberRequest, SearchRequest } from './service.ts';
 import type { RuntimeMemoryMutation } from './runtime-memory.ts';
 import type { DocumentMutation } from './documents.ts';
 import { MnemonSubagentCoordinator, type DelegatedWriteResult, type SubagentCounters } from './subagent.ts';
 import { type ReviewActivityScore } from './review-activity.ts';
 import { type TurnMemoryActivitySnapshot } from './activity.ts';
+import type { RuntimeMemoryController } from './runtime-memory.ts';
+interface AgentRuntimeSource {
+    forAgent(agent: HostAgent): {
+        runtimeMemory: RuntimeMemoryController;
+    };
+}
 export type { TurnMemoryActivity, TurnMemoryActivitySnapshot } from './activity.ts';
 export declare const MNEMON_PLUGIN_SOURCE = "dsh-mnemon";
 export type LifecyclePhase = 'idle' | 'prime' | 'recall' | 'writeback' | 'review' | 'supervised' | 'error';
@@ -58,11 +64,12 @@ export declare class MnemonLifecycle {
     private readonly ctx;
     private readonly coordinator;
     private readonly config;
+    private readonly runtimeSource?;
     private readonly owners;
     private readonly counters;
     /** Bounded process-local replay fence for finalized-message write actions. */
     private readonly supervisedWritebacks;
-    constructor(ctx: HostContextShape, coordinator: MnemonSubagentCoordinator, config: ResolvedConfig);
+    constructor(ctx: HostContextShape, coordinator: MnemonSubagentCoordinator, config: ResolvedConfig, runtimeSource?: AgentRuntimeSource | undefined);
     start(): () => void;
     snapshot(sessionId?: string): LifecycleSnapshot;
     workspaceRoot(sessionId?: string): string | undefined;

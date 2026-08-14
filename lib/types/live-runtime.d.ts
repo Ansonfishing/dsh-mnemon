@@ -1,4 +1,5 @@
 import type { ResolvedConfig } from './config.ts';
+import type { HostAgent, HostAgentsService, HostWorkspace, HostWorkspaceRegistry } from './contracts.ts';
 import { DocumentManager } from './documents.ts';
 import { MnemonPackManager } from './pack.ts';
 import { type MnemonRunner } from './runner.ts';
@@ -19,7 +20,7 @@ export interface MnemonRuntimeGraph {
  * validate and initialize the selected storage root, so a failed candidate is
  * rejected by DSH settings validation without disturbing the active graph.
  */
-export declare function createRuntimeGraph(config: ResolvedConfig): MnemonRuntimeGraph;
+export declare function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: string): MnemonRuntimeGraph;
 /**
  * Stable faces handed to DSH registrations. `swap` is synchronous and contains
  * no user code, so all faces move to the same prevalidated generation in one
@@ -27,7 +28,10 @@ export declare function createRuntimeGraph(config: ResolvedConfig): MnemonRuntim
  * generation until that invocation settles.
  */
 export declare class LiveMnemonRuntime {
+    private readonly workspaceRegistry?;
+    private readonly agents?;
     private current;
+    private readonly workspaceGraphs;
     readonly config: ResolvedConfig;
     readonly runner: MnemonRunner;
     readonly service: MnemonService;
@@ -35,8 +39,28 @@ export declare class LiveMnemonRuntime {
     readonly documents: DocumentManager;
     readonly storage: StorageScopeInspector;
     readonly packs: MnemonPackManager;
-    constructor(initial: MnemonRuntimeGraph);
+    constructor(initial: MnemonRuntimeGraph, workspaceRegistry?: HostWorkspaceRegistry | undefined, agents?: HostAgentsService | undefined);
     swap(next: MnemonRuntimeGraph): void;
     snapshot(): MnemonRuntimeGraph;
+    /** Resolve the runtime that must serve one Agent execution. */
+    forAgent(agent: HostAgent): MnemonRuntimeGraph;
+    /** Resolve an authorized DSH workspace selected by the Web workbench. */
+    forWorkspaceId(workspaceId: string): MnemonRuntimeGraph;
+    /** Resolve a Web request, preferring its explicit inspection workspace. */
+    route(request: {
+        workspaceId?: string;
+        sessionId?: string;
+    }): {
+        graph: MnemonRuntimeGraph;
+        selectedWorkspace?: HostWorkspace;
+        effectiveWorkspace?: HostWorkspace;
+        selectedRoot: string;
+        effectiveRoot: string;
+        aligned: boolean;
+    };
+    private forWorkspacePath;
+    private agent;
+    private requireWorkspace;
+    private workspaceForPath;
 }
 //# sourceMappingURL=live-runtime.d.ts.map

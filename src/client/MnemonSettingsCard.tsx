@@ -14,15 +14,16 @@ export interface MnemonSettingsCardProps {
   t?: MnemonTranslate
 }
 
-type CoreField = 'storageScope' | 'dataDir'
+type CoreField = 'displayMode' | 'storageScope' | 'dataDir'
 type InteractionField = 'toolviews' | 'turnBar' | 'saveAction'
 type Field = CoreField | InteractionField
 interface Draft extends Record<InteractionField, boolean> {
+  displayMode: 'sidebar' | 'buildin'
   storageScope: string
   dataDir: string
 }
 
-const CORE_FIELDS: CoreField[] = ['storageScope', 'dataDir']
+const CORE_FIELDS: CoreField[] = ['displayMode', 'storageScope', 'dataDir']
 const INTERACTION_FIELDS: InteractionField[] = ['toolviews', 'turnBar', 'saveAction']
 
 function record(value: unknown): Record<string, unknown> {
@@ -40,6 +41,7 @@ function coreDraft(value: Config | undefined): Pick<Draft, CoreField> {
   const resolved = value ?? {}
   const dataDir = resolved.dataDir?.trim() || legacyPackDirectory(resolved)
   return {
+    displayMode: resolved.displayMode ?? 'sidebar',
     storageScope: resolved.storageScope ?? (dataDir === '' ? 'global' : 'custom'),
     dataDir,
   }
@@ -164,6 +166,16 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           <h1>{t('config.title')}</h1>
           <p>{t('config.description')}</p>
         </header>
+
+        <section className={css.section} aria-labelledby="mnemon-display-heading">
+          <div className={css.sectionHeading}>
+            <div><h2 id="mnemon-display-heading">{t('config.displayTitle')}</h2><p>{t('config.displayDescription')}</p></div>
+          </div>
+          <div className={`${css.choiceGrid} ${css.displayGrid}`} role="radiogroup" aria-label={t('config.displayAria')}>
+            <ChoiceCard id="mnemon-display-sidebar" name="mnemon-display" label={t('config.displaySidebar')} detail={t('config.displaySidebarHint')} checked={draft.displayMode === 'sidebar'} disabled={coreDisabled} onChange={() => edit('displayMode', 'sidebar')} />
+            <ChoiceCard id="mnemon-display-buildin" name="mnemon-display" label={t('config.displayBuildin')} detail={t('config.displayBuildinHint')} checked={draft.displayMode === 'buildin'} disabled={coreDisabled} onChange={() => edit('displayMode', 'buildin')} />
+          </div>
+        </section>
 
         <section className={css.section} aria-labelledby="mnemon-storage-heading">
           <div className={css.sectionHeading}>

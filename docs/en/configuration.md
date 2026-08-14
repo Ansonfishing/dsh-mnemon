@@ -12,12 +12,13 @@ $DSH_HOME/settings.yaml
 
 The default is commonly `~/.dsh/settings.yaml`. All current settings are marked `live`; after Save, the Host initializes a candidate runtime graph and then switches to it atomically.
 
-The Web settings card edits only `storageScope` and `dataDir`. Other advanced settings must be changed directly in YAML.
+The Web settings card edits `displayMode`, `storageScope`, and `dataDir`. Other advanced settings must be changed directly in YAML.
 
 ## Complete Example
 
 ```yaml
 mnemon:
+  displayMode: sidebar # sidebar | buildin
   storageScope: global # global | workspace | custom
   # dataDir: ~/mnemon-data       # required for custom
   # cliPath: /opt/homebrew/bin/mnemon
@@ -37,6 +38,7 @@ mnemon:
 
 | Setting | Default | Range | Implementation Semantics |
 |---|---:|---|---|
+| `displayMode` | `sidebar` | `sidebar` / `buildin` | `sidebar` mounts the dedicated sidebar workbench; `buildin` restores the native DSH conversation-area tab; saving switches live and never mounts both entries together |
 | `storageScope` | `global` | `global` / `workspace` / `custom` | Controls the root for Runtime, Documents, Memory Spaces, and reserved state as one unit |
 | `dataDir` | unset | absolute path, `~`, or `~/...` | Required for `custom`; legacy configurations that set only this option automatically resolve to `custom` |
 | `cliPath` | auto-discovered | executable path | Explicitly selects the Mnemon CLI |
@@ -48,7 +50,7 @@ mnemon:
 | `recallMode` | `guided` | `guided` / `off` | Whether to inject an on-demand recall cue; does not remove explicit recall |
 | `writebackMode` | `guided` | `guided` / `off` | Whether to inject the hot-memory cue and enable score-based background review; does not remove explicit writes |
 | `idleReviewMs` | `30000` | 5000–600000 ms | Required continuous idle time after the threshold is reached |
-| `tabEnabled` | `true` | boolean | Currently gates only Host Mnemon data RPC; the client Tab is still registered—see the limitation below |
+| `tabEnabled` | `true` | boolean | Whether to mount the Web entry selected by `displayMode`; Host RPC, commands, and Agent tools remain registered when off |
 | `writeEnabled` | `true` | boolean | Whether to expose semantic write tools, write RPC, and write commands |
 | `mnemon-ui.toolviews` | `false` | boolean | In-conversation memory tool cards for `mnemon_*` calls; off by default (opt-in), **applies live after saving** |
 | `mnemon-ui.turnBar` | `false` | boolean | Turn-tail memory activity bar; off by default (opt-in), **applies live after saving** |
@@ -70,10 +72,11 @@ Suitable for users who want Runtime, Documents, and Memory Spaces shared across 
 ### `workspace`
 
 ```text
-resolve(process.cwd(), ".mnemon")
+Agent / tool / lifecycle: resolve(currentSession.header.cwd, ".mnemon")
+Web workbench inspection: resolve(workspaceRegistry.get(selectedWorkspaceId).path, ".mnemon")
 ```
 
-Here, cwd is the DSH Host process launch directory. It is not the current browser-page directory and does not necessarily match the cwd recorded for every session. Start DSH from the target project directory.
+Each DSH workspace owns an independent three-tier memory root. Agents, model tools, commands, and lifecycle hooks route by the current session cwd and are unaffected by the Web workbench's inspection target. The workbench can select only Host-registered workspaces, never an arbitrary path. When inspection and execution differ, the header shows both paths and offers one-click alignment with the current session. Agent-backed actions are rejected while misaligned to prevent writes to the wrong project.
 
 ### `custom`
 
@@ -168,9 +171,11 @@ routingGuidance=false
   -> runtime-memory prompt section remains
 ```
 
-## Current `tabEnabled` Limitation
+## Display Mode and the `tabEnabled` UI Switch
 
-When `tabEnabled=false`, the Host does not register Mnemon read/write RPC, but the Web client still registers its conversation view slot unconditionally. The current result is therefore “the Tab entry may still appear while its data interface is unavailable,” not complete Tab removal. This is an implementation gap; do not rely on the setting to uninstall the UI.
+`displayMode=sidebar` (the default) mounts the “Memory System” sidebar entry and its dedicated center-column workbench. `displayMode=buildin` instead registers the original DSH `conversation.view` tab. Saving first disposes the active entry and then mounts the target, so the two modes never appear simultaneously.
+
+`tabEnabled=false` removes the currently selected Web entry live. Host RPC, commands, and tools remain registered across display-mode and enablement changes so an Agent or command already in progress stays valid.
 
 ## Profile Patch Overrides
 

@@ -16,6 +16,14 @@ import {
 } from './runtime-memory.ts'
 import type { Insight, RememberRequest, SearchRequest } from './service.ts'
 
+interface AgentRuntimeSource {
+  forAgent(agent: HostAgent): { runtimeMemory: RuntimeMemoryController; documents: DocumentManager }
+}
+
+function isAgentRuntimeSource(value: RuntimeMemoryController | AgentRuntimeSource | undefined): value is AgentRuntimeSource {
+  return typeof value === 'object' && value !== null && 'forAgent' in value && typeof value.forAgent === 'function'
+}
+
 const READ_TOOLS = ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related']
 const WRITE_TOOLS = [
   ...READ_TOOLS,
@@ -348,7 +356,7 @@ export class MnemonSubagentCoordinator {
 
   constructor(
     private readonly subagents: HostSubagentsService,
-    private readonly runtimeMemory?: RuntimeMemoryController,
+    private readonly runtimeMemoryOrSource?: RuntimeMemoryController | AgentRuntimeSource,
     private readonly documents?: DocumentManager,
   ) {}
 
@@ -357,18 +365,15 @@ export class MnemonSubagentCoordinator {
   }
 
   documentsSnapshot(parent: HostAgent) {
-    if (this.documents === undefined) throw new Error('Mnemon Documents control plane is unavailable')
-    return this.documents.forAgent(parent).snapshot()
+    return this.documentsFor(parent).forAgent(parent).snapshot()
   }
 
   documentGet(parent: HostAgent, id: string) {
-    if (this.documents === undefined) throw new Error('Mnemon Documents control plane is unavailable')
-    return this.documents.forAgent(parent).get(id)
+    return this.documentsFor(parent).forAgent(parent).get(id)
   }
 
   documentSearch(parent: HostAgent, query: string, includeArchived = false, limit?: number) {
-    if (this.documents === undefined) throw new Error('Mnemon Documents control plane is unavailable')
-    return this.documents.forAgent(parent).search(query, { includeArchived, ...(limit === undefined ? {} : { limit }) })
+    return this.documentsFor(parent).forAgent(parent).search(query, { includeArchived, ...(limit === undefined ? {} : { limit }) })
   }
 
   async recall(parent: HostAgent, request: SearchRequest, signal: AbortSignal): Promise<DelegatedRecallResult> {
@@ -463,8 +468,7 @@ ${naturalRequest(request)}`
   }
 
   private async documentLocked(parent: HostAgent, request: DocumentMutation, signal: AbortSignal): Promise<CoordinatedDocumentResult> {
-    if (this.documents === undefined) throw new Error('Mnemon Documents control plane is unavailable')
-    const controller = this.documents.forAgent(parent)
+    const controller = this.documentsFor(parent).forAgent(parent)
     const archivedDocumentIds: string[] = []
     const memoryBodyIds = new Set<string>()
     let lastArchive: CoordinatedDocumentResult['maintenance']
@@ -505,8 +509,7 @@ ${naturalRequest(request)}`
   }
 
   private async archiveDocumentLocked(parent: HostAgent, id: string, signal: AbortSignal): Promise<CoordinatedDocumentResult> {
-    if (this.documents === undefined) throw new Error('Mnemon Documents control plane is unavailable')
-    const controller = this.documents.forAgent(parent)
+    const controller = this.documentsFor(parent).forAgent(parent)
     const document = controller.get(id)
     if (document.status !== 'active') throw new Error('only active documents can be archived')
     const { provider, runId, result } = await this.delegate(
@@ -532,16 +535,16 @@ ${naturalRequest(request)}`
   }
 
   private async runtimeLocked(parent: HostAgent, request: RuntimeMemoryMutation, signal: AbortSignal): Promise<CoordinatedRuntimeMemoryResult> {
-    if (this.runtimeMemory === undefined) throw new Error('runtime memory control plane is unavailable')
+    const runtimeMemory = this.runtimeMemoryFor(parent)
     try {
-      return await this.runtimeMemory.mutate(request)
+      return await runtimeMemory.mutate(request)
     } catch (error) {
       if (!(error instanceof RuntimeMemoryCapacityError) || request.action !== 'add') throw error
     }
 
     if (request.target === 'user') return this.compactUserAndRetry(parent, request, signal)
 
-    const snapshot = this.runtimeMemory.snapshot()
+    const snapshot = runtimeMemory.snapshot()
     const targetView = snapshot.targets[request.target]
     const targetEntries = snapshot.entries.filter(entry => entry.target === request.target)
     if (targetEntries.length === 0) throw new Error('runtime memory capacity was exceeded without entries available for archival')
@@ -561,8 +564,8 @@ ${indentedText(request.content ?? '')}`
       if (typeof item.content !== 'string' || !['critical', 'normal', 'low'].includes(String(item.importance))) throw new Error('runtime memory migration returned an invalid compaction entry')
       return { content: item.content, importance: item.importance as RuntimeMemoryCompactedEntry['importance'] }
     }) : []
-    await this.runtimeMemory.compactTarget(snapshot.revision, request.target, compactedEntries, compactedBudget)
-    const mutation = await this.runtimeMemory.mutate(request)
+    await runtimeMemory.compactTarget(snapshot.revision, request.target, compactedEntries, compactedBudget)
+    const mutation = await runtimeMemory.mutate(request)
     return {
       ...mutation,
       maintenance: {
@@ -576,8 +579,8 @@ ${indentedText(request.content ?? '')}`
   }
 
   private async compactUserAndRetry(parent: HostAgent, request: RuntimeMemoryMutation, signal: AbortSignal): Promise<CoordinatedRuntimeMemoryResult> {
-    if (this.runtimeMemory === undefined) throw new Error('runtime memory control plane is unavailable')
-    const snapshot = this.runtimeMemory.snapshot()
+    const runtimeMemory = this.runtimeMemoryFor(parent)
+    const snapshot = runtimeMemory.snapshot()
     const targetEntries = snapshot.entries.filter(entry => entry.target === 'user')
     if (targetEntries.length === 0) throw new Error('USER.md capacity was exceeded without entries available for compaction')
     const targetView = snapshot.targets.user
@@ -615,8 +618,8 @@ ${indentedText(request.content ?? '')}`
     const candidates = compactedEntries.map(({ content, importance }) => ({ content, importance }))
     const candidateBytes = Buffer.byteLength(candidates.map(entry => entry.content.trim().replace(/\s+/gu, ' ')).join(RUNTIME_ENTRY_DELIMITER), 'utf8')
     if (candidateBytes > compactedBudget) throw new Error(`USER.md compaction did not fit the host budget (${candidateBytes} > ${compactedBudget} bytes)`)
-    await this.runtimeMemory.compactTarget(snapshot.revision, 'user', candidates, compactedBudget)
-    const mutation = await this.runtimeMemory.mutate(request)
+    await runtimeMemory.compactTarget(snapshot.revision, 'user', candidates, compactedBudget)
+    const mutation = await runtimeMemory.mutate(request)
     return {
       ...mutation,
       maintenance: {
@@ -692,5 +695,17 @@ ${indentedText(request.content ?? '')}`
     const selected = names.includes('spawn') && compatible('spawn') ? 'spawn' : names.find(compatible)
     if (selected === undefined) throw new Error('dsh-mnemon requires a DSH subagent provider with structured output, tool filtering, persona, and depth limiting')
     return selected
+  }
+
+  private runtimeMemoryFor(parent: HostAgent): RuntimeMemoryController {
+    if (isAgentRuntimeSource(this.runtimeMemoryOrSource)) return this.runtimeMemoryOrSource.forAgent(parent).runtimeMemory
+    if (this.runtimeMemoryOrSource === undefined) throw new Error('runtime memory control plane is unavailable')
+    return this.runtimeMemoryOrSource
+  }
+
+  private documentsFor(parent: HostAgent): DocumentManager {
+    if (isAgentRuntimeSource(this.runtimeMemoryOrSource)) return this.runtimeMemoryOrSource.forAgent(parent).documents
+    if (this.documents === undefined) throw new Error('Mnemon Documents control plane is unavailable')
+    return this.documents
   }
 }

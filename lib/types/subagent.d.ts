@@ -2,6 +2,12 @@ import type { HostAgent, HostSubagentsService } from './contracts.ts';
 import { type DocumentManager, type DocumentMutation, type DocumentMutationResult, type DocumentView } from './documents.ts';
 import { type RuntimeMemoryController, type RuntimeMemoryMutation, type RuntimeMemoryMutationResult } from './runtime-memory.ts';
 import type { Insight, RememberRequest, SearchRequest } from './service.ts';
+interface AgentRuntimeSource {
+    forAgent(agent: HostAgent): {
+        runtimeMemory: RuntimeMemoryController;
+        documents: DocumentManager;
+    };
+}
 /** Rejects schema keywords that DSH structured-output tools cannot compile. */
 export declare function assertDshOutputSchema(schema: unknown, path?: string): void;
 export interface SubagentCounters {
@@ -67,12 +73,12 @@ export declare function isSubagent(agent: HostAgent | undefined): boolean;
 /** Delegates memory judgment and execution to a fresh, tool-scoped DSH child. */
 export declare class MnemonSubagentCoordinator {
     private readonly subagents;
-    private readonly runtimeMemory?;
+    private readonly runtimeMemoryOrSource?;
     private readonly documents?;
     private readonly counters;
     private runtimeQueue;
     private documentQueue;
-    constructor(subagents: HostSubagentsService, runtimeMemory?: RuntimeMemoryController | undefined, documents?: DocumentManager | undefined);
+    constructor(subagents: HostSubagentsService, runtimeMemoryOrSource?: (RuntimeMemoryController | AgentRuntimeSource) | undefined, documents?: DocumentManager | undefined);
     snapshot(): SubagentCounters;
     documentsSnapshot(parent: HostAgent): import("./documents.ts").DocumentSnapshot;
     documentGet(parent: HostAgent, id: string): DocumentView;
@@ -93,5 +99,8 @@ export declare class MnemonSubagentCoordinator {
     private compactUserAndRetry;
     private delegate;
     private provider;
+    private runtimeMemoryFor;
+    private documentsFor;
 }
+export {};
 //# sourceMappingURL=subagent.d.ts.map

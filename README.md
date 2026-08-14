@@ -110,7 +110,7 @@ dsh plugin --profile web add "github:omdsh-dev/dsh-mnemon"
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
-打开 DSH 的“设置 -> 记忆系统”独立配置页选择存储范围，再进入会话的“记忆系统”Tab 创建或激活记忆体。所有设置点击保存后实时生效；存储根会在新目录初始化成功后原子切换，切换范围不会自动迁移、合并或删除旧数据。
+打开 DSH 的“设置 -> 记忆系统”独立配置页即可选择展示形态与存储范围。默认 `sidebar` 从左侧栏进入独立“记忆系统”工作台；切换为 `buildin` 则恢复原有的对话区内嵌标签页，保存后实时切换且不会重复挂载。`workspace` 范围下可在侧边栏工作台顶部独立切换要查看和维护的 DSH 工作区；Agent、工具和生命周期仍始终使用当前会话工作区。两者不一致时全局提示会同时显示查看目录和实际生效目录，并可一键对齐。存储根会在新目录初始化成功后原子切换，切换范围不会自动迁移、合并或删除旧数据。
 
 升级与卸载（`dsh plugin` 转发给 profile 目录下的 pnpm）：
 
@@ -122,7 +122,7 @@ dsh plugin --profile web update dsh-mnemon
 dsh plugin --profile web remove dsh-mnemon
 ```
 
-卸载不会删除记忆数据：`global` 范围数据留在 `~/.mnemon`，`workspace` / `custom` 范围数据留在对应目录，重新安装后即可继续使用。若只想临时停用自动读写而不卸载，可在插件配置里关闭 `writebackMode` / `recallMode` / `lifecycleEnabled`（详见[配置参考](./docs/zh-CN/configuration.md)的“开关交互”与 `tabEnabled` 的当前限制）。
+卸载不会删除记忆数据：`global` 范围数据留在 `~/.mnemon`，`workspace` / `custom` 范围数据留在对应目录，重新安装后即可继续使用。若只想临时停用自动读写而不卸载，可在插件配置里关闭 `writebackMode` / `recallMode` / `lifecycleEnabled`；`tabEnabled=false` 可隐藏当前展示形态的 Web 入口（详见[配置参考](./docs/zh-CN/configuration.md)）。
 
 ## 最小配置
 
@@ -130,11 +130,12 @@ dsh plugin --profile web remove dsh-mnemon
 
 ```yaml
 mnemon:
+  displayMode: sidebar # sidebar | buildin；默认 sidebar
   storageScope: global # global | workspace | custom
 ```
 
 - `global`：`MNEMON_DATA_DIR`，未设置时为 `~/.mnemon`。
-- `workspace`：启动 DSH Host 时工作目录下的 `.mnemon`。
+- `workspace`：每个 DSH 工作区各自根目录下的 `.mnemon`；Agent 执行跟随当前会话工作区，Web 工作台可独立选择查看目标。
 - `custom`：`dataDir` 指定的绝对路径或 `~/...` 路径。
 
 完整配置、覆盖优先级和只读模式见[配置参考](./docs/zh-CN/configuration.md)。

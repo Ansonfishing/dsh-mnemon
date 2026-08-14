@@ -72,7 +72,7 @@ export interface MnemonRunner {
   effectiveStore(): string
 }
 
-export function createRunner(config: ResolvedConfig, processRunner: ProcessRunner = runProcess): MnemonRunner {
+export function createRunner(config: ResolvedConfig, processRunner: ProcessRunner = runProcess, workspaceRoot?: string): MnemonRunner {
   const found = findMnemonCommand(config)
   const command = found ?? config.cliPath ?? 'mnemon'
   // Mnemon 0.1.2 runs store migrations while opening the database. Serializing
@@ -88,7 +88,7 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
     return args
   }
   const effectiveDataDir = (): string => {
-    if (config.storageScope === 'workspace') return resolve(process.cwd(), '.mnemon')
+    if (config.storageScope === 'workspace') return resolve(workspaceRoot ?? process.cwd(), '.mnemon')
     if (config.storageScope === 'custom') return expandHome(config.dataDir!)
     return expandHome(process.env.MNEMON_DATA_DIR?.trim() || '~/.mnemon')
   }

@@ -4,6 +4,53 @@ import type { RuntimeMemoryController, RuntimeMemoryImportance, RuntimeMemoryTar
 import type { Category, EdgeType, Intent, MnemonService, SearchRequest, Source } from './service.ts'
 import type { StorageScopeInspector } from './storage-scope.ts'
 import type { MnemonPackManager } from './pack.ts'
+import type { LiveMnemonRuntime, MnemonRuntimeGraph } from './live-runtime.ts'
+
+type RuntimeInput = MnemonService | LiveMnemonRuntime
+
+function isRoutedRuntime(value: RuntimeInput): value is LiveMnemonRuntime {
+  return 'route' in value && typeof value.route === 'function'
+}
+
+function requestedScope(payload: Record<string, unknown>): { workspaceId?: string; sessionId?: string } {
+  const workspaceId = payload.workspaceId === undefined ? undefined : String(payload.workspaceId).trim()
+  const sessionId = payload.sessionId === undefined ? undefined : String(payload.sessionId).trim()
+  return {
+    ...(workspaceId === undefined || workspaceId === '' ? {} : { workspaceId }),
+    ...(sessionId === undefined || sessionId === '' ? {} : { sessionId }),
+  }
+}
+
+function runtimeFor(
+  input: RuntimeInput,
+  payload: Record<string, unknown>,
+  runtimeMemory?: RuntimeMemoryController,
+  storage?: StorageScopeInspector,
+): {
+  graph: Pick<MnemonRuntimeGraph, 'service' | 'runtimeMemory' | 'documents' | 'storage' | 'packs'>
+  route?: ReturnType<LiveMnemonRuntime['route']>
+  explicitWorkspace: boolean
+} {
+  if (isRoutedRuntime(input)) {
+    const scope = requestedScope(payload)
+    const route = input.route(scope)
+    return { graph: route.graph, route, explicitWorkspace: scope.workspaceId !== undefined && route.graph.config.storageScope === 'workspace' }
+  }
+  return {
+    graph: {
+      service: input,
+      runtimeMemory: runtimeMemory as RuntimeMemoryController,
+      documents: undefined as never,
+      storage: storage as StorageScopeInspector,
+      packs: undefined as never,
+    },
+    explicitWorkspace: false,
+  }
+}
+
+function requireAligned(route: ReturnType<LiveMnemonRuntime['route']> | undefined): void {
+  if (route?.aligned === false) throw new Error('the selected memory workspace differs from the current session; align the workbench before running an Agent-backed operation')
+}
 
 export const MNEMON_READ_CHANNEL = '/dsh-mnemon-read'
 export const MNEMON_WRITE_CHANNEL = '/dsh-mnemon-write'
@@ -33,19 +80,27 @@ function badRequest(message: string): RpcResult<unknown> {
   return { ok: false, error: { code: 'bad-request', message, details: { issues: [] } } }
 }
 
-export function createReadHandler(service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector): HostRpcHandler {
+export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
       const payload = object(rawPayload)
+      const resolved = runtimeFor(input, payload, runtimeMemory, storage)
+      const { service } = resolved.graph
+      const selectedWorkspace = resolved.route?.selectedWorkspace
+      const documentController = resolved.explicitWorkspace && selectedWorkspace !== undefined
+        ? resolved.graph.documents.forWorkspace(selectedWorkspace.path)
+        : undefined
       switch (endpoint) {
         case 'runtime-memory':
-          if (runtimeMemory === undefined) throw new Error('runtime memory is unavailable')
-          return success(runtimeMemory.snapshot())
+          if (resolved.graph.runtimeMemory === undefined) throw new Error('runtime memory is unavailable')
+          return success(resolved.graph.runtimeMemory.snapshot())
         case 'status':
           {
             const sessionId = payload.sessionId === undefined ? '' : String(payload.sessionId).trim()
             let documents
-            if (lifecycle !== undefined && sessionId !== '') {
+            if (documentController !== undefined) {
+              try { documents = documentController.snapshot() } catch {}
+            } else if (lifecycle !== undefined && sessionId !== '') {
               try { documents = lifecycle.documents(sessionId) } catch {}
             }
           return success({
@@ -54,16 +109,32 @@ export function createReadHandler(service: MnemonService, lifecycle?: MnemonLife
               lifecycle: lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId)),
             }),
             ...(documents === undefined ? {} : { documents }),
-            ...(storage === undefined ? {} : { storage: storage.catalog(lifecycle?.workspaceRoot(sessionId)) }),
+            ...(resolved.graph.storage === undefined ? {} : { storage: resolved.graph.storage.catalog(selectedWorkspace?.path ?? lifecycle?.workspaceRoot(sessionId)) }),
+            ...(resolved.route === undefined ? {} : {
+              workspaceContext: {
+                mode: service.config.storageScope,
+                selectedRoot: resolved.route.selectedRoot,
+                effectiveRoot: resolved.route.effectiveRoot,
+                aligned: resolved.route.aligned,
+                ...(resolved.route.selectedWorkspace === undefined ? {} : { selectedWorkspace: resolved.route.selectedWorkspace }),
+                ...(resolved.route.effectiveWorkspace === undefined ? {} : { effectiveWorkspace: resolved.route.effectiveWorkspace }),
+              },
+            }),
           })
           }
         case 'documents':
+          if (documentController !== undefined) return success(documentController.snapshot())
           if (lifecycle === undefined) throw new Error('Mnemon Documents require lifecycle integration')
           return success(lifecycle.documents(String(payload.sessionId ?? '')))
         case 'document':
+          if (documentController !== undefined) return success(documentController.get(String(payload.id ?? '')))
           if (lifecycle === undefined) throw new Error('Mnemon Documents require lifecycle integration')
           return success(lifecycle.document(String(payload.sessionId ?? ''), String(payload.id ?? '')))
         case 'document-search':
+          if (documentController !== undefined) return success(await documentController.search(
+            String(payload.query ?? ''),
+            { includeArchived: payload.includeArchived === true, ...(payload.limit === undefined ? {} : { limit: Number(payload.limit) }) },
+          ))
           if (lifecycle === undefined) throw new Error('Mnemon Documents require lifecycle integration')
           return success(await lifecycle.searchDocuments(
             String(payload.sessionId ?? ''),
@@ -140,14 +211,22 @@ export function createReadHandler(service: MnemonService, lifecycle?: MnemonLife
   }
 }
 
-export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController): HostRpcHandler {
+export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
-      if (!service.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
       const payload = object(rawPayload)
+      const resolved = runtimeFor(input, payload, runtimeMemory)
+      const { service } = resolved.graph
+      if (!service.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
+      const selectedWorkspace = resolved.route?.selectedWorkspace
+      const documentController = resolved.explicitWorkspace && selectedWorkspace !== undefined
+        ? resolved.graph.documents.forWorkspace(selectedWorkspace.path)
+        : undefined
+      const inspectionDiverged = resolved.explicitWorkspace && resolved.route?.aligned === false
+      const alignedSession = resolved.explicitWorkspace && resolved.route?.aligned === true && resolved.route.effectiveWorkspace !== undefined
       switch (endpoint) {
         case 'runtime-memory':
-          if (runtimeMemory === undefined) throw new Error('runtime memory is unavailable')
+          if (resolved.graph.runtimeMemory === undefined) throw new Error('runtime memory is unavailable')
           {
             const request = {
             action: String(payload.action ?? '') as 'add' | 'replace' | 'remove',
@@ -157,20 +236,44 @@ export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLif
             ...(payload.importance === undefined ? {} : { importance: String(payload.importance) as RuntimeMemoryImportance }),
             }
             const sessionId = String(payload.sessionId ?? '').trim()
-            return success(lifecycle === undefined || sessionId === '' ? await runtimeMemory.mutate(request) : await lifecycle.runtime(sessionId, request))
+            return success(inspectionDiverged || lifecycle === undefined || sessionId === '' || (resolved.explicitWorkspace && !alignedSession)
+              ? await resolved.graph.runtimeMemory.mutate(request)
+              : await lifecycle.runtime(sessionId, request))
           }
         case 'supervise':
           if (lifecycle === undefined) throw new Error('Mnemon lifecycle integration is unavailable')
+          requireAligned(resolved.route)
           return success(await lifecycle.supervise(
             String(payload.sessionId ?? ''),
             String(payload.content ?? ''),
             payload.idempotencyKey === undefined ? undefined : String(payload.idempotencyKey),
           ))
         case 'document':
-          if (lifecycle === undefined) throw new Error('Mnemon Documents require lifecycle integration')
           {
             const action = String(payload.action ?? '')
             const sessionId = String(payload.sessionId ?? '')
+            if (documentController !== undefined && action !== 'archive' && (!alignedSession || lifecycle === undefined)) {
+              const sessionIds = resolved.route?.aligned === true && sessionId.trim() !== '' ? [sessionId] : []
+              if (action === 'create') return success(await documentController.mutate({
+                action: 'create',
+                title: String(payload.title ?? ''),
+                content: String(payload.content ?? ''),
+                ...(payload.description === undefined ? {} : { description: String(payload.description) }),
+                ...(Array.isArray(payload.sourcePaths) ? { sourcePaths: payload.sourcePaths.map(String) } : {}),
+                sessionIds,
+              }))
+              if (action === 'update') return success(await documentController.mutate({
+                action: 'update',
+                id: String(payload.id ?? ''),
+                ...(payload.title === undefined ? {} : { title: String(payload.title) }),
+                ...(payload.description === undefined ? {} : { description: String(payload.description) }),
+                ...(payload.content === undefined ? {} : { content: String(payload.content) }),
+                ...(Array.isArray(payload.sourcePaths) ? { sourcePaths: payload.sourcePaths.map(String) } : {}),
+                sessionIds,
+              }))
+            }
+            if (lifecycle === undefined) throw new Error('Mnemon Documents require lifecycle integration')
+            if (resolved.explicitWorkspace) requireAligned(resolved.route)
             if (action === 'archive') return success(await lifecycle.archiveDocument(sessionId, String(payload.id ?? '')))
             if (action === 'create') return success(await lifecycle.mutateDocument(sessionId, {
               action: 'create',
@@ -202,16 +305,16 @@ export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLif
             ...(payload.memoryBodyId === undefined ? {} : { memoryBodyId: String(payload.memoryBodyId) }),
             source: 'user',
             } as const
-            return success(lifecycle === undefined
+            return success(inspectionDiverged || lifecycle === undefined || (resolved.explicitWorkspace && !alignedSession)
               ? await service.remember(request)
               : await lifecycle.remember(String(payload.sessionId ?? ''), request))
           }
         case 'link':
-          return success(lifecycle === undefined
+          return success(inspectionDiverged || lifecycle === undefined || (resolved.explicitWorkspace && !alignedSession)
             ? await service.link(String(payload.sourceId ?? ''), String(payload.targetId ?? ''), payload.type as EdgeType | undefined, payload.weight === undefined ? 0.5 : Number(payload.weight), payload.reason === undefined ? undefined : String(payload.reason), undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
             : await lifecycle.mutate(String(payload.sessionId ?? ''), 'link', payload))
         case 'forget':
-          return success(lifecycle === undefined
+          return success(inspectionDiverged || lifecycle === undefined || (resolved.explicitWorkspace && !alignedSession)
             ? await service.forget(String(payload.id ?? ''), undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
             : await lifecycle.mutate(String(payload.sessionId ?? ''), 'forget', { id: String(payload.id ?? ''), ...(payload.memoryBodyId === undefined ? {} : { memoryBodyId: String(payload.memoryBodyId) }) }))
         case 'body-create':
@@ -256,8 +359,10 @@ export function createPackHandler(manager: MnemonPackManager, writeEnabled: bool
 }
 
 /** Read operations are available to trusted Web hosts; local mutations stay loopback-only. */
-export function registerRpc(connection: HostConnectionHandle, service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector, packs?: MnemonPackManager): void {
-  connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(service, lifecycle, runtimeMemory, storage), { authority: 'trusted-host' })
-  connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(service, lifecycle, runtimeMemory), { authority: 'loopback' })
-  if (packs !== undefined) connection.rpc.handle(MNEMON_PACK_CHANNEL, createPackHandler(packs, () => service.config.writeEnabled), { authority: 'loopback' })
+export function registerRpc(connection: HostConnectionHandle, input: RuntimeInput, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector, packs?: MnemonPackManager): void {
+  connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(input, lifecycle, runtimeMemory, storage), { authority: 'trusted-host' })
+  connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(input, lifecycle, runtimeMemory), { authority: 'loopback' })
+  const packManager = isRoutedRuntime(input) ? input.packs : packs
+  const config = input.config
+  if (packManager !== undefined) connection.rpc.handle(MNEMON_PACK_CHANNEL, createPackHandler(packManager, () => config.writeEnabled), { authority: 'loopback' })
 }

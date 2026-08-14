@@ -28,7 +28,17 @@ export interface MnemonViewProps {
   connection: ClientConnectionHandle
   settingsScope: ClientSettingsScope<Config>
   sessionId?: string
+  workspaceId?: string
+  workspaceSelection?: MnemonWorkspaceSelection
   t?: MnemonTranslate
+}
+
+export interface MnemonWorkspaceSelection {
+  options: Array<{ id: string; title: string; path: string }>
+  selectedWorkspaceId?: string
+  effectiveWorkspaceId?: string
+  onSelect(workspaceId: string): void
+  onAlign(): void
 }
 
 type Page = 'overview' | 'runtime' | 'documents' | 'explore' | 'entities' | 'remember' | 'list' | 'status'
@@ -1509,9 +1519,9 @@ export function MnemonView(props: MnemonViewProps): JSX.Element {
   return <I18nContext.Provider value={props.t ?? translateZh}><MnemonWorkspace {...props} /></I18nContext.Provider>
 }
 
-function MnemonWorkspace({ connection, sessionId }: MnemonViewProps): JSX.Element {
+function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelection }: MnemonViewProps): JSX.Element {
   const t = useT()
-  const client = useMemo(() => new MnemonClient(connection, sessionId), [connection, sessionId])
+  const client = useMemo(() => new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
   const [page, setPage] = useState<Page>('status')
   const canvasRef = useRef<HTMLElement | null>(null)
 
@@ -1530,6 +1540,7 @@ function MnemonWorkspace({ connection, sessionId }: MnemonViewProps): JSX.Elemen
   const [status, setStatus] = useState<StatusView | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
   const [statusError, setStatusError] = useState<string | null>(null)
+  const statusRequest = useRef(0)
   const [revision, setRevision] = useState(0)
   const [searchSeed, setSearchSeed] = useState('')
   const [rememberSeed, setRememberSeed] = useState('')
@@ -1549,8 +1560,16 @@ function MnemonWorkspace({ connection, sessionId }: MnemonViewProps): JSX.Elemen
   }, [sessionId, applyAnchor])
 
   const loadStatus = useCallback(async () => {
+    const request = ++statusRequest.current
     setStatusLoading(true); setStatusError(null)
-    try { setStatus(await client.status()) } catch (reason) { setStatusError(message(reason)) } finally { setStatusLoading(false) }
+    try {
+      const next = await client.status()
+      if (request === statusRequest.current) setStatus(next)
+    } catch (reason) {
+      if (request === statusRequest.current) setStatusError(message(reason))
+    } finally {
+      if (request === statusRequest.current) setStatusLoading(false)
+    }
   }, [client])
   useEffect(() => { void loadStatus() }, [loadStatus])
 
@@ -1564,15 +1583,18 @@ function MnemonWorkspace({ connection, sessionId }: MnemonViewProps): JSX.Elemen
   const catalogKnown = status?.memoryBodies !== undefined
   const memoryBodies = useMemo(() => status?.memoryBodies ?? [], [status])
   const activeBodies = memoryBodies.filter(body => body.active).length
+  const workspaceContext = status?.workspaceContext
+  const showWorkspacePicker = workspaceContext?.mode === 'workspace' && workspaceSelection !== undefined && workspaceSelection.options.length > 0
 
   return (
     <main className={css.shell}>
       <header className={css.masthead}>
         <div className={css.brand}><MnemonLogo className={css.brandLogo} /><h1>Mnemon</h1></div>
         <section className={css.telemetry} aria-label={t('telemetry.aria')}><div className={css.telemetryMetric}><span>{t('telemetry.memories')}</span><strong>{stats?.totalInsights ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.graph')}</span><strong>{stats?.edgeCount ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.entities')}</span><strong>{stats?.topEntities.length ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.spaces')}</span><strong>{status === null || !catalogKnown ? '—' : activeBodies}</strong></div></section>
-        <div className={css.statusCluster}><span className={`${css.statusDot} ${statusLoading && status === null ? css.checking : status?.healthy === true ? css.online : css.offline}`} /><span>{statusLoading ? t('header.checking') : status?.healthy === true ? catalogKnown ? t('header.connected', { count: activeBodies }) : t('header.directoryPending') : t('header.unavailable')}</span><button type="button" className={css.iconButton} disabled={statusLoading} onClick={refreshAll} aria-label={t('common.refresh')}>↻</button></div>
+        <div className={css.headerActions}>{showWorkspacePicker && <label className={css.workspacePicker}><span>{t('workspace.viewing')}</span><select aria-label={t('workspace.selectorAria')} value={workspaceSelection.selectedWorkspaceId ?? ''} onChange={event => workspaceSelection.onSelect(event.target.value)}>{workspaceSelection.options.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.title}</option>)}</select></label>}<div className={css.statusCluster}><span className={`${css.statusDot} ${statusLoading && status === null ? css.checking : status?.healthy === true ? css.online : css.offline}`} /><span>{statusLoading ? t('header.checking') : status?.healthy === true ? catalogKnown ? t('header.connected', { count: activeBodies }) : t('header.directoryPending') : t('header.unavailable')}</span><button type="button" className={css.iconButton} disabled={statusLoading} onClick={refreshAll} aria-label={t('common.refresh')}>↻</button></div></div>
       </header>
       {(statusError !== null || status?.healthy === false) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
+      {workspaceContext?.mode === 'workspace' && !workspaceContext.aligned && <div className={css.workspaceMismatch} role="status"><div><strong>{t('workspace.mismatchTitle')}</strong><span>{t('workspace.mismatchDescription')}</span><div><code>{t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}</code><code>{t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}</code></div></div>{workspaceSelection?.effectiveWorkspaceId !== undefined && <button type="button" className={css.secondaryButton} onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button>}</div>}
       <div className={css.workspace}>
         <div className={css.topNavigation}><nav className={css.nav} aria-label={t('nav.aria')}>{PAGE_NAV.map((group, groupIndex) => <Fragment key={group.aria}><div className={css.navGroup} role="group" aria-label={t(group.aria)}>{group.entries.map(item => <button key={item.id} type="button" aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><span className={css.navGlyph} aria-hidden="true">{item.glyph}</span><span><strong>{t(item.label)}</strong><small>{t(item.detail)}</small></span></button>)}</div>{groupIndex < PAGE_NAV.length - 1 && <span className={css.navGroupDivider} aria-hidden="true" />}</Fragment>)}</nav><div className={css.spaceSummary}><span>{t('sidebar.activeSpaces')}</span><code>{catalogKnown ? `${activeBodies} / ${memoryBodies.length}` : '— / —'}</code><small>{writeEnabled ? t('common.agentSupervised') : t('common.readOnly')}</small></div></div>
         <section className={css.canvas} ref={canvasRef} data-testid="mnemon-canvas">
