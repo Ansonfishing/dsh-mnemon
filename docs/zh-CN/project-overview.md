@@ -41,6 +41,54 @@ DSH 提供主 Agent 与扩展入口，`dsh-mnemon` 负责三层控制、路由�
 3. **确定性控制边界**：Host 校验输入、路径、权限、revision、UTF-8 容量、锁、超时和进程参数。
 4. **本地数据边界**：Runtime、Documents 和 Memory Spaces 统一位于选定的 `storageRoot`；记忆持久化不依赖远程记忆服务。
 
+### 记忆系统流转
+
+下面的流转图描述稳定的执行边界，而不是实时监控面板。实线表示确定性 Host 路径，虚线表示需要 LLM 判断的受监督 worker 路径；节点不携带当前数量、最近活动或健康状态。
+
+```mermaid
+flowchart TB
+  subgraph CONTEXT["01 · 每轮上下文"]
+    direction LR
+    C1["运行时记忆<br/>USER.md + MEMORY.md"] -->|"每轮 prompt assembly"| C2["Root Agent<br/>路由工具调用，不直接访问 SQLite"]
+    C2 <--> C3["用户 / 当前任务<br/>当前轮输入与工具轨迹"]
+    C2 -->|"按需，不注入全文"| C4["Document 确定性检索"]
+    C4 --> C5["项目档案<br/>active Documents"]
+    C5 --> C6["证据 / 回执<br/>带来源返回 Root Agent"]
+    C6 --> C2
+  end
+
+  subgraph SEMANTIC["02 · 按需语义操作"]
+    direction LR
+    S1["Root Agent<br/>recall · write · related"] -.-> S2["spawn 隔离 worker<br/>语义判断 · 最小工具白名单"]
+    S2 -.-> S3["Mnemon Host Bridge<br/>Service → Runner → 本地 CLI"]
+    S3 <--> S4["Memory Spaces<br/>长期记忆与关系图"]
+    S4 --> S5["证据 / 回执<br/>带来源返回 Root Agent"]
+    S5 --> S1
+  end
+
+  subgraph MAINTENANCE["03 · 空闲维护与归档"]
+    direction TB
+    M1["普通 Runtime 与 Document 变更<br/>add / replace / remove · create / update"] --> M2["Host 确定性控制层<br/>锁 · 原子写 · revision · 容量"] --> M3["运行时记忆 / active Documents"]
+    M4["活动评分与空闲门控"] -.-> M5["fork 完成检查点<br/>只维护 Runtime / Document"] --> M6["Runtime / active Document<br/>保守维护 · 新轮次取消审查"] --> M7["证据 / 回执"]
+    M8["项目档案"] -.-> M9["spawn 归档 worker<br/>容量维护 / 人工归档"] -.-> M10["Mnemon Host Bridge"] --> M11["1 · 写入并验证 Mnemon 冷索引"] --> M12["2 · revision fence 后迁移原文<br/>失败或冲突保留 active"]
+  end
+
+  classDef host fill:#eef5ff,stroke:#4b77be,color:#17233a
+  classDef worker fill:#f7f3ff,stroke:#8b6ce7,stroke-dasharray:5 3,color:#28203d
+  classDef store fill:#f1faf4,stroke:#55a36f,color:#173321
+  classDef task fill:#fafafa,stroke:#8a8a8a,color:#222
+  class C2,C4,S3,M2,M10 host
+  class S2,M5,M9 worker
+  class C1,C5,S4,M3,M6,M8,M11,M12 store
+  class C3,C6,S1,S5,M1,M4,M7 task
+```
+
+[![记忆系统流转原始中文界面：每轮上下文、按需语义操作、空闲维护与归档](./assets/architecture/memory-system-flow.zh-CN.png)](./assets/architecture/memory-system-flow.zh-CN.png)
+
+*中文原始界面截图保留了迁移前的完整布局，用作架构图的视觉与实现参考。*
+
+这三条链路分别回答：每轮上下文从哪里来、语义操作如何隔离执行，以及普通写入、空闲审查和冷归档如何保护原始数据。具体触发门槛、工具权限和失败语义见[生命周期与核心流程](./workflows.md)。
+
 更细的模块分工、root/worker 双路径和 RPC 信任边界见[架构设计](./architecture.md)。
 
 架构边界决定谁可以执行操作，内置 Prompt 决定 LLM 何时主动使用能力，三层模型则决定信息以什么粒度保存、何时进入上下文。
@@ -176,7 +224,7 @@ Web 的直接检索走确定性服务；“Agent 查询”则先完成相同检�
 
 | 页面 | 主要用途 |
 |---|---|
-| 状态 | CLI、运行时热记忆、存储域、生命周期和 subagent 诊断 |
+| 状态 | CLI、运行时热记忆、存储域、记忆体和 Documents 健康状态 |
 | 运行时 | USER / MEMORY 热记忆、容量和确定性维护 |
 | 记忆体 | Memory Space 目录、激活开关、元信息编辑和多空间实时图谱 |
 | 档案 | Documents 检索、阅读、编辑和归档 |

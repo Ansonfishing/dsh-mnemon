@@ -4,7 +4,6 @@ import Markdown from 'markdown-to-jsx'
 import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts'
 import type { Config } from '../config.ts'
 import type { DocumentRecord, DocumentSnapshot, DocumentView } from '../documents.ts'
-import { QODERWORK_REVIEW_POLICY } from '../review-activity.ts'
 import type { RuntimeMemoryEntry, RuntimeMemoryImportance, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts'
 import type { StorageAreaInventory, StorageScopeInventory, StorageScopeKind } from '../storage-scope.ts'
 import {
@@ -1313,24 +1312,10 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
 function StatusPage(props: { status: StatusView | null; loading: boolean; onRefresh: () => void }): JSX.Element {
   const t = useT()
   const status = props.status
-  const lifecycle = status?.lifecycle
-  const current = lifecycle?.current
-  const workers = lifecycle?.subagents
   const documents = status?.documents
-  const reviewActivity = current?.reviewActivity
-  const reviewThreshold = reviewActivity?.threshold ?? QODERWORK_REVIEW_POLICY.reviewThreshold
   const catalogKnown = status?.memoryBodies !== undefined
   const memoryBodies = useMemo(() => status?.memoryBodies ?? [], [status])
   const activeBodies = memoryBodies.filter(body => body.active).length
-  const phase = current?.lastPhase === undefined || current.lastPhase === 'idle' ? t('status.phaseIdle') : current.lastPhase === 'supervised' ? t('status.phaseSupervised') : current.lastPhase === 'error' ? t('status.phaseError') : current.lastPhase === 'prime' ? t('status.prime') : current.lastPhase === 'recall' ? t('status.recallWorker') : current.lastPhase === 'review' ? t('status.phaseReview') : t('status.writeWorker')
-  const reviewState = current?.reviewRunning === true
-    ? t('status.reviewRunning')
-    : current?.idleReviewPending === true
-      ? t('status.reviewPending')
-      : reviewActivity?.eligible === true
-        ? t('status.reviewQualified')
-        : t('status.reviewAccumulating')
-  const lastReview = current?.lastReviewAt === undefined ? t('status.noReview') : t('status.reviewAt', { time: new Date(current.lastReviewAt).toLocaleTimeString(), action: current.lastReviewAction ?? '—', score: current.lastReviewScore ?? '—' })
   const storage = status?.storage
   const selectedScopeKind = storage?.activeKind ?? 'global'
   const selectedScope = storage?.scopes.find(scope => scope.kind === selectedScopeKind)
@@ -1339,31 +1324,16 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
   const runtimeMemoryEntries = runtimeArea === undefined ? 0 : Number(runtimeArea.details.memoryEntries ?? 0)
   return (
     <div className={css.page}>
-      <PageHeader title={t('status.title')} description={t('status.description')} meta={status === null && props.loading ? t('common.loading') : status?.healthy === true && lifecycle?.sessionAvailable === true ? t('status.nominal') : t('status.checkRequired')} action={<button type="button" className={css.secondaryButton} disabled={props.loading} onClick={props.onRefresh}>{props.loading ? t('status.rechecking') : t('status.recheck')}</button>} />
+      <PageHeader title={t('status.title')} description={t('status.description')} meta={status === null && props.loading ? t('common.loading') : status?.healthy === true ? t('status.nominal') : t('status.checkRequired')} action={<button type="button" className={css.secondaryButton} disabled={props.loading} onClick={props.onRefresh}>{props.loading ? t('status.rechecking') : t('status.recheck')}</button>} />
 
       <section className={css.healthStrip} aria-label={t('status.aria')}>
         <article><span className={`${css.healthIndicator} ${status === null ? css.healthMuted : status.healthy ? css.healthGood : css.healthBad}`} /><div><small>{t('status.engine')}</small><strong>{status === null ? t('status.engineChecking') : status.healthy ? t('status.engineConnected') : t('status.engineUnavailable')}</strong><p>{status?.version === undefined ? t('status.versionWaiting') : `CLI ${status.version}`}</p></div></article>
         <article><span className={`${css.healthIndicator} ${runtimeArea === undefined ? css.healthMuted : runtimeArea.status === 'invalid' ? css.healthBad : css.healthGood}`} /><div><small>{t('status.runtime')}</small><strong>{runtimeArea === undefined ? t('status.runtimeWaiting') : t('status.runtimeRatio', { user: runtimeUserEntries, memory: runtimeMemoryEntries })}</strong><p>{runtimeArea === undefined ? t('status.runtimeWaitingDetail') : t('status.runtimeBytes', { bytes: humanBytes(runtimeArea.bytes) })}</p></div></article>
         <article><span className={`${css.healthIndicator} ${activeBodies > 0 ? css.healthGood : css.healthMuted}`} /><div><small>{t('status.spaces')}</small><strong>{catalogKnown ? t('status.activeRatio', { active: activeBodies, total: memoryBodies.length }) : t('status.directoryUnsynced')}</strong><p>{t('status.activeMemories', { count: status?.stats?.totalInsights ?? 0 })}</p></div></article>
         <article><span className={`${css.healthIndicator} ${documents === undefined ? css.healthMuted : css.healthGood}`} /><div><small>{t('status.documents')}</small><strong>{documents === undefined ? t('status.documentsWaiting') : t('status.documentRatio', { active: documents.activeCount, archived: documents.archivedCount })}</strong><p>{documents === undefined ? t('status.documentsSession') : t('status.documentUsage', { used: humanBytes(documents.activeBytes), limit: humanBytes(documents.limitBytes) })}</p></div></article>
-        <article><span className={`${css.healthIndicator} ${lifecycle === undefined ? css.healthMuted : lifecycle.sessionAvailable ? css.healthGood : css.healthBad}`} /><div><small>{t('status.router')}</small><strong>{lifecycle === undefined ? t('status.routerChecking') : lifecycle.sessionAvailable ? t('status.routerReady') : t('status.sessionMissing')}</strong><p>{workers === undefined ? t('status.orchestrationWaiting') : t('status.workerSummary', { recalls: workers.recalls, reviews: workers.reviews ?? 0, writes: workers.writes, failures: workers.failures ?? 0 })}</p></div></article>
       </section>
-
-      <MemorySystemFlow status={status} reviewState={reviewState} />
 
       <StorageDomains catalog={storage} selected={selectedScope} selectedKind={selectedScopeKind} />
-
-      <section className={css.lifecyclePanel}>
-          <div className={css.statusSectionHeader}><div><h3>{t('status.lifecycle')}</h3><p>{t('status.lifecycleText')}</p></div><span className={css.phaseBadge}>{phase}</span></div>
-          <div className={css.lifecycleFlow}>
-            <article><span>01</span><div><strong>{t('status.prime')}</strong><p>{t('status.primeText')}</p></div><code>{lifecycle?.counters.primes ?? 0}</code></article>
-            <article data-disabled={lifecycle?.recallMode === 'off' || undefined}><span>02</span><div><strong>{t('status.recallWorker')}</strong><p>{lifecycle?.recallMode === 'guided' ? t('status.recallText') : t('status.recallOff')}</p></div><code>{workers?.recalls ?? 0}</code></article>
-            <article data-disabled={lifecycle?.writebackMode === 'off' || undefined}><span>03</span><div><strong>{t('status.writeWorker')}</strong><p>{lifecycle?.writebackMode === 'guided' ? t('status.writeText', { threshold: reviewThreshold, seconds: Math.round((lifecycle.idleReviewMs ?? 0) / 1000) }) : t('status.writeOff')}</p></div><code>{workers?.reviews ?? 0}</code></article>
-          </div>
-          <div className={css.lifecycleFoot}><span>{t('status.activitySignals')} <strong>{t('status.activitySignalValues', { chars: reviewActivity?.totalUserTextLength ?? 0, turns: reviewActivity?.turnCount ?? 0, tools: reviewActivity?.toolCallCount ?? 0, unique: reviewActivity?.uniqueToolCount ?? 0 })}</strong></span><span>{t('status.lastReview')} <strong>{lastReview}</strong></span><span>{t('status.workerFailures')} <strong>{workers?.failures ?? 0}</strong></span></div>
-          {current?.lastError !== undefined && <div className={css.inlineError} role="alert">Lifecycle：{current.lastError}</div>}
-      </section>
-
     </div>
   )
 }
@@ -1402,7 +1372,7 @@ function StorageDomains(props: {
           <div><strong>{humanBytes(props.selected.totalBytes)}</strong><small>{props.selected.available ? t('status.storageAvailable') : t('status.storageNotCreated')}</small></div>
         </div>
         <div className={css.storageAreaGrid}>
-          {props.selected.areas.map(area => <article key={area.kind} data-status={area.status}>
+          {props.selected.areas.filter(area => area.kind !== 'state').map(area => <article key={area.kind} data-status={area.status}>
             <header><div><span /> <strong>{storageAreaLabel(t, area.kind)}</strong></div><em>{areaStatus(area.status)}</em></header>
             <div className={css.storageAreaMetric}><strong>{area.itemCount}</strong><span>{t('status.storageItems')}</span><code>{humanBytes(area.bytes)}</code></div>
             <p>{storageAreaDetails(t, area)}</p>
@@ -1412,115 +1382,6 @@ function StorageDomains(props: {
         </div>
       </>}
       {props.catalog !== undefined && <p className={css.storageFootnote}>{t('status.storageFootnote', { root: props.catalog.activeRoot })}</p>}
-    </section>
-  )
-}
-
-function MemorySystemFlow(props: { status: StatusView | null; reviewState: string }): JSX.Element {
-  const t = useT()
-  const status = props.status
-  const activeScope = status?.storage?.scopes.find(scope => scope.active)
-  const runtime = activeScope?.areas.find(area => area.kind === 'runtime')
-  const documentArea = activeScope?.areas.find(area => area.kind === 'documents')
-  const documents = status?.documents
-  const bodies = status?.memoryBodies ?? []
-  const activeBodies = bodies.filter(body => body.active).length
-  const score = status?.lifecycle?.current?.reviewActivity?.score ?? 0
-  const threshold = status?.lifecycle?.current?.reviewActivity?.threshold ?? QODERWORK_REVIEW_POLICY.reviewThreshold
-  const idleSeconds = Math.round((status?.lifecycle?.idleReviewMs ?? 30_000) / 1000)
-  const hostReady = status?.lifecycle?.sessionAvailable === true
-  const flowActive = status?.healthy === true && hostReady
-  const areaState = (area: StorageAreaInventory | undefined): 'ready' | 'idle' | 'error' => area?.status === 'invalid' ? 'error' : area?.status === 'ready' ? 'ready' : 'idle'
-  const current = status?.lifecycle?.current
-  const workers = status?.lifecycle?.subagents
-  const lastWorkerOperation = workers?.lastOperation
-  const spawnRecent = lastWorkerOperation !== undefined && lastWorkerOperation !== 'review'
-  const archiveRecent = lastWorkerOperation === 'document-archive' || lastWorkerOperation === 'migration'
-  const reviewState = current?.reviewRunning === true ? 'running' : current?.idleReviewPending === true ? 'pending' : 'idle'
-  const rootRunning = current?.status === 'running'
-  const semanticActive = rootRunning && (current?.lastPhase === 'recall' || current?.lastPhase === 'supervised')
-  const runtimeCount = runtime?.itemCount ?? 0
-  const insights = status?.stats?.totalInsights ?? 0
-  const flowNode = (title: string, meta: string, state: 'ready' | 'idle' | 'error' = 'idle', kind: 'host' | 'worker' | 'store' | 'task' = 'host', emphasis?: 'active' | 'recent' | 'pending') => (
-    <article className={css.flowArchitectureNode} data-state={state} data-kind={kind} data-emphasis={emphasis}>
-      <span className={css.flowArchitectureSignal} aria-hidden="true" />
-      <div><strong>{title}</strong><small>{meta}</small></div>
-    </article>
-  )
-  const connector = (label: string, kind: 'host' | 'worker' = 'host', active = false) => <div className={css.flowConnector} data-kind={kind} data-active={active || undefined}><span>{label}</span><i aria-hidden="true" /></div>
-  return (
-    <section className={css.memoryFlow} aria-label={t('status.flowTitle')}>
-      <div className={css.statusSectionHeader}><div><h3>{t('status.flowTitle')}</h3><p>{t('status.flowDescription')}</p></div><span className={`${css.runtimeBadge} ${status === null ? css.runtimePending : flowActive ? css.runtimeOnline : css.runtimeOffline}`}>{status === null ? t('common.loading') : flowActive ? t('status.flowLive') : t('status.flowDegraded')}</span></div>
-      <div className={css.memoryFlowCanvas}>
-        <div className={css.flowArchitecture} role="img" aria-label={`${t('status.flowTitle')}：${t('status.flowDescription')}`}>
-          <section className={css.flowLane} data-lane="context">
-            <header><span>01</span><div><strong>{t('status.flowLaneContext')}</strong><small>{t('status.flowLaneContextDetail')}</small></div></header>
-            <div className={css.flowTrack}>
-              {flowNode(t('status.storageRuntime'), t('status.flowRuntimeMeta', { count: runtimeCount }), areaState(runtime), 'store')}
-              {connector(t('status.flowPromptAssembly'), 'host')}
-              {flowNode(t('status.flowSupervisor'), t('status.flowRootMeta'), hostReady ? 'ready' : 'idle', 'host', rootRunning ? 'active' : undefined)}
-              {connector('↔', 'host', rootRunning)}
-              {flowNode(t('status.flowConversation'), t('status.flowTurns'), hostReady ? 'ready' : 'idle', 'task')}
-            </div>
-            <div className={`${css.flowTrack} ${css.flowSecondaryTrack}`}>
-              {flowNode(t('status.flowSupervisor'), t('status.flowRootMeta'), hostReady ? 'ready' : 'idle', 'host')}
-              {connector(t('status.flowOnDemand'), 'host')}
-              {flowNode(t('status.flowDocumentSearch'), t('status.flowOnDemand'), areaState(documentArea), 'host')}
-              {connector('→', 'host')}
-              {flowNode(t('status.storageDocuments'), t('status.flowDocuments', { active: documents?.activeCount ?? 0, archived: documents?.archivedCount ?? 0 }), areaState(documentArea), 'store')}
-              {connector('↩', 'host')}
-              {flowNode(t('status.flowContext'), t('status.flowEvidenceMeta'), hostReady ? 'ready' : 'idle', 'task')}
-            </div>
-          </section>
-
-          <section className={css.flowLane} data-lane="semantic">
-            <header><span>02</span><div><strong>{t('status.flowLaneSemantic')}</strong><small>{t('status.flowLaneSemanticDetail')}</small></div></header>
-            <div className={css.flowTrack}>
-              {flowNode(t('status.flowSupervisor'), t('status.flowSemanticRequest'), hostReady ? 'ready' : 'idle', 'task')}
-              {connector('→', 'worker', semanticActive)}
-              {flowNode(t('status.flowSpawnWorker'), `${t('status.flowSpawnMeta')}${spawnRecent ? ` · ${t('status.flowRecent')}` : ''}`, hostReady ? 'ready' : 'idle', 'worker', semanticActive ? 'active' : spawnRecent ? 'recent' : undefined)}
-              {connector('→', 'worker', semanticActive)}
-              {flowNode(t('status.flowHostBridge'), t('status.flowHostBridgeMeta'), status?.healthy === false ? 'error' : status?.healthy === true ? 'ready' : 'idle', 'host')}
-              {connector('↔', 'host', semanticActive)}
-              {flowNode(t('term.spaces'), t('status.flowSpacesMeta', { active: activeBodies, total: bodies.length, insights }), status?.healthy === false ? 'error' : activeBodies > 0 ? 'ready' : 'idle', 'store')}
-              {connector('↩', 'host', semanticActive)}
-              {flowNode(t('status.flowContext'), t('status.flowEvidenceMeta'), hostReady ? 'ready' : 'idle', 'task')}
-            </div>
-          </section>
-
-          <section className={css.flowLane} data-lane="maintenance">
-            <header><span>03</span><div><strong>{t('status.flowLaneMaintenance')}</strong><small>{t('status.flowLaneMaintenanceDetail')}</small></div></header>
-            <div className={`${css.flowTrack} ${css.flowMaintenanceTrack}`}>
-              {flowNode(t('status.flowDeterministicWrites'), t('status.flowDeterministicWritesMeta'), hostReady ? 'ready' : 'idle', 'task')}
-              {connector('→', 'host')}
-              {flowNode(t('status.flowControlPlane'), t('status.flowControlPlaneMeta'), areaState(runtime), 'host')}
-              {connector('→', 'host')}
-              {flowNode(t('status.storageRuntime'), t('status.storageDocuments'), areaState(documentArea), 'store')}
-            </div>
-            <div className={`${css.flowTrack} ${css.flowReviewTrack}`}>
-              {flowNode(t('status.flowReviewGate'), t('status.flowReviewGateMeta', { score, threshold, seconds: idleSeconds }), current?.reviewActivity?.eligible === true ? 'ready' : 'idle', 'task', reviewState === 'pending' ? 'pending' : undefined)}
-              {connector('→', 'worker', reviewState === 'running')}
-              {flowNode(t('status.flowForkReview'), t('status.flowForkReviewMeta', { state: props.reviewState }), current?.lastError === undefined ? hostReady ? 'ready' : 'idle' : 'error', 'worker', reviewState === 'running' ? 'active' : reviewState === 'pending' ? 'pending' : undefined)}
-              {connector('→', 'host', reviewState === 'running')}
-              {flowNode(t('status.flowReviewTargets'), t('status.flowReviewTargetsMeta'), areaState(documentArea), 'host')}
-              {connector('↩', 'host', reviewState === 'running')}
-              {flowNode(t('status.flowContext'), t('status.flowEvidenceMeta'), hostReady ? 'ready' : 'idle', 'task')}
-            </div>
-            <div className={`${css.flowTrack} ${css.flowArchiveTrack}`}>
-              {flowNode(t('status.storageDocuments'), t('status.flowDocuments', { active: documents?.activeCount ?? 0, archived: documents?.archivedCount ?? 0 }), areaState(documentArea), 'store')}
-              {connector('→', 'worker')}
-              {flowNode(t('status.flowColdArchive'), `${t('status.flowColdArchiveMeta')}${archiveRecent ? ` · ${t('status.flowRecent')}` : ''}`, hostReady ? 'ready' : 'idle', 'worker', archiveRecent ? 'recent' : undefined)}
-              {connector('→', 'worker')}
-              {flowNode(t('status.flowHostBridge'), t('status.flowHostBridgeMeta'), status?.healthy === false ? 'error' : status?.healthy === true ? 'ready' : 'idle', 'host')}
-              {connector('→', 'host')}
-              {flowNode(t('status.flowIndexFirst'), t('term.spaces'), status?.healthy === false ? 'error' : activeBodies > 0 ? 'ready' : 'idle', 'store')}
-              {connector('→', 'host')}
-              {flowNode(t('status.flowRevisionMove'), t('status.flowRevisionMoveMeta', { archived: documents?.archivedCount ?? 0 }), areaState(documentArea), 'store')}
-            </div>
-          </section>
-        </div>
-      </div>
-      <div className={css.flowLegend}><span><i />{t('status.flowReadWrite')}</span><span><i />{t('status.flowArchive')}</span><span><b />{t('status.flowLegendRecent')}</span><span>{t('status.flowCurrentScope', { scope: storageScopeLabel(t, status?.storage?.activeKind ?? 'global') })}</span></div>
     </section>
   )
 }

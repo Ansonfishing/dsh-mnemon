@@ -10,7 +10,7 @@ Sidebar uses a minimal skin aligned with official DSH panels: its title is “Me
 
 | Page | Purpose | Call Boundary |
 |---|---|---|
-| Status | Diagnostics for the CLI, runtime hot memory, storage scope, Memory Spaces, Documents, lifecycle, and workers | Aggregated reads |
+| Status | Health of the CLI, runtime hot memory, storage scope, Memory Spaces, and Documents | Aggregated reads |
 | Runtime | Inspect and maintain USER / MEMORY hot memory and capacity | Regular mutations are deterministic; capacity maintenance may start a worker |
 | Memory Spaces | Memory Space directory, activation switches and metadata editing, a live multi-space graph, and node inspection | Deterministic RPC reads; switches and metadata edits use write RPC |
 | Documents | Search, read, create, update, and archive Documents | Search/edit operations use the control layer; archiving starts a worker |
