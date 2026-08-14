@@ -171,7 +171,7 @@ When the Web locale changes, the Chinese key set remains the type source of trut
 ```text
 [ ] pnpm run verify
 [ ] review source and generated lib diffs
-[ ] validate package file list includes README.en.md and docs
+[ ] validate package file list includes README.en.md, docs/assets, and bilingual docs
 [ ] install the built/local bundle into an isolated Web profile
 [ ] run real Mnemon CLI and WebUI smoke tests
 [ ] verify Chinese and English workspaces
@@ -180,7 +180,7 @@ When the Web locale changes, the Chinese key set remains the type source of trut
 [ ] back up any data root used for upgrade testing
 ```
 
-`package.json.files` currently publishes `lib`, the patch, both root READMEs, the public bilingual docs, and the License; the historical research ledger is excluded from the installed package.
+`package.json.files` currently publishes `lib`, the patch, both root READMEs, README demo assets, the public bilingual docs, and the License; the historical research ledger is excluded from the installed package.
 
 ## Publishing to npm
 

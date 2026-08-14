@@ -171,7 +171,7 @@ Web locale 变更时，中文键集合仍是类型事实源；英文词典必须
 ```text
 [ ] pnpm run verify
 [ ] review source and generated lib diffs
-[ ] validate package file list includes README.en.md and docs
+[ ] validate package file list includes README.en.md, docs/assets and bilingual docs
 [ ] install the built/local bundle into an isolated Web profile
 [ ] run real Mnemon CLI and WebUI smoke tests
 [ ] verify Chinese and English workspaces
@@ -180,7 +180,7 @@ Web locale 变更时，中文键集合仍是类型事实源；英文词典必须
 [ ] back up any data root used for upgrade testing
 ```
 
-`package.json.files` 当前发布 `lib`、patch、两份根 README、双语公开 docs 和 License；历史研究台账不进入安装包。
+`package.json.files` 当前发布 `lib`、patch、两份根 README、README 演示素材、双语公开 docs 和 License；历史研究台账不进入安装包。
 
 ## 发布到 npm
 
