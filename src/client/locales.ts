@@ -561,6 +561,16 @@ export const zh = {
   'config.save': '保存到 settings.yaml',
   'config.overridden': '已覆盖',
   'config.reset': '恢复默认',
+  'config.interactionTitle': '对话内交互',
+  'config.interactionLive': '实时生效',
+  'config.interactionHint': '这些表面可随时开关：保存后立即生效，无需重启；关闭某项后对话恢复 DSH 官方默认呈现。',
+  'config.interactionToolviews': '记忆工具卡',
+  'config.interactionToolviewsHint': 'mnemon_* 工具调用的记忆风格卡片（状态、摘要、展开证据与跳转）',
+  'config.interactionTurnBar': '回合记忆条',
+  'config.interactionTurnBarHint': '完成回合尾部的记忆活动摘要（召回 / 沉淀 / 档案检索）',
+  'config.interactionSaveAction': '存入记忆按钮',
+  'config.interactionSaveActionHint': '已定稿助手回复旁的受监督沉淀入口（记忆子 Agent 判断与查重）',
+  'config.interactionOn': '开启',
 } satisfies Record<string, string>
 
 export type MnemonKey = keyof typeof zh
@@ -1127,6 +1137,16 @@ export const en = {
   'config.save': 'Save to settings.yaml',
   'config.overridden': 'Overridden',
   'config.reset': 'Restore default',
+  'config.interactionTitle': 'In-conversation interaction',
+  'config.interactionLive': 'Live',
+  'config.interactionHint': 'Toggle these surfaces any time: changes apply immediately after saving, no restart needed; disabling one restores DSH\'s official default presentation.',
+  'config.interactionToolviews': 'Memory tool cards',
+  'config.interactionToolviewsHint': 'Memory-flavoured cards for mnemon_* tool calls (state, summary, expandable evidence, jumps)',
+  'config.interactionTurnBar': 'Turn memory bar',
+  'config.interactionTurnBarHint': 'Memory-activity summary under completed turns (recall / write / document search)',
+  'config.interactionSaveAction': 'Save to memory action',
+  'config.interactionSaveActionHint': 'Supervised distillation entry beside finalized assistant replies (memory subagent judgment and dedupe)',
+  'config.interactionOn': 'Enabled',
 } satisfies Record<MnemonKey, string>
 
 export type MnemonTranslate = (key: MnemonKey, params?: Record<string, unknown>) => string

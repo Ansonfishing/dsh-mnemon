@@ -222,6 +222,8 @@ export interface ClientSettingsScope<T> {
   subscribe(listener: () => void): () => void
   set(field: string, value: unknown): Promise<void>
   unset(field: string): Promise<void>
+  setPath(path: string[], value: unknown): Promise<void>
+  unsetPath(path: string[]): Promise<void>
 }
 
 export interface ClientContextShape {

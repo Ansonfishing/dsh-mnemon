@@ -9,10 +9,20 @@ export interface MnemonSettingsCardProps {
   t?: MnemonTranslate
 }
 
-type Field = 'storageScope' | 'dataDir'
-type Draft = Record<Field, string>
+type StringField = 'storageScope' | 'dataDir'
+type BooleanField = 'interactionToolviews' | 'interactionTurnBar' | 'interactionSaveAction'
+type Field = StringField | BooleanField
+type Draft = Record<StringField, string> & Record<BooleanField, boolean>
 
-const FIELD_ORDER: Field[] = ['storageScope', 'dataDir']
+const FIELD_ORDER: StringField[] = ['storageScope', 'dataDir']
+const INTERACTION_ORDER: BooleanField[] = ['interactionToolviews', 'interactionTurnBar', 'interactionSaveAction']
+
+/** Nested settings paths of the live interaction toggles. */
+const INTERACTION_PATHS: Record<BooleanField, string[]> = {
+  interactionToolviews: ['conversationInteraction', 'toolviews'],
+  interactionTurnBar: ['conversationInteraction', 'turnBar'],
+  interactionSaveAction: ['conversationInteraction', 'saveAction'],
+}
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -22,9 +32,13 @@ function record(value: unknown): Record<string, unknown> {
 
 function draftOf(value: Config | undefined): Draft {
   const resolved = value ?? {}
+  const interaction = record(resolved.conversationInteraction)
   return {
     storageScope: resolved.storageScope ?? (resolved.dataDir?.trim() ? 'custom' : 'global'),
     dataDir: resolved.dataDir?.trim() ?? '',
+    interactionToolviews: interaction.toolviews !== false,
+    interactionTurnBar: interaction.turnBar !== false,
+    interactionSaveAction: interaction.saveAction !== false,
   }
 }
 
@@ -62,7 +76,7 @@ export function MnemonSettingsCard({ scope, t = translateZh }: MnemonSettingsCar
 
   if (snapshot.status === 'unavailable') return null
 
-  const edit = (field: Field, value: string) => {
+  const edit = (field: Field, value: string | boolean) => {
     setDraft(current => ({ ...current, [field]: value }))
     setDirty(current => new Set(current).add(field))
     setReset(current => {
@@ -92,13 +106,20 @@ export function MnemonSettingsCard({ scope, t = translateZh }: MnemonSettingsCar
     setSaving(true)
     setFailed(null)
     try {
-      const order = draft.storageScope === 'custom' ? [...FIELD_ORDER].reverse() : FIELD_ORDER
+      const order: Field[] = [...(draft.storageScope === 'custom' ? [...FIELD_ORDER].reverse() : FIELD_ORDER), ...INTERACTION_ORDER]
       for (const field of order) {
         if (!dirty.has(field)) continue
-        if (reset.has(field) || (field === 'dataDir' && draft.dataDir.trim() === '')) {
-          await scope.unset(field)
+        const booleanPath = INTERACTION_PATHS[field as BooleanField]
+        if (booleanPath !== undefined) {
+          if (reset.has(field)) await scope.unsetPath(booleanPath)
+          else await scope.setPath(booleanPath, draft[field as BooleanField] === true)
+          continue
+        }
+        const stringField = field as StringField
+        if (reset.has(stringField) || (stringField === 'dataDir' && draft.dataDir.trim() === '')) {
+          await scope.unset(stringField)
         } else {
-          await scope.set(field, draft[field].trim())
+          await scope.set(stringField, draft[stringField].trim())
         }
       }
       setDirty(new Set())
@@ -111,6 +132,11 @@ export function MnemonSettingsCard({ scope, t = translateZh }: MnemonSettingsCar
   }
 
   const fieldMeta = (field: Field) => Object.hasOwn(overridden, field) && !reset.has(field)
+  const interactionMeta = (field: BooleanField) => {
+    const group = record(overridden.conversationInteraction)
+    const path = INTERACTION_PATHS[field]
+    return Object.hasOwn(group, path[path.length - 1]!) && !reset.has(field)
+  }
   const errorId = error === null ? undefined : 'mnemon-settings-validation'
   const loading = snapshot.status === 'loading'
 
@@ -133,6 +159,23 @@ export function MnemonSettingsCard({ scope, t = translateZh }: MnemonSettingsCar
           {draft.storageScope === 'custom' && <SettingField controlId="mnemon-custom-directory" t={t} label={t('config.customDirectory')} hint={t('config.customHint')} overridden={fieldMeta('dataDir')} resetDisabled={controlsDisabled} onReset={() => resetField('dataDir')}>
             <input id="mnemon-custom-directory" aria-label={t('config.customAria')} aria-describedby={`mnemon-custom-directory-hint${errorId === undefined ? '' : ` ${errorId}`}`} aria-invalid={error !== null} value={draft.dataDir} onChange={event => edit('dataDir', event.target.value)} placeholder="~/mnemon-data" spellCheck={false} autoComplete="off" disabled={controlsDisabled} />
           </SettingField>}
+        </div>
+
+        <div className={css.interactionGroup}>
+          <div className={css.interactionHeader}>
+            <strong>{t('config.interactionTitle')}</strong>
+            <span>{t('config.interactionLive')}</span>
+          </div>
+          <p className={css.interactionHint}>{t('config.interactionHint')}</p>
+          <SettingField controlId="mnemon-interaction-toolviews" t={t} label={t('config.interactionToolviews')} hint={t('config.interactionToolviewsHint')} overridden={interactionMeta('interactionToolviews')} resetDisabled={controlsDisabled} onReset={() => resetField('interactionToolviews')}>
+            <label className={css.checkboxLine}><input id="mnemon-interaction-toolviews" type="checkbox" checked={draft.interactionToolviews} onChange={event => edit('interactionToolviews', event.target.checked)} disabled={controlsDisabled} /><span>{t('config.interactionOn')}</span></label>
+          </SettingField>
+          <SettingField controlId="mnemon-interaction-turn-bar" t={t} label={t('config.interactionTurnBar')} hint={t('config.interactionTurnBarHint')} overridden={interactionMeta('interactionTurnBar')} resetDisabled={controlsDisabled} onReset={() => resetField('interactionTurnBar')}>
+            <label className={css.checkboxLine}><input id="mnemon-interaction-turn-bar" type="checkbox" checked={draft.interactionTurnBar} onChange={event => edit('interactionTurnBar', event.target.checked)} disabled={controlsDisabled} /><span>{t('config.interactionOn')}</span></label>
+          </SettingField>
+          <SettingField controlId="mnemon-interaction-save-action" t={t} label={t('config.interactionSaveAction')} hint={t('config.interactionSaveActionHint')} overridden={interactionMeta('interactionSaveAction')} resetDisabled={controlsDisabled} onReset={() => resetField('interactionSaveAction')}>
+            <label className={css.checkboxLine}><input id="mnemon-interaction-save-action" type="checkbox" checked={draft.interactionSaveAction} onChange={event => edit('interactionSaveAction', event.target.checked)} disabled={controlsDisabled} /><span>{t('config.interactionOn')}</span></label>
+          </SettingField>
         </div>
 
         <div className={css.feedback} aria-live="polite">

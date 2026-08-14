@@ -15,6 +15,8 @@ describe('MnemonView', () => {
     subscribe: () => () => {},
     set: async () => {},
     unset: async () => {},
+    setPath: async () => {},
+    unsetPath: async () => {},
   } satisfies ClientSettingsScope<Config>
 
   function createConnection(options: { withInactiveBody?: boolean; listCount?: number; longContent?: boolean } = {}) {

@@ -27,6 +27,8 @@ describe('MnemonSettingsCard', () => {
       subscribe() { return () => {} },
       set,
       unset,
+      setPath: set,
+      unsetPath: unset,
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
 
     render(<MnemonSettingsCard scope={scope} />)
@@ -52,7 +54,7 @@ describe('MnemonSettingsCard', () => {
       snapshot,
       getSnapshot() { return this.snapshot },
       subscribe() { return () => {} },
-      set: vi.fn(async () => {}),
+      set: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
       unset: vi.fn(async () => {}),
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
 
@@ -77,7 +79,7 @@ describe('MnemonSettingsCard', () => {
       snapshot,
       getSnapshot() { return this.snapshot },
       subscribe() { return () => {} },
-      set: vi.fn(async (field: string) => { calls.push(field) }),
+      set: vi.fn(async (field: string) => { calls.push(field) }), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
       unset: vi.fn(async () => {}),
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
     const view = render(<MnemonSettingsCard scope={scope} />)
@@ -103,7 +105,7 @@ describe('MnemonSettingsCard', () => {
       snapshot,
       getSnapshot() { return this.snapshot },
       subscribe() { return () => {} },
-      set: vi.fn(async () => {}),
+      set: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
       unset: vi.fn(async () => {}),
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
 
@@ -130,7 +132,7 @@ describe('MnemonSettingsCard', () => {
       snapshot,
       getSnapshot() { return this.snapshot },
       subscribe() { return () => {} },
-      set: vi.fn(async () => {}),
+      set: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
       unset: vi.fn(async () => {}),
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
 
@@ -151,7 +153,7 @@ describe('MnemonSettingsCard', () => {
       snapshot,
       getSnapshot() { return this.snapshot },
       subscribe() { return () => {} },
-      set: vi.fn(async () => {}),
+      set: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
       unset: vi.fn(async () => {}),
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
 
@@ -160,5 +162,43 @@ describe('MnemonSettingsCard', () => {
     expect(screen.getByRole('status').textContent).toBe('载入中…')
     expect(screen.queryByText('当前部署的插件设置为只读。')).toBeNull()
     expect(screen.queryByLabelText('Mnemon 存储范围')).toBeNull()
+  })
+
+  it('persists interaction toggles through nested setPath calls', async () => {
+    const setPath = vi.fn(async () => {})
+    const unsetPath = vi.fn(async () => {})
+    const snapshot = {
+      status: 'ready' as const,
+      value: { conversationInteraction: { toolviews: true, turnBar: true, saveAction: true } },
+      base: {},
+      user: {},
+      revision: 0,
+      writable: true,
+      mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}),
+      unset: vi.fn(async () => {}),
+      setPath,
+      unsetPath,
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+
+    const view = render(<MnemonSettingsCard scope={scope} />)
+
+    const toolviews = view.getByLabelText('记忆工具卡') as HTMLInputElement
+    const turnBar = view.getByLabelText('回合记忆条') as HTMLInputElement
+    expect(toolviews.checked).toBe(true)
+    expect(turnBar.checked).toBe(true)
+
+    fireEvent.click(toolviews)
+    fireEvent.click(turnBar)
+    fireEvent.click(view.getByRole('button', { name: '保存到 settings.yaml' }))
+
+    await waitFor(() => expect(setPath).toHaveBeenCalledWith(['conversationInteraction', 'toolviews'], false))
+    expect(setPath).toHaveBeenCalledWith(['conversationInteraction', 'turnBar'], false)
+    expect(unsetPath).not.toHaveBeenCalled()
   })
 })

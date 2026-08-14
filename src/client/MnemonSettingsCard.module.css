@@ -103,6 +103,71 @@
   max-width: 660px;
 }
 
+.interactionGroup {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  max-width: 660px;
+  margin-top: 6px;
+  padding: 12px 14px 4px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.interactionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.interactionHeader strong {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+.interactionHeader span {
+  flex: none;
+  border-radius: 999px;
+  padding: 1px 8px;
+  color: var(--dsw-alias-state-success-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, transparent);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.interactionHint {
+  margin: -6px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.checkboxLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  min-height: 20px;
+  cursor: pointer;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  user-select: none;
+}
+.checkboxLine input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--dsw-alias-state-business-primary);
+  cursor: pointer;
+}
+.checkboxLine input:disabled {
+  cursor: default;
+}
+
 .field {
   min-width: 0;
   display: grid;
