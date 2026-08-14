@@ -43,6 +43,31 @@ describe('MemoryBodyRegistry', () => {
     expect(existsSync(join(dataDir, 'data', '.dsh-memory-bodies.json'))).toBe(true)
   })
 
+  it('keeps a legacy default Store without presenting it as an auto-created default Memory Space', () => {
+    const dataDir = temporaryDirectory()
+    mkdirSync(join(dataDir, 'data', 'default'), { recursive: true })
+    writeFileSync(join(dataDir, 'data', 'default', 'mnemon.db'), 'existing database')
+    writeFileSync(join(dataDir, 'data', '.dsh-memory-bodies.json'), JSON.stringify({
+      version: 1,
+      bodies: [{
+        id: 'default',
+        name: '默认记忆体',
+        description: '从现有 Mnemon Store 自动接入。',
+        active: true,
+        createdAt: '2026-05-29T00:00:00.000Z',
+        updatedAt: '2026-08-13T00:00:00.000Z',
+      }],
+    }))
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
+
+    const registry = new MemoryBodyRegistry(runner, true)
+
+    expect(registry.list()).toEqual([
+      expect.objectContaining({ id: 'default', name: 'default', description: 'Existing Mnemon Store discovered on disk.', active: true }),
+    ])
+    expect(readFileSync(join(dataDir, 'data', 'default', 'mnemon.db'), 'utf8')).toBe('existing database')
+  })
+
   it('persists names, descriptions, and activation independently from Mnemon data', async () => {
     const dataDir = temporaryDirectory()
     const process = vi.fn<ProcessRunner>(async () => ({ stdout: 'Created store', stderr: '', exitCode: 0 }))
