@@ -30,10 +30,11 @@ describe('Mnemon settings bridge', () => {
     const ops = [
       { op: 'set', path: ['store'], value: 'settings-store' },
       { op: 'set', path: ['idleReviewMs'], value: 45000 },
+      { op: 'set', path: ['displayMode'], value: 'buildin' },
     ]
     const written = await handler('mutate', { expectedRevision: 2, ops })
     expect(mutate).toHaveBeenCalledWith('mnemon', ops, 2)
-    expect(written).toEqual(expect.objectContaining({ ok: true, value: expect.objectContaining({ revision: 3, user: { store: 'settings-store', idleReviewMs: 45000 } }) }))
+    expect(written).toEqual(expect.objectContaining({ ok: true, value: expect.objectContaining({ revision: 3, user: { store: 'settings-store', idleReviewMs: 45000, displayMode: 'buildin' } }) }))
   })
 
   it('rejects fields outside the plugin schema', async () => {

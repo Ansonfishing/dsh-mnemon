@@ -60,7 +60,7 @@ export interface AgentSearchResponse extends SearchResponse {
 }
 
 export class MnemonClient {
-  constructor(private readonly connection: ClientConnectionHandle, private readonly sessionId?: string) {}
+  constructor(private readonly connection: ClientConnectionHandle, private readonly sessionId?: string, private readonly workspaceId?: string) {}
 
   private async call<T>(channel: string, endpoint: string, payload: unknown): Promise<T> {
     const response = await this.connection.rpc.call(channel, endpoint, payload)
@@ -68,12 +68,20 @@ export class MnemonClient {
     return response.value as T
   }
 
+  private scoped<T extends object = Record<string, never>>(payload: T = {} as T): T & { sessionId?: string; workspaceId?: string } {
+    return {
+      ...payload,
+      ...(this.sessionId === undefined ? {} : { sessionId: this.sessionId }),
+      ...(this.workspaceId === undefined ? {} : { workspaceId: this.workspaceId }),
+    }
+  }
+
   status(): Promise<StatusView> {
-    return this.call(MNEMON_READ_CHANNEL, 'status', this.sessionId === undefined ? {} : { sessionId: this.sessionId })
+    return this.call(MNEMON_READ_CHANNEL, 'status', this.scoped())
   }
 
   runtimeMemory(): Promise<RuntimeMemorySnapshot> {
-    return this.call(MNEMON_READ_CHANNEL, 'runtime-memory', {})
+    return this.call(MNEMON_READ_CHANNEL, 'runtime-memory', this.scoped())
   }
 
   mutateRuntimeMemory(request: {
@@ -83,59 +91,58 @@ export class MnemonClient {
     old_text?: string
     importance?: RuntimeMemoryImportance
   }): Promise<RuntimeMemoryMutationResult> {
-    return this.call(MNEMON_WRITE_CHANNEL, 'runtime-memory', { ...request, sessionId: this.sessionId })
+    return this.call(MNEMON_WRITE_CHANNEL, 'runtime-memory', this.scoped(request))
   }
 
   documents(): Promise<DocumentSnapshot> {
-    return this.call(MNEMON_READ_CHANNEL, 'documents', { sessionId: this.sessionId })
+    return this.call(MNEMON_READ_CHANNEL, 'documents', this.scoped())
   }
 
   document(id: string): Promise<DocumentView> {
-    return this.call(MNEMON_READ_CHANNEL, 'document', { sessionId: this.sessionId, id })
+    return this.call(MNEMON_READ_CHANNEL, 'document', this.scoped({ id }))
   }
 
   searchDocuments(query: string, includeArchived = false, limit = 50): Promise<DocumentSearchResult> {
-    return this.call(MNEMON_READ_CHANNEL, 'document-search', { sessionId: this.sessionId, query, includeArchived, limit })
+    return this.call(MNEMON_READ_CHANNEL, 'document-search', this.scoped({ query, includeArchived, limit }))
   }
 
   mutateDocument(request: DocumentMutation): Promise<DocumentMutationResult> {
-    return this.call(MNEMON_WRITE_CHANNEL, 'document', { ...request, sessionId: this.sessionId })
+    return this.call(MNEMON_WRITE_CHANNEL, 'document', this.scoped(request))
   }
 
   archiveDocument(id: string): Promise<DocumentMutationResult> {
-    return this.call(MNEMON_WRITE_CHANNEL, 'document', { action: 'archive', id, sessionId: this.sessionId })
+    return this.call(MNEMON_WRITE_CHANNEL, 'document', this.scoped({ action: 'archive', id }))
   }
 
   bodies(): Promise<MemoryBodyCatalog> {
-    return this.call(MNEMON_READ_CHANNEL, 'bodies', {})
+    return this.call(MNEMON_READ_CHANNEL, 'bodies', this.scoped())
   }
 
   graph(memoryBodyIds?: string[]): Promise<MemoryGraphSnapshot> {
-    return this.call(MNEMON_READ_CHANNEL, 'graph', memoryBodyIds === undefined ? {} : { memoryBodyIds })
+    return this.call(MNEMON_READ_CHANNEL, 'graph', this.scoped(memoryBodyIds === undefined ? {} : { memoryBodyIds }))
   }
 
   list(request: MemoryListRequest = {}): Promise<MemoryListView> {
-    return this.call(MNEMON_READ_CHANNEL, 'list', request)
+    return this.call(MNEMON_READ_CHANNEL, 'list', this.scoped(request))
   }
 
   entities(entity?: string, limit?: number): Promise<EntityView> {
-    return this.call(MNEMON_READ_CHANNEL, 'entities', {
-      sessionId: this.sessionId,
+    return this.call(MNEMON_READ_CHANNEL, 'entities', this.scoped({
       ...(entity === undefined ? {} : { entity }),
       ...(limit === undefined ? {} : { limit }),
-    })
+    }))
   }
 
   search(request: SearchRequest): Promise<SearchResponse> {
-    return this.call(MNEMON_READ_CHANNEL, 'search', { ...request, sessionId: this.sessionId })
+    return this.call(MNEMON_READ_CHANNEL, 'search', this.scoped(request))
   }
 
   agentSearch(request: SearchRequest): Promise<AgentSearchResponse> {
-    return this.call(MNEMON_READ_CHANNEL, 'agent-search', { ...request, sessionId: this.sessionId })
+    return this.call(MNEMON_READ_CHANNEL, 'agent-search', this.scoped(request))
   }
 
   related(id: string, memoryBodyId?: string): Promise<Insight[]> {
-    return this.call(MNEMON_READ_CHANNEL, 'related', { id, depth: 2, sessionId: this.sessionId, ...(memoryBodyId === undefined ? {} : { memoryBodyId }) })
+    return this.call(MNEMON_READ_CHANNEL, 'related', this.scoped({ id, depth: 2, ...(memoryBodyId === undefined ? {} : { memoryBodyId }) }))
   }
 
   /** Settled memory-tool activity of one turn, shared across all mounted tails. */
@@ -150,23 +157,23 @@ export class MnemonClient {
   }
 
   remember(request: RememberRequest): Promise<Record<string, unknown>> {
-    return this.call(MNEMON_WRITE_CHANNEL, 'remember', { ...request, sessionId: this.sessionId })
+    return this.call(MNEMON_WRITE_CHANNEL, 'remember', this.scoped(request))
   }
 
   supervise(content: string, idempotencyKey?: string): Promise<{ delegated: true; sessionId: string; runId: string; provider: string; summary: string; action: string; memoryBodyIds: string[] }> {
-    return this.call(MNEMON_WRITE_CHANNEL, 'supervise', { sessionId: this.sessionId, content, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) })
+    return this.call(MNEMON_WRITE_CHANNEL, 'supervise', this.scoped({ content, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) }))
   }
 
   forget(id: string, memoryBodyId?: string): Promise<Record<string, unknown>> {
-    return this.call(MNEMON_WRITE_CHANNEL, 'forget', { id, sessionId: this.sessionId, ...(memoryBodyId === undefined ? {} : { memoryBodyId }) })
+    return this.call(MNEMON_WRITE_CHANNEL, 'forget', this.scoped({ id, ...(memoryBodyId === undefined ? {} : { memoryBodyId }) }))
   }
 
   createBody(request: { name: string; description: string; active?: boolean }): Promise<MemoryBody> {
-    return this.call(MNEMON_WRITE_CHANNEL, 'body-create', request)
+    return this.call(MNEMON_WRITE_CHANNEL, 'body-create', this.scoped(request))
   }
 
   updateBody(memoryBodyId: string, request: { name?: string; description?: string; active?: boolean }): Promise<MemoryBody> {
-    return this.call(MNEMON_WRITE_CHANNEL, 'body-update', { memoryBodyId, ...request })
+    return this.call(MNEMON_WRITE_CHANNEL, 'body-update', this.scoped({ memoryBodyId, ...request }))
   }
 
   packTarget(): Promise<{ root: string; scope: 'global' | 'workspace' | 'custom' }> {

@@ -1,4 +1,4 @@
-import type { HostContextShape } from './contracts.ts';
+import type { HostAgent, HostContextShape } from './contracts.ts';
 import type { ResolvedConfig } from './config.ts';
 import type { RuntimeMemoryController } from './runtime-memory.ts';
 export declare const GUIDANCE_SECTION_NAME = "mnemon:routing";
@@ -7,4 +7,6 @@ export declare const ROUTING_GUIDANCE = "Use memory only by need. For substantia
 export declare function registerGuidance(ctx: HostContextShape, config?: Pick<ResolvedConfig, 'routingGuidance'>): void;
 /** Inject the latest committed USER.md/MEMORY.md projections on every prompt assembly. */
 export declare function registerRuntimeMemoryContext(ctx: HostContextShape, runtimeMemory: RuntimeMemoryController): void;
+/** Shadow the global fallback with the current Agent workspace's hot memory. */
+export declare function registerAgentRuntimeMemoryContext(agent: HostAgent, runtimeMemory: () => RuntimeMemoryController): () => void;
 //# sourceMappingURL=guidance.d.ts.map

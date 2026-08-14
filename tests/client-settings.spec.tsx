@@ -9,6 +9,32 @@ import type { Config, InteractionConfig } from '../src/config.ts'
 afterEach(cleanup)
 
 describe('MnemonSettingsCard', () => {
+  it('defaults to sidebar and persists a buildin display-mode selection', async () => {
+    const mutate = vi.fn(async () => {})
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
+      mutate,
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+
+    render(<MnemonSettingsCard scope={scope} />)
+
+    expect((screen.getByRole('radio', { name: 'Sidebar' }) as HTMLInputElement).checked).toBe(true)
+    fireEvent.click(screen.getByRole('radio', { name: 'Buildin' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([
+      { op: 'set', path: ['displayMode'], value: 'buildin' },
+    ]))
+  })
+
   it('stages settings and writes them through the DSH settings scope', async () => {
     const set = vi.fn(async () => {})
     const unset = vi.fn(async () => {})

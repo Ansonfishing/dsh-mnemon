@@ -108,7 +108,8 @@ no implicit delete
 | 现象 | 检查与处理 |
 |---|---|
 | Mnemon 不可用 | 运行 `command -v mnemon`、`mnemon --version`；设置 `MNEMON_CLI_PATH` 或 `cliPath` 后重启 |
-| 状态正常但召回为空 | 检查是否有 active Memory Space、当前 `storageScope`、DSH 启动 cwd 和查询是否足够聚焦 |
+| 状态正常但召回为空 | 检查是否有 active Memory Space、当前 `storageScope`、工作台查看目录、会话实际生效目录和查询是否足够聚焦 |
+| 工作台提示目录未对齐 | 这是安全提示：工作台正在查看另一工作区，而 Agent 仍跟随当前会话；点击“对齐当前会话”或有意保留跨工作区查看 |
 | `memoryBodyId is required...` | active 数量不是恰好 1；让 worker 或调用方显式选择目标 |
 | `memory body is not active for reading` | 在记忆体页激活目标；写入 inactive 可以，但读取不行 |
 | subagent provider 错误 | 普通任务需要完整隔离能力；后台审查另需 `fork + inheritsParentContext` |
@@ -121,7 +122,7 @@ no implicit delete
 | lock timeout | 检查是否有另一个实例正在写；不要删除仍属于活跃进程的 lock |
 | invalid JSON / unexpected viz | CLI 输出协议可能不兼容；在隔离根中验证版本，不要继续写生产数据 |
 | 远程页面可以读但不能写 | 写 RPC 强制 loopback，这是权限设计 |
-| `tabEnabled=false` 仍显示 Tab | 当前开关只停 Host 数据 RPC，不会移除客户端 slot |
+| 左侧栏不显示“记忆系统” | 检查 `tabEnabled=true` 且 `displayMode=sidebar`；`buildin` 会显示在对话区标签页；本地 link 修改后先运行 `pnpm run build` 并重启 DSH profile |
 | 本地 link 不反映源码 | 先运行 `pnpm run build`，再重启 DSH profile |
 
 ## 已知限制

@@ -12,6 +12,12 @@ import type { DocumentMutation } from './documents.ts'
 import { MnemonSubagentCoordinator, type DelegatedWriteResult, type SubagentCounters } from './subagent.ts'
 import { scoreReviewActivity, type ReviewActivityScore } from './review-activity.ts'
 import { TurnActivityProjection, type TurnMemoryActivity, type TurnMemoryActivitySnapshot } from './activity.ts'
+import type { RuntimeMemoryController } from './runtime-memory.ts'
+import { registerAgentRuntimeMemoryContext } from './guidance.ts'
+
+interface AgentRuntimeSource {
+  forAgent(agent: HostAgent): { runtimeMemory: RuntimeMemoryController }
+}
 
 export type { TurnMemoryActivity, TurnMemoryActivitySnapshot } from './activity.ts'
 
@@ -382,6 +388,7 @@ export class MnemonLifecycle {
     private readonly ctx: HostContextShape,
     private readonly coordinator: MnemonSubagentCoordinator,
     private readonly config: ResolvedConfig,
+    private readonly runtimeSource?: AgentRuntimeSource,
   ) {}
 
   start(): () => void {
@@ -528,7 +535,11 @@ export class MnemonLifecycle {
     let dispose: () => unknown
     dispose = agent.ctx.effect(() => {
       const stop = lifecycle.start()
+      const stopRuntimeContext = this.runtimeSource === undefined
+        ? () => {}
+        : registerAgentRuntimeMemoryContext(agent, () => this.runtimeSource!.forAgent(agent).runtimeMemory)
       return () => {
+        stopRuntimeContext()
         stop()
         if (this.owners.get(agent)?.dispose === dispose) this.owners.delete(agent)
       }

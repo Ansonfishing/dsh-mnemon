@@ -1,4 +1,4 @@
-import type { HostContextShape } from './contracts.ts'
+import type { HostAgent, HostContextShape } from './contracts.ts'
 import type { ResolvedConfig } from './config.ts'
 import type { RuntimeMemoryController } from './runtime-memory.ts'
 
@@ -10,6 +10,14 @@ function systemPrompt(ctx: HostContextShape): {
   section?: (value: { name: string; order: number; text: string | (() => string) }) => unknown
 } | undefined {
   return ctx.get('systemPrompt') as {
+    section?: (value: { name: string; order: number; text: string | (() => string) }) => unknown
+  } | undefined
+}
+
+function scopedSystemPrompt(agent: HostAgent): {
+  section?: (value: { name: string; order: number; text: string | (() => string) }) => unknown
+} | undefined {
+  return agent.ctx.get?.('systemPrompt') as {
     section?: (value: { name: string; order: number; text: string | (() => string) }) => unknown
   } | undefined
 }
@@ -29,4 +37,14 @@ export function registerRuntimeMemoryContext(ctx: HostContextShape, runtimeMemor
     order: 145,
     text: () => runtimeMemory.contextText(),
   })
+}
+
+/** Shadow the global fallback with the current Agent workspace's hot memory. */
+export function registerAgentRuntimeMemoryContext(agent: HostAgent, runtimeMemory: () => RuntimeMemoryController): () => void {
+  const dispose = scopedSystemPrompt(agent)?.section?.({
+    name: RUNTIME_MEMORY_SECTION_NAME,
+    order: 145,
+    text: () => runtimeMemory().contextText(),
+  })
+  return typeof dispose === 'function' ? dispose as () => void : () => {}
 }

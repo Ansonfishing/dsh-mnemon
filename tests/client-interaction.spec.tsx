@@ -4,6 +4,8 @@ import { waitFor } from '@testing-library/react'
 import { apply } from '../src/client/index.ts'
 import { selectMnemonTurnTail } from '../src/client/MnemonTurnTail.tsx'
 
+const mountedEffects: Array<() => void> = []
+
 interface SlotOptions {
   name: string
   key?: string
@@ -72,7 +74,10 @@ function makeCtx(initialValue: unknown) {
     effect: vi.fn((callback: () => unknown) => {
       const dispose = callback()
       effects.push(callback)
-      if (typeof dispose === 'function') effectDisposers.push(dispose as () => void)
+      if (typeof dispose === 'function') {
+        effectDisposers.push(dispose as () => void)
+        mountedEffects.push(dispose as () => void)
+      }
       return () => {}
     }),
   }
@@ -86,7 +91,11 @@ function makeCtx(initialValue: unknown) {
 const TOOLVIEW_KEYS = ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related', 'mnemon_status', 'mnemon_document_search', 'mnemon_document_manage', 'mnemon_runtime_memory', 'mnemon_remember', 'mnemon_link', 'mnemon_forget', 'mnemon_memory_body_create', 'mnemon_memory_body_update', 'mnemon_memory_body_merge']
 
 describe('interaction surfaces binding', () => {
-  afterEach(() => { vi.restoreAllMocks() })
+  afterEach(() => {
+    for (const dispose of mountedEffects.splice(0).reverse()) dispose()
+    document.body.replaceChildren()
+    vi.restoreAllMocks()
+  })
 
   it('declines an unsettled turn with the DSH chain-slot null sentinel', () => {
     const owner = (status: string) => ({ turn: { status }, seq: 1, openFile: vi.fn() })
@@ -97,9 +106,10 @@ describe('interaction surfaces binding', () => {
   it('registers no interaction surface by default (opt-in off)', async () => {
     const { ctx, injects, activeRegistrations } = makeCtx({})
     apply(ctx)
-    // conversation.view and the dedicated settings section always register; the
-    // interaction surfaces must not until settings explicitly enable them.
-    expect(injects).toEqual(expect.arrayContaining(['conversation.view', 'settings.section']))
+    // The standalone sidebar workspace does not occupy conversation.view; the
+    // interaction surfaces must not register until settings enable them.
+    expect(injects).toContain('settings.section')
+    expect(injects).not.toContain('conversation.view')
     await waitFor(() => {
       expect(activeRegistrations()).not.toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
     })

@@ -108,7 +108,8 @@ When migration is required, stop writes and copy the complete root. Two roots ca
 | Symptom | Check and Resolution |
 |---|---|
 | Mnemon is unavailable | Run `command -v mnemon` and `mnemon --version`; set `MNEMON_CLI_PATH` or `cliPath`, then restart |
-| Status is healthy but recall is empty | Check that a Memory Space is active, inspect the current `storageScope` and DSH launch cwd, and make sure the query is focused enough |
+| Status is healthy but recall is empty | Check that a Memory Space is active, inspect `storageScope`, the workbench inspection root, the current session's effective root, and make sure the query is focused enough |
+| Workbench reports a directory mismatch | This is a safety notice: the workbench is inspecting another workspace while the Agent still follows the current session; align with the session or intentionally keep cross-workspace inspection |
 | `memoryBodyId is required...` | The active count is not exactly 1; have the worker or caller select a target explicitly |
 | `memory body is not active for reading` | Activate the target in Overview; writing to an inactive space is allowed, but reading is not |
 | Subagent provider error | Regular tasks require the full isolation capabilities; background review additionally requires `fork + inheritsParentContext` |
@@ -121,7 +122,7 @@ When migration is required, stop writes and copy the complete root. Two roots ca
 | Lock timeout | Check whether another instance is writing; do not delete a lock that still belongs to a live process |
 | Invalid JSON / unexpected viz | The CLI output protocol may be incompatible; validate the version against an isolated root and do not continue writing production data |
 | A remote page can read but not write | Write RPC enforces loopback by design |
-| `tabEnabled=false` still shows the Tab | The setting currently stops only Host data RPC and does not remove the client slot |
+| “Memory System” is missing from the sidebar | Check `tabEnabled=true` and `displayMode=sidebar`; `buildin` appears as a conversation-area tab; after changing a local link, run `pnpm run build` and restart the DSH profile |
 | Local link does not reflect source | Run `pnpm run build`, then restart the DSH profile |
 
 ## Known Limitations

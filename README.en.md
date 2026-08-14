@@ -110,7 +110,7 @@ For a local checkout, use an absolute path:
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
-Open the dedicated “Settings -> Memory System” page to select a storage scope, then create or activate a Memory Space in the conversation's “Memory System” tab. All settings apply live after Save; the storage root switches atomically after the new directory initializes successfully. Changing the scope never migrates, merges, or deletes old data automatically.
+Open the dedicated “Settings -> Memory System” page to choose both a display mode and storage scope. The default `sidebar` mode opens a dedicated “Memory System” workbench from the sidebar; switching to `buildin` restores the original conversation-area tab. Saving switches live without mounting duplicate entries. Under the `workspace` scope, the sidebar workbench selector independently chooses which DSH workspace to inspect and maintain; agents, tools, and lifecycle hooks always continue to use the current session workspace. A global banner shows both paths when they diverge and aligns them with one click. The storage root switches atomically after the new directory initializes successfully, and changing the scope never migrates, merges, or deletes old data automatically.
 
 Upgrade and uninstall (`dsh plugin` forwards to pnpm inside the profile directory):
 
@@ -122,7 +122,7 @@ dsh plugin --profile web update dsh-mnemon
 dsh plugin --profile web remove dsh-mnemon
 ```
 
-Uninstalling never deletes memory data: `global` data stays in `~/.mnemon`, and `workspace` / `custom` data stays in their directories, so reinstalling picks up where you left off. To pause automatic reads/writes without uninstalling, turn off `writebackMode` / `recallMode` / `lifecycleEnabled` in the plugin configuration (see the [configuration reference](./docs/en/configuration.md) for toggle interactions and the current `tabEnabled` limitation).
+Uninstalling never deletes memory data: `global` data stays in `~/.mnemon`, and `workspace` / `custom` data stays in their directories, so reinstalling picks up where you left off. To pause automatic reads/writes without uninstalling, turn off `writebackMode` / `recallMode` / `lifecycleEnabled`; set `tabEnabled=false` to hide the currently selected Web entry (see the [configuration reference](./docs/en/configuration.md)).
 
 ## Minimal configuration
 
@@ -130,11 +130,12 @@ Configuration lives in `$DSH_HOME/settings.yaml` (commonly `~/.dsh/settings.yaml
 
 ```yaml
 mnemon:
+  displayMode: sidebar # sidebar | buildin; sidebar by default
   storageScope: global # global | workspace | custom
 ```
 
 - `global`: `MNEMON_DATA_DIR`, or `~/.mnemon` when unset.
-- `workspace`: `.mnemon` under the DSH Host launch directory.
+- `workspace`: `.mnemon` under each DSH workspace root; Agent execution follows the current session workspace while the Web workbench may inspect another target.
 - `custom`: an absolute or `~/...` path supplied through `dataDir`.
 
 See the [configuration reference](./docs/en/configuration.md) for every option, precedence rules, and read-only mode.

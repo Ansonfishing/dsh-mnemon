@@ -12,6 +12,7 @@ describe('Mnemon config and resolution', () => {
       timeoutMs: 10_000,
       defaultRecallLimit: 10,
       routingGuidance: true,
+      displayMode: 'sidebar',
       lifecycleEnabled: true,
       recallMode: 'guided',
       writebackMode: 'guided',
@@ -19,6 +20,11 @@ describe('Mnemon config and resolution', () => {
       tabEnabled: true,
       writeEnabled: true,
     })
+  })
+
+  it('supports sidebar and buildin display modes with sidebar as the default', () => {
+    expect(resolveConfig({}).displayMode).toBe('sidebar')
+    expect(resolveConfig({ displayMode: 'buildin' }).displayMode).toBe('buildin')
   })
 
   it('resolves the one storage-scope setting and preserves legacy dataDir as custom', () => {

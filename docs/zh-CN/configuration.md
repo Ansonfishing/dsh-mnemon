@@ -12,12 +12,13 @@ $DSH_HOME/settings.yaml
 
 默认通常是 `~/.dsh/settings.yaml`。当前全部配置标记为 `live` 生效；保存后会先初始化候选运行图，再原子切换 Host 服务。
 
-Web 设置卡只编辑 `storageScope` 和 `dataDir`。其他高级项需要直接修改 YAML。
+Web 设置卡编辑 `displayMode`、`storageScope` 和 `dataDir`。其他高级项需要直接修改 YAML。
 
 ## 完整示例
 
 ```yaml
 mnemon:
+  displayMode: sidebar # sidebar | buildin
   storageScope: global # global | workspace | custom
   # dataDir: ~/mnemon-data       # custom 时必填
   # cliPath: /opt/homebrew/bin/mnemon
@@ -37,6 +38,7 @@ mnemon:
 
 | 配置 | 默认值 | 范围 | 实现语义 |
 |---|---:|---|---|
+| `displayMode` | `sidebar` | `sidebar` / `buildin` | `sidebar` 挂载左侧栏独立工作台；`buildin` 恢复 DSH 原生对话区标签页；保存后实时切换且不会同时挂载两个入口 |
 | `storageScope` | `global` | `global` / `workspace` / `custom` | 统一控制 Runtime、Documents、Memory Spaces 和预留 state 根目录 |
 | `dataDir` | 未设置 | 绝对路径、`~` 或 `~/...` | `custom` 时必填；旧配置只设置它时自动解析为 `custom` |
 | `cliPath` | 自动发现 | 可执行路径 | 显式指定 Mnemon CLI |
@@ -48,7 +50,7 @@ mnemon:
 | `recallMode` | `guided` | `guided` / `off` | 是否注入按需 recall cue；不移除显式召回 |
 | `writebackMode` | `guided` | `guided` / `off` | 是否注入热记忆 cue 并启用评分后台审查；不移除显式写入 |
 | `idleReviewMs` | `30000` | 5000–600000 ms | 达标后需要连续空闲的时间 |
-| `tabEnabled` | `true` | boolean | 当前只门控 Host Mnemon 数据 RPC；客户端 Tab 仍会注册，见下方限制 |
+| `tabEnabled` | `true` | boolean | 是否挂载 `displayMode` 指定的 Web 入口；关闭后 Host RPC、命令和 Agent 工具保持注册 |
 | `writeEnabled` | `true` | boolean | 是否暴露语义写工具、写 RPC 和写命令 |
 | `mnemon-ui.toolviews` | `false` | boolean | 对话内记忆工具卡（`mnemon_*` 调用的记忆风格卡片）；默认关闭（opt-in），**保存后实时生效** |
 | `mnemon-ui.turnBar` | `false` | boolean | 回合尾记忆活动条；默认关闭（opt-in），**保存后实时生效** |
@@ -70,10 +72,11 @@ MNEMON_DATA_DIR when non-empty
 ### `workspace`
 
 ```text
-resolve(process.cwd(), ".mnemon")
+Agent / 工具 / 生命周期：resolve(currentSession.header.cwd, ".mnemon")
+Web 工作台查看：resolve(workspaceRegistry.get(selectedWorkspaceId).path, ".mnemon")
 ```
 
-这里的 cwd 是 DSH Host 进程启动目录，不是浏览器页面当前目录，也不一定等于每个会话记录的 cwd。应从目标项目目录启动 DSH。
+每个 DSH 工作区拥有独立的三层记忆根。Agent、模型工具、命令和生命周期按当前会话的 cwd 路由，不受 Web 工作台查看目标影响。工作台只能从 Host 已登记的工作区中选择，不能提交任意路径；查看目标与会话实际目录不一致时，顶部会显示两条路径并提供“一键对齐当前会话”。需要 Agent 子任务的操作在未对齐时会被 Host 拒绝，避免写入错误项目。
 
 ### `custom`
 
@@ -168,9 +171,11 @@ routingGuidance=false
   -> runtime-memory prompt section remains
 ```
 
-## `tabEnabled` 当前限制
+## 展示形态与 `tabEnabled` 界面开关
 
-Host 在 `tabEnabled=false` 时不注册 Mnemon read/write RPC，但 Web client 仍无条件注册 conversation view slot。因此当前效果是“Tab 入口仍可能出现但数据接口不可用”，而不是完整隐藏 Tab。这是实现缺口，不应依赖它进行 UI 卸载。
+`displayMode=sidebar`（默认）会挂载“记忆系统”侧边栏入口和独立主内容区工作台；`displayMode=buildin` 会改为注册原有的 DSH `conversation.view` 内嵌标签页。设置页保存后会先卸载当前入口再挂载目标入口，因此两种形态不会同时出现。
+
+`tabEnabled=false` 会实时移除当前形态的 Web 入口。为避免运行中的 Agent 或命令因界面设置变化而失效，Host RPC、命令和工具不会随展示形态或总开关卸载。
 
 ## Profile patch 覆盖
 

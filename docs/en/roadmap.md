@@ -11,7 +11,6 @@ The Roadmap records work beyond the current implementation; it is not a commitme
 - [ ] **Backoff, circuit breaking, and manual retry**: apply bounded backoff after consecutive failures, show the reason on the Status page, and allow explicit recovery.
 - [ ] **Deterministic sensitive-data defenses**: add secret/credential pattern detection, size limits, and audit receipts beyond LLM admission.
 - [ ] **Automated real-WebUI E2E**: isolate DSH_HOME, storageRoot, workspace, and the port; cover light tasks, score-based review, cancellation, and failures without partial writes.
-- [ ] **Correct `tabEnabled` semantics**: have the Host and client use the same switch so the complete Tab capability is actually registered or removed.
 - [ ] **Correct cold-reference paths**: under every storage scope, write resolvable references that match the actual managed path.
 
 ## P1: Long-Term Maintenance and Data Operations

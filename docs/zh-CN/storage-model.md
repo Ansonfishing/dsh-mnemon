@@ -50,7 +50,7 @@ follow an exact cold reference when full text is required
 +-- state/                         # reserved; no persistent reviewer yet
 ```
 
-`storageScope` 决定整个根，而不只是 Mnemon 数据库。`state/` 当前只会被状态盘点器识别；评分水位仍保存在运行中 Host 的内存中。
+`storageScope` 决定整个根，而不只是 Mnemon 数据库。`workspace` 范围会为每个已登记 DSH 工作区解析独立的 `<workspace>/.mnemon`；Web 查看目标与当前会话执行目标彼此独立，只有后者会驱动 Agent、工具和生命周期。`state/` 当前只会被状态盘点器识别；评分水位仍保存在运行中 Host 的内存中。
 
 ## Runtime Memory
 

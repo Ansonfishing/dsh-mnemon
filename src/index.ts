@@ -16,7 +16,7 @@ import { StorageScopeInspector } from './storage-scope.ts'
 import { MnemonPackManager } from './pack.ts'
 
 export const name = 'dsh-mnemon'
-export const inject = ['tools', 'settings', 'commands', 'agents', 'subagents']
+export const inject = ['tools', 'settings', 'commands', 'agents', 'subagents', 'workspaceRegistry']
 export { Config, InteractionConfig, resolveConfig, resolveInteractionConfig, DocumentManager, LiveMnemonRuntime, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, StorageScopeInspector, MnemonPackManager, createRunner, createRuntimeGraph }
 export type { MnemonConfig }
 
@@ -32,7 +32,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     },
   })
   const initialSettings = settings.get()
-  const runtime = new LiveMnemonRuntime(prepared.get(initialSettings) ?? createRuntimeGraph(resolveConfig(initialSettings)))
+  const runtime = new LiveMnemonRuntime(prepared.get(initialSettings) ?? createRuntimeGraph(resolveConfig(initialSettings)), ctx.workspaceRegistry, ctx.agents)
   const resolved = runtime.config
   ctx.on('settings/updated', ((namespace: string, next: Config) => {
     if (namespace !== 'mnemon') return
@@ -42,15 +42,15 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     base: resolveInteractionConfig(resolved.conversationInteraction),
     applies: 'live',
   })
-  const coordinator = new MnemonSubagentCoordinator(ctx.subagents, runtime.runtimeMemory, runtime.documents)
-  const lifecycle = new MnemonLifecycle(ctx, coordinator, resolved)
+  const coordinator = new MnemonSubagentCoordinator(ctx.subagents, runtime)
+  const lifecycle = new MnemonLifecycle(ctx, coordinator, runtime.config, runtime)
   ctx.effect(() => lifecycle.start(), 'dsh-mnemon.lifecycle-root()')
-  registerTools(ctx, runtime.service, coordinator, runtime.runtimeMemory, runtime.documents)
-  registerCommands(ctx.commands, runtime.service, coordinator)
+  registerTools(ctx, runtime, coordinator)
+  registerCommands(ctx.commands, runtime, coordinator)
   registerGuidance(ctx, resolved)
   registerRuntimeMemoryContext(ctx, runtime.runtimeMemory)
   ctx.inject(['connection'], (webContext) => {
-    registerRpc(webContext.connection, runtime.service, lifecycle, runtime.runtimeMemory, runtime.storage, runtime.packs)
+    registerRpc(webContext.connection, runtime, lifecycle)
     registerSettingsRpc(webContext.connection, ctx.settings)
   })
 }

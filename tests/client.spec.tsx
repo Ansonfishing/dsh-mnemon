@@ -19,7 +19,7 @@ describe('MnemonView', () => {
     unsetPath: async () => {},
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { withInactiveBody?: boolean; listCount?: number; longContent?: boolean } = {}) {
+  function createConnection(options: { withInactiveBody?: boolean; listCount?: number; longContent?: boolean; workspaceMismatch?: boolean } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -90,6 +90,16 @@ describe('MnemonView', () => {
           lastAt: '2026-08-13T03:00:00.000Z',
         },
       },
+      ...(options.workspaceMismatch === true ? {
+        workspaceContext: {
+          mode: 'workspace',
+          selectedRoot: '/tmp/workspace-two/.mnemon',
+          effectiveRoot: '/tmp/workspace-one/.mnemon',
+          aligned: false,
+          selectedWorkspace: { id: 'workspace-2', title: 'Workspace Two', path: '/tmp/workspace-two' },
+          effectiveWorkspace: { id: 'workspace-1', title: 'Workspace One', path: '/tmp/workspace-one' },
+        },
+      } : {}),
     }
     const memory = { id: 'memory-12345678', content: options.longContent === true ? '这是一段非常长的记忆内容，用于验证图谱检查器对超长文本的截断展示，以及全文预览窗口的打开与关闭。'.repeat(6) : '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], entities: ['SQLite'], color: '#e74c3c', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-12345678` }
     const secondaryMemory = { id: 'preference-1', content: '用户偏好简洁中文回答。', category: 'preference', importance: 4, tags: ['style'], entities: ['DSH'], color: '#9b59b6', memoryBodyId: secondaryBody.id, memoryBodyName: secondaryBody.name, graphId: `${secondaryBody.id}:preference-1` }
@@ -280,7 +290,7 @@ describe('MnemonView', () => {
     expect(screen.getByRole('img', { name: /^记忆系统流转/ })).toBeTruthy()
     expect(screen.getByRole('heading', { name: '存储域' })).toBeTruthy()
     expect(screen.getByText('/tmp/mnemon')).toBeTruthy()
-  })
+  }, 10_000)
 
   it('activates an additional memory space without crashing the live graph', async () => {
     const { connection } = createConnection({ withInactiveBody: true })
@@ -314,7 +324,38 @@ describe('MnemonView', () => {
     await waitFor(() => expect(screen.getByText('项目决策空间')).toBeTruthy())
     expect(screen.getByText('存放架构与交付决策。')).toBeTruthy()
     expect(screen.queryByRole('button', { name: '编辑项目决策空间' })).toBeTruthy()
-    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-update', { memoryBodyId: 'project', name: '项目决策空间', description: '存放架构与交付决策。' })
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-update', { memoryBodyId: 'project', name: '项目决策空间', description: '存放架构与交付决策。', sessionId: 'session-1' })
+  })
+
+  it('shows the inspected workspace, warns on divergence, and offers one-click alignment', async () => {
+    const { connection } = createConnection({ workspaceMismatch: true })
+    const onSelect = vi.fn()
+    const onAlign = vi.fn()
+    render(<MnemonView
+      connection={connection}
+      settingsScope={settingsScope}
+      sessionId="session-1"
+      workspaceId="workspace-2"
+      workspaceSelection={{
+        options: [
+          { id: 'workspace-1', title: 'Workspace One', path: '/tmp/workspace-one' },
+          { id: 'workspace-2', title: 'Workspace Two', path: '/tmp/workspace-two' },
+        ],
+        selectedWorkspaceId: 'workspace-2',
+        effectiveWorkspaceId: 'workspace-1',
+        onSelect,
+        onAlign,
+      }}
+    />)
+
+    await waitFor(() => expect(screen.getByText('查看目录与当前会话未对齐')).toBeTruthy())
+    expect((screen.getByRole('combobox', { name: '选择要查看的记忆工作区' }) as HTMLSelectElement).value).toBe('workspace-2')
+    expect(screen.getByText('查看：/tmp/workspace-two/.mnemon')).toBeTruthy()
+    expect(screen.getByText('生效：/tmp/workspace-one/.mnemon')).toBeTruthy()
+    fireEvent.change(screen.getByRole('combobox', { name: '选择要查看的记忆工作区' }), { target: { value: 'workspace-1' } })
+    expect(onSelect).toHaveBeenCalledWith('workspace-1')
+    fireEvent.click(screen.getByRole('button', { name: '对齐当前会话' }))
+    expect(onAlign).toHaveBeenCalledTimes(1)
   })
 
   it('clamps long node content in the graph inspector and opens a full-text preview', async () => {

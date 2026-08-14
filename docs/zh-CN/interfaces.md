@@ -4,7 +4,7 @@
 
 ## Web 工作台
 
-主要 Web 界面跟随 DSH 全局语言和明暗主题。顶部导航分为三组，组间以分隔线呈现：「状态」独立成第一组；「运行时、记忆体、档案」对应三层存储；「沉淀、检索、实体、内容」为读写工具。默认进入「状态」页。
+`displayMode=sidebar`（默认）通过左侧栏打开独立工作台，`displayMode=buildin` 通过原有 DSH `conversation.view` 内嵌标签页打开同一功能界面。两种形态由设置页实时切换且不会同时挂载。主要 Web 界面跟随 DSH 全局语言和明暗主题。顶部导航分为三组，组间以分隔线呈现：「状态」独立成第一组；「运行时、记忆体、档案」对应三层存储；「沉淀、检索、实体、内容」为读写工具。默认进入「状态」页。
 
 | 页面 | 用途 | 调用边界 |
 |---|---|---|
@@ -91,6 +91,8 @@ worker 内调用同名工具时直接到服务层，不再委派。
 
 RPC 是 DSH Host 与本插件 Web client 的内部桥，不是承诺稳定的外部 HTTP API。
 
+工作台数据请求会携带 `sessionId` 和可选的 `workspaceId`。Host 只接受 `workspaceRegistry` 中已登记的工作区 ID：确定性读取与人工维护路由到 `workspaceId` 指向的查看根，而 Agent、工具和生命周期继续按 `sessionId` 对应 Agent 的 cwd 路由。`status.workspaceContext` 返回两条根目录和 `aligned` 状态；需要 Agent 写入的操作在未对齐时被拒绝。
+
 ### 读通道
 
 ```text
@@ -123,7 +125,7 @@ authority: loopback
 | Endpoint | 行为 |
 |---|---|
 | `runtime-memory` | 热记忆 mutation |
-| `supervise` | Tab 候选交给记忆 worker |
+| `supervise` | 工作台候选交给记忆 worker |
 | `document` | create / update / archive |
 | `remember` | 带可选高级约束的语义写入 |
 | `link` | 建立关系 |
@@ -131,7 +133,7 @@ authority: loopback
 | `body-create` | 创建 Memory Space |
 | `body-update` | 更新元数据或 active |
 
-`writeEnabled=false` 时整个写通道不注册。
+`writeEnabled=false` 时写通道保持稳定注册，但所有 mutation 都会在 Host 边界拒绝。
 
 ### 设置通道
 

@@ -102,6 +102,14 @@ export interface StatusView {
   lifecycle?: LifecycleSnapshot
   documents?: DocumentSnapshot
   storage?: StorageScopeCatalog
+  workspaceContext?: {
+    mode: 'global' | 'workspace' | 'custom'
+    selectedRoot: string
+    effectiveRoot: string
+    aligned: boolean
+    selectedWorkspace?: { id: string; title: string; path: string }
+    effectiveWorkspace?: { id: string; title: string; path: string }
+  }
   stats?: MemoryBodyStats & { dbPath?: string }
 }
 
