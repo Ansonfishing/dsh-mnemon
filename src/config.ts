@@ -32,6 +32,15 @@ export interface Config {
   writebackMode?: 'guided' | 'off'
   /** Continuous root-agent idle time after the QoderWork activity gate is met. */
   idleReviewMs?: number
+  /** In-conversation interaction surfaces; each toggle binds live on the client. */
+  conversationInteraction?: {
+    /** Memory-flavoured toolview cards for mnemon_* tool calls. */
+    toolviews?: boolean
+    /** Per-turn memory activity bar under completed turns. */
+    turnBar?: boolean
+    /** Save-to-memory action on finalized assistant messages. */
+    saveAction?: boolean
+  }
 }
 
 export const Config: z<Config> = z.object({
@@ -50,6 +59,12 @@ export const Config: z<Config> = z.object({
   recallMode: z.union(['guided', 'off'] as const).default('guided'),
   writebackMode: z.union(['guided', 'off'] as const).default('guided'),
   idleReviewMs: z.number().step(1).min(5_000).max(600_000).default(DEFAULT_IDLE_REVIEW_MS),
+  // Each interaction surface defaults on; users may disable any of them live.
+  conversationInteraction: z.object({
+    toolviews: z.boolean().default(true),
+    turnBar: z.boolean().default(true),
+    saveAction: z.boolean().default(true),
+  }).default({ toolviews: true, turnBar: true, saveAction: true }),
 })
 
 export interface ResolvedConfig {
@@ -66,6 +81,11 @@ export interface ResolvedConfig {
   recallMode: 'guided' | 'off'
   writebackMode: 'guided' | 'off'
   idleReviewMs: number
+  conversationInteraction: {
+    toolviews: boolean
+    turnBar: boolean
+    saveAction: boolean
+  }
 }
 
 function optionalText(value: string | undefined): string | undefined {
@@ -99,5 +119,10 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     recallMode: config.recallMode ?? 'guided',
     writebackMode: config.writebackMode ?? 'guided',
     idleReviewMs: config.idleReviewMs ?? DEFAULT_IDLE_REVIEW_MS,
+    conversationInteraction: {
+      toolviews: config.conversationInteraction?.toolviews ?? true,
+      turnBar: config.conversationInteraction?.turnBar ?? true,
+      saveAction: config.conversationInteraction?.saveAction ?? true,
+    },
   }
 }
