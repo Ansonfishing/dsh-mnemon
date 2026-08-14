@@ -94,7 +94,7 @@ mnemon --version
 插件不会自动迁移数据：
 
 ```text
-old scope -- change setting + restart --> new empty or existing scope
+old scope -- change setting + save --> new empty or existing scope
 
 no implicit copy
 no implicit merge
@@ -112,7 +112,7 @@ no implicit delete
 | `memoryBodyId is required...` | active 数量不是恰好 1；让 worker 或调用方显式选择目标 |
 | `memory body is not active for reading` | 在记忆体页激活目标；写入 inactive 可以，但读取不行 |
 | subagent provider 错误 | 普通任务需要完整隔离能力；后台审查另需 `fork + inheritsParentContext` |
-| 设置保存后无变化 | 所有选项重启后生效 |
+| 设置保存后无变化 | 检查界面错误提示；所有选项应在保存成功后实时生效 |
 | custom 目录被拒绝 | 使用绝对路径、`~` 或 `~/...` |
 | Document 无 workspace | 会话必须对应 live root Agent，并在 session header 中带 cwd |
 | source path 被拒绝 | 路径必须留在会话工作区内，且不能引用托管 Documents 目录 |

@@ -6,7 +6,7 @@ export { DEFAULT_IDLE_REVIEW_MS, DEFAULT_RECALL_LIMIT, DEFAULT_TIMEOUT_MS } from
 
 /** User-facing configuration mounted from the DSH profile patch. */
 export interface Config {
-  /** Storage domain selected in DSH plugin settings. Changes apply after restart. */
+  /** Storage domain selected in DSH plugin settings. Changes apply live after save. */
   storageScope?: 'global' | 'workspace' | 'custom'
   /** Explicit `mnemon` executable. Omit to resolve MNEMON_CLI_PATH, PATH, then common install locations. */
   cliPath?: string

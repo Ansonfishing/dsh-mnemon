@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -98,7 +98,7 @@ describe('dsh-mnemon plugin composition', () => {
       expect.objectContaining({ name: 'mnemon:routing' }),
       expect.objectContaining({ name: 'mnemon:runtime-memory', text: expect.any(Function) }),
     ])
-    const guidance = (fixture.sections[0] as { text: string }).text
+    const guidance = (fixture.sections[0] as { text: () => string }).text()
     expect(guidance).toContain('Call mnemon_recall')
     expect(guidance).toContain('never infer a missing historical rule')
     expect(guidance.length).toBeLessThan(360)
@@ -109,22 +109,20 @@ describe('dsh-mnemon plugin composition', () => {
       expect.arrayContaining(['/dsh-mnemon-pack', expect.anything(), { authority: 'loopback' }]),
     ]))
     expect(fixture.registrations).toEqual([
-      expect.arrayContaining(['mnemon', expect.anything(), expect.objectContaining({ applies: 'restart' })]),
+      expect.arrayContaining(['mnemon', expect.anything(), expect.objectContaining({ applies: 'live' })]),
       expect.arrayContaining(['mnemon-ui', expect.anything(), expect.objectContaining({ applies: 'live', base: { toolviews: false, turnBar: false, saveAction: false } })]),
     ])
   })
 
-  it('keeps recall/status available while hiding all mutation surfaces in read-only mode', () => {
+  it('keeps stable live surfaces while fencing every mutation in read-only mode', async () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), writeEnabled: false })
-    expect(fixture.tools.map(tool => (tool as { name: string }).name)).toEqual([
-      'mnemon_memory_bodies',
-      'mnemon_recall',
-      'mnemon_related',
-      'mnemon_status',
-      'mnemon_document_search',
-    ])
-    expect(fixture.channels).toHaveLength(3)
+    expect(fixture.tools).toHaveLength(13)
+    const runtimeTool = fixture.tools.find(tool => (tool as { name: string }).name === 'mnemon_runtime_memory') as {
+      execute: (args: unknown, execution: unknown) => Promise<unknown>
+    }
+    expect(() => runtimeTool.execute({ action: 'add', target: 'memory', content: 'blocked' }, { signal: new AbortController().signal })).toThrow('read-only')
+    expect(fixture.channels).toHaveLength(4)
     expect(fixture.channels).toEqual(expect.arrayContaining([
       expect.arrayContaining(['/dsh-mnemon-pack', expect.anything(), { authority: 'loopback' }]),
     ]))
@@ -162,10 +160,44 @@ describe('dsh-mnemon plugin composition', () => {
     expect(result.suggestionHint).toContain('Retry')
   })
 
-  it('can disable both guidance and the Web tab independently', () => {
+  it('keeps guidance and Web RPC registrations stable while their live values are disabled', () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), routingGuidance: false, tabEnabled: false })
-    expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:runtime-memory' })])
-    expect(fixture.channels).toHaveLength(1)
+    expect(fixture.sections).toEqual([
+      expect.objectContaining({ name: 'mnemon:routing', text: expect.any(Function) }),
+      expect.objectContaining({ name: 'mnemon:runtime-memory' }),
+    ])
+    expect((fixture.sections[0] as { text: () => string }).text()).toBe('')
+    expect(fixture.channels).toHaveLength(4)
+  })
+
+  it('atomically switches the same live RPC faces after settings validation', async () => {
+    const fixture = context()
+    const initialRoot = dataDir()
+    const nextRoot = dataDir()
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', storageScope: 'custom', dataDir: initialRoot })
+    const packRegistration = fixture.channels.find(channel => (channel as unknown[])[0] === '/dsh-mnemon-pack') as [string, (endpoint: string, payload: unknown) => Promise<{ ok: boolean; value?: { root: string } }>]
+    await expect(packRegistration[1]('target', {})).resolves.toMatchObject({ ok: true, value: { root: initialRoot } })
+
+    const coreRegistration = fixture.registrations.find(registration => (registration as unknown[])[0] === 'mnemon') as [string, unknown, { validate: (value: object) => void }]
+    const next = { cliPath: '/fake/mnemon', storageScope: 'custom' as const, dataDir: nextRoot }
+    coreRegistration[2].validate(next)
+    const settingsUpdated = fixture.listeners.find(listener => (listener as unknown[])[0] === 'settings/updated') as [string, (namespace: string, value: object) => void]
+    settingsUpdated[1]('mnemon', next)
+
+    await expect(packRegistration[1]('target', {})).resolves.toMatchObject({ ok: true, value: { root: nextRoot } })
+  })
+
+  it('rejects an uninitializable live root before the active graph can move', async () => {
+    const fixture = context()
+    const initialRoot = dataDir()
+    const invalidRoot = join(dataDir(), 'not-a-directory')
+    writeFileSync(invalidRoot, 'occupied')
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', storageScope: 'custom', dataDir: initialRoot })
+    const packRegistration = fixture.channels.find(channel => (channel as unknown[])[0] === '/dsh-mnemon-pack') as [string, (endpoint: string, payload: unknown) => Promise<{ ok: boolean; value?: { root: string } }>]
+    const coreRegistration = fixture.registrations.find(registration => (registration as unknown[])[0] === 'mnemon') as [string, unknown, { validate: (value: object) => void }]
+
+    expect(() => coreRegistration[2].validate({ cliPath: '/fake/mnemon', storageScope: 'custom', dataDir: invalidRoot })).toThrow()
+    await expect(packRegistration[1]('target', {})).resolves.toMatchObject({ ok: true, value: { root: initialRoot } })
   })
 })

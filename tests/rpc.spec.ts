@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { resolveConfig } from '../src/config.ts'
-import type { HostConnectionHandle } from '../src/contracts.ts'
+import type { HostConnectionHandle, HostRpcHandler } from '../src/contracts.ts'
 import type { MnemonLifecycle } from '../src/lifecycle.ts'
 import { createPackHandler, createReadHandler, createWriteHandler, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL, registerRpc } from '../src/rpc.ts'
 import type { RuntimeMemoryController } from '../src/runtime-memory.ts'
@@ -193,9 +193,11 @@ describe('Mnemon RPC', () => {
     expect(handle).toHaveBeenCalledWith(MNEMON_PACK_CHANNEL, expect.any(Function), { authority: 'loopback' })
   })
 
-  it('does not expose a write channel in read-only mode', () => {
+  it('keeps the live write channel stable but rejects it in read-only mode', async () => {
     const handle = vi.fn()
     registerRpc({ rpc: { handle } } as unknown as HostConnectionHandle, fakeService(false))
-    expect(handle).toHaveBeenCalledTimes(1)
+    expect(handle).toHaveBeenCalledTimes(2)
+    const writeHandler = handle.mock.calls.find(([channel]) => channel === MNEMON_WRITE_CHANNEL)?.[1] as HostRpcHandler
+    await expect(writeHandler('remember', { content: 'blocked' })).resolves.toMatchObject({ ok: false, error: { code: 'internal' } })
   })
 })

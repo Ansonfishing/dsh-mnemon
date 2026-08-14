@@ -94,7 +94,7 @@ If `USER.md` / `MEMORY.md` is damaged, the control layer can repair it from a va
 The plugin does not migrate data automatically:
 
 ```text
-old scope -- change setting + restart --> new empty or existing scope
+old scope -- change setting + save --> new empty or existing scope
 
 no implicit copy
 no implicit merge
@@ -112,7 +112,7 @@ When migration is required, stop writes and copy the complete root. Two roots ca
 | `memoryBodyId is required...` | The active count is not exactly 1; have the worker or caller select a target explicitly |
 | `memory body is not active for reading` | Activate the target in Overview; writing to an inactive space is allowed, but reading is not |
 | Subagent provider error | Regular tasks require the full isolation capabilities; background review additionally requires `fork + inheritsParentContext` |
-| Settings have no effect after saving | All options take effect after restart |
+| Settings have no effect after saving | Check the UI error; all options should apply live after a successful Save |
 | Custom directory is rejected | Use an absolute path, `~`, or `~/...` |
 | Document has no workspace | The session must correspond to a live root Agent and include cwd in its session header |
 | Source path is rejected | The path must stay within the session workspace and must not reference the managed Documents directory |

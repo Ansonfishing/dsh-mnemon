@@ -3,6 +3,7 @@ import { registerCommands } from './commands.ts'
 import type { HostContextShape } from './contracts.ts'
 import { DocumentManager } from './documents.ts'
 import { registerGuidance, registerRuntimeMemoryContext } from './guidance.ts'
+import { createRuntimeGraph, LiveMnemonRuntime, type MnemonRuntimeGraph } from './live-runtime.ts'
 import { MnemonLifecycle } from './lifecycle.ts'
 import { registerRpc } from './rpc.ts'
 import { createRunner } from './runner.ts'
@@ -16,39 +17,40 @@ import { MnemonPackManager } from './pack.ts'
 
 export const name = 'dsh-mnemon'
 export const inject = ['tools', 'settings', 'commands', 'agents', 'subagents']
-export { Config, InteractionConfig, resolveConfig, resolveInteractionConfig, DocumentManager, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, StorageScopeInspector, MnemonPackManager, createRunner }
+export { Config, InteractionConfig, resolveConfig, resolveInteractionConfig, DocumentManager, LiveMnemonRuntime, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, StorageScopeInspector, MnemonPackManager, createRunner, createRuntimeGraph }
 export type { MnemonConfig }
 
 /** Mount native model tools on every DSH surface and UI RPC only when Web connection exists. */
 export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   const ctx = rawContext as unknown as HostContextShape
+  const prepared = new WeakMap<object, MnemonRuntimeGraph>()
   const settings = ctx.settings.register<Config>('mnemon', Config, {
     base: config,
-    applies: 'restart',
-    validate: value => { resolveConfig(value) },
+    applies: 'live',
+    validate: value => {
+      prepared.set(value, createRuntimeGraph(resolveConfig(value)))
+    },
   })
-  const resolved = resolveConfig(settings.get())
+  const initialSettings = settings.get()
+  const runtime = new LiveMnemonRuntime(prepared.get(initialSettings) ?? createRuntimeGraph(resolveConfig(initialSettings)))
+  const resolved = runtime.config
+  ctx.on('settings/updated', ((namespace: string, next: Config) => {
+    if (namespace !== 'mnemon') return
+    runtime.swap(prepared.get(next) ?? createRuntimeGraph(resolveConfig(next)))
+  }) as never)
   ctx.settings.register('mnemon-ui', InteractionConfig, {
     base: resolveInteractionConfig(resolved.conversationInteraction),
     applies: 'live',
   })
-  const runner = createRunner(resolved)
-  const service = new MnemonService(runner, resolved)
-  const runtimeMemory = new RuntimeMemoryController(runner)
-  const documents = new DocumentManager(undefined, undefined, () => runner.effectiveDataDir())
-  const storage = new StorageScopeInspector(runner, resolved)
-  const packs = new MnemonPackManager(runner, resolved, components => {
-    if (components.includes('memory-spaces')) service.memoryBodies.reload()
-  })
-  const coordinator = new MnemonSubagentCoordinator(ctx.subagents, runtimeMemory, documents)
+  const coordinator = new MnemonSubagentCoordinator(ctx.subagents, runtime.runtimeMemory, runtime.documents)
   const lifecycle = new MnemonLifecycle(ctx, coordinator, resolved)
   ctx.effect(() => lifecycle.start(), 'dsh-mnemon.lifecycle-root()')
-  registerTools(ctx, service, coordinator, runtimeMemory, documents)
-  registerCommands(ctx.commands, service, coordinator)
-  if (resolved.routingGuidance) registerGuidance(ctx)
-  registerRuntimeMemoryContext(ctx, runtimeMemory)
+  registerTools(ctx, runtime.service, coordinator, runtime.runtimeMemory, runtime.documents)
+  registerCommands(ctx.commands, runtime.service, coordinator)
+  registerGuidance(ctx, resolved)
+  registerRuntimeMemoryContext(ctx, runtime.runtimeMemory)
   ctx.inject(['connection'], (webContext) => {
-    if (resolved.tabEnabled) registerRpc(webContext.connection, service, lifecycle, runtimeMemory, storage, packs)
+    registerRpc(webContext.connection, runtime.service, lifecycle, runtime.runtimeMemory, runtime.storage, runtime.packs)
     registerSettingsRpc(webContext.connection, ctx.settings)
   })
 }

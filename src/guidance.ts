@@ -1,4 +1,5 @@
 import type { HostContextShape } from './contracts.ts'
+import type { ResolvedConfig } from './config.ts'
 import type { RuntimeMemoryController } from './runtime-memory.ts'
 
 export const GUIDANCE_SECTION_NAME = 'mnemon:routing'
@@ -13,8 +14,12 @@ function systemPrompt(ctx: HostContextShape): {
   } | undefined
 }
 
-export function registerGuidance(ctx: HostContextShape): void {
-  systemPrompt(ctx)?.section?.({ name: GUIDANCE_SECTION_NAME, order: 150, text: ROUTING_GUIDANCE })
+export function registerGuidance(ctx: HostContextShape, config?: Pick<ResolvedConfig, 'routingGuidance'>): void {
+  systemPrompt(ctx)?.section?.({
+    name: GUIDANCE_SECTION_NAME,
+    order: 150,
+    text: () => config?.routingGuidance === false ? '' : ROUTING_GUIDANCE,
+  })
 }
 
 /** Inject the latest committed USER.md/MEMORY.md projections on every prompt assembly. */

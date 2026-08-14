@@ -10,7 +10,7 @@ The plugin registers the `mnemon` namespace with the DSH settings service. User 
 $DSH_HOME/settings.yaml
 ```
 
-The default is commonly `~/.dsh/settings.yaml`. All current settings are marked as taking effect on `restart`; restart the DSH Host after saving them.
+The default is commonly `~/.dsh/settings.yaml`. All current settings are marked `live`; after Save, the Host initializes a candidate runtime graph and then switches to it atomically.
 
 The Web settings card edits only `storageScope` and `dataDir`. Other advanced settings must be changed directly in YAML.
 
@@ -54,7 +54,7 @@ mnemon:
 | `mnemon-ui.turnBar` | `false` | boolean | Turn-tail memory activity bar; off by default (opt-in), **applies live after saving** |
 | `mnemon-ui.saveAction` | `false` | boolean | “Save to memory” action on finalized assistant replies; off by default (opt-in), **applies live after saving** |
 
-`mnemon` is the restart-applied Host/storage namespace; `mnemon-ui` is the live browser-presentation namespace. Legacy `mnemon.conversationInteraction` values remain a migration default, but new saves write only to `mnemon-ui`.
+Both the `mnemon` Host/storage namespace and the `mnemon-ui` browser-presentation namespace apply live. The storage root switches atomically only after the new runtime graph initializes successfully. Legacy `mnemon.conversationInteraction` values remain a migration default, but new saves write only to `mnemon-ui`.
 
 ## Storage Scopes
 

@@ -108,7 +108,7 @@ On the dedicated “Settings -> Memory System” page, choose:
 | `workspace` | `.mnemon` under the DSH Host startup directory | Project isolation |
 | `custom` | `dataDir` | An explicit disk, mounted volume, or dedicated data directory |
 
-Settings are written to `$DSH_HOME/settings.yaml` and take effect after restarting DSH. Switching scopes does not move existing data; to preserve it, stop all writes first and manually copy the entire old root directory.
+Settings are written to `$DSH_HOME/settings.yaml` and apply live after Save. Switching scopes does not move existing data; to preserve it, stop writes first and migrate with a complete ZIP backup.
 
 ## 5. Create Your First Memory Space
 

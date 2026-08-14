@@ -108,7 +108,7 @@ dsh --profile web
 | `workspace` | DSH Host 启动目录下的 `.mnemon` | 项目隔离 |
 | `custom` | `dataDir` | 显式磁盘、挂载卷或专用数据目录 |
 
-设置写入 `$DSH_HOME/settings.yaml`，重启 DSH 后应用。切换范围不会搬运旧数据；需要保留时先停止写入并手工复制整个旧根目录。
+设置写入 `$DSH_HOME/settings.yaml`，保存后实时应用。切换范围不会搬运旧数据；需要保留时先停止写入并通过整体 ZIP 备份迁移。
 
 ## 5. 创建第一个记忆体
 

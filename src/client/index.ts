@@ -93,18 +93,36 @@ export function apply(rawContext: unknown): void {
   const namespace: MnemonNamespace = 'mnemon'
   ctx.effect(() => ctx.locale.register(namespace, { zh, en }), 'dsh-mnemon: locale dictionaries')
   const translate = ctx.locale.bind(namespace)
-  ctx.slots.inject('conversation.view', () => ctx.slots.register({
-    name: 'conversation.view',
-    id: 'mnemon',
-    order: 30,
-    label: () => translate('tab.label'),
-    locale: namespace,
-    inject: (): { connection: ClientConnectionHandle; settingsScope: MnemonSettingsScope<Config>; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
-      connection: ctx.connection,
-      settingsScope: settings,
-      t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
-    }),
-  }, MnemonView))
+  let disposeMemoryTab: (() => void) | undefined
+  const reconcileMemoryTab = (): void => {
+    const enabled = settings.getSnapshot().value?.tabEnabled !== false
+    if (enabled && disposeMemoryTab === undefined) {
+      disposeMemoryTab = ctx.slots.inject('conversation.view', () => ctx.slots.register({
+        name: 'conversation.view',
+        id: 'mnemon',
+        order: 30,
+        label: () => translate('tab.label'),
+        locale: namespace,
+        inject: (): { connection: ClientConnectionHandle; settingsScope: MnemonSettingsScope<Config>; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+          connection: ctx.connection,
+          settingsScope: settings,
+          t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
+        }),
+      }, MnemonView))
+    } else if (!enabled && disposeMemoryTab !== undefined) {
+      disposeMemoryTab()
+      disposeMemoryTab = undefined
+    }
+  }
+  ctx.effect(() => {
+    const unsubscribe = settings.subscribe(reconcileMemoryTab)
+    reconcileMemoryTab()
+    return () => {
+      unsubscribe()
+      disposeMemoryTab?.()
+      disposeMemoryTab = undefined
+    }
+  }, 'dsh-mnemon: memory tab')
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'mnemon',

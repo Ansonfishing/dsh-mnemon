@@ -143,6 +143,7 @@ export function createReadHandler(service: MnemonService, lifecycle?: MnemonLife
 export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
+      if (!service.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
       const payload = object(rawPayload)
       switch (endpoint) {
         case 'runtime-memory':
@@ -235,7 +236,7 @@ export function createWriteHandler(service: MnemonService, lifecycle?: MnemonLif
 }
 
 /** Backup payloads contain private memory and therefore remain loopback-only. */
-export function createPackHandler(manager: MnemonPackManager, writeEnabled = true): HostRpcHandler {
+export function createPackHandler(manager: MnemonPackManager, writeEnabled: boolean | (() => boolean) = true): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
       const payload = object(rawPayload)
@@ -243,7 +244,8 @@ export function createPackHandler(manager: MnemonPackManager, writeEnabled = tru
       if (endpoint === 'export') return success(await manager.exportPack('full'))
       if (endpoint === 'inspect') return success(manager.inspectPack(String(payload.base64 ?? ''), payload.fileName === undefined ? undefined : String(payload.fileName)))
       if (endpoint === 'import') {
-        if (!writeEnabled) throw new Error('Mnemon Pack import is disabled while memory writes are read-only')
+        const writable = typeof writeEnabled === 'function' ? writeEnabled() : writeEnabled
+        if (!writable) throw new Error('Mnemon Pack import is disabled while memory writes are read-only')
         return success(await manager.importPack(String(payload.base64 ?? ''), { mode: 'merge' }))
       }
       return badRequest(`unknown Pack endpoint: ${endpoint}`)
@@ -256,8 +258,6 @@ export function createPackHandler(manager: MnemonPackManager, writeEnabled = tru
 /** Read operations are available to trusted Web hosts; local mutations stay loopback-only. */
 export function registerRpc(connection: HostConnectionHandle, service: MnemonService, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector, packs?: MnemonPackManager): void {
   connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(service, lifecycle, runtimeMemory, storage), { authority: 'trusted-host' })
-  if (service.config.writeEnabled) {
-    connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(service, lifecycle, runtimeMemory), { authority: 'loopback' })
-  }
-  if (packs !== undefined) connection.rpc.handle(MNEMON_PACK_CHANNEL, createPackHandler(packs, service.config.writeEnabled), { authority: 'loopback' })
+  connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(service, lifecycle, runtimeMemory), { authority: 'loopback' })
+  if (packs !== undefined) connection.rpc.handle(MNEMON_PACK_CHANNEL, createPackHandler(packs, () => service.config.writeEnabled), { authority: 'loopback' })
 }

@@ -160,8 +160,6 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     presentResult: () => ({ card: 'generic', title: 'Mnemon Documents ready' }),
   } as never))
 
-  if (!service.config.writeEnabled) return
-
   ctx.tools.register(definition({
     name: 'mnemon_document_manage',
     description: 'Create or update one managed project Document through the Mnemon Documents control plane. Use for substantial reusable project knowledge, not user-profile preferences, routine progress, raw transcripts, secrets, or small hot-memory facts. Source paths are references inside the workspace and are never edited. Archive is allowed only from a root request and first writes a durable Mnemon cold-reference through an isolated subagent.',
@@ -179,6 +177,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     execute: (args: { action: 'create' | 'update' | 'archive'; id?: string; title?: string; description?: string; content?: string; sourcePaths?: string[] }, exec: ToolExecution) => {
+      if (!service.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
       const agent = requireAgent(exec)
       if (args.action === 'archive') {
         if (isSubagent(agent)) throw new Error('idle document workers cannot cold-archive directly')
@@ -210,6 +209,7 @@ export function registerTools(ctx: HostContextShape, service: MnemonService, coo
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     execute: (args: { action: 'add' | 'replace' | 'remove'; target: RuntimeMemoryTarget; content?: string; old_text?: string; importance?: RuntimeMemoryImportance }, exec: ToolExecution) => {
+      if (!service.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
       const request = {
         action: args.action,
         target: args.target,

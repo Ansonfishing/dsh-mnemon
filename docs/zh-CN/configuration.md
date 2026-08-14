@@ -10,7 +10,7 @@
 $DSH_HOME/settings.yaml
 ```
 
-默认通常是 `~/.dsh/settings.yaml`。当前全部配置标记为 `restart` 生效；保存后需要重启 DSH Host。
+默认通常是 `~/.dsh/settings.yaml`。当前全部配置标记为 `live` 生效；保存后会先初始化候选运行图，再原子切换 Host 服务。
 
 Web 设置卡只编辑 `storageScope` 和 `dataDir`。其他高级项需要直接修改 YAML。
 
@@ -54,7 +54,7 @@ mnemon:
 | `mnemon-ui.turnBar` | `false` | boolean | 回合尾记忆活动条；默认关闭（opt-in），**保存后实时生效** |
 | `mnemon-ui.saveAction` | `false` | boolean | 已定稿助手回复旁的「存入记忆」按钮；默认关闭（opt-in），**保存后实时生效** |
 
-`mnemon` 是重启生效的 Host/存储命名空间；`mnemon-ui` 是实时生效的浏览器呈现命名空间。旧版 `mnemon.conversationInteraction` 仍会作为迁移默认值读取，但新保存只写入 `mnemon-ui`。
+`mnemon` Host/存储命名空间和 `mnemon-ui` 浏览器呈现命名空间都实时生效。存储根只会在新运行图初始化成功后原子切换；旧版 `mnemon.conversationInteraction` 仍会作为迁移默认值读取，但新保存只写入 `mnemon-ui`。
 
 ## 存储范围
 

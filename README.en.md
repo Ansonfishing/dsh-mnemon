@@ -110,7 +110,7 @@ For a local checkout, use an absolute path:
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
-Open the dedicated “Settings -> Memory System” page to select a storage scope, then create or activate a Memory Space in the conversation's “Memory System” tab. Storage settings apply after restart; conversation presentation applies live after saving. Changing the scope never migrates, merges, or deletes old data automatically.
+Open the dedicated “Settings -> Memory System” page to select a storage scope, then create or activate a Memory Space in the conversation's “Memory System” tab. All settings apply live after Save; the storage root switches atomically after the new directory initializes successfully. Changing the scope never migrates, merges, or deletes old data automatically.
 
 Upgrade and uninstall (`dsh plugin` forwards to pnpm inside the profile directory):
 

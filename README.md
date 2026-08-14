@@ -110,7 +110,7 @@ dsh plugin --profile web add "github:omdsh-dev/dsh-mnemon"
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
-打开 DSH 的“设置 -> 记忆系统”独立配置页选择存储范围，再进入会话的“记忆系统”Tab 创建或激活记忆体。存储配置重启后生效，对话呈现设置保存后实时生效；切换范围不会自动迁移、合并或删除旧数据。
+打开 DSH 的“设置 -> 记忆系统”独立配置页选择存储范围，再进入会话的“记忆系统”Tab 创建或激活记忆体。所有设置点击保存后实时生效；存储根会在新目录初始化成功后原子切换，切换范围不会自动迁移、合并或删除旧数据。
 
 升级与卸载（`dsh plugin` 转发给 profile 目录下的 pnpm）：
 
