@@ -32,6 +32,7 @@ describe('MnemonView', () => {
       stats: { totalInsights: 12, deletedInsights: 0, edgeCount: 9, oplogCount: 20, dbSizeBytes: 4096, byCategory: {}, topEntities: [{ entity: 'SQLite', count: 2 }] },
     }
     let secondaryActive = false
+    let mnemonVersionUpdated = false
     const secondaryBody = {
       ...body,
       id: 'preferences',
@@ -44,6 +45,7 @@ describe('MnemonView', () => {
     const status = {
       healthy: true,
       version: '0.1.2',
+      dshMnemonVersion: '0.1.2',
       cliPath: '/usr/local/bin/mnemon',
       commandFound: true,
       dataDir: '/tmp/mnemon',
@@ -157,6 +159,18 @@ describe('MnemonView', () => {
         return { ok: true, value: documents.find(document => document.id === payload?.id) }
       }
       if (endpoint === 'status') return { ok: true, value: { ...status, memoryBodies: bodies } }
+      if (endpoint === 'versions') return { ok: true, value: {
+        checkedAt: '2026-08-15T03:00:00.000Z',
+        components: [
+          { id: 'mnemon', name: 'Mnemon CLI', current: mnemonVersionUpdated ? '0.2.0' : '0.1.2', latest: '0.2.0', outdated: !mnemonVersionUpdated, installMode: 'homebrew', updateSupported: true, updateHint: 'brew' },
+          { id: 'dsh-mnemon', name: 'dsh-mnemon', current: '0.1.2', latest: '0.1.3', outdated: true, installMode: 'link', updateSupported: false, updateHint: 'link' },
+        ],
+      } }
+      if (endpoint === 'version-update') {
+        mnemonVersionUpdated = payload?.component === 'mnemon'
+        status.version = mnemonVersionUpdated ? '0.2.0' : status.version
+        return { ok: true, value: { component: payload?.component, previousVersion: '0.1.2', currentVersion: '0.2.0', updated: true, restartRequired: false } }
+      }
       if (endpoint === 'bodies') return { ok: true, value: { items: bodies, total: bodies.length, activeCount: bodies.filter(item => item.active).length, directory: '/tmp/mnemon/data', generatedAt: '2026-08-13T03:00:00.000Z' } }
       if (endpoint === 'graph') return {
         ok: true,
@@ -320,6 +334,27 @@ describe('MnemonView', () => {
     expect(screen.getByRole('img', { name: /Mnemon 实时记忆图谱，7 个元素/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: '记忆体: 偏好记忆体' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '实体: DSH' })).toBeTruthy()
+  })
+
+  it('checks both product versions and only offers a safe supported update', async () => {
+    const { connection, call } = createConnection()
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    await waitFor(() => expect(screen.getByText('dsh-mnemon 0.1.2')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '检查版本' }))
+    const dialog = screen.getByRole('dialog', { name: '检查与更新版本' })
+    await waitFor(() => expect(within(dialog).getByText('Mnemon CLI')).toBeTruthy())
+    expect(within(dialog).getByText('dsh-mnemon')).toBeTruthy()
+    expect(within(dialog).getByText('本地 Link')).toBeTruthy()
+    expect(within(dialog).getByText(/请在源码目录拉取并构建/)).toBeTruthy()
+    expect(within(dialog).getAllByRole('button', { name: '更新' })).toHaveLength(1)
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '更新' }))
+    await waitFor(() => expect(within(dialog).getByText('Mnemon CLI 已更新')).toBeTruthy())
+    expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'version-update', { component: 'mnemon' })
+    await waitFor(() => expect(within(dialog).getByText('已是最新')).toBeTruthy())
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'versions')).toHaveLength(2)
+    await waitFor(() => expect(screen.getByText('Mnemon 0.2.0')).toBeTruthy())
   })
 
   it('keeps shared functionality but applies the minimal unbranded sidebar appearance', async () => {

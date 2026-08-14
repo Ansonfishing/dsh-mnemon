@@ -14,10 +14,11 @@ import { MnemonSubagentCoordinator } from './subagent.ts'
 import { registerTools } from './tools.ts'
 import { StorageScopeInspector } from './storage-scope.ts'
 import { MnemonPackManager } from './pack.ts'
+import { VersionUpdateManager } from './version-updates.ts'
 
 export const name = 'dsh-mnemon'
 export const inject = ['tools', 'settings', 'commands', 'agents', 'subagents', 'workspaceRegistry']
-export { Config, InteractionConfig, resolveConfig, resolveInteractionConfig, DocumentManager, LiveMnemonRuntime, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, StorageScopeInspector, MnemonPackManager, createRunner, createRuntimeGraph }
+export { Config, InteractionConfig, resolveConfig, resolveInteractionConfig, DocumentManager, LiveMnemonRuntime, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, StorageScopeInspector, MnemonPackManager, VersionUpdateManager, createRunner, createRuntimeGraph }
 export type { MnemonConfig }
 
 /** Mount native model tools on every DSH surface and UI RPC only when Web connection exists. */

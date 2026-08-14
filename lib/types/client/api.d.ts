@@ -5,6 +5,7 @@ import type { RuntimeMemoryImportance, RuntimeMemoryMutationResult, RuntimeMemor
 import type { EntityView, Insight, MemoryBodyCatalog, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts';
 import type { AssistantMessageText, TurnMemoryActivity } from '../lifecycle.ts';
 import type { MnemonPackExport, MnemonPackImportResult, MnemonPackPreview } from '../pack.ts';
+import type { VersionComponentId, VersionStatus, VersionUpdateResult } from '../version-updates.ts';
 export interface SearchResponse {
     query: string;
     mode: string;
@@ -27,6 +28,8 @@ export declare class MnemonClient {
     private call;
     private scoped;
     status(): Promise<StatusView>;
+    versions(): Promise<VersionStatus>;
+    updateVersion(component: VersionComponentId): Promise<VersionUpdateResult>;
     runtimeMemory(): Promise<RuntimeMemorySnapshot>;
     mutateRuntimeMemory(request: {
         action: 'add' | 'replace' | 'remove';

@@ -5,6 +5,9 @@ import type { Category, EdgeType, Intent, MnemonService, SearchRequest, Source }
 import type { StorageScopeInspector } from './storage-scope.ts'
 import type { MnemonPackManager } from './pack.ts'
 import type { LiveMnemonRuntime, MnemonRuntimeGraph } from './live-runtime.ts'
+import { VersionUpdateManager, type VersionComponentId } from './version-updates.ts'
+import { MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from './channels.ts'
+export { MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from './channels.ts'
 
 type RuntimeInput = MnemonService | LiveMnemonRuntime
 
@@ -52,10 +55,6 @@ function requireAligned(route: ReturnType<LiveMnemonRuntime['route']> | undefine
   if (route?.aligned === false) throw new Error('the selected memory workspace differs from the current session; align the workbench before running an Agent-backed operation')
 }
 
-export const MNEMON_READ_CHANNEL = '/dsh-mnemon-read'
-export const MNEMON_WRITE_CHANNEL = '/dsh-mnemon-write'
-export const MNEMON_PACK_CHANNEL = '/dsh-mnemon-pack'
-
 function object(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('payload must be an object')
   return value as Record<string, unknown>
@@ -80,10 +79,14 @@ function badRequest(message: string): RpcResult<unknown> {
   return { ok: false, error: { code: 'bad-request', message, details: { issues: [] } } }
 }
 
-export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector): HostRpcHandler {
+export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector, versions?: VersionUpdateManager): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
       const payload = object(rawPayload)
+      if (endpoint === 'versions') {
+        if (versions === undefined) throw new Error('version checks are unavailable')
+        return success(await versions.check())
+      }
       const resolved = runtimeFor(input, payload, runtimeMemory, storage)
       const { service } = resolved.graph
       const selectedWorkspace = resolved.route?.selectedWorkspace
@@ -105,6 +108,7 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
             }
           return success({
             ...await service.status(),
+            ...(versions === undefined ? {} : { dshMnemonVersion: versions.currentDshMnemonVersion }),
             ...(lifecycle === undefined ? {} : {
               lifecycle: lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId)),
             }),
@@ -211,10 +215,16 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
   }
 }
 
-export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController): HostRpcHandler {
+export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, versions?: VersionUpdateManager): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
       const payload = object(rawPayload)
+      if (endpoint === 'version-update') {
+        if (versions === undefined) throw new Error('version updates are unavailable')
+        const component = String(payload.component ?? '')
+        if (component !== 'mnemon' && component !== 'dsh-mnemon') return badRequest(`unknown version component: ${component}`)
+        return success(await versions.update(component as VersionComponentId))
+      }
       const resolved = runtimeFor(input, payload, runtimeMemory)
       const { service } = resolved.graph
       if (!service.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
@@ -361,10 +371,15 @@ export function createPackHandler(manager: MnemonPackManager, writeEnabled: bool
 }
 
 /** Read operations are available to trusted Web hosts; local mutations stay loopback-only. */
-export function registerRpc(connection: HostConnectionHandle, input: RuntimeInput, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector, packs?: MnemonPackManager): void {
-  connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(input, lifecycle, runtimeMemory, storage), { authority: 'trusted-host' })
-  connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(input, lifecycle, runtimeMemory), { authority: 'loopback' })
+export function registerRpc(connection: HostConnectionHandle, input: RuntimeInput, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector, packs?: MnemonPackManager, versions?: VersionUpdateManager): void {
+  const versionManager = versions ?? new VersionUpdateManager({ mnemonCliPath: () => findVersionCli(input) })
+  connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(input, lifecycle, runtimeMemory, storage, versionManager), { authority: 'trusted-host' })
+  connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(input, lifecycle, runtimeMemory, versionManager), { authority: 'loopback' })
   const packManager = isRoutedRuntime(input) ? input.packs : packs
   const config = input.config
   if (packManager !== undefined) connection.rpc.handle(MNEMON_PACK_CHANNEL, createPackHandler(packManager, () => config.writeEnabled), { authority: 'loopback' })
+}
+
+function findVersionCli(input: RuntimeInput): string | undefined {
+  return input.config.cliPath
 }

@@ -6,6 +6,7 @@ import type { Config } from '../config.ts'
 import type { DocumentRecord, DocumentSnapshot, DocumentView } from '../documents.ts'
 import type { RuntimeMemoryEntry, RuntimeMemoryImportance, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts'
 import type { StorageAreaInventory, StorageScopeInventory, StorageScopeKind } from '../storage-scope.ts'
+import type { VersionComponentStatus, VersionInstallMode, VersionStatus, VersionUpdateResult } from '../version-updates.ts'
 import {
   CATEGORIES,
   type Category,
@@ -193,8 +194,8 @@ function SidebarModal(props: { title: string; description?: string; busy?: boole
     return () => window.removeEventListener('keydown', onKey)
   }, [close])
   return (
-    <div className={appearance.classes.modalBackdrop} onPointerDown={event => { if (event.target === event.currentTarget) close() }}>
-      <section ref={dialogRef} className={appearance.classes.modal} role="dialog" aria-modal="true" aria-label={props.title}>
+    <div className={appearanceClass(css.modalBackdrop, appearance.classes.modalBackdrop)} onPointerDown={event => { if (event.target === event.currentTarget) close() }}>
+      <section ref={dialogRef} className={appearanceClass(css.modal, appearance.classes.modal)} role="dialog" aria-modal="true" aria-label={props.title}>
         <header><div><h2>{props.title}</h2>{props.description !== undefined && <p>{props.description}</p>}</div><button type="button" className={css.iconButton} disabled={props.busy} onClick={close} aria-label={t('common.cancel')}>×</button></header>
         <div>{props.children}</div>
       </section>
@@ -1565,8 +1566,84 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
   )
 }
 
-function StatusPage(props: { status: StatusView | null; loading: boolean; onRefresh: () => void }): JSX.Element {
+function versionModeLabel(t: MnemonTranslate, mode: VersionInstallMode): string {
+  if (mode === 'homebrew') return t('versions.modeHomebrew')
+  if (mode === 'go') return t('versions.modeGo')
+  if (mode === 'npm') return t('versions.modeNpm')
+  if (mode === 'link') return t('versions.modeLink')
+  if (mode === 'missing') return t('versions.modeMissing')
+  return t('versions.modeManual')
+}
+
+function versionHint(t: MnemonTranslate, component: VersionComponentStatus): string {
+  if (component.checkError !== undefined) return t('versions.latestUnavailable')
+  if (component.updateHint === 'brew') return t('versions.hintHomebrew')
+  if (component.updateHint === 'brew-missing') return t('versions.hintBrewMissing')
+  if (component.updateHint === 'go') return t('versions.hintGo')
+  if (component.updateHint === 'pnpm') return t('versions.hintPnpm')
+  if (component.updateHint === 'pnpm-missing') return t('versions.hintPnpmMissing')
+  if (component.updateHint === 'link') return t('versions.hintLink')
+  if (component.updateHint === 'install') return t('versions.hintInstall')
+  return t('versions.hintManual')
+}
+
+function VersionDialog(props: { client: MnemonClient; onClose: () => void; onRefreshStatus: () => void }): JSX.Element {
   const t = useT()
+  const [snapshot, setSnapshot] = useState<VersionStatus | null>(null)
+  const [checking, setChecking] = useState(true)
+  const [updating, setUpdating] = useState<VersionComponentStatus['id'] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<VersionUpdateResult | null>(null)
+  const check = useCallback(async () => {
+    setChecking(true)
+    setError(null)
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    try {
+      const deadline = new Promise<never>((_resolve, reject) => { timeout = setTimeout(() => reject(new Error(t('versions.timeout'))), 15_000) })
+      setSnapshot(await Promise.race([props.client.versions(), deadline]))
+    }
+    catch (reason) { setError(message(reason)) }
+    finally { if (timeout !== undefined) clearTimeout(timeout); setChecking(false) }
+  }, [props.client, t])
+  useEffect(() => { void check() }, [check])
+  const update = async (component: VersionComponentStatus) => {
+    setUpdating(component.id)
+    setError(null)
+    setResult(null)
+    try {
+      const next = await props.client.updateVersion(component.id)
+      setResult(next)
+      await check()
+      props.onRefreshStatus()
+    } catch (reason) {
+      setError(message(reason))
+    } finally {
+      setUpdating(null)
+    }
+  }
+  const busy = checking || updating !== null
+  return <SidebarModal title={t('versions.title')} description={t('versions.description')} busy={busy} onClose={props.onClose}>
+    <div className={css.versionDialogBody}>
+      {checking && snapshot === null && <div className={css.versionChecking} role="status"><span />{t('versions.checking')}</div>}
+      {error !== null && <div className={css.versionError} role="alert"><strong>{t('versions.failed')}</strong><p>{error}</p></div>}
+      {result !== null && <div className={css.versionResult} role="status"><strong>{result.updated ? t('versions.updated', { name: result.component === 'mnemon' ? 'Mnemon CLI' : 'dsh-mnemon' }) : t('versions.alreadyCurrent')}</strong>{result.restartRequired && <p>{t('versions.restartRequired')}</p>}</div>}
+      {snapshot !== null && <div className={css.versionList}>{snapshot.components.map(component => {
+        const canUpdate = component.outdated && component.updateSupported && component.checkError === undefined
+        const state = component.checkError !== undefined ? t('versions.unknown') : component.outdated ? t('versions.available') : t('versions.current')
+        return <article key={component.id} data-outdated={component.outdated || undefined}>
+          <header><div><strong>{component.name}</strong><span>{versionModeLabel(t, component.installMode)}</span></div><em>{state}</em></header>
+          <div className={css.versionNumbers}><div><small>{t('versions.installed')}</small><code>{component.current ?? '—'}</code></div><span>→</span><div><small>{t('versions.latest')}</small><code>{component.latest ?? '—'}</code></div></div>
+          <footer><p>{versionHint(t, component)}</p>{canUpdate && <button type="button" className={css.primaryButton} disabled={busy} onClick={() => void update(component)}>{updating === component.id ? t('versions.updating') : t('versions.update')}</button>}</footer>
+        </article>
+      })}</div>}
+      <div className={css.versionDialogActions}><span>{snapshot === null ? '' : t('versions.checkedAt', { time: new Date(snapshot.checkedAt).toLocaleTimeString() })}</span><div><button type="button" className={css.ghostButton} disabled={busy} onClick={props.onClose}>{t('common.cancel')}</button><button type="button" data-autofocus className={css.secondaryButton} disabled={busy} onClick={() => void check()}>{checking ? t('versions.checkingShort') : t('versions.recheck')}</button></div></div>
+    </div>
+  </SidebarModal>
+}
+
+function StatusPage(props: { client: MnemonClient; status: StatusView | null; loading: boolean; onRefresh: () => void }): JSX.Element {
+  const t = useT()
+  const [versionsOpen, setVersionsOpen] = useState(false)
   const status = props.status
   const documents = status?.documents
   const catalogKnown = status?.memoryBodies !== undefined
@@ -1580,16 +1657,17 @@ function StatusPage(props: { status: StatusView | null; loading: boolean; onRefr
   const runtimeMemoryEntries = runtimeArea === undefined ? 0 : Number(runtimeArea.details.memoryEntries ?? 0)
   return (
     <div className={css.page}>
-      <PageHeader title={t('status.title')} description={t('status.description')} meta={status === null && props.loading ? t('common.loading') : status?.healthy === true ? t('status.nominal') : t('status.checkRequired')} action={<button type="button" className={css.secondaryButton} disabled={props.loading} onClick={props.onRefresh}>{props.loading ? t('status.rechecking') : t('status.recheck')}</button>} />
+      <PageHeader title={t('status.title')} description={t('status.description')} meta={status === null && props.loading ? t('common.loading') : status?.healthy === true ? t('status.nominal') : t('status.checkRequired')} action={<div className={css.statusHeaderActions}><button type="button" className={css.ghostButton} disabled={props.loading} onClick={props.onRefresh}>{props.loading ? t('status.rechecking') : t('status.recheck')}</button><button type="button" className={css.secondaryButton} onClick={() => setVersionsOpen(true)}>{t('versions.checkAction')}</button></div>} />
 
       <section className={css.healthStrip} aria-label={t('status.aria')}>
-        <article><span className={`${css.healthIndicator} ${status === null ? css.healthMuted : status.healthy ? css.healthGood : css.healthBad}`} /><div><small>{t('status.engine')}</small><strong>{status === null ? t('status.engineChecking') : status.healthy ? t('status.engineConnected') : t('status.engineUnavailable')}</strong><p>{status?.version === undefined ? t('status.versionWaiting') : `CLI ${status.version}`}</p></div></article>
+        <article><span className={`${css.healthIndicator} ${status === null ? css.healthMuted : status.healthy ? css.healthGood : css.healthBad}`} /><div><small>{t('status.engine')}</small><strong>{status === null ? t('status.engineChecking') : status.healthy ? status.version === undefined ? t('status.engineConnected') : `Mnemon ${status.version}` : t('status.engineUnavailable')}</strong><p>{status?.dshMnemonVersion === undefined ? t('status.versionWaiting') : `dsh-mnemon ${status.dshMnemonVersion}`}</p></div></article>
         <article><span className={`${css.healthIndicator} ${runtimeArea === undefined ? css.healthMuted : runtimeArea.status === 'invalid' ? css.healthBad : css.healthGood}`} /><div><small>{t('status.runtime')}</small><strong>{runtimeArea === undefined ? t('status.runtimeWaiting') : t('status.runtimeRatio', { user: runtimeUserEntries, memory: runtimeMemoryEntries })}</strong><p>{runtimeArea === undefined ? t('status.runtimeWaitingDetail') : t('status.runtimeBytes', { bytes: humanBytes(runtimeArea.bytes) })}</p></div></article>
         <article><span className={`${css.healthIndicator} ${activeBodies > 0 ? css.healthGood : css.healthMuted}`} /><div><small>{t('status.spaces')}</small><strong>{catalogKnown ? t('status.activeRatio', { active: activeBodies, total: memoryBodies.length }) : t('status.directoryUnsynced')}</strong><p>{t('status.activeMemories', { count: status?.stats?.totalInsights ?? 0 })}</p></div></article>
         <article><span className={`${css.healthIndicator} ${documents === undefined ? css.healthMuted : css.healthGood}`} /><div><small>{t('status.documents')}</small><strong>{documents === undefined ? t('status.documentsWaiting') : t('status.documentRatio', { active: documents.activeCount, archived: documents.archivedCount })}</strong><p>{documents === undefined ? t('status.documentsSession') : t('status.documentUsage', { used: humanBytes(documents.activeBytes), limit: humanBytes(documents.limitBytes) })}</p></div></article>
       </section>
 
       <StorageDomains catalog={storage} selected={selectedScope} selectedKind={selectedScopeKind} />
+      {versionsOpen && <VersionDialog client={props.client} onClose={() => setVersionsOpen(false)} onRefreshStatus={props.onRefresh} />}
     </div>
   )
 }
@@ -1797,7 +1875,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
           {page === 'entities' && <EntitiesPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onExplore={explore} />}
           {page === 'remember' && appearance.surface === 'buildin' && <RememberPage client={client} sessionId={sessionId} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} />}
           {page === 'list' && <ListPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onClone={clone} onExplore={explore} />}
-          {page === 'status' && <StatusPage status={status} loading={statusLoading} onRefresh={() => void loadStatus()} />}
+          {page === 'status' && <StatusPage client={client} status={status} loading={statusLoading} onRefresh={() => void loadStatus()} />}
         </section>
         {appearance.surface === 'sidebar' && rememberOpen && <RememberPage client={client} sessionId={sessionId} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} onClose={() => setRememberOpen(false)} onComplete={() => setRememberOpen(false)} />}
       </div>

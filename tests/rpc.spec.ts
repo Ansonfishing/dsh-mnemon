@@ -7,6 +7,7 @@ import type { RuntimeMemoryController } from '../src/runtime-memory.ts'
 import { MnemonService } from '../src/service.ts'
 import type { MnemonPackManager } from '../src/pack.ts'
 import type { LiveMnemonRuntime, MnemonRuntimeGraph } from '../src/live-runtime.ts'
+import type { VersionUpdateManager } from '../src/version-updates.ts'
 
 function fakeService(writeEnabled = true): MnemonService {
   return {
@@ -53,6 +54,19 @@ describe('Mnemon RPC', () => {
       ok: false,
       error: { code: 'bad-request', message: 'unknown read endpoint: nope', details: { issues: [] } },
     })
+  })
+
+  it('checks versions on the read channel and keeps explicit updates loopback-only', async () => {
+    const versions = {
+      currentDshMnemonVersion: '0.1.2',
+      check: vi.fn(async () => ({ checkedAt: 'now', components: [{ id: 'mnemon', current: '0.2.0' }] })),
+      update: vi.fn(async (component: string) => ({ component, updated: true, restartRequired: component === 'dsh-mnemon' })),
+    } as unknown as VersionUpdateManager
+    await expect(createReadHandler(fakeService(), undefined, undefined, undefined, versions)('versions', {})).resolves.toMatchObject({ ok: true, value: { checkedAt: 'now' } })
+    await expect(createReadHandler(fakeService(), undefined, undefined, undefined, versions)('status', {})).resolves.toMatchObject({ ok: true, value: { dshMnemonVersion: '0.1.2' } })
+    await expect(createWriteHandler(fakeService(false), undefined, undefined, versions)('version-update', { component: 'dsh-mnemon' })).resolves.toMatchObject({ ok: true, value: { updated: true } })
+    await expect(createWriteHandler(fakeService(), undefined, undefined, versions)('version-update', { component: 'other' })).resolves.toMatchObject({ ok: false, error: { code: 'bad-request' } })
+    expect(versions.update).toHaveBeenCalledWith('dsh-mnemon')
   })
 
   it('returns one cached turn-activity projection while preserving the legacy endpoint', async () => {

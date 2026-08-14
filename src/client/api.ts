@@ -1,11 +1,12 @@
 import type { ClientConnectionHandle } from '../contracts.ts'
-import { MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from '../rpc.ts'
+import { MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from '../channels.ts'
 import type { MemoryBody } from '../memory-bodies.ts'
 import type { DocumentMutation, DocumentMutationResult, DocumentSearchResult, DocumentSnapshot, DocumentView } from '../documents.ts'
 import type { RuntimeMemoryImportance, RuntimeMemoryMutationResult, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts'
 import type { EntityView, Insight, MemoryBodyCatalog, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts'
 import type { AssistantMessageText, TurnMemoryActivity, TurnMemoryActivitySnapshot } from '../lifecycle.ts'
 import type { MnemonPackExport, MnemonPackImportResult, MnemonPackPreview } from '../pack.ts'
+import type { VersionComponentId, VersionStatus, VersionUpdateResult } from '../version-updates.ts'
 
 interface TurnActivityCacheEntry {
   cursor: number
@@ -78,6 +79,14 @@ export class MnemonClient {
 
   status(): Promise<StatusView> {
     return this.call(MNEMON_READ_CHANNEL, 'status', this.scoped())
+  }
+
+  versions(): Promise<VersionStatus> {
+    return this.call(MNEMON_READ_CHANNEL, 'versions', {})
+  }
+
+  updateVersion(component: VersionComponentId): Promise<VersionUpdateResult> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'version-update', { component })
   }
 
   runtimeMemory(): Promise<RuntimeMemorySnapshot> {

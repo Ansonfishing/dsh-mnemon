@@ -90,6 +90,7 @@ export interface StatusView {
   healthy: boolean
   error?: string
   version?: string
+  dshMnemonVersion?: string
   cliPath: string
   commandFound: boolean
   dataDir: string

@@ -17,6 +17,17 @@ mnemon --version
 
 `mnemon status` opens the effective Store, so the upstream CLI may initialize default data or run migrations. It is not a completely side-effect-free read probe. The plugin's Status page also checks active Memory Spaces, Documents, lifecycle state, and subagent counts.
 
+## Version Checks and Updates
+
+The Sidebar Status page checks two independently installed components through **Check versions**:
+
+- **Mnemon CLI**: the installed version comes from local `mnemon --version`, while the latest version comes from Mnemon GitHub Releases;
+- **dsh-mnemon**: the installed version comes from the running plugin package, while the latest version comes from the npm registry.
+
+Checking is read-only and never installs anything automatically. An **Update** button appears only when a newer release exists and the installation source can be identified safely. Mnemon supports Homebrew Cask, Homebrew Formula, and `go install`; dsh-mnemon supports npm installs managed by pnpm in the owning DSH Profile. Local `link:` / `file:` development builds and unrecognized manual installs show guidance only, preventing source overwrite or use of the wrong package manager.
+
+The Host chooses fixed update commands: the browser cannot supply executable names or arguments, no shell is enabled, and execution time and output are bounded. Checks use the existing read-only RPC channel; explicit updates remain on the loopback write channel. After a successful update, the UI automatically checks both versions again and refreshes System Status. Restart `dsh web` after updating dsh-mnemon to load the new plugin code. A Mnemon CLI update applies from the next CLI invocation.
+
 ## Security Boundaries
 
 ### Process
