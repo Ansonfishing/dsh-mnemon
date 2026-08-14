@@ -1,4 +1,5 @@
 import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { consumeMnemonAnchor, subscribeMnemonAnchor, type MnemonAnchor } from './anchor.ts'
 import Markdown from 'markdown-to-jsx'
 import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts'
 import type { Config } from '../config.ts'
@@ -1537,6 +1538,20 @@ function MnemonWorkspace({ connection, sessionId }: MnemonViewProps): JSX.Elemen
   const [revision, setRevision] = useState(0)
   const [searchSeed, setSearchSeed] = useState('')
   const [rememberSeed, setRememberSeed] = useState('')
+
+  /** Conversation surfaces ask this view to open a page (optionally with a seed). */
+  const applyAnchor = useCallback((anchor: MnemonAnchor) => {
+    if (anchor.seed !== undefined && anchor.seed !== '') {
+      if (anchor.page === 'explore') setSearchSeed(anchor.seed)
+      if (anchor.page === 'remember') setRememberSeed(anchor.seed)
+    }
+    setPage(anchor.page)
+  }, [])
+  useEffect(() => {
+    const held = consumeMnemonAnchor(sessionId)
+    if (held !== null) applyAnchor(held)
+    return subscribeMnemonAnchor(sessionId, applyAnchor)
+  }, [sessionId, applyAnchor])
 
   const loadStatus = useCallback(async () => {
     setStatusLoading(true); setStatusError(null)
