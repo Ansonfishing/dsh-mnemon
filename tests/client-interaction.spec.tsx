@@ -71,37 +71,39 @@ const TOOLVIEW_KEYS = ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related'
 describe('interaction surfaces binding', () => {
   afterEach(() => { vi.restoreAllMocks() })
 
-  it('registers all three surfaces while settings load (defaults enabled)', () => {
+  it('registers no interaction surface by default (opt-in off)', async () => {
     const { ctx, injects, activeRegistrations } = makeCtx({})
     apply(ctx)
-    expect(injects).toEqual(expect.arrayContaining(['conversation.view', 'settings.plugin.item', 'tool.call.toolview', 'conversation.chat.turnTail', 'conversation.chat.assistant-actions']))
-    expect(activeRegistrations()).toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
-    expect(activeRegistrations()).toEqual(expect.arrayContaining(['conversation.chat.turnTail', 'mnemon-save']))
-  })
-
-  it('disposes the toolview surface when the loaded settings disable it', async () => {
-    const { ctx, activeRegistrations, injects } = makeCtx({
-      conversationInteraction: { toolviews: false, turnBar: true, saveAction: true },
-    })
-    apply(ctx)
-    // The optimistic registration happens synchronously; wait for the loaded
-    // settings to reconcile and dispose the toolview surface.
+    // conversation.view and settings.plugin.item always register; the
+    // interaction surfaces must not until settings explicitly enable them.
+    expect(injects).toEqual(expect.arrayContaining(['conversation.view', 'settings.plugin.item']))
     await waitFor(() => {
       expect(activeRegistrations()).not.toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
     })
-    expect(activeRegistrations()).toEqual(expect.arrayContaining(['conversation.chat.turnTail', 'mnemon-save']))
-    expect(injects).toEqual(expect.arrayContaining(['conversation.chat.turnTail', 'conversation.chat.assistant-actions']))
+    expect(activeRegistrations()).not.toContain('conversation.chat.turnTail')
+    expect(activeRegistrations()).not.toContain('mnemon-save')
   })
 
-  it('keeps surfaces enabled when only other toggles are off', async () => {
+  it('registers explicitly enabled surfaces after settings load', async () => {
+    const { ctx, activeRegistrations } = makeCtx({
+      conversationInteraction: { toolviews: true, turnBar: true, saveAction: true },
+    })
+    apply(ctx)
+    await waitFor(() => {
+      expect(activeRegistrations()).toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
+    })
+    expect(activeRegistrations()).toEqual(expect.arrayContaining(['conversation.chat.turnTail', 'mnemon-save']))
+  })
+
+  it('registers only the enabled surfaces when toggles are mixed', async () => {
     const { ctx, activeRegistrations } = makeCtx({
       conversationInteraction: { toolviews: true, turnBar: false, saveAction: true },
     })
     apply(ctx)
     await waitFor(() => {
-      expect(activeRegistrations()).not.toContain('conversation.chat.turnTail')
+      expect(activeRegistrations()).toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
     })
-    expect(activeRegistrations()).toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
     expect(activeRegistrations()).toEqual(expect.arrayContaining(['mnemon-save']))
+    expect(activeRegistrations()).not.toContain('conversation.chat.turnTail')
   })
 })

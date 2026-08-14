@@ -36,9 +36,9 @@ function draftOf(value: Config | undefined): Draft {
   return {
     storageScope: resolved.storageScope ?? (resolved.dataDir?.trim() ? 'custom' : 'global'),
     dataDir: resolved.dataDir?.trim() ?? '',
-    interactionToolviews: interaction.toolviews !== false,
-    interactionTurnBar: interaction.turnBar !== false,
-    interactionSaveAction: interaction.saveAction !== false,
+    interactionToolviews: interaction.toolviews === true,
+    interactionTurnBar: interaction.turnBar === true,
+    interactionSaveAction: interaction.saveAction === true,
   }
 }
 

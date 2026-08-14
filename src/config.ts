@@ -32,7 +32,7 @@ export interface Config {
   writebackMode?: 'guided' | 'off'
   /** Continuous root-agent idle time after the QoderWork activity gate is met. */
   idleReviewMs?: number
-  /** In-conversation interaction surfaces; each toggle binds live on the client. */
+  /** In-conversation interaction surfaces; all default off (opt-in, still stabilizing). */
   conversationInteraction?: {
     /** Memory-flavoured toolview cards for mnemon_* tool calls. */
     toolviews?: boolean
@@ -59,12 +59,12 @@ export const Config: z<Config> = z.object({
   recallMode: z.union(['guided', 'off'] as const).default('guided'),
   writebackMode: z.union(['guided', 'off'] as const).default('guided'),
   idleReviewMs: z.number().step(1).min(5_000).max(600_000).default(DEFAULT_IDLE_REVIEW_MS),
-  // Each interaction surface defaults on; users may disable any of them live.
+  // Each interaction surface is opt-in and defaults off; users enable them live.
   conversationInteraction: z.object({
-    toolviews: z.boolean().default(true),
-    turnBar: z.boolean().default(true),
-    saveAction: z.boolean().default(true),
-  }).default({ toolviews: true, turnBar: true, saveAction: true }),
+    toolviews: z.boolean().default(false),
+    turnBar: z.boolean().default(false),
+    saveAction: z.boolean().default(false),
+  }).default({ toolviews: false, turnBar: false, saveAction: false }),
 })
 
 export interface ResolvedConfig {
@@ -120,9 +120,9 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     writebackMode: config.writebackMode ?? 'guided',
     idleReviewMs: config.idleReviewMs ?? DEFAULT_IDLE_REVIEW_MS,
     conversationInteraction: {
-      toolviews: config.conversationInteraction?.toolviews ?? true,
-      turnBar: config.conversationInteraction?.turnBar ?? true,
-      saveAction: config.conversationInteraction?.saveAction ?? true,
+      toolviews: config.conversationInteraction?.toolviews ?? false,
+      turnBar: config.conversationInteraction?.turnBar ?? false,
+      saveAction: config.conversationInteraction?.saveAction ?? false,
     },
   }
 }

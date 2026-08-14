@@ -201,4 +201,31 @@ describe('MnemonSettingsCard', () => {
     expect(setPath).toHaveBeenCalledWith(['conversationInteraction', 'turnBar'], false)
     expect(unsetPath).not.toHaveBeenCalled()
   })
+
+  it('presents interaction toggles unchecked by default (opt-in)', () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {},
+      user: {},
+      revision: 0,
+      writable: true,
+      mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}),
+      unset: vi.fn(async () => {}),
+      setPath: vi.fn(async () => {}),
+      unsetPath: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+
+    const view = render(<MnemonSettingsCard scope={scope} />)
+
+    expect((view.getByLabelText('记忆工具卡') as HTMLInputElement).checked).toBe(false)
+    expect((view.getByLabelText('回合记忆条') as HTMLInputElement).checked).toBe(false)
+    expect((view.getByLabelText('存入记忆按钮') as HTMLInputElement).checked).toBe(false)
+  })
 })

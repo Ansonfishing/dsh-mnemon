@@ -75,9 +75,10 @@ const INTERACTION_UNITS: Record<'toolviews' | 'turnBar' | 'saveAction', Interact
 
 type InteractionUnitKey = keyof typeof INTERACTION_UNITS
 
+/** Interaction surfaces are opt-in: an explicit `true` in settings enables one. */
 function enabledOf(value: unknown, key: 'toolviews' | 'turnBar' | 'saveAction'): boolean {
   const group = (value as { conversationInteraction?: Partial<Record<typeof key, boolean>> } | undefined)?.conversationInteraction
-  return group === undefined || group[key] !== false
+  return group?.[key] === true
 }
 
 /** Add one standard conversation.view entry; unloading the plugin removes it with the slot effect. */
@@ -110,9 +111,9 @@ export function apply(rawContext: unknown): void {
     }),
   }, MnemonSettingsCard as never))
 
-  // In-conversation interaction surfaces are bound live: each settings change
-  // registers or disposes the slot contributions without a reload. While the
-  // snapshot is still loading, the defaults apply (all enabled).
+  // In-conversation interaction surfaces are opt-in and bound live: each
+  // settings change registers or disposes the slot contributions without a
+  // reload. Until the snapshot loads, nothing registers (conservative default).
   const active = new Map<InteractionUnitKey, () => void>()
   const reconcile = (): void => {
     const value = settings.getSnapshot().value
