@@ -4,6 +4,7 @@ import type { MemoryBody } from '../memory-bodies.ts'
 import type { DocumentMutation, DocumentMutationResult, DocumentSearchResult, DocumentSnapshot, DocumentView } from '../documents.ts'
 import type { RuntimeMemoryImportance, RuntimeMemoryMutationResult, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts'
 import type { EntityView, Insight, MemoryBodyCatalog, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts'
+import type { AssistantMessageText, TurnMemoryActivity } from '../lifecycle.ts'
 
 export interface SearchResponse {
   query: string
@@ -95,6 +96,16 @@ export class MnemonClient {
 
   related(id: string, memoryBodyId?: string): Promise<Insight[]> {
     return this.call(MNEMON_READ_CHANNEL, 'related', { id, depth: 2, sessionId: this.sessionId, ...(memoryBodyId === undefined ? {} : { memoryBodyId }) })
+  }
+
+  /** Memory-tool activity of one turn; null when the turn had none or the agent is gone. */
+  turnActivity(turn: number): Promise<TurnMemoryActivity | null> {
+    return this.call(MNEMON_READ_CHANNEL, 'turn-activity', { sessionId: this.sessionId, turn })
+  }
+
+  /** Plain text of one finalized assistant message; null when absent or empty. */
+  assistantMessageText(messageId: string): Promise<AssistantMessageText | null> {
+    return this.call(MNEMON_READ_CHANNEL, 'assistant-message', { sessionId: this.sessionId, messageId })
   }
 
   remember(request: RememberRequest): Promise<Record<string, unknown>> {

@@ -117,6 +117,12 @@ export function createReadHandler(service: MnemonService, lifecycle?: MnemonLife
           }
         case 'related':
           return success(await service.related(String(payload.id ?? ''), payload.depth === undefined ? 2 : Number(payload.depth), payload.edge as EdgeType | undefined, undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId)))
+        case 'turn-activity':
+          if (lifecycle === undefined) throw new Error('Mnemon turn activity requires lifecycle integration')
+          return success(lifecycle.turnActivity(String(payload.sessionId ?? ''), Number(payload.turn)))
+        case 'assistant-message':
+          if (lifecycle === undefined) throw new Error('Mnemon assistant message requires lifecycle integration')
+          return success(lifecycle.assistantMessage(String(payload.sessionId ?? ''), String(payload.messageId ?? '')))
         default:
           return badRequest(`unknown read endpoint: ${endpoint}`)
       }

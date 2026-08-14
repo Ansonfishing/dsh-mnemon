@@ -121,6 +121,61 @@ function completedToolActivity(events: readonly HostSessionEvent[], turn: number
   return { count, names }
 }
 
+const MNEMON_READ_TOOLS = new Set(['mnemon_recall', 'mnemon_related', 'mnemon_document_search', 'mnemon_status', 'mnemon_memory_bodies'])
+const MNEMON_WRITE_TOOLS = new Set(['mnemon_remember', 'mnemon_forget', 'mnemon_link', 'mnemon_document_manage', 'mnemon_runtime_memory', 'mnemon_memory_body_create', 'mnemon_memory_body_update', 'mnemon_memory_body_merge'])
+
+/** Per-turn Mnemon tool activity, derived from the durable session log. */
+export interface TurnMemoryActivity {
+  turn: number
+  count: number
+  names: string[]
+  recalls: number
+  writes: number
+  documentSearches: number
+}
+
+/** Classify one turn's mnemon tool calls for the turnTail memory-activity bar. */
+function turnMemoryActivity(events: readonly HostSessionEvent[], turn: number): TurnMemoryActivity | null {
+  const names: string[] = []
+  let recalls = 0
+  let writes = 0
+  let documentSearches = 0
+  for (const event of events) {
+    if (event.type !== 'tool/call' || eventTurn(event) !== turn || typeof event.data.name !== 'string') continue
+    const name = event.data.name
+    if (!name.startsWith('mnemon_')) continue
+    names.push(name)
+    if (MNEMON_READ_TOOLS.has(name)) recalls += 1
+    else if (MNEMON_WRITE_TOOLS.has(name)) writes += 1
+    if (name === 'mnemon_document_search') documentSearches += 1
+  }
+  if (names.length === 0) return null
+  return { turn, count: names.length, names, recalls, writes, documentSearches }
+}
+
+/** Extracted plain text of one finalized assistant message, when present in the session log. */
+export interface AssistantMessageText {
+  messageId: string
+  text: string
+}
+
+/** Join the text blocks of an `assistant/message` event whose message id matches. */
+function assistantMessageText(events: readonly HostSessionEvent[], messageId: string): AssistantMessageText | null {
+  for (const event of events) {
+    if (event.type !== 'assistant/message') continue
+    const message = event.data.message as { id?: unknown; blocks?: Array<{ type?: unknown; text?: unknown }> } | undefined
+    if (message === undefined || typeof message !== 'object' || message.id !== messageId) continue
+    const blocks = Array.isArray(message.blocks) ? message.blocks : []
+    const text = blocks
+      .filter(block => block.type === 'text' && typeof block.text === 'string')
+      .map(block => String(block.text))
+      .join('\n\n')
+      .trim()
+    return text === '' ? null : { messageId, text }
+  }
+  return null
+}
+
 function guidedReminder(config: ResolvedConfig): string | undefined {
   if (config.recallMode === 'guided' && config.writebackMode === 'guided') return '[MNEMON] Search active Documents for substantial project knowledge before deep recall; call mnemon_recall only when durable history or an exact prior detail matters, and use mnemon_runtime_memory only for new explicit reusable facts. Otherwise call none.'
   if (config.recallMode === 'guided') return '[MNEMON] Search active Documents for substantial project knowledge before deep recall; call mnemon_recall only when durable history or an exact prior detail matters. Otherwise call neither.'
@@ -201,6 +256,16 @@ class MnemonAgentLifecycle {
   markSupervised(): void {
     this.counters.supervisedRequests += 1
     this.mark('supervised')
+  }
+
+  /** Memory-tool activity of one turn, from this agent's durable session log. */
+  turnMemoryActivity(turn: number): TurnMemoryActivity | null {
+    return turnMemoryActivity(this.agent.session.events, turn)
+  }
+
+  /** Plain text of one finalized assistant message, from this agent's session log. */
+  assistantMessageText(messageId: string): AssistantMessageText | null {
+    return assistantMessageText(this.agent.session.events, messageId)
   }
 
   private async preStep(payload: PreStepPayload, next: () => Promise<HostPreStepDecision>): Promise<HostPreStepDecision> {
@@ -373,6 +438,20 @@ export class MnemonLifecycle {
   workspaceRoot(sessionId?: string): string | undefined {
     if (sessionId === undefined || sessionId.trim() === '') return undefined
     return this.ctx.agents.get(sessionId.trim())?.session.header?.cwd
+  }
+
+  /** Memory-tool activity of one turn, resolved per session; null while the agent is absent. */
+  turnActivity(sessionId: string, turn: number): TurnMemoryActivity | null {
+    const agent = this.ctx.agents.get(sessionId.trim())
+    const owner = agent === undefined ? undefined : this.owners.get(agent)?.lifecycle
+    return owner === undefined ? null : owner.turnMemoryActivity(turn)
+  }
+
+  /** Plain text of one finalized assistant message, resolved per session; null while absent. */
+  assistantMessage(sessionId: string, messageId: string): AssistantMessageText | null {
+    const agent = this.ctx.agents.get(sessionId.trim())
+    const owner = agent === undefined ? undefined : this.owners.get(agent)?.lifecycle
+    return owner === undefined ? null : owner.assistantMessageText(messageId)
   }
 
   recall(sessionId: string, request: SearchRequest, signal = new AbortController().signal) {
