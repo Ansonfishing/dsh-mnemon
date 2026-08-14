@@ -180,7 +180,7 @@ When the Web locale changes, the Chinese key set remains the type source of trut
 [ ] back up any data root used for upgrade testing
 ```
 
-`package.json.files` currently publishes `lib`, the patch, both root READMEs, README demo assets, the public bilingual docs, and the License; the historical research ledger is excluded from the installed package.
+`package.json.files` currently publishes `lib`, the patch, both root READMEs, centrally managed documentation visuals, the public bilingual docs, and the License.
 
 ## Publishing to npm
 
