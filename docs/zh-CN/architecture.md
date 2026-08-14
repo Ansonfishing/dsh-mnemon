@@ -8,13 +8,15 @@
 
 - DSH 提供主 Agent、生命周期事件、subagent provider、工具、命令、设置和 Web 扩展点；
 - 插件提供三层知识控制面、路由策略、事务屏障和 UI；
-- 本地 `mnemon` CLI 提供命名 Store、SQLite 持久化、四类图、召回、关系和软删除。
+- 本地 `mnemon` CLI 提供命名 Store、SQLite 持久化、四类图、召回、关系和软删除，并形成与其他 Mnemon-enabled Agent 共享长期记忆的数据边界。
 
 ## 组件图
 
 [![dsh-mnemon 运行时架构](../assets/diagrams/zh-CN/project-architecture.svg)](../assets/diagrams/zh-CN/project-architecture.svg)
 
 图中实线表示确定性数据或控制路径，紫色虚线表示 LLM 监督路径。Runtime Memory 和 Documents 直接使用受管文件；只有 Memory Spaces 通过 `MnemonRunner` 调用本地 Mnemon CLI。点击图片可以查看原始 SVG。
+
+因此跨 Agent 互操作只发生在图中的 Memory Spaces：共享的是 Mnemon Store 内的长期记忆与关系，不是 DSH 的会话上下文、Runtime 投影或 Documents 控制面。插件不会把数据主动推送到其他 Agent；参与方通过对齐本地 Mnemon 根和 Store 来共享。
 
 ## Host 组合根
 

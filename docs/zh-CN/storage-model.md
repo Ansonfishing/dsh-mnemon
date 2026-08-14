@@ -164,6 +164,12 @@ mnemon.db     独立数据面
 - 合并通过 Mnemon import 把来源内容导入目标；来源数据库保留，默认只将来源设为未激活。
 - `forget` 是按精确 ID 的软删除，不等于删除数据库文件。
 
+### 跨 Agent 可见性
+
+`mnemon.db` 是 Mnemon 原生数据面，不是 dsh-mnemon 私有格式。其他 Mnemon-enabled Agent 在使用同一个 `storageRoot` 和 Store 时，可以访问同一份长期记忆。dsh-mnemon 也会发现磁盘上兼容的 Store；其 DSH 专有名称、说明和激活状态仍由 `.dsh-memory-bodies.json` 管理。
+
+共享不延伸到 `runtime/` 或 `documents/`。即使它们位于同一个根，其他 Agent 也必须自行实现相应协议才能理解这些 DSH 管理层；不能把“共享 Mnemon 长期记忆”表述为自动共享完整 DSH 上下文。
+
 ## 四类关系
 
 Mnemon 长期层保留 `temporal`、`semantic`、`causal` 和 `entity` 关系。插件不会要求每条记忆都手工创建关系；关系应在确实能改善未来召回时建立。记忆体页可以聚合多个已激活记忆体的记忆、实体、关系和空间归属。

@@ -8,13 +8,15 @@
 
 - DSH provides the root Agent, lifecycle events, subagent providers, tools, commands, settings, and Web extension points;
 - the plugin provides the control plane for three knowledge layers, routing policies, transactional barriers, and UI;
-- the local `mnemon` CLI provides named Stores, SQLite persistence, four graph types, recall, relationships, and soft deletion.
+- the local `mnemon` CLI provides named Stores, SQLite persistence, four graph types, recall, relationships, and soft deletion, and defines the durable-data boundary shared with other Mnemon-enabled agents.
 
 ## Component Diagram
 
 [![dsh-mnemon runtime architecture](../assets/diagrams/en/project-architecture.svg)](../assets/diagrams/en/project-architecture.svg)
 
 Solid lines show deterministic data or control paths; purple dashed lines show LLM-supervised paths. Runtime Memory and Documents use managed files directly. Only Memory Spaces call the local Mnemon CLI through `MnemonRunner`. Click the image to open the original SVG.
+
+Cross-agent interoperability therefore applies only to Memory Spaces in the diagram: agents share durable memories and relations inside Mnemon Stores, not DSH conversation context, Runtime projections, or the Documents control plane. The plugin never pushes data to another agent; participants share by aligning their local Mnemon root and Store.
 
 ## Host Composition Root
 

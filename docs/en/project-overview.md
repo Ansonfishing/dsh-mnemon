@@ -1,8 +1,8 @@
-# Project Overview: Local Three-Tier Memory for DSH
+# Project Overview: Local Three-Tier and Cross-Agent Memory for DSH
 
 [简体中文](../zh-CN/project-overview.md) | **English** | [Documentation hub](./README.md)
 
-`dsh-mnemon` integrates [Mnemon](https://github.com/mnemon-dev/mnemon) Memory Spaces with DeepSeek Harness, then adds Runtime hot memory, Project Documents, lifecycle routing, bounded subagents, a deterministic control layer, and native DSH interfaces.
+`dsh-mnemon` integrates [Mnemon](https://github.com/mnemon-dev/mnemon) Memory Spaces with DeepSeek Harness, then adds Runtime hot memory, Project Documents, lifecycle routing, bounded subagents, a deterministic control layer, and native DSH interfaces. Because the durable tier uses native Mnemon Stores, DSH can reuse the same local long-term memory with other Mnemon-enabled agents.
 
 Its goal is not to store more text. It balances long-term continuity, current-fact priority, context cost, and recoverable writes.
 
@@ -49,6 +49,18 @@ Each Memory Space maps to an independent Mnemon Store and `mnemon.db`, with a st
 - Recall retains Memory Space provenance and memory IDs for related traversal.
 
 See [Storage and the three-tier model](./storage-model.md) for authoritative files, capacities, and directories.
+
+## Cross-agent sharing boundary
+
+“Sharing” does not mean that dsh-mnemon broadcasts conversations or files to arbitrary agents. It means that multiple Mnemon-enabled agents use the same local Mnemon data:
+
+1. every participant installs and integrates Mnemon;
+2. every participant can access the same `storageRoot`;
+3. durable memories intended for sharing live in Mnemon Stores recognized by those participants.
+
+Under those conditions, another Mnemon-enabled agent can recall durable facts, entities, and relations written through DSH, and DSH can discover compatible memories written in the other direction. This boundary covers Mnemon Memory Spaces only. `runtime/` and `documents/` are DSH layers managed by dsh-mnemon and do not automatically become another agent's context merely because the root is shared.
+
+The default `global` root, `~/.mnemon`, is the simplest choice for several local agents. Use `custom` for an explicitly agreed shared root, or `workspace` to constrain sharing to one project. Concurrent processes rely on Mnemon and SQLite concurrency semantics; stop every user before offline copying, migration, or direct database changes.
 
 ## Architecture
 

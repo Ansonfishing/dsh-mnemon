@@ -8,13 +8,14 @@
 
 1. [快速开始](./getting-started.md)：安装 Mnemon 与插件，选择存储范围，完成第一次验证。
 2. [Sidebar 与对话交互指南](./ui-guide.md)：认识状态、运行时、记忆体、档案和对话内入口。
-3. [项目介绍](./project-overview.md)：理解三层模型、读写边界与完整流转。
+3. [项目介绍](./project-overview.md)：理解三层模型、跨 Agent 共享边界、读写边界与完整流转。
 
 ## 按任务查找
 
 | 我想要…… | 文档 |
 |---|---|
 | 决定一条信息应放在哪一层 | [存储与三层记忆模型](./storage-model.md) |
+| 让 DSH 与其他 Mnemon-enabled Agent 共享长期记忆 | [项目介绍：跨 Agent 共享边界](./project-overview.md#跨-agent-共享边界) · [配置参考：共享范围](./configuration.md#选择跨-agent-共享范围) |
 | 了解每轮注入、召回、沉淀和归档何时发生 | [生命周期与核心流程](./workflows.md) |
 | 切换 Sidebar / Buildin、全局 / 工作区 / 自定义目录 | [配置参考](./configuration.md) |
 | 理解工作区“查看目录”与 Agent“实际生效目录” | [UI 指南：工作区模式](./ui-guide.md#工作区模式查看与执行分离) |
@@ -34,6 +35,7 @@
 | 运行时记忆 | Runtime Memory | 每轮注入的 USER / MEMORY 热记忆 |
 | 档案 | Project Documents | 受管、可检索、保留完整 Markdown 叙事的项目知识 |
 | 记忆体 | Memory Space | 独立、可激活、按需召回的长期 Mnemon Store |
+| 跨 Agent 共享 | Cross-agent memory sharing | 多个 Mnemon-enabled Agent 使用同一根和 Store，共享长期记忆而非完整 DSH 上下文 |
 | 沉淀 | Remember / Distill | 把候选交给受监督子 Agent 判断、查重与写入 |
 | 召回 | Recall | 从已激活记忆体按需取回有界证据 |
 | 归档 | Archive | 先建立冷引用，再把不常用档案迁出 active 层 |

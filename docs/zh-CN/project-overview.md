@@ -1,8 +1,8 @@
-# 项目介绍：面向 DSH 的本地三层记忆系统
+# 项目介绍：面向 DSH 的本地三层与跨 Agent 共享记忆系统
 
 **简体中文** | [English](../en/project-overview.md) | [文档中心](./README.md)
 
-`dsh-mnemon` 将 [Mnemon](https://github.com/mnemon-dev/mnemon) 的长期记忆体接入 DeepSeek Harness，并补充运行时热记忆、项目档案、生命周期路由、受限子 Agent、确定性控制层与 DSH 原生界面。
+`dsh-mnemon` 将 [Mnemon](https://github.com/mnemon-dev/mnemon) 的长期记忆体接入 DeepSeek Harness，并补充运行时热记忆、项目档案、生命周期路由、受限子 Agent、确定性控制层与 DSH 原生界面。因为长期层使用 Mnemon 原生 Store，DSH 也获得了与其他 Mnemon-enabled Agent 复用同一套本地长期记忆的能力。
 
 它要解决的不是“保存更多文字”，而是让 Agent 在长期连续性、当前事实优先、上下文成本和可恢复写入之间取得平衡。
 
@@ -49,6 +49,18 @@
 - 召回返回记忆体来源与记忆 ID，后续可以继续查看关联。
 
 三层的权威文件、容量与目录结构见[存储与三层记忆模型](./storage-model.md)。
+
+## 跨 Agent 共享边界
+
+这里的“共享”不是 dsh-mnemon 把对话或文件主动广播给任意 Agent，而是多个已接入 Mnemon 的 Agent 使用同一套本地 Mnemon 数据：
+
+1. 每个参与方都安装并接入 Mnemon；
+2. 每个参与方都能访问同一个 `storageRoot`；
+3. 需要共享的长期记忆位于各方共同识别的 Mnemon Store 中。
+
+满足这些条件后，在 DSH 中写入的长期事实、实体与关系可以由其他 Mnemon-enabled Agent 召回，反向写入也能被 DSH 发现。共享范围只覆盖 Mnemon Memory Spaces；`runtime/` 和 `documents/` 是 dsh-mnemon 管理的 DSH 层，不会仅因共用目录就自动成为其他 Agent 的上下文。
+
+`global` 默认根 `~/.mnemon` 最适合本机多个 Agent 共享；`custom` 适合显式约定的公共根；`workspace` 则把共享限制在对应项目目录。多个进程同时访问时依赖 Mnemon / SQLite 的并发语义，离线复制、迁移或直接修改数据库前应先停止所有使用者。
 
 ## 总体架构
 

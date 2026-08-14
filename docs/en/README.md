@@ -8,13 +8,14 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 
 1. [Getting Started](./getting-started.md): install Mnemon and the plugin, choose storage, and complete first-run verification.
 2. [Sidebar and conversation UI guide](./ui-guide.md): learn Status, Runtime, Memory Spaces, Documents, and in-conversation entry points.
-3. [Project overview](./project-overview.md): understand the three-tier model, read/write boundaries, and complete flow.
+3. [Project overview](./project-overview.md): understand the three-tier model, cross-agent sharing boundary, read/write boundaries, and complete flow.
 
 ## Find a task
 
 | I want to… | Document |
 |---|---|
 | Decide which tier should retain something | [Storage and the three-tier model](./storage-model.md) |
+| Share durable memory between DSH and other Mnemon-enabled agents | [Project overview: Cross-agent sharing](./project-overview.md#cross-agent-sharing-boundary) · [Configuration: Sharing scope](./configuration.md#choose-a-cross-agent-sharing-scope) |
 | Learn when injection, recall, remembering, and archiving happen | [Lifecycle and workflows](./workflows.md) |
 | Switch Sidebar / Buildin or global / workspace / custom storage | [Configuration reference](./configuration.md) |
 | Understand workspace inspection versus the Agent's effective directory | [UI guide: Workspace mode](./ui-guide.md#workspace-mode-separating-inspection-from-execution) |
@@ -34,6 +35,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 | Runtime Memory | USER / MEMORY | Hot memory projected into every turn |
 | Project Documents | Documents / 档案 | Managed, searchable project knowledge that keeps full Markdown structure |
 | Memory Space | 记忆体 | An independent, activatable, on-demand Mnemon Store |
+| Cross-agent memory sharing | 跨 Agent 共享 | Mnemon-enabled agents use the same root and Store to share durable memory, not the complete DSH context |
 | Remember | Distill / 沉淀 | Submit a candidate to a supervised subagent for qualification, dedupe, and writing |
 | Recall | 召回 | Retrieve bounded evidence from active Memory Spaces |
 | Archive | 归档 | Create a cold reference before moving an infrequently used Document out of active storage |

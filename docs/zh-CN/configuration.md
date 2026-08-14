@@ -66,7 +66,7 @@ MNEMON_DATA_DIR when non-empty
   otherwise ~/.mnemon
 ```
 
-适合希望多个工作区共享 Runtime、Documents 和 Memory Spaces 的用户。
+适合希望多个工作区共享 Runtime、Documents 和 Memory Spaces 的用户；其他 Mnemon-enabled Agent 使用相同根时，也可以共享其中的 Mnemon Memory Spaces。
 
 ### `workspace`
 
@@ -86,6 +86,16 @@ mnemon:
 ```
 
 也允许 `~` 和 `~/...`。相对路径会被拒绝。
+
+### 选择跨 Agent 共享范围
+
+| 目标 | 推荐范围 | 说明 |
+|---|---|---|
+| 本机多个 Agent 共享长期记忆 | `global` | 各方统一使用 `~/.mnemon` 或同一个 `MNEMON_DATA_DIR` |
+| 多个 Agent 共享指定数据根 | `custom` | 各方显式配置同一个绝对目录，便于隔离和备份 |
+| 只在一个项目内共享 | `workspace` | 各方都需要把 Mnemon 根对齐到该项目的 `<workspace>/.mnemon` |
+
+只有 `data/<store>/mnemon.db` 中的 Mnemon 长期层具备原生跨 Agent 互操作性。Runtime、Documents、DSH 的激活状态和 UI 元数据仍属于 dsh-mnemon 管理范围。
 
 ## CLI 发现优先级
 

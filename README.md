@@ -8,11 +8,12 @@
   </a>
 </p>
 
-<p align="center"><strong>让 DeepSeek Harness 拥有本地、分层、可监督的长期记忆。</strong></p>
+<p align="center"><strong>让 DeepSeek Harness 拥有可跨 Agent 共享的本地、分层、可监督长期记忆。</strong></p>
 
-`dsh-mnemon` 将 [Mnemon](https://github.com/mnemon-dev/mnemon) 接入 DeepSeek Harness（DSH），并把每轮需要的热记忆、需要完整阅读的项目档案和按需召回的长期记忆体组织在同一个工作台中。
+`dsh-mnemon` 将 [Mnemon](https://github.com/mnemon-dev/mnemon) 接入 DeepSeek Harness（DSH），并把每轮需要的热记忆、需要完整阅读的项目档案和按需召回的长期记忆体组织在同一个工作台中。其他 Agent 只要同样接入 Mnemon，并使用同一套可访问的本地 Mnemon 存储，就可以与 DSH 共享长期记忆。
 
 - **本地优先**：记忆保存在本机 SQLite、JSON 与 Markdown 中，不依赖远程记忆服务。
+- **跨 Agent 共享**：DSH 的 Mnemon 记忆体可以被其他支持 Mnemon 的 Agent 读取和复用。
 - **三层协作**：运行时记忆、项目档案、记忆体各自保存适合自己的信息粒度。
 - **受监督写入**：语义判断交给隔离的记忆子 Agent，路径、权限、容量、锁与 revision 由 Host 控制。
 - **DSH 原生体验**：默认 Sidebar 工作台、对话内回合记忆、存入记忆弹窗、双语界面与明暗主题。
@@ -73,6 +74,12 @@ dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 | **记忆体** | 跨会话事实、决策、实体与关系 | 只从已激活 Memory Spaces 按需召回有界证据 |
 
 三层不是同一内容的简单复制：信息会按使用频率、叙事长度和召回方式进入最合适的层级。完整规则见[存储与三层记忆模型](./docs/zh-CN/storage-model.md)。
+
+### 与其他 Agent 共享长期记忆
+
+跨 Agent 共享发生在 Mnemon 提供的**记忆体**层。其他支持 Mnemon 的 Agent 指向相同的 `storageRoot` 和 Store 后，可以召回或继续沉淀同一批长期事实、实体与关系。DSH 专有的运行时记忆和项目档案不会因此自动暴露给其他 Agent。
+
+默认 `global` 模式使用 `~/.mnemon`，最适合作为本机 Agent 之间的共享记忆根；`custom` 和 `workspace` 也可以共享，但所有参与方必须显式对齐目录。共享同一目录意味着共享同一份数据，请先确认信任边界，并避免并发执行不兼容的离线迁移或目录操作。
 
 ## Sidebar 工作台
 

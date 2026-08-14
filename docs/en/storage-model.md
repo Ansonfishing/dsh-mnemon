@@ -164,6 +164,12 @@ mnemon.db     independent data plane
 - Merge imports source content into the target through Mnemon; the source database remains in place, and by default only the source is marked inactive.
 - `forget` is a soft delete by exact ID, not deletion of a database file.
 
+### Cross-Agent Visibility
+
+`mnemon.db` is Mnemon's native data plane, not a private dsh-mnemon format. Another Mnemon-enabled agent can access the same durable memory when it uses the same `storageRoot` and Store. dsh-mnemon also discovers compatible Stores already present on disk; DSH-specific names, descriptions, and activation state remain managed by `.dsh-memory-bodies.json`.
+
+This sharing does not extend to `runtime/` or `documents/`. Even when those directories sit under the same root, another agent must implement their DSH-specific protocols to understand them. “Shared Mnemon memory” must not be presented as automatic sharing of the complete DSH context.
+
 ## Four Relationship Types
 
 The Mnemon long-term layer preserves `temporal`, `semantic`, `causal`, and `entity` relationships. The plugin does not require relationships to be created manually for every memory; they should be created only when they genuinely improve future recall. Overview can aggregate memories, entities, relationships, and space membership across multiple active Memory Spaces.

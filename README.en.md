@@ -8,11 +8,12 @@
   </a>
 </p>
 
-<p align="center"><strong>Local, layered, supervised long-term memory for DeepSeek Harness.</strong></p>
+<p align="center"><strong>Local, layered, supervised memory for DeepSeek Harness—with cross-agent sharing through Mnemon.</strong></p>
 
-`dsh-mnemon` integrates [Mnemon](https://github.com/mnemon-dev/mnemon) with DeepSeek Harness (DSH). It brings hot memory needed every turn, full project Documents, and on-demand long-term Memory Spaces into one workbench.
+`dsh-mnemon` integrates [Mnemon](https://github.com/mnemon-dev/mnemon) with DeepSeek Harness (DSH). It brings hot memory needed every turn, full project Documents, and on-demand long-term Memory Spaces into one workbench. Other agents can share DSH's long-term memory when they also integrate Mnemon and use the same accessible local Mnemon storage.
 
 - **Local first**: memory stays in local SQLite, JSON, and Markdown; no remote memory service is required.
+- **Cross-agent sharing**: Mnemon-enabled agents can read and reuse DSH's Mnemon Memory Spaces.
 - **Three cooperating tiers**: Runtime Memory, Project Documents, and Memory Spaces retain information at the right granularity.
 - **Supervised writes**: isolated memory subagents make semantic decisions; the Host enforces paths, permissions, capacity, locks, and revisions.
 - **Native DSH experience**: a Sidebar workbench by default, turn memory, a Save-to-memory dialog, bilingual copy, and global themes.
@@ -73,6 +74,12 @@ See [Getting Started](./docs/en/getting-started.md) for provider requirements an
 | **Memory Spaces** | Cross-session facts, decisions, entities, and relations | Bounded evidence recalled on demand from active spaces only |
 
 The tiers are not simple copies of the same content. Knowledge is routed by frequency, narrative length, and retrieval needs. See [Storage and the three-tier model](./docs/en/storage-model.md).
+
+### Share long-term memory with other agents
+
+Cross-agent sharing applies to the **Memory Spaces** backed by Mnemon. Another Mnemon-enabled agent can recall from or contribute to the same durable facts, entities, and relations when it targets the same `storageRoot` and Store. DSH-managed Runtime Memory and Project Documents are not automatically exposed to other agents.
+
+The default `global` scope uses `~/.mnemon`, making it the simplest shared memory root for local agents. `custom` and `workspace` roots can also be shared, but every participant must align its directory explicitly. A shared root is shared data: establish a trust boundary first, and avoid incompatible offline migration or directory operations while another process is using it.
 
 ## Sidebar workbench
 

@@ -66,7 +66,7 @@ MNEMON_DATA_DIR when non-empty
   otherwise ~/.mnemon
 ```
 
-Suitable for users who want Runtime, Documents, and Memory Spaces shared across multiple workspaces.
+Suitable for users who want Runtime, Documents, and Memory Spaces shared across multiple workspaces. Other Mnemon-enabled agents can also share the Mnemon Memory Spaces when they use the same root.
 
 ### `workspace`
 
@@ -86,6 +86,16 @@ mnemon:
 ```
 
 `~` and `~/...` are also allowed. Relative paths are rejected.
+
+### Choose a Cross-Agent Sharing Scope
+
+| Goal | Recommended scope | Notes |
+|---|---|---|
+| Share durable memory among local agents | `global` | Every participant uses `~/.mnemon` or the same `MNEMON_DATA_DIR` |
+| Share one explicit data root | `custom` | Every participant configures the same absolute directory for isolation and backup |
+| Share only inside one project | `workspace` | Every participant aligns its Mnemon root to that project's `<workspace>/.mnemon` |
+
+Only the Mnemon durable tier under `data/<store>/mnemon.db` has native cross-agent interoperability. Runtime, Documents, DSH activation state, and UI metadata remain managed by dsh-mnemon.
 
 ## CLI Discovery Precedence
 
