@@ -3,9 +3,9 @@ import type { Config, InteractionConfig } from '../config.ts'
 import { MNEMON_SETTINGS_NAMESPACE, MNEMON_UI_SETTINGS_NAMESPACE } from '../settings.ts'
 import { MnemonSettingsCard } from './MnemonSettingsCard.tsx'
 import { MnemonView } from './MnemonView.tsx'
-import { MnemonToolView, MNEMON_TOOLVIEW_NAMES } from './MnemonToolviews.tsx'
 import { MnemonTurnTail, selectMnemonTurnTail } from './MnemonTurnTail.tsx'
 import { MnemonSaveAction } from './MnemonSaveAction.tsx'
+import { MNEMON_ANCHOR_EVENT } from './anchor.ts'
 import { en, zh, type MnemonKey } from './locales.ts'
 import { MnemonSettingsScope } from './settings.ts'
 import type { MnemonClientContext } from './dsh-compat.ts'
@@ -15,7 +15,7 @@ export const inject = ['slots', 'sessions', 'workspaces', 'connection', 'locale'
 
 /** Interaction surfaces: slot name, settings toggle, and the registrations it owns. */
 type MnemonNamespace = 'mnemon'
-type InteractionSlot = 'tool.call.toolview' | 'conversation.chat.turnTail' | 'conversation.chat.assistant-actions'
+type InteractionSlot = 'conversation.chat.turnTail' | 'conversation.chat.assistant-actions'
 type InteractionRegister = (ctx: MnemonClientContext, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string) => () => void
 
 interface InteractionUnit {
@@ -24,26 +24,7 @@ interface InteractionUnit {
   register: InteractionRegister
 }
 
-const INTERACTION_UNITS: Record<'toolviews' | 'turnBar' | 'saveAction', InteractionUnit> = {
-  toolviews: {
-    slot: 'tool.call.toolview',
-    enabled: (value: unknown): boolean => enabledOf(value, 'toolviews'),
-    register(ctx: MnemonClientContext, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
-      const disposers: Array<() => void> = []
-      for (const toolName of MNEMON_TOOLVIEW_NAMES) {
-        disposers.push(ctx.slots.register({
-          name: 'tool.call.toolview',
-          key: toolName,
-          locale: namespace,
-          inject: (sessionId: unknown): { sessionId?: string; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
-            ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
-            t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
-          }),
-        }, MnemonToolView))
-      }
-      return () => { for (const dispose of disposers.reverse()) dispose() }
-    },
-  },
+const INTERACTION_UNITS: Record<'turnBar' | 'saveAction', InteractionUnit> = {
   turnBar: {
     slot: 'conversation.chat.turnTail',
     enabled: (value: unknown): boolean => enabledOf(value, 'turnBar'),
@@ -82,26 +63,39 @@ const INTERACTION_UNITS: Record<'toolviews' | 'turnBar' | 'saveAction', Interact
 type InteractionUnitKey = keyof typeof INTERACTION_UNITS
 
 /** Interaction surfaces are opt-in: an explicit `true` in settings enables one. */
-function enabledOf(value: unknown, key: 'toolviews' | 'turnBar' | 'saveAction'): boolean {
+function enabledOf(value: unknown, key: 'turnBar' | 'saveAction'): boolean {
   return (value as Partial<Record<typeof key, boolean>> | undefined)?.[key] === true
 }
 
 type DisplayMode = NonNullable<Config['displayMode']>
 
 function mountBuildinMemoryView(ctx: MnemonClientContext, settings: MnemonSettingsScope<Config>, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
-  return ctx.slots.inject('conversation.view', () => ctx.slots.register({
+  const disposeView = ctx.slots.inject('conversation.view', () => ctx.slots.register({
     name: 'conversation.view',
     id: 'mnemon',
     order: 30,
     label: () => translate('tab.label'),
     locale: namespace,
-    inject: (): { connection: ClientConnectionHandle; settingsScope: MnemonSettingsScope<Config>; surface: 'buildin'; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+    inject: (): { connection: ClientConnectionHandle; settingsScope: MnemonSettingsScope<Config>; surface: 'buildin'; t: (key: MnemonKey, params?: Record<string, unknown>) => string; locale: 'zh' | 'en' } => ({
       connection: ctx.connection,
       settingsScope: settings,
       surface: 'buildin',
       t: translate,
+      locale: ctx.locale.getSnapshot().active,
     }),
   }, MnemonView))
+  if (typeof window === 'undefined' || typeof document === 'undefined') return disposeView
+  const openBuildinView = (): void => {
+    const label = translate('tab.label').trim()
+    const tab = [...document.querySelectorAll<HTMLElement>('[role="tab"]')]
+      .find(candidate => candidate.textContent?.trim() === label)
+    tab?.click()
+  }
+  window.addEventListener(MNEMON_ANCHOR_EVENT, openBuildinView)
+  return () => {
+    window.removeEventListener(MNEMON_ANCHOR_EVENT, openBuildinView)
+    disposeView()
+  }
 }
 
 /** Mount the memory workspace plus the optional in-conversation interaction surfaces. */

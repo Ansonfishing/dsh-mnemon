@@ -38,6 +38,7 @@ export interface MnemonViewProps {
   workspaceSelection?: MnemonWorkspaceSelection
   surface?: MnemonViewSurface
   t?: MnemonTranslate
+  locale?: 'zh' | 'en'
 }
 
 export interface MnemonWorkspaceSelection {
@@ -111,7 +112,9 @@ const CATEGORY_KEYS: Record<string, MnemonKey> = {
 }
 
 const I18nContext = createContext<MnemonTranslate>(translateZh)
+const LocaleContext = createContext<'zh' | 'en'>('zh')
 function useT(): MnemonTranslate { return useContext(I18nContext) }
+function useLocale(): string { return useContext(LocaleContext) === 'en' ? 'en-US' : 'zh-CN' }
 function categoryLabel(t: MnemonTranslate, category: string): string { return CATEGORY_KEYS[category] === undefined ? category : t(CATEGORY_KEYS[category]!) }
 
 function humanBytes(bytes: number): string {
@@ -364,7 +367,7 @@ function InsightCard(props: {
         )}
       </div>
     </article>
-    {appearance.surface === 'sidebar' && confirming && <SidebarModal title={t('card.confirmText')} description={`${insight.memoryBodyName ?? insight.memoryBodyId ?? ''}${insight.memoryBodyName === undefined && insight.memoryBodyId === undefined ? '' : ' · '}${insight.id}`} busy={forgetting} onClose={() => setConfirming(false)}><div className={css.bodyDeleteConfirm}><div className={css.bodyDeleteSummary}><strong>{insight.content}</strong><span>{meta.join(' · ')}</span></div><div className={css.bodyEditActions}><button type="button" data-autofocus className={css.ghostButton} disabled={forgetting} onClick={() => setConfirming(false)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={forgetting} onClick={() => void forget()}>{forgetting ? t('card.processing') : t('card.confirmForget')}</button></div></div></SidebarModal>}
+    {appearance.surface === 'sidebar' && confirming && <SidebarModal title={t('card.confirmText')} description={`${insight.memoryBodyName ?? insight.memoryBodyId ?? ''}${insight.memoryBodyName === undefined && insight.memoryBodyId === undefined ? '' : ' · '}${insight.id}`} busy={forgetting} onClose={() => setConfirming(false)}><div className={css.bodyDeleteConfirm}><div className={css.bodyDeleteSummary}><p className={css.bodyDeleteContent}>{insight.content}</p><span>{meta.join(' · ')}</span></div><div className={css.bodyEditActions}><button type="button" data-autofocus className={css.ghostButton} disabled={forgetting} onClick={() => setConfirming(false)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={forgetting} onClick={() => void forget()}>{forgetting ? t('card.processing') : t('card.confirmForget')}</button></div></div></SidebarModal>}
     </>
   )
 }
@@ -802,6 +805,7 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
 
 function OverviewPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; fallbackBodies: MemoryBodyView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onExplore: (query: string) => void }): JSX.Element {
   const t = useT()
+  const locale = useLocale()
   const appearance = useMnemonViewAppearance()
   const [graph, setGraph] = useState<MemoryGraphSnapshot | null>(null)
   const [catalog, setCatalog] = useState<MemoryBodyCatalog | null>(null)
@@ -904,7 +908,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
     } catch (reason) { setError(message(reason)) } finally { setDeletingBody(null) }
   }
 
-  const generated = graph === null ? t('overview.waitingSnapshot') : t('overview.updatedAt', { time: new Date(graph.generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) })
+  const generated = graph === null ? t('overview.waitingSnapshot') : t('overview.updatedAt', { time: new Date(graph.generatedAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }) })
   const graphSpaces = graph?.nodes.filter(node => graphNodeKind(node) === 'space').length ?? 0
   const graphEntities = graph?.nodes.filter(node => graphNodeKind(node) === 'entity').length ?? 0
   const graphMemories = graph?.nodes.filter(node => graphNodeKind(node) === 'memory').length ?? 0
@@ -1124,6 +1128,7 @@ function EntitiesPage(props: { client: MnemonClient; revision: number; writeEnab
 
 function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; onMutate: () => void }): JSX.Element {
   const t = useT()
+  const locale = useLocale()
   const appearance = useMnemonViewAppearance()
   const pageSize = 10
   const [snapshot, setSnapshot] = useState<RuntimeMemorySnapshot | null>(null)
@@ -1204,7 +1209,7 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
     const isRemoving = removing === key
     const isInlineRemoving = appearance.surface === 'buildin' && isRemoving
     return <article key={key} className={css.runtimeEntry} data-importance={entry.importance} data-target={entry.target}>
-      <div className={css.runtimeEntryMeta}>{showTarget ? <div className={css.runtimeEntryBadges}><span className={css.runtimeEntryTarget}>{entry.target === 'user' ? 'USER.md' : 'MEMORY.md'}</span><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span></div> : <span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span>}<time dateTime={entry.updated_at}>{new Date(entry.updated_at).toLocaleString()}</time></div>
+      <div className={css.runtimeEntryMeta}>{showTarget ? <div className={css.runtimeEntryBadges}><span className={css.runtimeEntryTarget}>{entry.target === 'user' ? 'USER.md' : 'MEMORY.md'}</span><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span></div> : <span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span>}<time dateTime={entry.updated_at}>{new Date(entry.updated_at).toLocaleString(locale)}</time></div>
       {isInlineEditing ? <textarea aria-label={t('runtime.editContent')} value={editContent} onChange={event => setEditContent(event.target.value)} rows={4} /> : <p>{entry.content}</p>}
       {isInlineEditing && <select aria-label={t('runtime.importance')} value={editImportance} onChange={event => setEditImportance(event.target.value as RuntimeMemoryImportance)}><option value="critical">{t('runtime.importance.critical')}</option><option value="normal">{t('runtime.importance.normal')}</option><option value="low">{t('runtime.importance.low')}</option></select>}
       <footer>
@@ -1280,7 +1285,7 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
       <p className={css.runtimeFootnote}>{t('runtime.footnote')}</p>
       {appearance.surface === 'sidebar' && adding && <SidebarModal title={t('runtime.addTitle')} description={t('runtime.addDescription')} busy={saving} onClose={closeComposer}>{composer}</SidebarModal>}
       {appearance.surface === 'sidebar' && editingEntry !== undefined && <SidebarModal title={t('runtime.editContent')} description={t(`runtime.target.${editingEntry.target}` as MnemonKey)} busy={saving} onClose={() => setEditing(null)}>{editForm}</SidebarModal>}
-      {appearance.surface === 'sidebar' && removingEntry !== undefined && <SidebarModal title={t('runtime.removeTitle')} description={t(`runtime.target.${removingEntry.target}` as MnemonKey)} busy={saving} onClose={() => setRemoving(null)}><div className={css.bodyDeleteConfirm}><p>{t('runtime.removeWarning')}</p><div className={css.bodyDeleteSummary}><strong>{removingEntry.content}</strong><span>{t(`runtime.importance.${removingEntry.importance}` as MnemonKey)}</span></div><div className={css.bodyEditActions}><button type="button" data-autofocus className={css.ghostButton} disabled={saving} onClick={() => setRemoving(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void remove(removingEntry)}>{t('runtime.removeAction')}</button></div></div></SidebarModal>}
+      {appearance.surface === 'sidebar' && removingEntry !== undefined && <SidebarModal title={t('runtime.removeTitle')} description={t(`runtime.target.${removingEntry.target}` as MnemonKey)} busy={saving} onClose={() => setRemoving(null)}><div className={css.bodyDeleteConfirm}><p>{t('runtime.removeWarning')}</p><div className={css.bodyDeleteSummary}><p className={css.bodyDeleteContent}>{removingEntry.content}</p><span>{t(`runtime.importance.${removingEntry.importance}` as MnemonKey)}</span></div><div className={css.bodyEditActions}><button type="button" data-autofocus className={css.ghostButton} disabled={saving} onClick={() => setRemoving(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void remove(removingEntry)}>{t('runtime.removeAction')}</button></div></div></SidebarModal>}
     </div>
   )
 }
@@ -1391,6 +1396,7 @@ type DocumentListItem = DocumentRecord & { healthy?: boolean; excerpt: string }
 
 function DocumentsPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; sessionId?: string; onMutate: () => void }): JSX.Element {
   const t = useT()
+  const locale = useLocale()
   const appearance = useMnemonViewAppearance()
   const pageSize = appearance.surface === 'sidebar' ? 8 : Number.MAX_SAFE_INTEGER
   const readerRef = useRef<HTMLElement | null>(null)
@@ -1534,7 +1540,7 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
       <div className={css.documentWorkspace}>
         <aside className={css.documentList} aria-label={t('documents.list')}>
           <header><span>{status === 'active' ? t('documents.activeList') : t('documents.archiveList')}</span><code>{items.length}</code></header>
-          {visibleItems.map(document => <button type="button" key={document.id} data-selected={selectedId === document.id || undefined} onClick={() => { setSelected(null); setSelectedId(document.id); setEditing(false); setConfirmArchive(false) }}><div><strong>{document.title}</strong><time dateTime={document.updatedAt}>{new Date(document.updatedAt).toLocaleDateString()}</time></div><p>{document.description || document.excerpt || t('documents.noDescription')}</p><footer><span>{humanBytes(document.sizeBytes)}</span><code>{document.id.slice(0, 8)}</code>{document.healthy === false && <em>{t('documents.missing')}</em>}</footer></button>)}
+          {visibleItems.map(document => <button type="button" key={document.id} data-selected={selectedId === document.id || undefined} onClick={() => { setSelected(null); setSelectedId(document.id); setEditing(false); setConfirmArchive(false) }}><div><strong>{document.title}</strong><time dateTime={document.updatedAt}>{new Date(document.updatedAt).toLocaleDateString(locale)}</time></div><p>{document.description || document.excerpt || t('documents.noDescription')}</p><footer><span>{humanBytes(document.sizeBytes)}</span><code>{document.id.slice(0, 8)}</code>{document.healthy === false && <em>{t('documents.missing')}</em>}</footer></button>)}
           {appearance.surface === 'sidebar' && !loading && <ProgressiveFooter compact visible={visibleItems.length} total={items.length} pageSize={pageSize} onMore={() => setVisibleLimit(value => value + pageSize)} />}
           {!loading && items.length === 0 && <div className={css.documentListEmpty}><span>▤</span><strong>{status === 'active' ? t('documents.emptyActive') : t('documents.emptyArchived')}</strong><p>{status === 'active' ? t('documents.emptyActiveText') : t('documents.emptyArchivedText')}</p></div>}
           {loading && <div className={css.loading}>{t('common.loading')}</div>}
@@ -1644,7 +1650,7 @@ function StorageDomains(props: {
 export function MnemonView(props: MnemonViewProps): JSX.Element {
   const t = props.t ?? translateZh
   const appearance = resolveMnemonViewAppearance(props.surface ?? 'buildin', t)
-  return <I18nContext.Provider value={t}><MnemonViewAppearanceProvider value={appearance}><MnemonWorkspace {...props} /></MnemonViewAppearanceProvider></I18nContext.Provider>
+  return <I18nContext.Provider value={t}><LocaleContext.Provider value={props.locale ?? 'zh'}><MnemonViewAppearanceProvider value={appearance}><MnemonWorkspace {...props} /></MnemonViewAppearanceProvider></LocaleContext.Provider></I18nContext.Provider>
 }
 
 function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection }: MnemonViewProps): JSX.Element {
@@ -1653,6 +1659,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const settingsSnapshot = useSyncExternalStore(settingsScope.subscribe, settingsScope.getSnapshot, settingsScope.getSnapshot)
   const client = useMemo(() => new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
   const clientContextKey = `${sessionId ?? ''}\u0000${workspaceId ?? ''}`
+  const viewContextKey = `${clientContextKey}\u0000${settingsSnapshot.revision ?? 'loading'}`
   const [page, setPage] = useState<Page>('status')
   const lastMemoryPage = useRef<SidebarMemoryPage>('overview')
   const canvasRef = useRef<HTMLElement | null>(null)
@@ -1673,11 +1680,11 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
 
   // Reset before paint so a newly selected page never flashes at the previous
   // page's scroll offset for one frame. The host still owns every ancestor.
-  useLayoutEffect(() => { resetViewportScroll() }, [clientContextKey, page, resetViewportScroll])
-  const [statusState, setStatusState] = useState<{ contextKey: string; value: StatusView | null; loading: boolean; error: string | null }>(() => ({ contextKey: clientContextKey, value: null, loading: true, error: null }))
-  const currentStatusState = statusState.contextKey === clientContextKey
+  useLayoutEffect(() => { resetViewportScroll() }, [viewContextKey, page, resetViewportScroll])
+  const [statusState, setStatusState] = useState<{ contextKey: string; value: StatusView | null; loading: boolean; error: string | null }>(() => ({ contextKey: viewContextKey, value: null, loading: true, error: null }))
+  const currentStatusState = statusState.contextKey === viewContextKey
     ? statusState
-    : { contextKey: clientContextKey, value: null, loading: true, error: null }
+    : { contextKey: viewContextKey, value: null, loading: true, error: null }
   const status = currentStatusState.value
   const statusLoading = currentStatusState.loading
   const statusError = currentStatusState.error
@@ -1693,7 +1700,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     setRememberOpen(false)
     setRememberSeed('')
     setSearchSeed('')
-  }, [clientContextKey])
+  }, [viewContextKey])
 
   const openRemember = useCallback((seed = '') => {
     setRememberSeed(seed)
@@ -1721,15 +1728,15 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
 
   const loadStatus = useCallback(async () => {
     const request = ++statusRequest.current
-    setStatusState(current => ({ contextKey: clientContextKey, value: current.contextKey === clientContextKey ? current.value : null, loading: true, error: null }))
+    setStatusState(current => ({ contextKey: viewContextKey, value: current.contextKey === viewContextKey ? current.value : null, loading: true, error: null }))
     try {
       const next = await client.status()
-      if (request === statusRequest.current) setStatusState({ contextKey: clientContextKey, value: next, loading: false, error: null })
+      if (request === statusRequest.current) setStatusState({ contextKey: viewContextKey, value: next, loading: false, error: null })
     } catch (reason) {
-      if (request === statusRequest.current) setStatusState({ contextKey: clientContextKey, value: null, loading: false, error: message(reason) })
+      if (request === statusRequest.current) setStatusState({ contextKey: viewContextKey, value: null, loading: false, error: message(reason) })
     }
-  }, [client, clientContextKey])
-  useEffect(() => { void loadStatus() }, [loadStatus, settingsSnapshot.revision])
+  }, [client, viewContextKey])
+  useEffect(() => { void loadStatus() }, [loadStatus])
 
   const mutate = useCallback(() => { setRevision(value => value + 1); void loadStatus() }, [loadStatus])
   const forget = useCallback(async (insight: Insight) => { await client.forget(insight.id, insight.memoryBodyId); mutate() }, [client, mutate])
@@ -1782,7 +1789,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       <div className={css.workspace}>
         <WorkspaceNavigation page={page} onSelect={selectPrimaryPage} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} writeEnabled={writeEnabled} />
         <MemoryNavigation page={page} writeEnabled={writeEnabled} onSelect={selectPage} onRemember={() => openRemember()} />
-        <section key={clientContextKey} className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={!isMemoryPage(page) ? '' : undefined}>
+        <section key={viewContextKey} className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={!isMemoryPage(page) ? '' : undefined}>
           {page === 'overview' && <OverviewPage client={client} revision={revision} writeEnabled={writeEnabled} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onExplore={explore} />}
           {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}
           {page === 'documents' && <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} />}

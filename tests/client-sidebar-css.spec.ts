@@ -12,4 +12,12 @@ describe('Sidebar layout invariants', () => {
   it('keeps the connected label visible in the compact Sidebar header', () => {
     expect(sidebarCss).toContain(".shell .statusCluster > span:not([class*='statusDot']) { display: inline; }")
   })
+
+  it('renders runtime metadata as real chips while keeping form values at normal weight', () => {
+    expect(sidebarCss).toContain(".shell [class*='runtimeEntryBadges'] > span {")
+    expect(sidebarCss).toContain('border-radius: 999px;')
+    expect(sidebarCss).toContain(".shell [class*='runtimeEntryBadges'] > [class*='runtimeEntryTarget'] {")
+    expect(sidebarCss).toContain(".shell textarea { font-family: var(--dsw-font-family); font-size: 13px; font-weight: 400; }")
+    expect(sidebarCss).toContain('.shell select { cursor: pointer; font-weight: 400; }')
+  })
 })

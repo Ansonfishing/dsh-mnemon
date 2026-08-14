@@ -1,6 +1,6 @@
 /**
  * Lightweight anchor channel between conversation-scoped Mnemon surfaces
- * (toolviews, turnTail bar, assistant actions) and the Mnemon workspace view.
+ * (turnTail bar and assistant actions) and the Mnemon workspace view.
  *
  * A dispatch asks the Mnemon view to open a page (optionally with a seed) in
  * the session the dispatch came from. The view may not be mounted when the

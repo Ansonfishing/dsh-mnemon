@@ -108,7 +108,7 @@ On the dedicated “Settings -> Memory System” page, first choose a display mo
 | `workspace` | `.mnemon` under each DSH workspace root | Project isolation and cross-workspace inspection |
 | `custom` | `dataDir` | An explicit disk, mounted volume, or dedicated data directory |
 
-Settings are written to `$DSH_HOME/settings.yaml` and apply live after Save. Switching scopes does not move existing data; to preserve it, stop writes first and migrate with a complete ZIP backup.
+Settings are written to `$DSH_HOME/settings.yaml`. After Save, the Host swaps the storage root atomically and the workbench immediately clears the old page state and reloads the active page automatically, with no manual browser refresh. Switching scopes does not move existing data; to preserve it, stop writes first and migrate with a complete ZIP backup.
 
 After selecting `workspace`, the workbench header can switch the workspace being inspected. This choice controls only which memory set the workbench displays and maintains; Agent execution always follows the current session. A global warning appears when the two differ and offers one-click alignment.
 

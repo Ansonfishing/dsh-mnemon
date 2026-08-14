@@ -13,6 +13,8 @@ describe('Mnemon Web client composition', () => {
       locale: {
         register: registerLocale,
         bind: vi.fn(() => (key: keyof typeof zh) => (active === 'zh' ? zh : en)[key]),
+        getSnapshot: vi.fn(() => ({ active, locales: [], revision: 0 })),
+        subscribe: vi.fn(() => () => {}),
       },
       slots: {
         inject: vi.fn((_name: string, factory: () => unknown) => factory()),
@@ -55,7 +57,12 @@ describe('Mnemon Web client composition', () => {
     const context = {
       connection: { rpc: { call } },
       effect: vi.fn((callback: () => unknown) => callback()),
-      locale: { register: vi.fn(() => () => {}), bind: vi.fn(() => (key: keyof typeof zh) => zh[key]) },
+      locale: {
+        register: vi.fn(() => () => {}),
+        bind: vi.fn(() => (key: keyof typeof zh) => zh[key]),
+        getSnapshot: vi.fn(() => ({ active: 'zh' as const, locales: [], revision: 0 })),
+        subscribe: vi.fn(() => () => {}),
+      },
       slots: {
         inject: vi.fn((_name: string, factory: () => unknown) => factory()),
         register: vi.fn((options: Record<string, unknown>) => {

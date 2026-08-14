@@ -40,7 +40,7 @@ export interface Config {
   idleReviewMs?: number
   /** @deprecated Migration source for pre-0.2 settings; new writes use the live `mnemon-ui` namespace. */
   conversationInteraction?: {
-    /** Memory-flavoured toolview cards for mnemon_* tool calls. */
+    /** @deprecated Removed. Mnemon now uses DSH's standard tool presentation. */
     toolviews?: boolean
     /** Per-turn memory activity bar under completed turns. */
     turnBar?: boolean
@@ -57,13 +57,11 @@ export interface CustomPackConfig {
 
 /** Browser-only interaction settings, registered live under `mnemon-ui`. */
 export interface InteractionConfig {
-  toolviews?: boolean
   turnBar?: boolean
   saveAction?: boolean
 }
 
 export const InteractionConfig: z<InteractionConfig> = z.object({
-  toolviews: z.boolean().default(false),
   turnBar: z.boolean().default(false),
   saveAction: z.boolean().default(false),
 })
@@ -122,14 +120,12 @@ export interface ResolvedConfig {
 }
 
 export interface ResolvedInteractionConfig {
-  toolviews: boolean
   turnBar: boolean
   saveAction: boolean
 }
 
 export function resolveInteractionConfig(config: InteractionConfig = {}): ResolvedInteractionConfig {
   return {
-    toolviews: config.toolviews ?? false,
     turnBar: config.turnBar ?? false,
     saveAction: config.saveAction ?? false,
   }

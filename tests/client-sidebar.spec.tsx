@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, waitFor } from '@testing-library/react'
 
 vi.mock('../src/client/MnemonView.tsx', () => ({
-  MnemonView: ({ sessionId, workspaceId, workspaceSelection, surface }: {
+  MnemonView: ({ sessionId, workspaceId, workspaceSelection, surface, t, locale }: {
     sessionId?: string
     workspaceId?: string
     surface?: 'sidebar' | 'buildin'
+    t?: (key: string) => string
+    locale?: 'zh' | 'en'
     workspaceSelection?: {
       options: Array<{ id: string; title: string }>
       selectedWorkspaceId?: string
@@ -14,7 +16,8 @@ vi.mock('../src/client/MnemonView.tsx', () => ({
       onSelect(id: string): void
       onAlign(): void
     }
-  }) => <div data-testid="mnemon-panel-content" data-workspace-id={workspaceId} data-effective-workspace-id={workspaceSelection?.effectiveWorkspaceId} data-surface={surface}>
+  }) => <div data-testid="mnemon-panel-content" data-workspace-id={workspaceId} data-effective-workspace-id={workspaceSelection?.effectiveWorkspaceId} data-surface={surface} data-locale={locale}>
+    <h1>{t?.('tab.label')}</h1>
     <span>{sessionId ?? 'no-session'}</span>
     <select aria-label="workspace-test-selector" value={workspaceSelection?.selectedWorkspaceId ?? ''} onChange={event => workspaceSelection?.onSelect(event.target.value)}>
       {workspaceSelection?.options.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.title}</option>)}
@@ -43,7 +46,8 @@ function renderShell(): void {
     </div>`
 }
 
-function context() {
+function context(locale?: { getSnapshot(): { active: 'zh' | 'en'; locales: readonly never[]; revision: number }; subscribe(listener: () => void): () => void }) {
+  const fallbackLocale = { active: 'zh' as const, locales: [] as const, revision: 0 }
   const snapshot = {
     ids: ['session-1'],
     byId: { 'session-1': { cwd: '/tmp/workspace-one' } },
@@ -62,6 +66,7 @@ function context() {
   }
   return {
     connection: { rpc: { call: vi.fn() } },
+    locale: locale ?? { getSnapshot: () => fallbackLocale, subscribe: () => () => {} },
     sessions: {
       list: { getSnapshot: () => snapshot, subscribe: () => () => {} },
     },
@@ -151,5 +156,34 @@ describe('Mnemon sidebar workspace', () => {
     currentDispose = undefined
     expect(document.querySelector('[data-dsh-mnemon-entry]')).toBeNull()
     expect(document.querySelector('[data-dsh-mnemon-view]')).toBeNull()
+  })
+
+  it('updates the custom sidebar entry and workspace when the DSH locale changes', async () => {
+    let active: 'zh' | 'en' = 'zh'
+    let revision = 0
+    let localeSnapshot: { active: 'zh' | 'en'; locales: readonly never[]; revision: number } = {
+      active,
+      locales: [],
+      revision,
+    }
+    const listeners = new Set<() => void>()
+    const locale = {
+      getSnapshot: () => localeSnapshot,
+      subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener) },
+    }
+    const t = (key: string) => key === 'tab.label' ? active === 'zh' ? '记忆系统' : 'Memory System' : key
+    currentDispose = mountMnemonWorkspace(context(locale) as never, {} as never, t)
+
+    await waitFor(() => expect(document.querySelector('[data-testid="mnemon-panel-content"] h1')?.textContent).toBe('记忆系统'))
+    expect(document.querySelector('[data-dsh-mnemon-entry]')?.textContent).toBe('记忆系统')
+
+    active = 'en'
+    revision += 1
+    localeSnapshot = { active, locales: [] as const, revision }
+    for (const listener of listeners) listener()
+
+    await waitFor(() => expect(document.querySelector('[data-testid="mnemon-panel-content"] h1')?.textContent).toBe('Memory System'))
+    expect(document.querySelector('[data-dsh-mnemon-entry]')?.textContent).toBe('Memory System')
+    expect(document.querySelector('[data-testid="mnemon-panel-content"]')?.getAttribute('data-locale')).toBe('en')
   })
 })

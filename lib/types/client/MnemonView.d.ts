@@ -10,6 +10,7 @@ export interface MnemonViewProps {
     workspaceSelection?: MnemonWorkspaceSelection;
     surface?: MnemonViewSurface;
     t?: MnemonTranslate;
+    locale?: 'zh' | 'en';
 }
 export interface MnemonWorkspaceSelection {
     options: Array<{

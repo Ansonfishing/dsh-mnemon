@@ -54,7 +54,7 @@ describe('Mnemon settings bridge', () => {
 
   it('exposes live browser interaction settings through a separate namespace', async () => {
     let revision = 4
-    let value = { toolviews: false, turnBar: false, saveAction: false }
+    let value = { turnBar: false, saveAction: false }
     const mutate = vi.fn(async (_namespace: string, ops: Array<{ op: string; path: string[]; value?: unknown }>) => {
       value = { ...value, ...Object.fromEntries(ops.filter(op => op.op === 'set').map(op => [op.path[0], op.value])) }
       revision += 1
@@ -65,17 +65,19 @@ describe('Mnemon settings bridge', () => {
       mutate,
       describe: () => [
         { ns: 'mnemon', value: {}, revision: 1, applies: 'restart' as const },
-        { ns: 'mnemon-ui', value, base: { toolviews: false, turnBar: false, saveAction: false }, user: {}, revision, applies: 'live' as const },
+        { ns: 'mnemon-ui', value, base: { turnBar: false, saveAction: false }, user: {}, revision, applies: 'live' as const },
       ],
     } as unknown as HostSettingsService
     const handler = createSettingsHandler(settings)
 
     await expect(handler('get', { namespace: 'mnemon-ui' })).resolves.toMatchObject({ ok: true, value: { applies: 'live', revision: 4 } })
     const ops = [
-      { op: 'set', path: ['toolviews'], value: true },
       { op: 'set', path: ['turnBar'], value: true },
+      { op: 'set', path: ['saveAction'], value: true },
     ]
     await expect(handler('mutate', { namespace: 'mnemon-ui', expectedRevision: 4, ops })).resolves.toMatchObject({ ok: true, value: { revision: 5 } })
     expect(mutate).toHaveBeenCalledWith('mnemon-ui', ops, 4)
+
+    await expect(handler('mutate', { namespace: 'mnemon-ui', ops: [{ op: 'set', path: ['toolviews'], value: true }] })).resolves.toMatchObject({ ok: false })
   })
 })

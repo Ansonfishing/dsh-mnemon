@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClientConnectionHandle } from '../src/contracts.ts'
-import type { ClientSettingsScope } from '../src/contracts.ts'
+import type { ClientSettingsScope, ClientSettingsSnapshot } from '../src/contracts.ts'
 import type { Config } from '../src/config.ts'
 import { MnemonView } from '../src/client/MnemonView.tsx'
 import { translateEn } from '../src/client/locales.ts'
@@ -579,6 +579,69 @@ describe('MnemonView', () => {
     await waitFor(() => expect(delayedCall).toHaveBeenCalledWith(expect.anything(), 'status', expect.objectContaining({ workspaceId: 'workspace-2' })))
   })
 
+  it('remounts and reloads the active Sidebar page as soon as a saved storage setting is published', async () => {
+    const base = createConnection({ runtimeCount: 1 })
+    let settingsGeneration = 0
+    let releaseNextGeneration!: () => void
+    const nextGenerationReady = new Promise<void>(resolve => { releaseNextGeneration = resolve })
+    const call = vi.fn(async (channel: string, endpoint: string, payload?: Record<string, unknown>) => {
+      const response = await base.call(channel, endpoint, payload)
+      if (settingsGeneration === 0 || (endpoint !== 'status' && endpoint !== 'runtime-memory')) return response
+      await nextGenerationReady
+      if (!response.ok) return response
+      if (endpoint === 'status') {
+        const value = response.value as Record<string, unknown>
+        const storage = value.storage as Record<string, unknown>
+        return { ...response, value: { ...value, dataDir: '/Users/test/.mnemon', storage: { ...storage, activeKind: 'global', activeRoot: '/Users/test/.mnemon' }, workspaceContext: { mode: 'global', selectedRoot: '/Users/test/.mnemon', effectiveRoot: '/Users/test/.mnemon', aligned: true } } }
+      }
+      const value = response.value as { targets: Record<string, Record<string, unknown>> }
+      const content = '全局目录实时加载的运行时记忆。'
+      return {
+        ...response,
+        value: {
+          ...value,
+          entries: [{ content, created_at: '2026-08-15T01:00:00.000Z', updated_at: '2026-08-15T01:00:00.000Z', target: 'memory', importance: 'normal' }],
+          targets: {
+            ...value.targets,
+            user: { ...value.targets.user, entryCount: 0, used: 0 },
+            memory: { ...value.targets.memory, entryCount: 1, used: content.length },
+          },
+        },
+      }
+    })
+    const connection = { rpc: { call } } as unknown as ClientConnectionHandle
+    let snapshot: ClientSettingsSnapshot<Config> = { status: 'ready', value: { storageScope: 'custom' }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' }
+    const listeners = new Set<() => void>()
+    const liveSettingsScope = {
+      getSnapshot: () => snapshot,
+      subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener) },
+      set: async () => {}, unset: async () => {}, setPath: async () => {}, unsetPath: async () => {},
+    } satisfies ClientSettingsScope<Config>
+    render(<MnemonView connection={connection} settingsScope={liveSettingsScope} sessionId="session-1" surface="sidebar" />)
+
+    await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
+    fireEvent.click(screen.getByRole('tab', { name: '运行时' }))
+    await waitFor(() => expect(screen.getByText('运行时条目 1')).toBeTruthy())
+    const oldCanvas = screen.getByTestId('mnemon-canvas')
+    oldCanvas.scrollTop = 240
+    fireEvent.change(screen.getByRole('textbox', { name: '筛选运行时记忆' }), { target: { value: '运行时条目' } })
+
+    settingsGeneration = 1
+    snapshot = { ...snapshot, value: { storageScope: 'global' }, revision: 1 }
+    act(() => { for (const listener of listeners) listener() })
+
+    await waitFor(() => expect(screen.getByTestId('mnemon-canvas')).not.toBe(oldCanvas))
+    expect(screen.getByTestId('mnemon-canvas').scrollTop).toBe(0)
+    expect(screen.getByLabelText('存储位置模式：全局')).toBeTruthy()
+    expect(screen.queryByText('运行时条目 1')).toBeNull()
+    expect((screen.getByRole('textbox', { name: '筛选运行时记忆' }) as HTMLInputElement).value).toBe('')
+
+    releaseNextGeneration()
+    await waitFor(() => expect(screen.getByText('全局目录实时加载的运行时记忆。')).toBeTruthy())
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'status')).toHaveLength(2)
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'runtime-memory')).toHaveLength(2)
+  })
+
   it('clamps long node content in the graph inspector and opens a full-text preview', async () => {
     const { connection } = createConnection({ longContent: true })
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
@@ -824,7 +887,7 @@ describe('MnemonView', () => {
 
   it('renders all product copy in English with Memory Space terminology', async () => {
     const { connection } = createConnection()
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" t={translateEn} />)
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" t={translateEn} locale="en" />)
 
     await waitFor(() => expect(screen.getByText('Connected · 1 active')).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: /Memory Spaces Directory and live graph/ }))

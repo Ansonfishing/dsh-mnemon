@@ -51,12 +51,11 @@ const MUTABLE_FIELDS = [
 
 /** Nested paths of the live in-conversation interaction toggles. */
 const INTERACTION_PATHS: string[][] = [
-  ['conversationInteraction', 'toolviews'],
   ['conversationInteraction', 'turnBar'],
   ['conversationInteraction', 'saveAction'],
 ]
 
-const UI_FIELDS = ['toolviews', 'turnBar', 'saveAction']
+const UI_FIELDS = ['turnBar', 'saveAction']
 
 function namespaceOf(payload: Record<string, unknown>): string {
   const namespace = payload.namespace === undefined ? MNEMON_SETTINGS_NAMESPACE : String(payload.namespace)

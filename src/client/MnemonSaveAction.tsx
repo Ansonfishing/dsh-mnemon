@@ -152,12 +152,16 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
         ref={buttonRef}
         type="button"
         className={css.button}
+        aria-label={t('saveAction.button')}
+        aria-haspopup="dialog"
         aria-expanded={open}
         title={t('saveAction.button')}
         onClick={() => setPanelOpen(!openRef.current)}
       >
-        <span className={css.glyph} aria-hidden="true">◈</span>
-        <span className={css.label}>{t('saveAction.button')}</span>
+        <svg className={css.icon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M3.25 3.75A1.75 1.75 0 0 1 5 2h6a1.75 1.75 0 0 1 1.75 1.75v8.5A1.75 1.75 0 0 1 11 14H5a1.75 1.75 0 0 1-1.75-1.75v-8.5Z" />
+          <path d="M6 2v3.25h4V2M5.75 10.25h4.5M8 8v4.5" />
+        </svg>
       </button>
       {open && (
         <div ref={panelRef} className={css.panel} role="dialog" aria-label={t('saveAction.title')}>

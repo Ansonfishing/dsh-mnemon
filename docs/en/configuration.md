@@ -52,9 +52,8 @@ mnemon:
 | `idleReviewMs` | `30000` | 5000–600000 ms | Required continuous idle time after the threshold is reached |
 | `tabEnabled` | `true` | boolean | Whether to mount the Web entry selected by `displayMode`; Host RPC, commands, and Agent tools remain registered when off |
 | `writeEnabled` | `true` | boolean | Whether to expose semantic write tools, write RPC, and write commands |
-| `mnemon-ui.toolviews` | `false` | boolean | In-conversation memory tool cards for `mnemon_*` calls; off by default (opt-in), **applies live after saving** |
 | `mnemon-ui.turnBar` | `false` | boolean | Turn-tail memory activity bar; off by default (opt-in), **applies live after saving** |
-| `mnemon-ui.saveAction` | `false` | boolean | “Save to memory” action on finalized assistant replies; off by default (opt-in), **applies live after saving** |
+| `mnemon-ui.saveAction` | `false` | boolean | “Save to memory” icon and confirmation on finalized assistant replies; off by default (opt-in), **applies live after saving** |
 
 Both the `mnemon` Host/storage namespace and the `mnemon-ui` browser-presentation namespace apply live. The storage root switches atomically only after the new runtime graph initializes successfully. Legacy `mnemon.conversationInteraction` values remain a migration default, but new saves write only to `mnemon-ui`.
 
