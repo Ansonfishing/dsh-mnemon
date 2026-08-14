@@ -94,7 +94,9 @@
 .spaceSummary code { grid-row: span 2; align-self: center; color: var(--mn-accent); font: 650 12px/1 var(--mn-code); }
 .spaceSummary small { color: var(--mn-faint); font-size: 9px; }
 
-.canvas { min-width: 0; flex: 1; overflow: auto; overscroll-behavior: contain; scroll-behavior: auto; -webkit-overflow-scrolling: touch; background: var(--mn-bg); }
+/* DSH owns the vertical scrollport when a tab is mounted in its auto-height view.
+   Keep horizontal containment, but let vertical wheel/touch input chain to that host. */
+.canvas { min-width: 0; flex: 1; overflow: auto; overscroll-behavior-x: contain; overscroll-behavior-y: auto; scroll-behavior: auto; -webkit-overflow-scrolling: touch; background: var(--mn-bg); }
 .page { width: min(1320px, 100%); min-height: 100%; margin: 0 auto; padding: clamp(18px, 2.2vw, 28px) clamp(18px, 2.8vw, 34px) clamp(150px, 18vh, 190px); }
 .pageHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
 .pageHeader h2 { margin: 2px 0 2px; font-size: 20px; line-height: 1.2; letter-spacing: -.025em; }
