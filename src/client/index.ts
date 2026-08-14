@@ -1,4 +1,4 @@
-import type { ClientConnectionHandle, ClientContextShape } from '../contracts.ts'
+import type { ClientConnectionHandle } from '../contracts.ts'
 import type { Config, InteractionConfig } from '../config.ts'
 import { MNEMON_SETTINGS_NAMESPACE, MNEMON_UI_SETTINGS_NAMESPACE } from '../settings.ts'
 import { MnemonSettingsCard } from './MnemonSettingsCard.tsx'
@@ -8,14 +8,17 @@ import { MnemonTurnTail, selectMnemonTurnTail } from './MnemonTurnTail.tsx'
 import { MnemonSaveAction } from './MnemonSaveAction.tsx'
 import { en, zh, type MnemonKey } from './locales.ts'
 import { MnemonSettingsScope } from './settings.ts'
+import type { MnemonClientContext } from './dsh-compat.ts'
 
 export const inject = ['slots', 'connection', 'locale']
 
 /** Interaction surfaces: slot name, settings toggle, and the registrations it owns. */
-type InteractionRegister = (ctx: ClientContextShape, namespace: string, translate: (key: MnemonKey, params?: Record<string, unknown>) => string) => () => void
+type MnemonNamespace = 'mnemon'
+type InteractionSlot = 'tool.call.toolview' | 'conversation.chat.turnTail' | 'conversation.chat.assistant-actions'
+type InteractionRegister = (ctx: MnemonClientContext, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string) => () => void
 
 interface InteractionUnit {
-  slot: string
+  slot: InteractionSlot
   enabled: (value: unknown) => boolean
   register: InteractionRegister
 }
@@ -24,7 +27,7 @@ const INTERACTION_UNITS: Record<'toolviews' | 'turnBar' | 'saveAction', Interact
   toolviews: {
     slot: 'tool.call.toolview',
     enabled: (value: unknown): boolean => enabledOf(value, 'toolviews'),
-    register(ctx: ClientContextShape, namespace: string, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
+    register(ctx: MnemonClientContext, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
       const disposers: Array<() => void> = []
       for (const toolName of MNEMON_TOOLVIEW_NAMES) {
         disposers.push(ctx.slots.register({
@@ -35,7 +38,7 @@ const INTERACTION_UNITS: Record<'toolviews' | 'turnBar' | 'saveAction', Interact
             ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
             t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
           }),
-        }, MnemonToolView as never) as () => void)
+        }, MnemonToolView))
       }
       return () => { for (const dispose of disposers.reverse()) dispose() }
     },
@@ -43,23 +46,23 @@ const INTERACTION_UNITS: Record<'toolviews' | 'turnBar' | 'saveAction', Interact
   turnBar: {
     slot: 'conversation.chat.turnTail',
     enabled: (value: unknown): boolean => enabledOf(value, 'turnBar'),
-    register(ctx: ClientContextShape, namespace: string, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
+    register(ctx: MnemonClientContext, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
       return ctx.slots.register({
         name: 'conversation.chat.turnTail',
         locale: namespace,
-        select: selectMnemonTurnTail as never,
+        select: selectMnemonTurnTail,
         inject: (sessionId: unknown): { sessionId?: string; connection: ClientConnectionHandle; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
           ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
           connection: ctx.connection,
           t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
         }),
-      }, MnemonTurnTail as never) as () => void
+      }, MnemonTurnTail)
     },
   },
   saveAction: {
     slot: 'conversation.chat.assistant-actions',
     enabled: (value: unknown): boolean => enabledOf(value, 'saveAction'),
-    register(ctx: ClientContextShape, namespace: string, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
+    register(ctx: MnemonClientContext, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
       return ctx.slots.register({
         name: 'conversation.chat.assistant-actions',
         id: 'mnemon-save',
@@ -70,7 +73,7 @@ const INTERACTION_UNITS: Record<'toolviews' | 'turnBar' | 'saveAction', Interact
           connection: ctx.connection,
           t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
         }),
-      }, MnemonSaveAction as never) as () => void
+      }, MnemonSaveAction)
     },
   },
 }
@@ -84,10 +87,10 @@ function enabledOf(value: unknown, key: 'toolviews' | 'turnBar' | 'saveAction'):
 
 /** Add one standard conversation.view entry; unloading the plugin removes it with the slot effect. */
 export function apply(rawContext: unknown): void {
-  const ctx = rawContext as unknown as ClientContextShape
+  const ctx = rawContext as MnemonClientContext
   const settings = new MnemonSettingsScope<Config>(ctx.connection, MNEMON_SETTINGS_NAMESPACE)
   const interactionSettings = new MnemonSettingsScope<InteractionConfig>(ctx.connection, MNEMON_UI_SETTINGS_NAMESPACE)
-  const namespace = 'mnemon'
+  const namespace: MnemonNamespace = 'mnemon'
   ctx.effect(() => ctx.locale.register(namespace, { zh, en }), 'dsh-mnemon: locale dictionaries')
   const translate = ctx.locale.bind(namespace)
   ctx.slots.inject('conversation.view', () => ctx.slots.register({
@@ -101,7 +104,7 @@ export function apply(rawContext: unknown): void {
       settingsScope: settings,
       t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
     }),
-  }, MnemonView as never))
+  }, MnemonView))
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'mnemon',
@@ -113,7 +116,7 @@ export function apply(rawContext: unknown): void {
       interactionScope: interactionSettings,
       t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
     }),
-  }, MnemonSettingsCard as never))
+  }, MnemonSettingsCard))
 
   // In-conversation interaction surfaces are opt-in and bound live: each
   // settings change registers or disposes the slot contributions without a
@@ -125,7 +128,7 @@ export function apply(rawContext: unknown): void {
       const unit = INTERACTION_UNITS[key]
       const enabled = unit.enabled(value)
       if (enabled && !active.has(key)) {
-        active.set(key, ctx.slots.inject(unit.slot, () => unit.register(ctx, namespace, translate)) as () => void)
+        active.set(key, ctx.slots.inject(unit.slot, () => unit.register(ctx, namespace, translate)))
       } else if (!enabled && active.has(key)) {
         active.get(key)!()
         active.delete(key)

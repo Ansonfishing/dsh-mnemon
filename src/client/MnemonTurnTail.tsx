@@ -1,6 +1,7 @@
 import { memo, useEffect, useState, type JSX, type MouseEvent as ReactMouseEvent } from 'react'
 import type { ClientConnectionHandle } from '../contracts.ts'
 import type { TurnMemoryActivity } from '../lifecycle.ts'
+import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { MnemonClient } from './api.ts'
 import { dispatchMnemonAnchor } from './anchor.ts'
 import type { MnemonKey } from './locales.ts'
@@ -23,9 +24,9 @@ function turnNumber(turn: unknown): number | undefined {
 }
 
 /** Whether this entry renders for the owner; chain selectors decline quietly. */
-export function selectMnemonTurnTail(owner: unknown): boolean {
-  const turn = (owner as { turn?: { status?: unknown } } | null)?.turn
-  return turn !== undefined && turn.status === 'closed'
+export function selectMnemonTurnTail(owner: TurnTailOwnerProps): Record<string, never> | null {
+  const turn = owner.turn as unknown as { status?: unknown }
+  return turn.status === 'closed' ? {} : null
 }
 
 /** One-line memory-activity bar under a completed turn; hides when the turn touched no memory. */

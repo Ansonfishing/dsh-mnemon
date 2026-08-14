@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { waitFor } from '@testing-library/react'
 import { apply } from '../src/client/index.ts'
+import { selectMnemonTurnTail } from '../src/client/MnemonTurnTail.tsx'
 
 interface SlotOptions {
   name: string
@@ -86,6 +87,12 @@ const TOOLVIEW_KEYS = ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related'
 
 describe('interaction surfaces binding', () => {
   afterEach(() => { vi.restoreAllMocks() })
+
+  it('declines an unsettled turn with the DSH chain-slot null sentinel', () => {
+    const owner = (status: string) => ({ turn: { status }, seq: 1, openFile: vi.fn() })
+    expect(selectMnemonTurnTail(owner('open') as never)).toBeNull()
+    expect(selectMnemonTurnTail(owner('closed') as never)).toEqual({})
+  })
 
   it('registers no interaction surface by default (opt-in off)', async () => {
     const { ctx, injects, activeRegistrations } = makeCtx({})
