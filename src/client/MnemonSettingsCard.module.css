@@ -2,6 +2,7 @@
   box-sizing: border-box;
   display: flex;
   width: 100%;
+  max-width: 720px;
   min-width: 0;
   flex-direction: column;
   gap: 28px;
@@ -25,18 +26,17 @@
 .pageHeader h1 {
   margin: 0;
   color: var(--dsw-alias-label-primary);
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 28px;
-  letter-spacing: -.01em;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
 }
 
 .pageHeader p {
   max-width: 64ch;
-  margin: 5px 0 0;
+  margin: 8px 0 0;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 14px;
+  line-height: 22px;
 }
 
 .section {
@@ -184,26 +184,43 @@
 .primaryPill,
 .actions button {
   appearance: none;
-  min-height: 36px;
-  border: 0;
+  display: inline-flex;
+  box-sizing: border-box;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 18px;
   padding: 0 14px;
-  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
   cursor: pointer;
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 14px;
+  line-height: 22px;
   white-space: nowrap;
 }
 
-.pillButton:hover:not(:disabled), .actions button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.pillButton:hover:not(:disabled), .actions button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover-solid); }
 .pillButton:disabled, .primaryPill:disabled, .actions button:disabled, .textButton:disabled { cursor: default; opacity: .4; }
-.primaryPill, .save { color: var(--dsw-alias-bg-layer-3) !important; background: var(--dsw-alias-label-primary) !important; }
+.primaryPill, .save {
+  border-color: transparent !important;
+  color: var(--dsw-alias-label-primary-foreground) !important;
+  background: var(--dsw-alias-button-primary-fill) !important;
+}
+.primaryPill:hover:not(:disabled), .save:hover:not(:disabled) { background: var(--dsw-alias-button-primary-hover) !important; }
 
 .textButton {
   appearance: none;
+  display: inline-flex;
+  box-sizing: border-box;
+  height: 28px;
   flex: none;
   border: 0;
-  padding: 2px 0;
+  border-radius: 14px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
   color: var(--dsw-alias-label-secondary);
   background: transparent;
   cursor: pointer;
@@ -212,7 +229,7 @@
   line-height: 18px;
 }
 
-.textButton:hover:not(:disabled) { color: var(--dsw-alias-label-primary); }
+.textButton:hover:not(:disabled) { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
 
 .activePath {
   width: fit-content;
@@ -243,12 +260,13 @@
 .importBar > div { display: grid; min-width: 0; }
 .importBar strong { overflow: hidden; font-size: 12px; font-weight: 500; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
 .importBar small { color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 15px; }
-.importBar .textButton { padding: 0 6px; }
+.importBar .textButton { padding: 0 10px; }
 
 .feedback, .packFeedback { display: grid; gap: 4px; }
 .feedback:empty, .packFeedback:empty { display: none; }
 .feedback p, .packFeedback p { margin: 0; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 .error { color: var(--dsw-alias-state-error-primary); }
+.success { color: var(--dsw-alias-state-success-primary); }
 .readOnly { color: var(--dsw-alias-label-tertiary); }
 .packSuccess { color: var(--dsw-alias-state-success-primary); }
 
@@ -264,7 +282,7 @@
 
 .actions > span { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
 .actions > div { display: flex; gap: 8px; }
-.discard { color: var(--dsw-alias-label-secondary); }
+.discard { border-color: var(--dsw-alias-border-l2) !important; color: var(--dsw-alias-label-primary); background: transparent; }
 
 .settingsNote { margin: -14px 0 0; color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 16px; }
 .settingsNote code { color: var(--dsw-alias-label-secondary); font-family: var(--ds-font-family-code, ui-monospace, monospace); }
@@ -273,10 +291,10 @@
 .toggleRow > input:focus-visible + .switch,
 .pillButton:focus-visible,
 .primaryPill:focus-visible,
-.textButton:focus-visible,
+  .textButton:focus-visible,
 .actions button:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary));
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
 }
 
 @media (max-width: 620px) {

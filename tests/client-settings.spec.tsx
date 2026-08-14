@@ -36,6 +36,8 @@ describe('MnemonSettingsCard', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() => expect(set).toHaveBeenCalledWith('storageScope', 'workspace'))
+    expect(screen.getByText('已保存并实时生效')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '恢复默认' })).toBeNull()
     expect(screen.getByText(/\.dsh\/settings.yaml/)).toBeTruthy()
     expect(unset).not.toHaveBeenCalled()
   })

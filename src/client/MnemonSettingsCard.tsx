@@ -74,10 +74,10 @@ function useScope<T>(scope: ClientSettingsScope<T>): ClientSettingsSnapshot<T> {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
-function operations(fields: readonly Field[], dirty: ReadonlySet<Field>, reset: ReadonlySet<Field>, draft: Draft): SettingsOperation[] {
+function operations(fields: readonly Field[], dirty: ReadonlySet<Field>, draft: Draft): SettingsOperation[] {
   return fields.flatMap((field): SettingsOperation[] => {
     if (!dirty.has(field)) return []
-    if (reset.has(field) || (field === 'dataDir' && draft.dataDir.trim() === '')) return [{ op: 'unset', path: [field] }]
+    if (field === 'dataDir' && draft.dataDir.trim() === '') return [{ op: 'unset', path: [field] }]
     const value = draft[field]
     return [{ op: 'set', path: [field], value: typeof value === 'string' ? value.trim() : value }]
   })
@@ -101,18 +101,17 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const interactionSnapshot = useScope(interactionScope)
   const [draft, setDraft] = useState<Draft>(() => draftOf(coreSnapshot.value, interactionSnapshot.value))
   const [dirty, setDirty] = useState<Set<Field>>(() => new Set())
-  const [reset, setReset] = useState<Set<Field>>(() => new Set())
   const [saving, setSaving] = useState(false)
   const [browsing, setBrowsing] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
+  const [applied, setApplied] = useState(false)
+  const [targetRevision, setTargetRevision] = useState(0)
 
   useEffect(() => {
     if (dirty.size === 0) setDraft(draftOf(coreSnapshot.value, interactionSnapshot.value))
   }, [dirty.size, coreSnapshot.value, interactionSnapshot.value])
 
-  const inherited = useMemo(() => draftOf(record(coreSnapshot.base) as Config, record(interactionSnapshot.base) as InteractionConfig), [coreSnapshot.base, interactionSnapshot.base])
   const coreUser = useMemo(() => record(coreSnapshot.user), [coreSnapshot.user])
-  const interactionUser = useMemo(() => record(interactionSnapshot.user), [interactionSnapshot.user])
   const error = validation(t, draft)
   const loading = coreSnapshot.status === 'loading' || interactionSnapshot.status === 'loading'
   const writable = coreSnapshot.writable && interactionSnapshot.writable
@@ -122,19 +121,9 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const edit = (field: Field, value: string | boolean): void => {
     setDraft(current => ({ ...current, [field]: value }))
     setDirty(current => new Set(current).add(field))
-    setReset(current => { const next = new Set(current); next.delete(field); return next })
     setFailed(null)
+    setApplied(false)
   }
-
-  const resetField = (field: Field): void => {
-    setDraft(current => ({ ...current, [field]: inherited[field] }))
-    setDirty(current => new Set(current).add(field))
-    setReset(current => new Set(current).add(field))
-    setFailed(null)
-  }
-
-  const overridden = (field: Field): boolean => Object.hasOwn(INTERACTION_FIELDS.includes(field as InteractionField) ? interactionUser : coreUser, field) && !reset.has(field)
-  const resetFields = (fields: readonly Field[]): void => { for (const field of fields) if (overridden(field)) resetField(field) }
 
   const browse = async (): Promise<void> => {
     if (pickDirectory === undefined || browsing) return
@@ -154,24 +143,26 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
 
   const discard = (): void => {
     setDraft(draftOf(coreSnapshot.value, interactionSnapshot.value))
-    setDirty(new Set()); setReset(new Set()); setFailed(null)
+    setDirty(new Set()); setFailed(null); setApplied(false)
   }
 
   const save = async (): Promise<void> => {
     if (error !== null || dirty.size === 0 || saving || !writable) return
     setSaving(true); setFailed(null)
     try {
-      const coreOps = operations(CORE_FIELDS, dirty, reset, draft)
+      const coreOps = operations(CORE_FIELDS, dirty, draft)
       if (coreOps.length > 0) {
         if (Object.hasOwn(coreUser, 'customPackId')) coreOps.push({ op: 'unset', path: ['customPackId'] })
         if (Object.hasOwn(coreUser, 'customPacks')) coreOps.push({ op: 'unset', path: ['customPacks'] })
       }
-      const interactionOps = operations(INTERACTION_FIELDS, dirty, reset, draft)
+      const interactionOps = operations(INTERACTION_FIELDS, dirty, draft)
       await Promise.all([
         ...(coreOps.length === 0 ? [] : [commit(scope, coreOps)]),
         ...(interactionOps.length === 0 ? [] : [commit(interactionScope, interactionOps)]),
       ])
-      setDirty(new Set()); setReset(new Set())
+      setDirty(new Set())
+      setApplied(true)
+      if (coreOps.length > 0) setTargetRevision(revision => revision + 1)
     } catch (reason) {
       setFailed(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -181,9 +172,6 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
 
   const coreDisabled = loading || saving || browsing || !coreSnapshot.writable
   const interactionDisabled = loading || saving || !interactionSnapshot.writable
-  const storageOverridden = CORE_FIELDS.some(overridden)
-  const interactionOverridden = INTERACTION_FIELDS.some(overridden)
-
   return (
     <section className={css.page} aria-label={t('config.aria')} aria-busy={saving || loading || browsing}>
       {loading ? <p className={css.loading} role="status">{t('common.loading')}</p> : <>
@@ -194,8 +182,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
 
         <section className={css.section} aria-labelledby="mnemon-storage-heading">
           <div className={css.sectionHeading}>
-            <div><h2 id="mnemon-storage-heading">{t('config.storageTitle')}</h2><p>{t('config.storageDescription')} {t('config.restart')}</p></div>
-            {storageOverridden && <button className={css.textButton} type="button" disabled={coreDisabled} onClick={() => resetFields(CORE_FIELDS)}>{t('config.reset')}</button>}
+            <div><h2 id="mnemon-storage-heading">{t('config.storageTitle')}</h2><p>{t('config.storageDescription')}</p></div>
           </div>
           <div className={css.choiceGrid} role="radiogroup" aria-label={t('config.scopeAria')}>
             <ChoiceCard id="mnemon-storage-global" name="mnemon-storage" label={t('config.global')} detail="~/.mnemon" checked={draft.storageScope === 'global'} disabled={coreDisabled} onChange={() => edit('storageScope', 'global')} />
@@ -214,7 +201,6 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
         <section className={css.section} aria-labelledby="mnemon-interaction-heading">
           <div className={css.sectionHeading}>
             <div><h2 id="mnemon-interaction-heading">{t('config.interactionTitle')}</h2><p>{t('config.interactionHint')}</p></div>
-            {interactionOverridden && <button className={css.textButton} type="button" disabled={interactionDisabled} onClick={() => resetFields(INTERACTION_FIELDS)}>{t('config.reset')}</button>}
           </div>
           <div className={css.rowGroup}>
             <ToggleRow id="mnemon-interaction-toolviews" label={t('config.interactionToolviews')} hint={t('config.interactionToolviewsHint')} checked={draft.toolviews} disabled={interactionDisabled} onChange={value => edit('toolviews', value)} />
@@ -223,11 +209,12 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           </div>
         </section>
 
-        <MnemonPackSection {...(connection === undefined ? {} : { connection })} configuredScope={draft.storageScope} configuredDirectory={draft.dataDir} storageDirty={CORE_FIELDS.some(field => dirty.has(field))} t={t} />
+        <MnemonPackSection {...(connection === undefined ? {} : { connection })} refreshKey={targetRevision} t={t} />
 
         <div className={css.feedback} aria-live="polite">
           {error !== null && <p className={css.error} role="alert">{error}</p>}
           {failed !== null && <p className={css.error} role="alert">{t('config.saveFailed', { error: failed })}</p>}
+          {applied && <p className={css.success} role="status">{t('config.ready')}</p>}
           {pickDirectory === undefined && draft.storageScope === 'custom' && <p className={css.readOnly}>{t('config.customBrowseUnavailable')}</p>}
           {!writable && <p className={css.readOnly}>{t('config.readOnly')}</p>}
         </div>

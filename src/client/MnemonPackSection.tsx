@@ -7,9 +7,7 @@ import css from './MnemonSettingsCard.module.css'
 
 interface MnemonPackSectionProps {
   connection?: ClientConnectionHandle
-  configuredScope: string
-  configuredDirectory: string
-  storageDirty: boolean
+  refreshKey: number
   t: MnemonTranslate
 }
 
@@ -58,7 +56,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function MnemonPackSection({ connection, configuredScope, configuredDirectory, storageDirty, t }: MnemonPackSectionProps): JSX.Element {
+export function MnemonPackSection({ connection, refreshKey, t }: MnemonPackSectionProps): JSX.Element {
   const client = useMemo(() => connection === undefined ? null : new MnemonClient(connection), [connection])
   const input = useRef<HTMLInputElement | null>(null)
   const [target, setTarget] = useState<{ root: string; scope: 'global' | 'workspace' | 'custom' } | null>(null)
@@ -75,10 +73,8 @@ export function MnemonPackSection({ connection, configuredScope, configuredDirec
       if (active) setFailed(reason instanceof Error ? reason.message : String(reason))
     }).finally(() => { if (active) setBusy(null) })
     return () => { active = false }
-  }, [client])
+  }, [client, refreshKey])
 
-  const absoluteConfigured = configuredDirectory.trim().startsWith('/') ? configuredDirectory.trim() : null
-  const restartPending = target !== null && (storageDirty || configuredScope !== target.scope || (configuredScope === 'custom' && absoluteConfigured !== null && absoluteConfigured !== target.root))
   const scopeLabel = (scope: string): string => scope === 'global' ? t('config.global') : scope === 'workspace' ? t('config.workspace') : t('config.custom')
 
   const exportZip = async (): Promise<void> => {
@@ -132,7 +128,7 @@ export function MnemonPackSection({ connection, configuredScope, configuredDirec
         <strong>{t('config.packWholeZip')}</strong>
         <small>{t('config.packWholeZipHint')}</small>
         <code className={css.activePath} title={target?.root}>{target?.root ?? t('config.packTargetLoading')}</code>
-        {target !== null && <em className={css.scopeMeta}>{scopeLabel(target.scope)}{restartPending ? ` · ${t('config.packRestartPending')}` : ''}</em>}
+        {target !== null && <em className={css.scopeMeta}>{scopeLabel(target.scope)}</em>}
       </div>
       <div className={css.rowActions}>
         <button type="button" className={css.pillButton} disabled={client === null || busy !== null} onClick={() => input.current?.click()}>{busy === 'inspect' ? t('config.packInspecting') : t('config.packImportZip')}</button>
