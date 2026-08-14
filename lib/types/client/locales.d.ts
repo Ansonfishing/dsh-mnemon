@@ -545,7 +545,6 @@ export declare const zh: {
     'config.description': string;
     'config.unsaved': string;
     'config.ready': string;
-    'config.restart': string;
     'config.noticeBefore': string;
     'config.noticeAfter': string;
     'config.storageTitle': string;
@@ -588,7 +587,6 @@ export declare const zh: {
     'config.saving': string;
     'config.save': string;
     'config.overridden': string;
-    'config.reset': string;
     'config.interactionTitle': string;
     'config.interactionLive': string;
     'config.interactionHint': string;
@@ -603,7 +601,6 @@ export declare const zh: {
     'config.packDescription': string;
     'config.packActiveTarget': string;
     'config.packTargetLoading': string;
-    'config.packRestartPending': string;
     'config.packUnavailable': string;
     'config.packFull': string;
     'config.packFullHint': string;
@@ -1197,7 +1194,6 @@ export declare const en: {
     'config.description': string;
     'config.unsaved': string;
     'config.ready': string;
-    'config.restart': string;
     'config.noticeBefore': string;
     'config.noticeAfter': string;
     'config.storageTitle': string;
@@ -1240,7 +1236,6 @@ export declare const en: {
     'config.saving': string;
     'config.save': string;
     'config.overridden': string;
-    'config.reset': string;
     'config.interactionTitle': string;
     'config.interactionLive': string;
     'config.interactionHint': string;
@@ -1255,7 +1250,6 @@ export declare const en: {
     'config.packDescription': string;
     'config.packActiveTarget': string;
     'config.packTargetLoading': string;
-    'config.packRestartPending': string;
     'config.packUnavailable': string;
     'config.packFull': string;
     'config.packFullHint': string;
