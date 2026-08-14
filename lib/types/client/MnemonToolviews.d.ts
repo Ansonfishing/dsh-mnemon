@@ -4,12 +4,12 @@ export interface MnemonToolViewProps {
     toolName: string;
     /** RunningToolCall while live, ToolResultNode once settled; both are opaque wire slices. */
     block: unknown;
-    openFile?: (path: string) => void;
-    cwd?: string;
+    openFile?: ((path: string) => void) | undefined;
+    cwd?: string | undefined;
     /** Optional on older/newer DSH tool hosts; omit the action when unavailable. */
-    inspect?: () => void;
+    inspect?: (() => void) | undefined;
     /** Session the call belongs to; injected by the slot host. */
-    sessionId?: string;
+    sessionId?: string | undefined;
     t: (key: MnemonKey, params?: Record<string, unknown>) => string;
 }
 /** Render one mnemon_* tool call as a memory-flavoured row with expandable evidence. */

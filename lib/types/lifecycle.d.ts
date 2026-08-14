@@ -60,6 +60,8 @@ export declare class MnemonLifecycle {
     private readonly config;
     private readonly owners;
     private readonly counters;
+    /** Bounded process-local replay fence for finalized-message write actions. */
+    private readonly supervisedWritebacks;
     constructor(ctx: HostContextShape, coordinator: MnemonSubagentCoordinator, config: ResolvedConfig);
     start(): () => void;
     snapshot(sessionId?: string): LifecycleSnapshot;
@@ -79,7 +81,7 @@ export declare class MnemonLifecycle {
     mutateDocument(sessionId: string, request: DocumentMutation, signal?: AbortSignal): Promise<import("./subagent.ts").CoordinatedDocumentResult>;
     archiveDocument(sessionId: string, id: string, signal?: AbortSignal): Promise<import("./subagent.ts").CoordinatedDocumentResult>;
     mutate(sessionId: string, operation: string, request: unknown, signal?: AbortSignal): Promise<DelegatedWriteResult>;
-    supervise(sessionId: string, content: string, signal?: AbortSignal): Promise<SupervisedWritebackResult>;
+    supervise(sessionId: string, content: string, idempotencyKey?: string, signal?: AbortSignal): Promise<SupervisedWritebackResult>;
     private liveAgent;
     private install;
 }

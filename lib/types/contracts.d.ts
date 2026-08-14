@@ -1,3 +1,4 @@
+import type { ConnectionHandle as DshClientConnectionHandle } from '@deepseek-ai/dsh-client-connection/client';
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | {
     [key: string]: JsonValue;
@@ -27,11 +28,8 @@ export type RpcResult<T = JsonValue> = {
     ok: false;
     error: RpcError;
 };
-export interface ClientConnectionHandle {
-    rpc: {
-        call(channel: string, endpoint: string, payload: unknown): Promise<RpcResult<unknown>>;
-    };
-}
+/** Public DSH browser RPC face; the plugin intentionally consumes no other connection state. */
+export type ClientConnectionHandle = Pick<DshClientConnectionHandle, 'rpc'>;
 export type HostRpcHandler = (endpoint: string, payload: unknown) => Promise<RpcResult<unknown>>;
 export interface HostConnectionHandle {
     rpc: {
@@ -223,33 +221,6 @@ export interface HostContextShape {
     on(name: string, listener: (...args: never[]) => unknown): () => unknown;
     effect(callback: () => (() => unknown) | void, label?: string): () => unknown;
 }
-export interface SlotsService {
-    inject(name: string, factory: () => unknown): unknown;
-    register(options: {
-        name: string;
-        /** list slots: stable contributor id. */
-        id?: string;
-        /** keyed slots: dispatch key (chat node kind, tool name). */
-        key?: string;
-        /** chain slots: owner-predicate deciding whether this entry renders. */
-        select?: (owner: unknown) => unknown;
-        order?: number;
-        /** keyed/list/single shadowing: lowest priority renders; chain ignores it. */
-        priority?: number;
-        label?: string | (() => string);
-        locale?: string;
-        children?: Record<string, unknown>;
-        /** session-scope slots receive (sessionId, actions); root-scope none. */
-        inject?: (...args: unknown[]) => Record<string, unknown>;
-    }, component: (props: never) => unknown): unknown;
-}
-export interface ClientLocaleService {
-    register(namespace: string, dictionaries: {
-        zh: Record<string, string>;
-        en: Record<string, string>;
-    }): () => void;
-    bind(namespace: string): (key: string, params?: Record<string, unknown>) => string;
-}
 export interface ClientSettingsSnapshot<T> {
     status: 'loading' | 'ready' | 'unavailable';
     value?: T;
@@ -277,10 +248,4 @@ export type SettingsOperation = {
     op: 'unset';
     path: string[];
 };
-export interface ClientContextShape {
-    slots: SlotsService;
-    connection: ClientConnectionHandle;
-    locale: ClientLocaleService;
-    effect(callback: () => (() => unknown) | void, label?: string): () => unknown;
-}
 //# sourceMappingURL=contracts.d.ts.map

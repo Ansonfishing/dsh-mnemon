@@ -1,4 +1,5 @@
 import type { ClientConnectionHandle } from '../contracts.ts';
+import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type { MnemonKey } from './locales.ts';
 export interface MnemonTurnTailProps {
     /** Engine-owned closing Turn boundary (TurnLocation on the wire). */
@@ -11,7 +12,7 @@ export interface MnemonTurnTailProps {
     t: (key: MnemonKey, params?: Record<string, unknown>) => string;
 }
 /** Whether this entry renders for the owner; chain selectors decline quietly. */
-export declare function selectMnemonTurnTail(owner: unknown): boolean;
+export declare function selectMnemonTurnTail(owner: TurnTailOwnerProps): Record<string, never> | null;
 /** One-line memory-activity bar under a completed turn; hides when the turn touched no memory. */
 export declare const MnemonTurnTail: import("react").NamedExoticComponent<MnemonTurnTailProps>;
 //# sourceMappingURL=MnemonTurnTail.d.ts.map

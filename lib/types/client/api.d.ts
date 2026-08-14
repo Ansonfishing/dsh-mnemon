@@ -49,7 +49,7 @@ export declare class MnemonClient {
     /** Plain text of one finalized assistant message; null when absent or empty. */
     assistantMessageText(messageId: string): Promise<AssistantMessageText | null>;
     remember(request: RememberRequest): Promise<Record<string, unknown>>;
-    supervise(content: string): Promise<{
+    supervise(content: string, idempotencyKey?: string): Promise<{
         delegated: true;
         sessionId: string;
         runId: string;

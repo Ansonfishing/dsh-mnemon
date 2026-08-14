@@ -556,6 +556,7 @@ export declare const zh: {
     'config.global': string;
     'config.workspace': string;
     'config.custom': string;
+    'config.customHintShort': string;
     'config.customDirectory': string;
     'config.customHint': string;
     'config.customAria': string;
@@ -1138,6 +1139,7 @@ export declare const en: {
     'config.global': string;
     'config.workspace': string;
     'config.custom': string;
+    'config.customHintShort': string;
     'config.customDirectory': string;
     'config.customHint': string;
     'config.customAria': string;

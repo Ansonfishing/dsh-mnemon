@@ -8,6 +8,6 @@ export interface MnemonSettingsCardProps {
     interactionScope?: ClientSettingsScope<InteractionConfig>;
     t?: MnemonTranslate;
 }
-/** Dedicated Mnemon page contributed to DSH's Plugins settings tabs. */
+/** Dedicated Mnemon page contributed directly to DSH's settings navigation. */
 export declare function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, t }: MnemonSettingsCardProps): JSX.Element | null;
 //# sourceMappingURL=MnemonSettingsCard.d.ts.map
