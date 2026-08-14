@@ -14,7 +14,7 @@
 
 普通语义任务优先使用名为 `spawn` 的 Provider，并要求 `outputSchema`、`toolFilter`、`persona` 与 `depthLimit`。可选的评分后台审查还要求名为 `fork`、且 `inheritsParentContext=true` 的 Provider。缺少 `fork` 不影响确定性页面读取和普通手动操作。
 
-项目当前不声明固定的 DSH / Mnemon 最低版本矩阵。本文与截图以 dsh-mnemon v0.1.3 为基线；升级前先备份，并在隔离目录重复本页验证。
+项目当前不声明固定的 DSH / Mnemon 最低版本矩阵。本文与截图以 dsh-mnemon v0.1.4 为基线；升级前先备份，并在隔离目录重复本页验证。
 
 ## 2. 安装 Mnemon
 
