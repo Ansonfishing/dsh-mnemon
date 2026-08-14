@@ -32,8 +32,8 @@ describe('MnemonSettingsCard', () => {
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
 
     render(<MnemonSettingsCard scope={scope} />)
-    fireEvent.change(screen.getByLabelText('Mnemon 存储范围'), { target: { value: 'workspace' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存到 settings.yaml' }))
+    fireEvent.click(screen.getByRole('radio', { name: /工作区/ }))
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() => expect(set).toHaveBeenCalledWith('storageScope', 'workspace'))
     expect(screen.getByText(/\.dsh\/settings.yaml/)).toBeTruthy()
@@ -60,8 +60,9 @@ describe('MnemonSettingsCard', () => {
 
     render(<MnemonSettingsCard scope={scope} t={translateEn} />)
 
-    expect(screen.getByLabelText('Mnemon storage scope')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Save to settings.yaml' })).toBeTruthy()
+    expect(screen.getByRole('radiogroup', { name: 'Mnemon storage scope' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('radio', { name: /Workspace/ }))
+    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
   })
 
   it('persists a custom directory before selecting the custom scope', async () => {
@@ -85,9 +86,9 @@ describe('MnemonSettingsCard', () => {
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
     const view = render(<MnemonSettingsCard scope={scope} />)
 
-    fireEvent.change(view.getByLabelText('Mnemon 存储范围'), { target: { value: 'custom' } })
+    fireEvent.click(view.getByRole('radio', { name: /自定义目录/ }))
     fireEvent.change(view.getByLabelText('Mnemon 自定义数据目录'), { target: { value: '/tmp/mnemon-custom' } })
-    fireEvent.click(view.getByRole('button', { name: '保存到 settings.yaml' }))
+    fireEvent.click(view.getByRole('button', { name: '保存' }))
 
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([
       { op: 'set', path: ['dataDir'], value: '/tmp/mnemon-custom' },
@@ -114,7 +115,7 @@ describe('MnemonSettingsCard', () => {
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
 
     render(<MnemonSettingsCard scope={scope} />)
-    fireEvent.change(screen.getByLabelText('Mnemon 存储范围'), { target: { value: 'custom' } })
+    fireEvent.click(screen.getByRole('radio', { name: /自定义目录/ }))
 
     const directory = screen.getByLabelText('Mnemon 自定义数据目录')
     expect(directory.getAttribute('aria-invalid')).toBe('true')
@@ -142,8 +143,8 @@ describe('MnemonSettingsCard', () => {
 
     render(<MnemonSettingsCard scope={scope} />)
 
-    expect((screen.getByLabelText('Mnemon 存储范围') as HTMLSelectElement).disabled).toBe(true)
-    expect((screen.getByRole('button', { name: '保存到 settings.yaml' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('radio', { name: /全局/ }) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText('当前部署的插件设置为只读。')).toBeTruthy()
   })
 
@@ -165,7 +166,7 @@ describe('MnemonSettingsCard', () => {
 
     expect(screen.getByRole('status').textContent).toBe('载入中…')
     expect(screen.queryByText('当前部署的插件设置为只读。')).toBeNull()
-    expect(screen.queryByLabelText('Mnemon 存储范围')).toBeNull()
+    expect(screen.queryByRole('radiogroup', { name: 'Mnemon 存储范围' })).toBeNull()
   })
 
   it('persists live interaction toggles as one atomic mnemon-ui mutation', async () => {
@@ -217,7 +218,7 @@ describe('MnemonSettingsCard', () => {
 
     fireEvent.click(toolviews)
     fireEvent.click(turnBar)
-    fireEvent.click(view.getByRole('button', { name: '保存到 settings.yaml' }))
+    fireEvent.click(view.getByRole('button', { name: '保存' }))
 
     await waitFor(() => expect(interactionMutate).toHaveBeenCalledWith([
       { op: 'set', path: ['toolviews'], value: false },

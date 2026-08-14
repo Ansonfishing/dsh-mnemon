@@ -77,7 +77,7 @@ async function commit<T>(scope: ClientSettingsScope<T>, edits: SettingsOperation
   }
 }
 
-/** Dedicated Mnemon page contributed to DSH's Plugins settings tabs. */
+/** Dedicated Mnemon page contributed directly to DSH's settings navigation. */
 export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, t = translateZh }: MnemonSettingsCardProps): JSX.Element | null {
   const interactionScope = suppliedInteractionScope ?? scope as unknown as ClientSettingsScope<InteractionConfig>
   const coreSnapshot = useScope(scope)
@@ -119,6 +119,12 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
     setFailed(null)
   }
 
+  const resetFields = (fields: readonly Field[]): void => {
+    for (const field of fields) {
+      if (overridden(field)) resetField(field)
+    }
+  }
+
   const discard = (): void => {
     setDraft(draftOf(coreSnapshot.value, interactionSnapshot.value))
     setDirty(new Set())
@@ -151,47 +157,49 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const coreDisabled = loading || saving || !coreSnapshot.writable
   const interactionDisabled = loading || saving || !interactionSnapshot.writable
   const errorId = error === null ? undefined : 'mnemon-settings-validation'
+  const storageOverridden = CORE_FIELDS.some(overridden)
+  const interactionOverridden = INTERACTION_FIELDS.some(overridden)
 
   return (
     <section className={css.page} aria-label={t('config.aria')} aria-busy={saving || loading}>
-      <header className={css.pageHeader}>
-        <div className={css.headerCopy}>
-          <span className={css.eyebrow}>MNEMON</span>
-          <h2>{t('config.title')}</h2>
-          <p>{t('config.description')}</p>
-        </div>
-        <span className={`${css.status} ${dirty.size > 0 ? css.statusDirty : ''}`} aria-live="polite">
-          {loading ? t('common.loading') : dirty.size > 0 ? t('config.unsaved') : t('config.ready')}
-        </span>
-      </header>
-
       {loading ? <p className={css.loading} role="status">{t('common.loading')}</p> : <>
-        <p className={css.notice}>{t('config.noticeBefore')} <code>.dsh/settings.yaml</code>{t('config.noticeAfter')}</p>
+        <section className={css.section} aria-labelledby="mnemon-storage-heading">
+          <div className={css.sectionHeading}>
+            <div>
+              <h2 id="mnemon-storage-heading">{t('config.storageTitle')}</h2>
+              <p>{t('config.storageDescription')} {t('config.restart')}</p>
+            </div>
+            {storageOverridden && <button className={css.reset} type="button" disabled={coreDisabled} onClick={() => resetFields(CORE_FIELDS)}>{t('config.reset')}</button>}
+          </div>
 
-        <section className={css.group} aria-labelledby="mnemon-storage-heading">
-          <div className={css.groupHeader}>
-            <div><h3 id="mnemon-storage-heading">{t('config.storageTitle')}</h3><p>{t('config.storageDescription')}</p></div>
-            <span className={css.restartBadge}>{t('config.restart')}</span>
+          <div className={css.choiceGrid} role="radiogroup" aria-label={t('config.scopeAria')}>
+            <ChoiceCard id="mnemon-storage-global" name="mnemon-storage" label={t('config.global')} detail="~/.mnemon" checked={draft.storageScope === 'global'} disabled={coreDisabled} onChange={() => edit('storageScope', 'global')} />
+            <ChoiceCard id="mnemon-storage-workspace" name="mnemon-storage" label={t('config.workspace')} detail="<workspace>/.mnemon" checked={draft.storageScope === 'workspace'} disabled={coreDisabled} onChange={() => edit('storageScope', 'workspace')} />
+            <ChoiceCard id="mnemon-storage-custom" name="mnemon-storage" label={t('config.custom')} detail={draft.dataDir.trim() || t('config.customHintShort')} checked={draft.storageScope === 'custom'} disabled={coreDisabled} onChange={() => edit('storageScope', 'custom')} />
           </div>
-          <div className={css.fields}>
-            <SettingField controlId="mnemon-storage-scope" t={t} label={t('config.scope')} hint={t('config.scopeHint')} overridden={overridden('storageScope')} resetDisabled={coreDisabled} onReset={() => resetField('storageScope')}>
-              <select id="mnemon-storage-scope" aria-label={t('config.scopeAria')} aria-describedby="mnemon-storage-scope-hint" value={draft.storageScope} onChange={event => edit('storageScope', event.target.value)} disabled={coreDisabled}><option value="global">{t('config.global')} · ~/.mnemon</option><option value="workspace">{t('config.workspace')} · &lt;workspace&gt;/.mnemon</option><option value="custom">{t('config.custom')}</option></select>
-            </SettingField>
-            {draft.storageScope === 'custom' && <SettingField controlId="mnemon-custom-directory" t={t} label={t('config.customDirectory')} hint={t('config.customHint')} overridden={overridden('dataDir')} resetDisabled={coreDisabled} onReset={() => resetField('dataDir')}>
-              <input id="mnemon-custom-directory" aria-label={t('config.customAria')} aria-describedby={`mnemon-custom-directory-hint${errorId === undefined ? '' : ` ${errorId}`}`} aria-invalid={error !== null} value={draft.dataDir} onChange={event => edit('dataDir', event.target.value)} placeholder="~/mnemon-data" spellCheck={false} autoComplete="off" disabled={coreDisabled} />
-            </SettingField>}
-          </div>
+
+          {draft.storageScope === 'custom' && <div className={css.customField}>
+            <div className={css.fieldHeading}>
+              <label htmlFor="mnemon-custom-directory">{t('config.customDirectory')}</label>
+              {overridden('dataDir') && <button className={css.reset} type="button" disabled={coreDisabled} onClick={() => resetField('dataDir')}>{t('config.reset')}</button>}
+            </div>
+            <input id="mnemon-custom-directory" aria-label={t('config.customAria')} aria-describedby={`mnemon-custom-directory-hint${errorId === undefined ? '' : ` ${errorId}`}`} aria-invalid={error !== null} value={draft.dataDir} onChange={event => edit('dataDir', event.target.value)} placeholder="~/mnemon-data" spellCheck={false} autoComplete="off" disabled={coreDisabled} />
+            <p id="mnemon-custom-directory-hint">{t('config.customHint')}</p>
+          </div>}
         </section>
 
-        <section className={css.group} aria-labelledby="mnemon-interaction-heading">
-          <div className={css.groupHeader}>
-            <div><h3 id="mnemon-interaction-heading">{t('config.interactionTitle')}</h3><p>{t('config.interactionHint')}</p></div>
-            <span className={css.liveBadge}>{t('config.interactionLive')}</span>
+        <section className={css.section} aria-labelledby="mnemon-interaction-heading">
+          <div className={css.sectionHeading}>
+            <div>
+              <h2 id="mnemon-interaction-heading">{t('config.interactionTitle')}</h2>
+              <p>{t('config.interactionHint')}</p>
+            </div>
+            {interactionOverridden && <button className={css.reset} type="button" disabled={interactionDisabled} onClick={() => resetFields(INTERACTION_FIELDS)}>{t('config.reset')}</button>}
           </div>
-          <div className={css.switches}>
-            <SwitchRow id="mnemon-interaction-toolviews" label={t('config.interactionToolviews')} hint={t('config.interactionToolviewsHint')} checked={draft.toolviews} disabled={interactionDisabled} overridden={overridden('toolviews')} t={t} onReset={() => resetField('toolviews')} onChange={value => edit('toolviews', value)} />
-            <SwitchRow id="mnemon-interaction-turn-bar" label={t('config.interactionTurnBar')} hint={t('config.interactionTurnBarHint')} checked={draft.turnBar} disabled={interactionDisabled} overridden={overridden('turnBar')} t={t} onReset={() => resetField('turnBar')} onChange={value => edit('turnBar', value)} />
-            <SwitchRow id="mnemon-interaction-save-action" label={t('config.interactionSaveAction')} hint={t('config.interactionSaveActionHint')} checked={draft.saveAction} disabled={interactionDisabled} overridden={overridden('saveAction')} t={t} onReset={() => resetField('saveAction')} onChange={value => edit('saveAction', value)} />
+          <div className={css.choiceGrid}>
+            <ToggleCard id="mnemon-interaction-toolviews" label={t('config.interactionToolviews')} hint={t('config.interactionToolviewsHint')} checked={draft.toolviews} disabled={interactionDisabled} onChange={value => edit('toolviews', value)} />
+            <ToggleCard id="mnemon-interaction-turn-bar" label={t('config.interactionTurnBar')} hint={t('config.interactionTurnBarHint')} checked={draft.turnBar} disabled={interactionDisabled} onChange={value => edit('turnBar', value)} />
+            <ToggleCard id="mnemon-interaction-save-action" label={t('config.interactionSaveAction')} hint={t('config.interactionSaveActionHint')} checked={draft.saveAction} disabled={interactionDisabled} onChange={value => edit('saveAction', value)} />
           </div>
         </section>
 
@@ -201,43 +209,42 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           {!writable && <p className={css.readOnly}>{t('config.readOnly')}</p>}
         </div>
 
-        <footer className={`${css.actions} ${dirty.size > 0 ? css.actionsVisible : ''}`}>
-          <span>{dirty.size > 0 ? t('config.unsaved') : t('config.ready')}</span>
+        <footer className={`${css.actions} ${dirty.size > 0 ? css.actionsVisible : ''}`} aria-live="polite">
+          <span>{t('config.unsaved')}</span>
           <div>
             <button type="button" className={css.discard} disabled={dirty.size === 0 || saving} onClick={discard}>{t('config.discard')}</button>
             <button type="button" className={css.save} disabled={dirty.size === 0 || saving || error !== null || !writable} onClick={() => void save()}>{saving ? t('config.saving') : t('config.save')}</button>
           </div>
         </footer>
+
+        <p className={css.settingsNote}>{t('config.noticeBefore')} <code>.dsh/settings.yaml</code>{t('config.noticeAfter')}</p>
       </>}
     </section>
   )
 }
 
-function SettingField(props: { controlId: string; t: MnemonTranslate; label: string; hint: string; overridden: boolean; resetDisabled: boolean; onReset: () => void; children: JSX.Element }): JSX.Element {
+function ChoiceCard(props: { id: string; name: string; label: string; detail: string; checked: boolean; disabled: boolean; onChange: () => void }): JSX.Element {
   return (
-    <div className={css.field}>
-      <div className={css.fieldHeading}>
-        <label className={css.fieldTitle} htmlFor={props.controlId}>{props.label}</label>
-        {props.overridden && <em className={css.overridden}>{props.t('config.overridden')}</em>}
-        {props.overridden && <button className={css.reset} type="button" disabled={props.resetDisabled} onClick={props.onReset}>{props.t('config.reset')}</button>}
-      </div>
-      {props.children}
-      <p id={`${props.controlId}-hint`} className={css.fieldHint}>{props.hint}</p>
-    </div>
+    <label className={css.choiceCard} htmlFor={props.id}>
+      <input id={props.id} name={props.name} type="radio" aria-label={props.label} checked={props.checked} disabled={props.disabled} onChange={props.onChange} />
+      <span className={css.choiceFace}>
+        <strong>{props.label}</strong>
+        <small>{props.detail}</small>
+        <span className={css.check} aria-hidden="true">✓</span>
+      </span>
+    </label>
   )
 }
 
-function SwitchRow(props: { id: string; label: string; hint: string; checked: boolean; disabled: boolean; overridden: boolean; t: MnemonTranslate; onReset: () => void; onChange: (value: boolean) => void }): JSX.Element {
+function ToggleCard(props: { id: string; label: string; hint: string; checked: boolean; disabled: boolean; onChange: (value: boolean) => void }): JSX.Element {
   return (
-    <div className={css.switchRow}>
-      <label htmlFor={props.id} className={css.switchCopy}><strong>{props.label}</strong><span>{props.hint}</span></label>
-      <div className={css.switchControl}>
-        {props.overridden && <button className={css.reset} type="button" disabled={props.disabled} onClick={props.onReset}>{props.t('config.reset')}</button>}
-        <label className={css.switch}>
-          <input id={props.id} type="checkbox" aria-label={props.label} checked={props.checked} disabled={props.disabled} onChange={event => props.onChange(event.target.checked)} />
-          <span aria-hidden="true" />
-        </label>
-      </div>
-    </div>
+    <label className={css.choiceCard} htmlFor={props.id}>
+      <input id={props.id} type="checkbox" aria-label={props.label} checked={props.checked} disabled={props.disabled} onChange={event => props.onChange(event.target.checked)} />
+      <span className={css.choiceFace}>
+        <strong>{props.label}</strong>
+        <small>{props.hint}</small>
+        <span className={css.check} aria-hidden="true">✓</span>
+      </span>
+    </label>
   )
 }

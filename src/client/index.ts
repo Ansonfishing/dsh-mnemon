@@ -102,11 +102,11 @@ export function apply(rawContext: unknown): void {
       t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
     }),
   }, MnemonView as never))
-  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
-    name: 'settings.plugins.tab',
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
     id: 'mnemon',
     order: 20,
-    label: () => translate('config.tab'),
+    label: () => translate('tab.label'),
     locale: namespace,
     inject: (): { scope: MnemonSettingsScope<Config>; interactionScope: MnemonSettingsScope<InteractionConfig>; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
       scope: settings,

@@ -73,7 +73,7 @@
       "inject": [
         "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-client-ui-conversation",
-        "@deepseek-ai/dsh-client-ui-settings-plugins",
+        "@deepseek-ai/dsh-client-ui-settings",
         "@deepseek-ai/dsh-client-locale"
       ],
       "platform": "web"
@@ -92,16 +92,22 @@
     "schemastery": "^3.18.0"
   },
   "peerDependencies": {
-    "cordis": "^4.0.0-rc.7",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-connection": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-locale": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-runtime": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-settings": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-tool": "0.1.0-rc.6",
     "@testing-library/react": "^16.3.0",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
-    "cordis": "^4.0.0-rc.7",
     "jsdom": "^26.1.0",
     "lightningcss": "^1.29.0",
     "react": "^18.2.0",

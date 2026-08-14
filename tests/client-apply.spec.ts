@@ -26,13 +26,15 @@ describe('Mnemon Web client composition', () => {
     expect(registerLocale).toHaveBeenCalledWith('mnemon', { zh, en })
     const slotOptions = slots.find(options => options.name === 'conversation.view')
     expect(slotOptions).toMatchObject({ name: 'conversation.view', id: 'mnemon', order: 30, locale: 'mnemon' })
-    expect(slots).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'settings.plugins.tab', id: 'mnemon', order: 20 })]))
-    const settingsInject = slots.find(options => options.name === 'settings.plugins.tab')?.inject as (() => { t: (key: keyof typeof zh) => string }) | undefined
+    expect(slots).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'settings.section', id: 'mnemon', order: 20 })]))
+    const settingsEntry = slots.find(options => options.name === 'settings.section')
+    const settingsInject = settingsEntry?.inject as (() => { t: (key: keyof typeof zh) => string }) | undefined
     expect(settingsInject?.().t('config.scope')).toBe('存储范围')
     const label = slotOptions?.label as () => string
     expect(label()).toBe('记忆系统')
     active = 'en'
     expect(label()).toBe('Memory System')
+    expect((settingsEntry?.label as () => string)()).toBe('Memory System')
     expect(settingsInject?.().t('config.scope')).toBe('Storage scope')
   })
 })

@@ -90,9 +90,9 @@ describe('interaction surfaces binding', () => {
   it('registers no interaction surface by default (opt-in off)', async () => {
     const { ctx, injects, activeRegistrations } = makeCtx({})
     apply(ctx)
-    // conversation.view and the dedicated Plugins settings tab always register; the
+    // conversation.view and the dedicated settings section always register; the
     // interaction surfaces must not until settings explicitly enable them.
-    expect(injects).toEqual(expect.arrayContaining(['conversation.view', 'settings.plugins.tab']))
+    expect(injects).toEqual(expect.arrayContaining(['conversation.view', 'settings.section']))
     await waitFor(() => {
       expect(activeRegistrations()).not.toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
     })
@@ -122,8 +122,8 @@ describe('interaction surfaces binding', () => {
   it('registers and disposes interaction surfaces when mnemon-ui changes live', async () => {
     const { ctx, registeredOptions, activeRegistrations } = makeCtx({})
     apply(ctx)
-    await waitFor(() => expect(registeredOptions.some(options => options.name === 'settings.plugins.tab')).toBe(true))
-    const settingsEntry = registeredOptions.find(options => options.name === 'settings.plugins.tab')
+    await waitFor(() => expect(registeredOptions.some(options => options.name === 'settings.section')).toBe(true))
+    const settingsEntry = registeredOptions.find(options => options.name === 'settings.section')
     const injected = settingsEntry?.inject?.() as { interactionScope?: { mutate: (ops: unknown[]) => Promise<void> } } | undefined
     if (injected?.interactionScope === undefined) throw new Error('mnemon-ui settings scope was not injected')
 
