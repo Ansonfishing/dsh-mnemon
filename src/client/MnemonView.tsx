@@ -1,4 +1,4 @@
-import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { consumeMnemonAnchor, subscribeMnemonAnchor, type MnemonAnchor } from './anchor.ts'
 import Markdown from 'markdown-to-jsx'
 import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts'
@@ -154,15 +154,38 @@ function SidebarModal(props: { title: string; description?: string; busy?: boole
   const t = useT()
   const appearance = useMnemonViewAppearance()
   const dialogRef = useRef<HTMLElement | null>(null)
+  const returnFocusRef = useRef<HTMLElement | null>(null)
   const close = useCallback(() => { if (props.busy !== true) props.onClose() }, [props.busy, props.onClose])
   useLayoutEffect(() => {
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const firstControl = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]')
       ?? dialogRef.current?.querySelector<HTMLElement>('input:not(:disabled), textarea:not(:disabled), select:not(:disabled)')
       ?? dialogRef.current?.querySelector<HTMLElement>('div:last-child button:not(:disabled)')
     firstControl?.focus({ preventScroll: true })
+    return () => { if (returnFocusRef.current?.isConnected === true) returnFocusRef.current.focus({ preventScroll: true }) }
   }, [])
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') close() }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        close()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])') ?? []).filter(control => control.getAttribute('aria-hidden') !== 'true')
+      const first = controls[0]
+      const last = controls.at(-1)
+      if (first === undefined || last === undefined) {
+        event.preventDefault()
+        return
+      }
+      const active = document.activeElement
+      if (event.shiftKey && (active === first || !dialogRef.current?.contains(active))) {
+        event.preventDefault(); last.focus()
+      } else if (!event.shiftKey && (active === last || !dialogRef.current?.contains(active))) {
+        event.preventDefault(); first.focus()
+      }
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [close])
@@ -1569,6 +1592,11 @@ function storageScopeLabel(t: MnemonTranslate, kind: StorageScopeKind): string {
   return t(kind === 'global' ? 'status.storageGlobal' : kind === 'workspace' ? 'status.storageWorkspace' : 'status.storageCustom')
 }
 
+/** Resolve the configured scope before the first status round-trip to keep the Sidebar header stable. */
+function configuredStorageScope(config: Config | undefined): StorageScopeKind {
+  return config?.storageScope ?? (config?.dataDir?.trim() ? 'custom' : 'global')
+}
+
 function storageAreaLabel(t: MnemonTranslate, kind: StorageAreaInventory['kind']): string {
   return t(kind === 'runtime' ? 'status.storageRuntime' : kind === 'memory-bodies' ? 'status.storageBodies' : kind === 'documents' ? 'status.storageDocuments' : 'status.storageState')
 }
@@ -1619,10 +1647,12 @@ export function MnemonView(props: MnemonViewProps): JSX.Element {
   return <I18nContext.Provider value={t}><MnemonViewAppearanceProvider value={appearance}><MnemonWorkspace {...props} /></MnemonViewAppearanceProvider></I18nContext.Provider>
 }
 
-function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelection }: MnemonViewProps): JSX.Element {
+function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection }: MnemonViewProps): JSX.Element {
   const t = useT()
   const appearance = useMnemonViewAppearance()
+  const settingsSnapshot = useSyncExternalStore(settingsScope.subscribe, settingsScope.getSnapshot, settingsScope.getSnapshot)
   const client = useMemo(() => new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
+  const clientContextKey = `${sessionId ?? ''}\u0000${workspaceId ?? ''}`
   const [page, setPage] = useState<Page>('status')
   const lastMemoryPage = useRef<SidebarMemoryPage>('overview')
   const canvasRef = useRef<HTMLElement | null>(null)
@@ -1643,15 +1673,27 @@ function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelectio
 
   // Reset before paint so a newly selected page never flashes at the previous
   // page's scroll offset for one frame. The host still owns every ancestor.
-  useLayoutEffect(() => { resetViewportScroll() }, [page, resetViewportScroll])
-  const [status, setStatus] = useState<StatusView | null>(null)
-  const [statusLoading, setStatusLoading] = useState(true)
-  const [statusError, setStatusError] = useState<string | null>(null)
+  useLayoutEffect(() => { resetViewportScroll() }, [clientContextKey, page, resetViewportScroll])
+  const [statusState, setStatusState] = useState<{ contextKey: string; value: StatusView | null; loading: boolean; error: string | null }>(() => ({ contextKey: clientContextKey, value: null, loading: true, error: null }))
+  const currentStatusState = statusState.contextKey === clientContextKey
+    ? statusState
+    : { contextKey: clientContextKey, value: null, loading: true, error: null }
+  const status = currentStatusState.value
+  const statusLoading = currentStatusState.loading
+  const statusError = currentStatusState.error
   const statusRequest = useRef(0)
   const [revision, setRevision] = useState(0)
   const [searchSeed, setSearchSeed] = useState('')
   const [rememberSeed, setRememberSeed] = useState('')
   const [rememberOpen, setRememberOpen] = useState(false)
+
+  // A newly inspected workspace must never inherit visible cards, open editors,
+  // search seeds, or scroll position from the previous workspace.
+  useLayoutEffect(() => {
+    setRememberOpen(false)
+    setRememberSeed('')
+    setSearchSeed('')
+  }, [clientContextKey])
 
   const openRemember = useCallback((seed = '') => {
     setRememberSeed(seed)
@@ -1679,17 +1721,15 @@ function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelectio
 
   const loadStatus = useCallback(async () => {
     const request = ++statusRequest.current
-    setStatusLoading(true); setStatusError(null)
+    setStatusState(current => ({ contextKey: clientContextKey, value: current.contextKey === clientContextKey ? current.value : null, loading: true, error: null }))
     try {
       const next = await client.status()
-      if (request === statusRequest.current) setStatus(next)
+      if (request === statusRequest.current) setStatusState({ contextKey: clientContextKey, value: next, loading: false, error: null })
     } catch (reason) {
-      if (request === statusRequest.current) setStatusError(message(reason))
-    } finally {
-      if (request === statusRequest.current) setStatusLoading(false)
+      if (request === statusRequest.current) setStatusState({ contextKey: clientContextKey, value: null, loading: false, error: message(reason) })
     }
-  }, [client])
-  useEffect(() => { void loadStatus() }, [loadStatus])
+  }, [client, clientContextKey])
+  useEffect(() => { void loadStatus() }, [loadStatus, settingsSnapshot.revision])
 
   const mutate = useCallback(() => { setRevision(value => value + 1); void loadStatus() }, [loadStatus])
   const forget = useCallback(async (insight: Insight) => { await client.forget(insight.id, insight.memoryBodyId); mutate() }, [client, mutate])
@@ -1705,15 +1745,24 @@ function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelectio
   const memoryBodies = useMemo(() => status?.memoryBodies ?? [], [status])
   const activeBodies = memoryBodies.filter(body => body.active).length
   const workspaceContext = status?.workspaceContext
-  const showWorkspacePicker = workspaceContext?.mode === 'workspace' && workspaceSelection !== undefined && workspaceSelection.options.length > 0
-  const storageMode = workspaceContext?.mode ?? status?.storage?.activeKind
-  const storageModeText = storageMode === undefined ? '—' : storageScopeLabel(t, storageMode)
+  const storageMode = workspaceContext?.mode ?? status?.storage?.activeKind ?? configuredStorageScope(settingsSnapshot.value)
+  const storageModeText = storageScopeLabel(t, storageMode)
+  const showWorkspacePicker = storageMode === 'workspace' && workspaceSelection !== undefined && workspaceSelection.options.length > 0
   const workspaceDiverged = workspaceContext?.mode === 'workspace' && !workspaceContext.aligned
   const canAlignWorkspace = workspaceDiverged && workspaceSelection?.effectiveWorkspaceId !== undefined
   const workspaceDifference = workspaceContext === undefined
     ? ''
     : `${t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}; ${t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}`
   const workspacePicker = showWorkspacePicker && <label className={appearanceClass(css.workspacePicker, appearance.classes.workspacePicker)}><span>{t('workspace.viewing')}</span><select aria-label={t('workspace.selectorAria')} value={workspaceSelection.selectedWorkspaceId ?? ''} onChange={event => workspaceSelection.onSelect(event.target.value)}>{workspaceSelection.options.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.title}</option>)}</select></label>
+  const connectionLabel = statusLoading
+    ? t('header.checking')
+    : status?.healthy !== true
+      ? t('header.unavailable')
+      : appearance.surface === 'sidebar'
+        ? t('header.connected')
+        : catalogKnown
+          ? t('header.connectedWithCount', { count: activeBodies })
+          : t('header.directoryPending')
 
   return (
     <main className={appearanceClass(css.shell, appearance.classes.shell)} data-mnemon-surface={appearance.surface}>
@@ -1726,14 +1775,14 @@ function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelectio
           {appearance.surface === 'sidebar' && canAlignWorkspace && <div className={appearanceClass(css.workspaceMismatch, appearance.classes.workspaceMismatch)} role="status" aria-label={`${t('workspace.mismatchTitle')}. ${workspaceDifference}`} title={workspaceDifference}><span>{t('workspace.mismatchShort')}</span><button type="button" onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button></div>}
         </div>
         {appearance.showTelemetry && <section className={css.telemetry} aria-label={t('telemetry.aria')}><div className={css.telemetryMetric}><span>{t('telemetry.memories')}</span><strong>{stats?.totalInsights ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.graph')}</span><strong>{stats?.edgeCount ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.entities')}</span><strong>{stats?.topEntities.length ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.spaces')}</span><strong>{status === null || !catalogKnown ? '—' : activeBodies}</strong></div></section>}
-        <div className={appearanceClass(css.headerActions, appearance.classes.headerActions)}>{appearance.surface === 'buildin' && workspacePicker}<div className={appearanceClass(css.statusCluster, appearance.classes.statusCluster)}><span className={`${css.statusDot} ${statusLoading && status === null ? css.checking : status?.healthy === true ? css.online : css.offline}`} /><span>{statusLoading ? t('header.checking') : status?.healthy === true ? t('header.connected') : t('header.unavailable')}</span><button type="button" className={css.iconButton} disabled={statusLoading} onClick={refreshAll} aria-label={t('common.refresh')}>↻</button></div></div>
+        <div className={appearanceClass(css.headerActions, appearance.classes.headerActions)}>{appearance.surface === 'buildin' && workspacePicker}<div className={appearanceClass(css.statusCluster, appearance.classes.statusCluster)}><span className={`${css.statusDot} ${statusLoading && status === null ? css.checking : status?.healthy === true ? css.online : css.offline}`} /><span>{connectionLabel}</span><button type="button" className={css.iconButton} disabled={statusLoading} onClick={refreshAll} aria-label={t('common.refresh')}>↻</button></div></div>
       </header>
       {(statusError !== null || status?.healthy === false) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
       {appearance.surface === 'buildin' && workspaceDiverged && <div className={css.workspaceMismatch} role="status"><div><strong>{t('workspace.mismatchTitle')}</strong><span>{t('workspace.mismatchDescription')}</span><div><code>{t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}</code><code>{t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}</code></div></div>{canAlignWorkspace && <button type="button" className={css.secondaryButton} onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button>}</div>}
       <div className={css.workspace}>
         <WorkspaceNavigation page={page} onSelect={selectPrimaryPage} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} writeEnabled={writeEnabled} />
         <MemoryNavigation page={page} writeEnabled={writeEnabled} onSelect={selectPage} onRemember={() => openRemember()} />
-        <section className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={!isMemoryPage(page) ? '' : undefined}>
+        <section key={clientContextKey} className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={!isMemoryPage(page) ? '' : undefined}>
           {page === 'overview' && <OverviewPage client={client} revision={revision} writeEnabled={writeEnabled} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onExplore={explore} />}
           {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}
           {page === 'documents' && <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} />}

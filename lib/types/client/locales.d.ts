@@ -52,6 +52,8 @@ export declare const zh: {
     'common.showMore': string;
     'header.checking': string;
     'header.connected': string;
+    'header.connectedWithCount': string;
+    'header.directoryPending': string;
     'header.unavailable': string;
     'header.notReady': string;
     'workspace.viewing': string;
@@ -612,6 +614,8 @@ export declare const en: {
     'common.showMore': string;
     'header.checking': string;
     'header.connected': string;
+    'header.connectedWithCount': string;
+    'header.directoryPending': string;
     'header.unavailable': string;
     'header.notReady': string;
     'workspace.viewing': string;
