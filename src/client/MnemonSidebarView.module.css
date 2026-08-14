@@ -81,6 +81,144 @@
   font-weight: 600;
 }
 
+/*
+ * DSH action hierarchy, shared by the installed SSH and task-board panels.
+ * The stable source-class suffixes let Sidebar restyle the existing controls
+ * without leaking these appearance rules into Buildin.
+ */
+.shell [class*='primaryButton'] {
+  min-height: 0;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--dsw-alias-label-primary-foreground);
+  background: var(--dsw-alias-button-info-fill);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.shell [class*='primaryButton']:hover:not(:disabled) {
+  filter: none;
+  background: var(--dsw-alias-button-info-hover);
+}
+
+.shell [class*='secondaryButton'],
+.shell [class*='ghostButton'] {
+  min-height: 0;
+  padding: 5px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.shell [class*='secondaryButton']:hover:not(:disabled),
+.shell [class*='ghostButton']:hover:not(:disabled) {
+  filter: none;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.shell [class*='dangerButton'] {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--dsw-alias-state-error-primary);
+  background: none;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.shell [class*='dangerButton']:hover:not(:disabled) {
+  filter: none;
+  background: none;
+  text-decoration: underline;
+}
+
+.shell [class*='dangerSolidButton'] {
+  min-height: 0;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--dsw-alias-state-error-primary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.shell [class*='dangerSolidButton']:hover:not(:disabled) { filter: brightness(1.08); }
+
+.shell [class*='iconButton'],
+.shell [class*='bodyEditButton'],
+.shell [class*='inspectorEye'],
+.shell [class*='inspectorHeading'] button,
+.shell [class*='sectionHeading'] button,
+.shell [class*='previewHeading'] button {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  font-size: 13px;
+}
+.shell [class*='iconButton']:hover:not(:disabled),
+.shell [class*='bodyEditButton']:hover:not(:disabled),
+.shell [class*='inspectorEye']:hover:not(:disabled),
+.shell [class*='inspectorHeading'] button:hover:not(:disabled),
+.shell [class*='sectionHeading'] button:hover:not(:disabled),
+.shell [class*='previewHeading'] button:hover:not(:disabled) {
+  border: 0;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.shell [class*='primaryButton'],
+.shell [class*='secondaryButton'],
+.shell [class*='ghostButton'],
+.shell [class*='dangerButton'],
+.shell [class*='dangerSolidButton'],
+.shell [class*='iconButton'],
+.shell [class*='bodyEditButton'],
+.shell [class*='inspectorEye'],
+.shell [class*='inspectorHeading'] button,
+.shell [class*='sectionHeading'] button,
+.shell [class*='previewHeading'] button {
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, outline-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+.shell [class*='primaryButton']:active:not(:disabled),
+.shell [class*='secondaryButton']:active:not(:disabled),
+.shell [class*='ghostButton']:active:not(:disabled),
+.shell [class*='dangerButton']:active:not(:disabled),
+.shell [class*='dangerSolidButton']:active:not(:disabled),
+.shell [class*='iconButton']:active:not(:disabled),
+.shell [class*='bodyEditButton']:active:not(:disabled),
+.shell [class*='inspectorEye']:active:not(:disabled),
+.shell [class*='inspectorHeading'] button:active:not(:disabled),
+.shell [class*='sectionHeading'] button:active:not(:disabled),
+.shell [class*='previewHeading'] button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.shell [class*='primaryButton']:disabled,
+.shell [class*='secondaryButton']:disabled,
+.shell [class*='ghostButton']:disabled,
+.shell [class*='dangerButton']:disabled,
+.shell [class*='dangerSolidButton']:disabled,
+.shell [class*='iconButton']:disabled,
+.shell [class*='bodyEditButton']:disabled,
+.shell [class*='inspectorEye']:disabled {
+  cursor: default;
+  opacity: .45;
+}
+
 .shell .canvas { background: var(--dsw-alias-bg-base); }
 .shell .canvas > div {
   width: 100%;
@@ -130,4 +268,20 @@
   .shell .brand h1 { font-size: 16px; }
   .shell .headerActions { max-width: 62vw; }
   .shell .workspacePicker select { width: min(145px, 40vw); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell [class*='primaryButton'],
+  .shell [class*='secondaryButton'],
+  .shell [class*='ghostButton'],
+  .shell [class*='dangerButton'],
+  .shell [class*='dangerSolidButton'],
+  .shell [class*='iconButton'],
+  .shell [class*='bodyEditButton'],
+  .shell [class*='inspectorEye'],
+  .shell [class*='inspectorHeading'] button,
+  .shell [class*='sectionHeading'] button,
+  .shell [class*='previewHeading'] button {
+    transition: none;
+  }
 }
