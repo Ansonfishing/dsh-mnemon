@@ -170,7 +170,7 @@ These workflows can be initiated proactively through Agent tools and can also be
 
 ### Web Workspace
 
-The default `sidebar` mode opens a dedicated center-column workspace from the “Memory System” sidebar entry. Settings can switch to `buildin`, which restores the original conversation-area tab. Both modes reuse the same functional interface and are mounted mutually exclusively. It contains eight pages in three divider-separated groups: “Status” stands alone; “Runtime, Memory Spaces, Documents” cover the three storage tiers; “Distill, Recall, Entities, Content” are the read/write tools:
+The default `sidebar` mode opens a dedicated center-column workspace from the “Memory System” sidebar entry with a minimal, logo-free skin aligned with official DSH panels. Settings can switch to `buildin`, which restores the original conversation-area tab and its existing visuals. Both modes share the functional workbench, isolate their appearance definitions, and are mounted mutually exclusively. It contains eight pages in three logical groups: “Status” stands alone; “Runtime, Memory Spaces, Documents” cover the three storage tiers; “Distill, Recall, Entities, Content” are the read/write tools:
 
 Under the `workspace` storage scope, the header selector is an independent inspection context: it can display and maintain another registered DSH workspace without changing the current conversation. The execution context used by agents, tools, and lifecycle hooks always follows the current session cwd. When inspection and execution differ, the whole workbench shows both paths and a one-click alignment action; operations that need to start an Agent do not run while misaligned.
 

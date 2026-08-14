@@ -95,9 +95,10 @@ function mountBuildinMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
     order: 30,
     label: () => translate('tab.label'),
     locale: namespace,
-    inject: (): { connection: ClientConnectionHandle; settingsScope: MnemonSettingsScope<Config>; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+    inject: (): { connection: ClientConnectionHandle; settingsScope: MnemonSettingsScope<Config>; surface: 'buildin'; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
       connection: ctx.connection,
       settingsScope: settings,
+      surface: 'buildin',
       t: translate,
     }),
   }, MnemonView))

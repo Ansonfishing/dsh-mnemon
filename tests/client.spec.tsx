@@ -218,6 +218,7 @@ describe('MnemonView', () => {
     expect(screen.getByRole('switch', { name: '项目记忆体读取开关' }).getAttribute('aria-checked')).toBe('true')
     expect(screen.getByText('12')).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Mnemon', level: 1 })).toBeTruthy()
+    expect(container.querySelector('[data-mnemon-surface="buildin"]')).toBeTruthy()
     expect(screen.queryByText('LLM-supervised 4-graph persistent memory for AI agents.')).toBeNull()
     expect(screen.getByRole('img', { name: 'Mnemon' })).toBeTruthy()
     await waitFor(() => expect(screen.getByRole('img', { name: /Mnemon 实时记忆图谱/ })).toBeTruthy())
@@ -307,6 +308,24 @@ describe('MnemonView', () => {
     expect(screen.getByRole('img', { name: /Mnemon 实时记忆图谱，7 个元素/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: '记忆体: 偏好记忆体' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '实体: DSH' })).toBeTruthy()
+  })
+
+  it('keeps shared functionality but applies the minimal unbranded sidebar appearance', async () => {
+    const { connection } = createConnection()
+    const { container } = render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
+    expect(container.querySelector('[data-mnemon-surface="sidebar"]')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '记忆系统', level: 1 })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Mnemon', level: 1 })).toBeNull()
+    expect(screen.queryByRole('img', { name: 'Mnemon' })).toBeNull()
+    expect(screen.queryByRole('region', { name: '记忆统计' })).toBeNull()
+    expect(screen.queryByText('运行与诊断')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '记忆体' }))
+    expect(screen.getByRole('heading', { name: '记忆体', level: 2 })).toBeTruthy()
+    await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
+    expect(screen.queryByRole('img', { name: 'Mnemon' })).toBeNull()
   })
 
   it('edits an existing Memory Space name and description', async () => {

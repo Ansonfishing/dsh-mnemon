@@ -173,7 +173,7 @@ routingGuidance=false
 
 ## Display Mode and the `tabEnabled` UI Switch
 
-`displayMode=sidebar` (the default) mounts the “Memory System” sidebar entry and its dedicated center-column workbench. `displayMode=buildin` instead registers the original DSH `conversation.view` tab. Saving first disposes the active entry and then mounts the target, so the two modes never appear simultaneously.
+`displayMode=sidebar` (the default) mounts the “Memory System” sidebar entry and its dedicated center-column workbench with a minimal, logo-free skin aligned with official DSH panels. `displayMode=buildin` instead registers the original DSH `conversation.view` tab and preserves its existing visuals. The modes share the functional workbench while keeping appearance definitions isolated. Saving first disposes the active entry and then mounts the target, so the two modes never appear simultaneously.
 
 `tabEnabled=false` removes the currently selected Web entry live. Host RPC, commands, and tools remain registered across display-mode and enablement changes so an Agent or command already in progress stays valid.
 

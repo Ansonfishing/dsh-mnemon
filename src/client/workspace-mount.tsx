@@ -54,7 +54,7 @@ function MnemonPanel({ ctx, settings, t }: MnemonPanelProps): JSX.Element {
     },
   }), [effectiveWorkspace, resolvedSelectedId, workspaces.items])
 
-  return <MnemonView connection={ctx.connection} settingsScope={settings} {...(sessions.current === undefined ? {} : { sessionId: sessions.current })} {...(resolvedSelectedId === undefined ? {} : { workspaceId: resolvedSelectedId })} workspaceSelection={selection} t={t} />
+  return <MnemonView connection={ctx.connection} settingsScope={settings} {...(sessions.current === undefined ? {} : { sessionId: sessions.current })} {...(resolvedSelectedId === undefined ? {} : { workspaceId: resolvedSelectedId })} workspaceSelection={selection} surface="sidebar" t={t} />
 }
 
 function conversationColumn(): HTMLElement | undefined {

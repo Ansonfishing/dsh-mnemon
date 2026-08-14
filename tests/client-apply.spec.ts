@@ -70,6 +70,8 @@ describe('Mnemon Web client composition', () => {
     await vi.waitFor(() => expect(slots).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'conversation.view', id: 'mnemon', order: 30 }),
     ])))
+    const conversationEntry = slots.find(options => options.name === 'conversation.view')
+    expect((conversationEntry?.inject as () => { surface: string })().surface).toBe('buildin')
     const settingsEntry = slots.find(options => options.name === 'settings.section')
     const scope = (settingsEntry?.inject as () => { scope: { set: (field: string, value: unknown) => Promise<void> } })().scope
     await scope.set('displayMode', 'sidebar')

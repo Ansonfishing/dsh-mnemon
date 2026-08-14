@@ -4,7 +4,9 @@
 
 ## Web Workspace
 
-`displayMode=sidebar` (the default) opens a dedicated workbench from the sidebar, while `displayMode=buildin` opens the same functional interface through the original DSH `conversation.view` tab. The settings page switches the two modes live and never mounts both simultaneously. The main Web interface follows DSH's global language and light/dark theme. The top navigation is split into three divider-separated groups: “Status” stands alone; “Runtime, Memory Spaces, Documents” cover the three storage tiers; “Distill, Recall, Entities, Content” are the read/write tools. The “Status” page opens by default.
+`displayMode=sidebar` (the default) opens a dedicated workbench from the sidebar, while `displayMode=buildin` opens the same functional interface through the original DSH `conversation.view` tab. The settings page switches the two modes live and never mounts both simultaneously. Both modes share all functionality, data requests, and workspace state while using isolated appearance definitions. The main Web interface follows DSH's global language and light/dark theme.
+
+Sidebar uses a minimal skin aligned with official DSH panels: its title is “Memory System,” and it omits the Mnemon logo, header telemetry, and navigation decoration in favor of compact text tabs. Buildin preserves the existing Mnemon brand header, telemetry, and grouped-navigation visuals. Both modes expose the same eight pages: “Status”; the three storage tiers “Runtime, Memory Spaces, Documents”; and the read/write tools “Distill, Recall, Entities, Content.” The “Status” page opens by default.
 
 | Page | Purpose | Call Boundary |
 |---|---|---|

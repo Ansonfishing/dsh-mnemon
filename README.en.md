@@ -110,7 +110,7 @@ For a local checkout, use an absolute path:
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
-Open the dedicated “Settings -> Memory System” page to choose both a display mode and storage scope. The default `sidebar` mode opens a dedicated “Memory System” workbench from the sidebar; switching to `buildin` restores the original conversation-area tab. Saving switches live without mounting duplicate entries. Under the `workspace` scope, the sidebar workbench selector independently chooses which DSH workspace to inspect and maintain; agents, tools, and lifecycle hooks always continue to use the current session workspace. A global banner shows both paths when they diverge and aligns them with one click. The storage root switches atomically after the new directory initializes successfully, and changing the scope never migrates, merges, or deletes old data automatically.
+Open the dedicated “Settings -> Memory System” page to choose both a display mode and storage scope. The default `sidebar` mode opens a dedicated “Memory System” workbench with a plain-text title, no Mnemon logo, and a minimal skin aligned with official DSH panels. Switching to `buildin` restores the original conversation-area tab and preserves its existing visuals. Both modes share all functionality and data flows while keeping appearance definitions isolated. Saving switches live without mounting duplicate entries. Under the `workspace` scope, the sidebar workbench selector independently chooses which DSH workspace to inspect and maintain; agents, tools, and lifecycle hooks always continue to use the current session workspace. A global banner shows both paths when they diverge and aligns them with one click. The storage root switches atomically after the new directory initializes successfully, and changing the scope never migrates, merges, or deletes old data automatically.
 
 Upgrade and uninstall (`dsh plugin` forwards to pnpm inside the profile directory):
 
@@ -142,7 +142,7 @@ See the [configuration reference](./docs/en/configuration.md) for every option, 
 
 ## Entry points
 
-The Web workspace contains Status, Runtime, Memory Spaces, Documents, Distill, Recall, Entities, and Content pages in three divider-separated groups: “Status” stands alone; “Runtime, Memory Spaces, Documents” cover the three storage tiers; “Distill, Recall, Entities, Content” are the read/write tools. Its main interface follows DSH's global Chinese/English locale.
+The Web workspace contains Status, Runtime, Memory Spaces, Documents, Distill, Recall, Entities, and Content pages in three logical groups: “Status” stands alone; “Runtime, Memory Spaces, Documents” cover the three storage tiers; “Distill, Recall, Entities, Content” are the read/write tools. Its main interface follows DSH's global Chinese/English locale.
 
 Memory also surfaces inside the conversation flow (conversation interface, **off by default**; enable each surface under Settings → Memory System → Conversation interface — changes apply live on save):
 

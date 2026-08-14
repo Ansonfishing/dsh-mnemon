@@ -22,6 +22,13 @@ import {
 import { MnemonClient } from './api.ts'
 import { translateZh, type MnemonKey, type MnemonTranslate } from './locales.ts'
 import { MnemonLogo } from './MnemonLogo.tsx'
+import {
+  appearanceClass,
+  MnemonViewAppearanceProvider,
+  resolveMnemonViewAppearance,
+  useMnemonViewAppearance,
+  type MnemonViewSurface,
+} from './MnemonViewAppearance.tsx'
 import css from './MnemonView.module.css'
 
 export interface MnemonViewProps {
@@ -30,6 +37,7 @@ export interface MnemonViewProps {
   sessionId?: string
   workspaceId?: string
   workspaceSelection?: MnemonWorkspaceSelection
+  surface?: MnemonViewSurface
   t?: MnemonTranslate
 }
 
@@ -105,8 +113,9 @@ function insightKey(insight: Insight): string {
 }
 
 function PageHeader(props: { title: string; description: string; meta?: string; action?: JSX.Element }): JSX.Element {
+  const appearance = useMnemonViewAppearance()
   return (
-    <div className={css.pageHeader}>
+    <div className={appearanceClass(css.pageHeader, appearance.classes.pageHeader)}>
       <div><h2>{props.title}</h2><p>{props.description}</p></div>
       <div className={css.pageHeaderMeta}>{props.meta !== undefined && <code>{props.meta}</code>}{props.action}</div>
     </div>
@@ -664,6 +673,7 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
 
 function OverviewPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; fallbackBodies: MemoryBodyView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onExplore: (query: string) => void }): JSX.Element {
   const t = useT()
+  const appearance = useMnemonViewAppearance()
   const [graph, setGraph] = useState<MemoryGraphSnapshot | null>(null)
   const [catalog, setCatalog] = useState<MemoryBodyCatalog | null>(null)
   const [selected, setSelected] = useState<MemoryGraphNode | null>(null)
@@ -800,7 +810,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
           </section>
           <aside className={css.graphInspector} data-empty={selected === null || undefined}>
             {selected === null ? (
-              <div className={css.inspectorEmpty}><MnemonLogo className={css.inspectorLogo} title={t('overview.inspector')} /><h3>{t('overview.selectNode')}</h3><p>{t('overview.selectNodeText')}</p></div>
+              <div className={css.inspectorEmpty}>{appearance.showLogo ? <MnemonLogo className={css.inspectorLogo} title={t('overview.inspector')} /> : <span className={appearanceClass(css.inspectorLogo, appearance.classes.inspectorGlyph)} aria-hidden="true">◇</span>}<h3>{t('overview.selectNode')}</h3><p>{t('overview.selectNodeText')}</p></div>
             ) : (
               <>
                 <div className={css.inspectorHeading}><span>{t(selectedKind === 'space' ? 'overview.inspectorSpace' : selectedKind === 'entity' ? 'overview.inspectorEntity' : 'overview.inspector')}</span><button type="button" onClick={() => setSelected(null)} aria-label={t('overview.closeInspector')}>×</button></div>
@@ -1516,11 +1526,14 @@ function MemorySystemFlow(props: { status: StatusView | null; reviewState: strin
 }
 
 export function MnemonView(props: MnemonViewProps): JSX.Element {
-  return <I18nContext.Provider value={props.t ?? translateZh}><MnemonWorkspace {...props} /></I18nContext.Provider>
+  const t = props.t ?? translateZh
+  const appearance = resolveMnemonViewAppearance(props.surface ?? 'buildin', t)
+  return <I18nContext.Provider value={t}><MnemonViewAppearanceProvider value={appearance}><MnemonWorkspace {...props} /></MnemonViewAppearanceProvider></I18nContext.Provider>
 }
 
 function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelection }: MnemonViewProps): JSX.Element {
   const t = useT()
+  const appearance = useMnemonViewAppearance()
   const client = useMemo(() => new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
   const [page, setPage] = useState<Page>('status')
   const canvasRef = useRef<HTMLElement | null>(null)
@@ -1587,17 +1600,17 @@ function MnemonWorkspace({ connection, sessionId, workspaceId, workspaceSelectio
   const showWorkspacePicker = workspaceContext?.mode === 'workspace' && workspaceSelection !== undefined && workspaceSelection.options.length > 0
 
   return (
-    <main className={css.shell}>
-      <header className={css.masthead}>
-        <div className={css.brand}><MnemonLogo className={css.brandLogo} /><h1>Mnemon</h1></div>
-        <section className={css.telemetry} aria-label={t('telemetry.aria')}><div className={css.telemetryMetric}><span>{t('telemetry.memories')}</span><strong>{stats?.totalInsights ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.graph')}</span><strong>{stats?.edgeCount ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.entities')}</span><strong>{stats?.topEntities.length ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.spaces')}</span><strong>{status === null || !catalogKnown ? '—' : activeBodies}</strong></div></section>
-        <div className={css.headerActions}>{showWorkspacePicker && <label className={css.workspacePicker}><span>{t('workspace.viewing')}</span><select aria-label={t('workspace.selectorAria')} value={workspaceSelection.selectedWorkspaceId ?? ''} onChange={event => workspaceSelection.onSelect(event.target.value)}>{workspaceSelection.options.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.title}</option>)}</select></label>}<div className={css.statusCluster}><span className={`${css.statusDot} ${statusLoading && status === null ? css.checking : status?.healthy === true ? css.online : css.offline}`} /><span>{statusLoading ? t('header.checking') : status?.healthy === true ? catalogKnown ? t('header.connected', { count: activeBodies }) : t('header.directoryPending') : t('header.unavailable')}</span><button type="button" className={css.iconButton} disabled={statusLoading} onClick={refreshAll} aria-label={t('common.refresh')}>↻</button></div></div>
+    <main className={appearanceClass(css.shell, appearance.classes.shell)} data-mnemon-surface={appearance.surface}>
+      <header className={appearanceClass(css.masthead, appearance.classes.masthead)}>
+        <div className={appearanceClass(css.brand, appearance.classes.brand)}>{appearance.showLogo && <MnemonLogo className={css.brandLogo} />}<h1>{appearance.title}</h1></div>
+        {appearance.showTelemetry && <section className={css.telemetry} aria-label={t('telemetry.aria')}><div className={css.telemetryMetric}><span>{t('telemetry.memories')}</span><strong>{stats?.totalInsights ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.graph')}</span><strong>{stats?.edgeCount ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.entities')}</span><strong>{stats?.topEntities.length ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.spaces')}</span><strong>{status === null || !catalogKnown ? '—' : activeBodies}</strong></div></section>}
+        <div className={appearanceClass(css.headerActions, appearance.classes.headerActions)}>{showWorkspacePicker && <label className={appearanceClass(css.workspacePicker, appearance.classes.workspacePicker)}><span>{t('workspace.viewing')}</span><select aria-label={t('workspace.selectorAria')} value={workspaceSelection.selectedWorkspaceId ?? ''} onChange={event => workspaceSelection.onSelect(event.target.value)}>{workspaceSelection.options.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.title}</option>)}</select></label>}<div className={appearanceClass(css.statusCluster, appearance.classes.statusCluster)}><span className={`${css.statusDot} ${statusLoading && status === null ? css.checking : status?.healthy === true ? css.online : css.offline}`} /><span>{statusLoading ? t('header.checking') : status?.healthy === true ? catalogKnown ? t('header.connected', { count: activeBodies }) : t('header.directoryPending') : t('header.unavailable')}</span><button type="button" className={css.iconButton} disabled={statusLoading} onClick={refreshAll} aria-label={t('common.refresh')}>↻</button></div></div>
       </header>
       {(statusError !== null || status?.healthy === false) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
-      {workspaceContext?.mode === 'workspace' && !workspaceContext.aligned && <div className={css.workspaceMismatch} role="status"><div><strong>{t('workspace.mismatchTitle')}</strong><span>{t('workspace.mismatchDescription')}</span><div><code>{t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}</code><code>{t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}</code></div></div>{workspaceSelection?.effectiveWorkspaceId !== undefined && <button type="button" className={css.secondaryButton} onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button>}</div>}
+      {workspaceContext?.mode === 'workspace' && !workspaceContext.aligned && <div className={appearanceClass(css.workspaceMismatch, appearance.classes.workspaceMismatch)} role="status"><div><strong>{t('workspace.mismatchTitle')}</strong><span>{t('workspace.mismatchDescription')}</span><div><code>{t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}</code><code>{t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}</code></div></div>{workspaceSelection?.effectiveWorkspaceId !== undefined && <button type="button" className={css.secondaryButton} onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button>}</div>}
       <div className={css.workspace}>
-        <div className={css.topNavigation}><nav className={css.nav} aria-label={t('nav.aria')}>{PAGE_NAV.map((group, groupIndex) => <Fragment key={group.aria}><div className={css.navGroup} role="group" aria-label={t(group.aria)}>{group.entries.map(item => <button key={item.id} type="button" aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><span className={css.navGlyph} aria-hidden="true">{item.glyph}</span><span><strong>{t(item.label)}</strong><small>{t(item.detail)}</small></span></button>)}</div>{groupIndex < PAGE_NAV.length - 1 && <span className={css.navGroupDivider} aria-hidden="true" />}</Fragment>)}</nav><div className={css.spaceSummary}><span>{t('sidebar.activeSpaces')}</span><code>{catalogKnown ? `${activeBodies} / ${memoryBodies.length}` : '— / —'}</code><small>{writeEnabled ? t('common.agentSupervised') : t('common.readOnly')}</small></div></div>
-        <section className={css.canvas} ref={canvasRef} data-testid="mnemon-canvas">
+        <div className={appearanceClass(css.topNavigation, appearance.classes.topNavigation)}><nav className={appearanceClass(css.nav, appearance.classes.nav)} aria-label={t('nav.aria')}>{PAGE_NAV.map((group, groupIndex) => <Fragment key={group.aria}><div className={appearanceClass(css.navGroup, appearance.classes.navGroup)} role="group" aria-label={t(group.aria)}>{group.entries.map(item => <button key={item.id} type="button" aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}>{appearance.showNavigationGlyphs && <span className={css.navGlyph} aria-hidden="true">{item.glyph}</span>}<span><strong>{t(item.label)}</strong>{appearance.showNavigationDetails && <small>{t(item.detail)}</small>}</span></button>)}</div>{appearance.showNavigationDividers && groupIndex < PAGE_NAV.length - 1 && <span className={css.navGroupDivider} aria-hidden="true" />}</Fragment>)}</nav>{appearance.showSpaceSummary && <div className={css.spaceSummary}><span>{t('sidebar.activeSpaces')}</span><code>{catalogKnown ? `${activeBodies} / ${memoryBodies.length}` : '— / —'}</code><small>{writeEnabled ? t('common.agentSupervised') : t('common.readOnly')}</small></div>}</div>
+        <section className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas">
           {page === 'overview' && <OverviewPage client={client} revision={revision} writeEnabled={writeEnabled} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onExplore={explore} />}
           {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}
           {page === 'documents' && <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} />}

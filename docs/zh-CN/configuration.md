@@ -173,7 +173,7 @@ routingGuidance=false
 
 ## 展示形态与 `tabEnabled` 界面开关
 
-`displayMode=sidebar`（默认）会挂载“记忆系统”侧边栏入口和独立主内容区工作台；`displayMode=buildin` 会改为注册原有的 DSH `conversation.view` 内嵌标签页。设置页保存后会先卸载当前入口再挂载目标入口，因此两种形态不会同时出现。
+`displayMode=sidebar`（默认）会挂载“记忆系统”侧边栏入口和独立主内容区工作台，并使用无 Mnemon Logo 的 DSH 官方风格极简皮肤；`displayMode=buildin` 会改为注册原有的 DSH `conversation.view` 内嵌标签页并保持既有视觉。两者共享功能工作台，但外观定义隔离。设置页保存后会先卸载当前入口再挂载目标入口，因此两种形态不会同时出现。
 
 `tabEnabled=false` 会实时移除当前形态的 Web 入口。为避免运行中的 Agent 或命令因界面设置变化而失效，Host RPC、命令和工具不会随展示形态或总开关卸载。
 
