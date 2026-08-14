@@ -1,49 +1,46 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import type { Config } from '../config.ts'
-import type { ClientSettingsScope } from '../contracts.ts'
+import { useEffect, useMemo, useState, useSyncExternalStore, type JSX } from 'react'
+import type { Config, InteractionConfig } from '../config.ts'
+import type { ClientSettingsScope, ClientSettingsSnapshot, SettingsOperation } from '../contracts.ts'
 import css from './MnemonSettingsCard.module.css'
 import { translateZh, type MnemonTranslate } from './locales.ts'
 
 export interface MnemonSettingsCardProps {
   scope: ClientSettingsScope<Config>
+  /** Separate live namespace; falls back to the core scope for older hosts. */
+  interactionScope?: ClientSettingsScope<InteractionConfig>
   t?: MnemonTranslate
 }
 
-type StringField = 'storageScope' | 'dataDir'
-type BooleanField = 'interactionToolviews' | 'interactionTurnBar' | 'interactionSaveAction'
-type Field = StringField | BooleanField
-type Draft = Record<StringField, string> & Record<BooleanField, boolean>
+type CoreField = 'storageScope' | 'dataDir'
+type InteractionField = 'toolviews' | 'turnBar' | 'saveAction'
+type Field = CoreField | InteractionField
+type Draft = Record<CoreField, string> & Record<InteractionField, boolean>
 
-const FIELD_ORDER: StringField[] = ['storageScope', 'dataDir']
-const INTERACTION_ORDER: BooleanField[] = ['interactionToolviews', 'interactionTurnBar', 'interactionSaveAction']
-
-/** Nested settings paths of the live interaction toggles. */
-const INTERACTION_PATHS: Record<BooleanField, string[]> = {
-  interactionToolviews: ['conversationInteraction', 'toolviews'],
-  interactionTurnBar: ['conversationInteraction', 'turnBar'],
-  interactionSaveAction: ['conversationInteraction', 'saveAction'],
-}
+const CORE_FIELDS: CoreField[] = ['storageScope', 'dataDir']
+const INTERACTION_FIELDS: InteractionField[] = ['toolviews', 'turnBar', 'saveAction']
 
 function record(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
 
-function draftOf(value: Config | undefined): Draft {
+function coreDraft(value: Config | undefined): Pick<Draft, CoreField> {
   const resolved = value ?? {}
-  const interaction = record(resolved.conversationInteraction)
   return {
     storageScope: resolved.storageScope ?? (resolved.dataDir?.trim() ? 'custom' : 'global'),
     dataDir: resolved.dataDir?.trim() ?? '',
-    interactionToolviews: interaction.toolviews === true,
-    interactionTurnBar: interaction.turnBar === true,
-    interactionSaveAction: interaction.saveAction === true,
   }
 }
 
-function inheritedDraft(base: unknown): Draft {
-  return draftOf(record(base) as Config)
+function interactionDraft(value: InteractionConfig | undefined): Pick<Draft, InteractionField> {
+  return {
+    toolviews: value?.toolviews === true,
+    turnBar: value?.turnBar === true,
+    saveAction: value?.saveAction === true,
+  }
+}
+
+function draftOf(core: Config | undefined, interaction: InteractionConfig | undefined): Draft {
+  return { ...coreDraft(core), ...interactionDraft(interaction) }
 }
 
 function validation(t: MnemonTranslate, draft: Draft): string | null {
@@ -55,28 +52,56 @@ function validation(t: MnemonTranslate, draft: Draft): string | null {
   return null
 }
 
-export function MnemonSettingsCard({ scope, t = translateZh }: MnemonSettingsCardProps): JSX.Element | null {
+function useScope<T>(scope: ClientSettingsScope<T>): ClientSettingsSnapshot<T> {
   const subscribe = useMemo(() => scope.subscribe.bind(scope), [scope])
   const getSnapshot = useMemo(() => scope.getSnapshot.bind(scope), [scope])
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-  const [draft, setDraft] = useState<Draft>(() => draftOf(snapshot.value))
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+function operations(fields: readonly Field[], dirty: ReadonlySet<Field>, reset: ReadonlySet<Field>, draft: Draft): SettingsOperation[] {
+  return fields.flatMap((field): SettingsOperation[] => {
+    if (!dirty.has(field)) return []
+    if (reset.has(field) || (field === 'dataDir' && draft.dataDir.trim() === '')) return [{ op: 'unset', path: [field] }]
+    return [{ op: 'set', path: [field], value: typeof draft[field] === 'string' ? draft[field].trim() : draft[field] }]
+  })
+}
+
+async function commit<T>(scope: ClientSettingsScope<T>, edits: SettingsOperation[]): Promise<void> {
+  if (scope.mutate !== undefined) return scope.mutate(edits)
+  for (const edit of edits) {
+    if (edit.path.length === 1) {
+      if (edit.op === 'set') await scope.set(edit.path[0]!, edit.value)
+      else await scope.unset(edit.path[0]!)
+    } else if (edit.op === 'set') await scope.setPath(edit.path, edit.value)
+    else await scope.unsetPath(edit.path)
+  }
+}
+
+/** Dedicated Mnemon page contributed to DSH's Plugins settings tabs. */
+export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, t = translateZh }: MnemonSettingsCardProps): JSX.Element | null {
+  const interactionScope = suppliedInteractionScope ?? scope as unknown as ClientSettingsScope<InteractionConfig>
+  const coreSnapshot = useScope(scope)
+  const interactionSnapshot = useScope(interactionScope)
+  const [draft, setDraft] = useState<Draft>(() => draftOf(coreSnapshot.value, interactionSnapshot.value))
   const [dirty, setDirty] = useState<Set<Field>>(() => new Set())
   const [reset, setReset] = useState<Set<Field>>(() => new Set())
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
 
   useEffect(() => {
-    if (dirty.size === 0) setDraft(draftOf(snapshot.value))
-  }, [dirty.size, snapshot.value])
+    if (dirty.size === 0) setDraft(draftOf(coreSnapshot.value, interactionSnapshot.value))
+  }, [dirty.size, coreSnapshot.value, interactionSnapshot.value])
 
-  const overridden = useMemo(() => record(snapshot.user), [snapshot.user])
-  const inherited = useMemo(() => inheritedDraft(snapshot.base), [snapshot.base])
+  const inherited = useMemo(() => draftOf(record(coreSnapshot.base) as Config, record(interactionSnapshot.base) as InteractionConfig), [coreSnapshot.base, interactionSnapshot.base])
+  const coreUser = useMemo(() => record(coreSnapshot.user), [coreSnapshot.user])
+  const interactionUser = useMemo(() => record(interactionSnapshot.user), [interactionSnapshot.user])
   const error = validation(t, draft)
-  const controlsDisabled = !snapshot.writable || saving
+  const loading = coreSnapshot.status === 'loading' || interactionSnapshot.status === 'loading'
+  const writable = coreSnapshot.writable && interactionSnapshot.writable
 
-  if (snapshot.status === 'unavailable') return null
+  if (coreSnapshot.status === 'unavailable' && interactionSnapshot.status === 'unavailable') return null
 
-  const edit = (field: Field, value: string | boolean) => {
+  const edit = (field: Field, value: string | boolean): void => {
     setDraft(current => ({ ...current, [field]: value }))
     setDirty(current => new Set(current).add(field))
     setReset(current => {
@@ -87,41 +112,32 @@ export function MnemonSettingsCard({ scope, t = translateZh }: MnemonSettingsCar
     setFailed(null)
   }
 
-  const resetField = (field: Field) => {
+  const resetField = (field: Field): void => {
     setDraft(current => ({ ...current, [field]: inherited[field] }))
     setDirty(current => new Set(current).add(field))
     setReset(current => new Set(current).add(field))
     setFailed(null)
   }
 
-  const discard = () => {
-    setDraft(draftOf(snapshot.value))
+  const discard = (): void => {
+    setDraft(draftOf(coreSnapshot.value, interactionSnapshot.value))
     setDirty(new Set())
     setReset(new Set())
     setFailed(null)
   }
 
-  const save = async () => {
-    if (error !== null || dirty.size === 0 || saving) return
+  const save = async (): Promise<void> => {
+    if (error !== null || dirty.size === 0 || saving || !writable) return
     setSaving(true)
     setFailed(null)
     try {
-      const order: Field[] = [...(draft.storageScope === 'custom' ? [...FIELD_ORDER].reverse() : FIELD_ORDER), ...INTERACTION_ORDER]
-      for (const field of order) {
-        if (!dirty.has(field)) continue
-        const booleanPath = INTERACTION_PATHS[field as BooleanField]
-        if (booleanPath !== undefined) {
-          if (reset.has(field)) await scope.unsetPath(booleanPath)
-          else await scope.setPath(booleanPath, draft[field as BooleanField] === true)
-          continue
-        }
-        const stringField = field as StringField
-        if (reset.has(stringField) || (stringField === 'dataDir' && draft.dataDir.trim() === '')) {
-          await scope.unset(stringField)
-        } else {
-          await scope.set(stringField, draft[stringField].trim())
-        }
-      }
+      const coreOrder: CoreField[] = draft.storageScope === 'custom' ? ['dataDir', 'storageScope'] : CORE_FIELDS
+      const coreOps = operations(coreOrder, dirty, reset, draft)
+      const interactionOps = operations(INTERACTION_FIELDS, dirty, reset, draft)
+      await Promise.all([
+        ...(coreOps.length === 0 ? [] : [commit(scope, coreOps)]),
+        ...(interactionOps.length === 0 ? [] : [commit(interactionScope, interactionOps)]),
+      ])
       setDirty(new Set())
       setReset(new Set())
     } catch (reason) {
@@ -131,65 +147,68 @@ export function MnemonSettingsCard({ scope, t = translateZh }: MnemonSettingsCar
     }
   }
 
-  const fieldMeta = (field: Field) => Object.hasOwn(overridden, field) && !reset.has(field)
-  const interactionMeta = (field: BooleanField) => {
-    const group = record(overridden.conversationInteraction)
-    const path = INTERACTION_PATHS[field]
-    return Object.hasOwn(group, path[path.length - 1]!) && !reset.has(field)
-  }
+  const overridden = (field: Field): boolean => Object.hasOwn(INTERACTION_FIELDS.includes(field as InteractionField) ? interactionUser : coreUser, field) && !reset.has(field)
+  const coreDisabled = loading || saving || !coreSnapshot.writable
+  const interactionDisabled = loading || saving || !interactionSnapshot.writable
   const errorId = error === null ? undefined : 'mnemon-settings-validation'
-  const loading = snapshot.status === 'loading'
 
   return (
-    <section className={css.card} aria-label={t('config.aria')} aria-busy={saving || loading}>
-      <div className={css.panelHeader}>
-        <div className={css.headerCopy}><h3>Mnemon</h3><p>{t('config.description')}</p></div>
+    <section className={css.page} aria-label={t('config.aria')} aria-busy={saving || loading}>
+      <header className={css.pageHeader}>
+        <div className={css.headerCopy}>
+          <span className={css.eyebrow}>MNEMON</span>
+          <h2>{t('config.title')}</h2>
+          <p>{t('config.description')}</p>
+        </div>
         <span className={`${css.status} ${dirty.size > 0 ? css.statusDirty : ''}`} aria-live="polite">
-          {loading ? t('common.loading') : dirty.size > 0 ? t('config.unsaved') : t('config.restart')}
+          {loading ? t('common.loading') : dirty.size > 0 ? t('config.unsaved') : t('config.ready')}
         </span>
-      </div>
-      <div className={css.body}>
-        {loading ? <p className={css.loading} role="status">{t('common.loading')}</p> : <>
+      </header>
+
+      {loading ? <p className={css.loading} role="status">{t('common.loading')}</p> : <>
         <p className={css.notice}>{t('config.noticeBefore')} <code>.dsh/settings.yaml</code>{t('config.noticeAfter')}</p>
 
-        <div className={css.primarySettings}>
-          <SettingField controlId="mnemon-storage-scope" t={t} label={t('config.scope')} hint={t('config.scopeHint')} overridden={fieldMeta('storageScope')} resetDisabled={controlsDisabled} onReset={() => resetField('storageScope')}>
-            <select id="mnemon-storage-scope" aria-label={t('config.scopeAria')} aria-describedby="mnemon-storage-scope-hint" value={draft.storageScope} onChange={event => edit('storageScope', event.target.value)} disabled={controlsDisabled}><option value="global">{t('config.global')} · ~/.mnemon</option><option value="workspace">{t('config.workspace')} · &lt;workspace&gt;/.mnemon</option><option value="custom">{t('config.custom')}</option></select>
-          </SettingField>
-          {draft.storageScope === 'custom' && <SettingField controlId="mnemon-custom-directory" t={t} label={t('config.customDirectory')} hint={t('config.customHint')} overridden={fieldMeta('dataDir')} resetDisabled={controlsDisabled} onReset={() => resetField('dataDir')}>
-            <input id="mnemon-custom-directory" aria-label={t('config.customAria')} aria-describedby={`mnemon-custom-directory-hint${errorId === undefined ? '' : ` ${errorId}`}`} aria-invalid={error !== null} value={draft.dataDir} onChange={event => edit('dataDir', event.target.value)} placeholder="~/mnemon-data" spellCheck={false} autoComplete="off" disabled={controlsDisabled} />
-          </SettingField>}
-        </div>
-
-        <div className={css.interactionGroup}>
-          <div className={css.interactionHeader}>
-            <strong>{t('config.interactionTitle')}</strong>
-            <span>{t('config.interactionLive')}</span>
+        <section className={css.group} aria-labelledby="mnemon-storage-heading">
+          <div className={css.groupHeader}>
+            <div><h3 id="mnemon-storage-heading">{t('config.storageTitle')}</h3><p>{t('config.storageDescription')}</p></div>
+            <span className={css.restartBadge}>{t('config.restart')}</span>
           </div>
-          <p className={css.interactionHint}>{t('config.interactionHint')}</p>
-          <SettingField controlId="mnemon-interaction-toolviews" t={t} label={t('config.interactionToolviews')} hint={t('config.interactionToolviewsHint')} overridden={interactionMeta('interactionToolviews')} resetDisabled={controlsDisabled} onReset={() => resetField('interactionToolviews')}>
-            <label className={css.checkboxLine}><input id="mnemon-interaction-toolviews" type="checkbox" checked={draft.interactionToolviews} onChange={event => edit('interactionToolviews', event.target.checked)} disabled={controlsDisabled} /><span>{t('config.interactionOn')}</span></label>
-          </SettingField>
-          <SettingField controlId="mnemon-interaction-turn-bar" t={t} label={t('config.interactionTurnBar')} hint={t('config.interactionTurnBarHint')} overridden={interactionMeta('interactionTurnBar')} resetDisabled={controlsDisabled} onReset={() => resetField('interactionTurnBar')}>
-            <label className={css.checkboxLine}><input id="mnemon-interaction-turn-bar" type="checkbox" checked={draft.interactionTurnBar} onChange={event => edit('interactionTurnBar', event.target.checked)} disabled={controlsDisabled} /><span>{t('config.interactionOn')}</span></label>
-          </SettingField>
-          <SettingField controlId="mnemon-interaction-save-action" t={t} label={t('config.interactionSaveAction')} hint={t('config.interactionSaveActionHint')} overridden={interactionMeta('interactionSaveAction')} resetDisabled={controlsDisabled} onReset={() => resetField('interactionSaveAction')}>
-            <label className={css.checkboxLine}><input id="mnemon-interaction-save-action" type="checkbox" checked={draft.interactionSaveAction} onChange={event => edit('interactionSaveAction', event.target.checked)} disabled={controlsDisabled} /><span>{t('config.interactionOn')}</span></label>
-          </SettingField>
-        </div>
+          <div className={css.fields}>
+            <SettingField controlId="mnemon-storage-scope" t={t} label={t('config.scope')} hint={t('config.scopeHint')} overridden={overridden('storageScope')} resetDisabled={coreDisabled} onReset={() => resetField('storageScope')}>
+              <select id="mnemon-storage-scope" aria-label={t('config.scopeAria')} aria-describedby="mnemon-storage-scope-hint" value={draft.storageScope} onChange={event => edit('storageScope', event.target.value)} disabled={coreDisabled}><option value="global">{t('config.global')} · ~/.mnemon</option><option value="workspace">{t('config.workspace')} · &lt;workspace&gt;/.mnemon</option><option value="custom">{t('config.custom')}</option></select>
+            </SettingField>
+            {draft.storageScope === 'custom' && <SettingField controlId="mnemon-custom-directory" t={t} label={t('config.customDirectory')} hint={t('config.customHint')} overridden={overridden('dataDir')} resetDisabled={coreDisabled} onReset={() => resetField('dataDir')}>
+              <input id="mnemon-custom-directory" aria-label={t('config.customAria')} aria-describedby={`mnemon-custom-directory-hint${errorId === undefined ? '' : ` ${errorId}`}`} aria-invalid={error !== null} value={draft.dataDir} onChange={event => edit('dataDir', event.target.value)} placeholder="~/mnemon-data" spellCheck={false} autoComplete="off" disabled={coreDisabled} />
+            </SettingField>}
+          </div>
+        </section>
+
+        <section className={css.group} aria-labelledby="mnemon-interaction-heading">
+          <div className={css.groupHeader}>
+            <div><h3 id="mnemon-interaction-heading">{t('config.interactionTitle')}</h3><p>{t('config.interactionHint')}</p></div>
+            <span className={css.liveBadge}>{t('config.interactionLive')}</span>
+          </div>
+          <div className={css.switches}>
+            <SwitchRow id="mnemon-interaction-toolviews" label={t('config.interactionToolviews')} hint={t('config.interactionToolviewsHint')} checked={draft.toolviews} disabled={interactionDisabled} overridden={overridden('toolviews')} t={t} onReset={() => resetField('toolviews')} onChange={value => edit('toolviews', value)} />
+            <SwitchRow id="mnemon-interaction-turn-bar" label={t('config.interactionTurnBar')} hint={t('config.interactionTurnBarHint')} checked={draft.turnBar} disabled={interactionDisabled} overridden={overridden('turnBar')} t={t} onReset={() => resetField('turnBar')} onChange={value => edit('turnBar', value)} />
+            <SwitchRow id="mnemon-interaction-save-action" label={t('config.interactionSaveAction')} hint={t('config.interactionSaveActionHint')} checked={draft.saveAction} disabled={interactionDisabled} overridden={overridden('saveAction')} t={t} onReset={() => resetField('saveAction')} onChange={value => edit('saveAction', value)} />
+          </div>
+        </section>
 
         <div className={css.feedback} aria-live="polite">
           {error !== null && <p id="mnemon-settings-validation" className={css.error} role="alert">{error}</p>}
           {failed !== null && <p className={css.error} role="alert">{t('config.saveFailed', { error: failed })}</p>}
-          {!snapshot.writable && <p className={css.readOnly}>{t('config.readOnly')}</p>}
+          {!writable && <p className={css.readOnly}>{t('config.readOnly')}</p>}
         </div>
 
-        <div className={css.actions}>
-          <button type="button" className={css.discard} disabled={dirty.size === 0 || saving} onClick={discard}>{t('config.discard')}</button>
-          <button type="button" className={css.save} disabled={dirty.size === 0 || saving || error !== null || !snapshot.writable} onClick={() => void save()}>{saving ? t('config.saving') : t('config.save')}</button>
-        </div>
-        </>}
-      </div>
+        <footer className={`${css.actions} ${dirty.size > 0 ? css.actionsVisible : ''}`}>
+          <span>{dirty.size > 0 ? t('config.unsaved') : t('config.ready')}</span>
+          <div>
+            <button type="button" className={css.discard} disabled={dirty.size === 0 || saving} onClick={discard}>{t('config.discard')}</button>
+            <button type="button" className={css.save} disabled={dirty.size === 0 || saving || error !== null || !writable} onClick={() => void save()}>{saving ? t('config.saving') : t('config.save')}</button>
+          </div>
+        </footer>
+      </>}
     </section>
   )
 }
@@ -204,6 +223,21 @@ function SettingField(props: { controlId: string; t: MnemonTranslate; label: str
       </div>
       {props.children}
       <p id={`${props.controlId}-hint`} className={css.fieldHint}>{props.hint}</p>
+    </div>
+  )
+}
+
+function SwitchRow(props: { id: string; label: string; hint: string; checked: boolean; disabled: boolean; overridden: boolean; t: MnemonTranslate; onReset: () => void; onChange: (value: boolean) => void }): JSX.Element {
+  return (
+    <div className={css.switchRow}>
+      <label htmlFor={props.id} className={css.switchCopy}><strong>{props.label}</strong><span>{props.hint}</span></label>
+      <div className={css.switchControl}>
+        {props.overridden && <button className={css.reset} type="button" disabled={props.disabled} onClick={props.onReset}>{props.t('config.reset')}</button>}
+        <label className={css.switch}>
+          <input id={props.id} type="checkbox" aria-label={props.label} checked={props.checked} disabled={props.disabled} onChange={event => props.onChange(event.target.checked)} />
+          <span aria-hidden="true" />
+        </label>
+      </div>
     </div>
   )
 }

@@ -110,7 +110,7 @@ For a local checkout, use an absolute path:
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
-Open “Settings -> Plugin Configuration -> Mnemon” to select a storage scope, then create or activate a Memory Space in the conversation's “Memory System” tab. Configuration applies after restart. Changing the scope never migrates, merges, or deletes old data automatically.
+Open the dedicated “Settings -> Plugins -> Mnemon” page to select a storage scope, then create or activate a Memory Space in the conversation's “Memory System” tab. Storage settings apply after restart; conversation presentation applies live after saving. Changing the scope never migrates, merges, or deletes old data automatically.
 
 Upgrade and uninstall (`dsh plugin` forwards to pnpm inside the profile directory):
 
@@ -143,10 +143,10 @@ See the [configuration reference](./docs/en/configuration.md) for every option, 
 
 The Web workspace contains Status, Runtime, Memory Spaces, Documents, Distill, Recall, Entities, and Content pages in three divider-separated groups: “Status” stands alone; “Runtime, Memory Spaces, Documents” cover the three storage tiers; “Distill, Recall, Entities, Content” are the read/write tools. Its main interface follows DSH's global Chinese/English locale.
 
-Memory also surfaces inside the conversation flow (in-conversation interaction, **off by default**; enable each surface under Settings → Plugin settings → Mnemon → In-conversation interaction — changes apply live on save):
+Memory also surfaces inside the conversation flow (in-conversation interaction, **off by default**; enable each surface under Settings → Plugins → Mnemon → In-conversation interaction — changes apply live on save):
 
 - **Memory tool cards**: every `mnemon_*` tool call renders as a memory-flavoured card — recalls show the query and hit count, writes show the subject summary — expandable to the raw arguments and structured result, with a one-click jump to the matching Memory view page;
-- **Turn memory bar**: a completed turn that touched memory gets a “Turn memory · recalled N · wrote M · document search K” summary under its tail, expandable to the exact tool names;
+- **Turn memory bar**: completed calls are separated into successful recalls, writes, document searches, and inspections, with failures reported independently; expand it for the exact tool names;
 - **Save to memory**: every finalized assistant reply carries a “Save to memory” action; the candidate is editable, and submission routes through the isolated memory subagent (judgment, dedupe, distillation) without filling the main conversation context.
 
 Common commands:

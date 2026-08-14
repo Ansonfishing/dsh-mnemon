@@ -50,9 +50,11 @@ mnemon:
 | `idleReviewMs` | `30000` | 5000–600000 ms | 达标后需要连续空闲的时间 |
 | `tabEnabled` | `true` | boolean | 当前只门控 Host Mnemon 数据 RPC；客户端 Tab 仍会注册，见下方限制 |
 | `writeEnabled` | `true` | boolean | 是否暴露语义写工具、写 RPC 和写命令 |
-| `conversationInteraction.toolviews` | `false` | boolean | 对话内记忆工具卡（`mnemon_*` 调用的记忆风格卡片）；默认关闭（opt-in），**保存后实时生效** |
-| `conversationInteraction.turnBar` | `false` | boolean | 回合尾记忆活动条；默认关闭（opt-in），**保存后实时生效** |
-| `conversationInteraction.saveAction` | `false` | boolean | 已定稿助手回复旁的「存入记忆」按钮；默认关闭（opt-in），**保存后实时生效** |
+| `mnemon-ui.toolviews` | `false` | boolean | 对话内记忆工具卡（`mnemon_*` 调用的记忆风格卡片）；默认关闭（opt-in），**保存后实时生效** |
+| `mnemon-ui.turnBar` | `false` | boolean | 回合尾记忆活动条；默认关闭（opt-in），**保存后实时生效** |
+| `mnemon-ui.saveAction` | `false` | boolean | 已定稿助手回复旁的「存入记忆」按钮；默认关闭（opt-in），**保存后实时生效** |
+
+`mnemon` 是重启生效的 Host/存储命名空间；`mnemon-ui` 是实时生效的浏览器呈现命名空间。旧版 `mnemon.conversationInteraction` 仍会作为迁移默认值读取，但新保存只写入 `mnemon-ui`。
 
 ## 存储范围
 

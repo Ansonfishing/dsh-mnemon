@@ -1,4 +1,6 @@
 import type { ClientConnectionHandle, ClientContextShape } from '../contracts.ts'
+import type { Config, InteractionConfig } from '../config.ts'
+import { MNEMON_SETTINGS_NAMESPACE, MNEMON_UI_SETTINGS_NAMESPACE } from '../settings.ts'
 import { MnemonSettingsCard } from './MnemonSettingsCard.tsx'
 import { MnemonView } from './MnemonView.tsx'
 import { MnemonToolView, MNEMON_TOOLVIEW_NAMES } from './MnemonToolviews.tsx'
@@ -77,14 +79,14 @@ type InteractionUnitKey = keyof typeof INTERACTION_UNITS
 
 /** Interaction surfaces are opt-in: an explicit `true` in settings enables one. */
 function enabledOf(value: unknown, key: 'toolviews' | 'turnBar' | 'saveAction'): boolean {
-  const group = (value as { conversationInteraction?: Partial<Record<typeof key, boolean>> } | undefined)?.conversationInteraction
-  return group?.[key] === true
+  return (value as Partial<Record<typeof key, boolean>> | undefined)?.[key] === true
 }
 
 /** Add one standard conversation.view entry; unloading the plugin removes it with the slot effect. */
 export function apply(rawContext: unknown): void {
   const ctx = rawContext as unknown as ClientContextShape
-  const settings = new MnemonSettingsScope(ctx.connection)
+  const settings = new MnemonSettingsScope<Config>(ctx.connection, MNEMON_SETTINGS_NAMESPACE)
+  const interactionSettings = new MnemonSettingsScope<InteractionConfig>(ctx.connection, MNEMON_UI_SETTINGS_NAMESPACE)
   const namespace = 'mnemon'
   ctx.effect(() => ctx.locale.register(namespace, { zh, en }), 'dsh-mnemon: locale dictionaries')
   const translate = ctx.locale.bind(namespace)
@@ -94,19 +96,21 @@ export function apply(rawContext: unknown): void {
     order: 30,
     label: () => translate('tab.label'),
     locale: namespace,
-    inject: (): { connection: ClientConnectionHandle; settingsScope: MnemonSettingsScope; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+    inject: (): { connection: ClientConnectionHandle; settingsScope: MnemonSettingsScope<Config>; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
       connection: ctx.connection,
       settingsScope: settings,
       t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
     }),
   }, MnemonView as never))
-  ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
-    name: 'settings.plugin.item',
+  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
+    name: 'settings.plugins.tab',
     id: 'mnemon',
-    order: 30,
+    order: 20,
+    label: () => translate('config.tab'),
     locale: namespace,
-    inject: (): { scope: MnemonSettingsScope; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+    inject: (): { scope: MnemonSettingsScope<Config>; interactionScope: MnemonSettingsScope<InteractionConfig>; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
       scope: settings,
+      interactionScope: interactionSettings,
       t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
     }),
   }, MnemonSettingsCard as never))
@@ -116,7 +120,7 @@ export function apply(rawContext: unknown): void {
   // reload. Until the snapshot loads, nothing registers (conservative default).
   const active = new Map<InteractionUnitKey, () => void>()
   const reconcile = (): void => {
-    const value = settings.getSnapshot().value
+    const value = interactionSettings.getSnapshot().value
     for (const key of Object.keys(INTERACTION_UNITS) as InteractionUnitKey[]) {
       const unit = INTERACTION_UNITS[key]
       const enabled = unit.enabled(value)
@@ -129,7 +133,7 @@ export function apply(rawContext: unknown): void {
     }
   }
   ctx.effect(() => {
-    const unsubscribe = settings.subscribe(reconcile)
+    const unsubscribe = interactionSettings.subscribe(reconcile)
     reconcile()
     return () => {
       unsubscribe()

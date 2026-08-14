@@ -60,14 +60,7 @@ export interface HostSettingsService {
         revision: number;
         applies: 'live' | 'restart';
     }>;
-    mutate(namespace: string, ops: Array<{
-        op: 'set';
-        path: string[];
-        value: unknown;
-    } | {
-        op: 'unset';
-        path: string[];
-    }>, expectedRevision?: number): Promise<void>;
+    mutate(namespace: string, ops: SettingsOperation[], expectedRevision?: number): Promise<void>;
 }
 export interface ToolExecution {
     signal: AbortSignal;
@@ -273,7 +266,17 @@ export interface ClientSettingsScope<T> {
     unset(field: string): Promise<void>;
     setPath(path: string[], value: unknown): Promise<void>;
     unsetPath(path: string[]): Promise<void>;
+    /** Commit one namespace mutation behind a single revision fence. */
+    mutate?(ops: SettingsOperation[]): Promise<void>;
 }
+export type SettingsOperation = {
+    op: 'set';
+    path: string[];
+    value: unknown;
+} | {
+    op: 'unset';
+    path: string[];
+};
 export interface ClientContextShape {
     slots: SlotsService;
     connection: ClientConnectionHandle;

@@ -100,7 +100,7 @@ Start the DSH Web profile:
 dsh --profile web
 ```
 
-Under “Settings -> Plugin Configuration -> Mnemon,” choose:
+On the dedicated “Settings -> Plugins -> Mnemon” page, choose:
 
 | Scope | Root directory | Best suited for |
 |---|---|---|

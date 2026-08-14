@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MnemonSettingsCard } from '../src/client/MnemonSettingsCard.tsx'
 import { translateEn } from '../src/client/locales.ts'
 import type { ClientSettingsScope } from '../src/contracts.ts'
-import type { Config } from '../src/config.ts'
+import type { Config, InteractionConfig } from '../src/config.ts'
 
 afterEach(cleanup)
 
@@ -65,7 +65,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('persists a custom directory before selecting the custom scope', async () => {
-    const calls: string[] = []
+    const mutate = vi.fn(async () => {})
     const snapshot = {
       status: 'ready' as const,
       value: { storageScope: 'global' as const },
@@ -79,8 +79,9 @@ describe('MnemonSettingsCard', () => {
       snapshot,
       getSnapshot() { return this.snapshot },
       subscribe() { return () => {} },
-      set: vi.fn(async (field: string) => { calls.push(field) }), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
+      set: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
       unset: vi.fn(async () => {}),
+      mutate,
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
     const view = render(<MnemonSettingsCard scope={scope} />)
 
@@ -88,7 +89,10 @@ describe('MnemonSettingsCard', () => {
     fireEvent.change(view.getByLabelText('Mnemon 自定义数据目录'), { target: { value: '/tmp/mnemon-custom' } })
     fireEvent.click(view.getByRole('button', { name: '保存到 settings.yaml' }))
 
-    await waitFor(() => expect(calls).toEqual(['dataDir', 'storageScope']))
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([
+      { op: 'set', path: ['dataDir'], value: '/tmp/mnemon-custom' },
+      { op: 'set', path: ['storageScope'], value: 'custom' },
+    ]))
   })
 
   it('connects custom-directory validation to the visible control', () => {
@@ -164,12 +168,11 @@ describe('MnemonSettingsCard', () => {
     expect(screen.queryByLabelText('Mnemon 存储范围')).toBeNull()
   })
 
-  it('persists interaction toggles through nested setPath calls', async () => {
-    const setPath = vi.fn(async () => {})
-    const unsetPath = vi.fn(async () => {})
-    const snapshot = {
+  it('persists live interaction toggles as one atomic mnemon-ui mutation', async () => {
+    const interactionMutate = vi.fn(async () => {})
+    const coreSnapshot = {
       status: 'ready' as const,
-      value: { conversationInteraction: { toolviews: true, turnBar: true, saveAction: true } },
+      value: { storageScope: 'global' as const },
       base: {},
       user: {},
       revision: 0,
@@ -177,16 +180,35 @@ describe('MnemonSettingsCard', () => {
       mode: 'host' as const,
     }
     const scope = {
-      snapshot,
+      snapshot: coreSnapshot,
       getSnapshot() { return this.snapshot },
       subscribe() { return () => {} },
       set: vi.fn(async () => {}),
       unset: vi.fn(async () => {}),
-      setPath,
-      unsetPath,
-    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+      setPath: vi.fn(async () => {}),
+      unsetPath: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof coreSnapshot }
+    const interactionSnapshot = {
+      status: 'ready' as const,
+      value: { toolviews: true, turnBar: true, saveAction: true },
+      base: {},
+      user: {},
+      revision: 0,
+      writable: true,
+      mode: 'host' as const,
+    }
+    const interactionScope = {
+      snapshot: interactionSnapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}),
+      unset: vi.fn(async () => {}),
+      setPath: vi.fn(async () => {}),
+      unsetPath: vi.fn(async () => {}),
+      mutate: interactionMutate,
+    } satisfies ClientSettingsScope<InteractionConfig> & { snapshot: typeof interactionSnapshot }
 
-    const view = render(<MnemonSettingsCard scope={scope} />)
+    const view = render(<MnemonSettingsCard scope={scope} interactionScope={interactionScope} />)
 
     const toolviews = view.getByLabelText('记忆工具卡') as HTMLInputElement
     const turnBar = view.getByLabelText('回合记忆条') as HTMLInputElement
@@ -197,9 +219,10 @@ describe('MnemonSettingsCard', () => {
     fireEvent.click(turnBar)
     fireEvent.click(view.getByRole('button', { name: '保存到 settings.yaml' }))
 
-    await waitFor(() => expect(setPath).toHaveBeenCalledWith(['conversationInteraction', 'toolviews'], false))
-    expect(setPath).toHaveBeenCalledWith(['conversationInteraction', 'turnBar'], false)
-    expect(unsetPath).not.toHaveBeenCalled()
+    await waitFor(() => expect(interactionMutate).toHaveBeenCalledWith([
+      { op: 'set', path: ['toolviews'], value: false },
+      { op: 'set', path: ['turnBar'], value: false },
+    ]))
   })
 
   it('presents interaction toggles unchecked by default (opt-in)', () => {

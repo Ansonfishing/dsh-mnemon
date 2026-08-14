@@ -1,9 +1,13 @@
-import type { Config } from '../config.ts';
+import { type JSX } from 'react';
+import type { Config, InteractionConfig } from '../config.ts';
 import type { ClientSettingsScope } from '../contracts.ts';
 import { type MnemonTranslate } from './locales.ts';
 export interface MnemonSettingsCardProps {
     scope: ClientSettingsScope<Config>;
+    /** Separate live namespace; falls back to the core scope for older hosts. */
+    interactionScope?: ClientSettingsScope<InteractionConfig>;
     t?: MnemonTranslate;
 }
-export declare function MnemonSettingsCard({ scope, t }: MnemonSettingsCardProps): JSX.Element | null;
+/** Dedicated Mnemon page contributed to DSH's Plugins settings tabs. */
+export declare function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, t }: MnemonSettingsCardProps): JSX.Element | null;
 //# sourceMappingURL=MnemonSettingsCard.d.ts.map

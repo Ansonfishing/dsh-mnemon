@@ -50,9 +50,11 @@ mnemon:
 | `idleReviewMs` | `30000` | 5000–600000 ms | Required continuous idle time after the threshold is reached |
 | `tabEnabled` | `true` | boolean | Currently gates only Host Mnemon data RPC; the client Tab is still registered—see the limitation below |
 | `writeEnabled` | `true` | boolean | Whether to expose semantic write tools, write RPC, and write commands |
-| `conversationInteraction.toolviews` | `false` | boolean | In-conversation memory tool cards for `mnemon_*` calls; off by default (opt-in), **applies live after saving** |
-| `conversationInteraction.turnBar` | `false` | boolean | Turn-tail memory activity bar; off by default (opt-in), **applies live after saving** |
-| `conversationInteraction.saveAction` | `false` | boolean | “Save to memory” action on finalized assistant replies; off by default (opt-in), **applies live after saving** |
+| `mnemon-ui.toolviews` | `false` | boolean | In-conversation memory tool cards for `mnemon_*` calls; off by default (opt-in), **applies live after saving** |
+| `mnemon-ui.turnBar` | `false` | boolean | Turn-tail memory activity bar; off by default (opt-in), **applies live after saving** |
+| `mnemon-ui.saveAction` | `false` | boolean | “Save to memory” action on finalized assistant replies; off by default (opt-in), **applies live after saving** |
+
+`mnemon` is the restart-applied Host/storage namespace; `mnemon-ui` is the live browser-presentation namespace. Legacy `mnemon.conversationInteraction` values remain a migration default, but new saves write only to `mnemon-ui`.
 
 ## Storage Scopes
 

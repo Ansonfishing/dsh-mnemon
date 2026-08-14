@@ -1,4 +1,4 @@
-import { Config, resolveConfig, type Config as MnemonConfig } from './config.ts'
+import { Config, InteractionConfig, resolveConfig, resolveInteractionConfig, type Config as MnemonConfig } from './config.ts'
 import { registerCommands } from './commands.ts'
 import type { HostContextShape } from './contracts.ts'
 import { DocumentManager } from './documents.ts'
@@ -15,7 +15,7 @@ import { StorageScopeInspector } from './storage-scope.ts'
 
 export const name = 'dsh-mnemon'
 export const inject = ['tools', 'settings', 'commands', 'agents', 'subagents']
-export { Config, resolveConfig, DocumentManager, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, StorageScopeInspector, createRunner }
+export { Config, InteractionConfig, resolveConfig, resolveInteractionConfig, DocumentManager, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, StorageScopeInspector, createRunner }
 export type { MnemonConfig }
 
 /** Mount native model tools on every DSH surface and UI RPC only when Web connection exists. */
@@ -27,6 +27,10 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     validate: value => { resolveConfig(value) },
   })
   const resolved = resolveConfig(settings.get())
+  ctx.settings.register('mnemon-ui', InteractionConfig, {
+    base: resolveInteractionConfig(resolved.conversationInteraction),
+    applies: 'live',
+  })
   const runner = createRunner(resolved)
   const service = new MnemonService(runner, resolved)
   const runtimeMemory = new RuntimeMemoryController(runner)

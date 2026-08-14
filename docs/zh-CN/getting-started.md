@@ -100,7 +100,7 @@ dsh plugin --profile web remove dsh-mnemon
 dsh --profile web
 ```
 
-在“设置 -> 插件配置 -> Mnemon”选择：
+在“设置 -> 插件 -> Mnemon”独立配置页选择：
 
 | 范围 | 根目录 | 适合场景 |
 |---|---|---|

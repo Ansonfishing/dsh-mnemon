@@ -21,6 +21,9 @@ function makeCtx(initialValue: unknown) {
   /** Registrations that have not been disposed yet. */
   let active: string[] = []
   const effects: Array<() => unknown> = []
+  const registeredOptions: SlotOptions[] = []
+  let uiValue = initialValue as Record<string, unknown>
+  let revision = 1
 
   const ctx = {
     slots: {
@@ -33,6 +36,7 @@ function makeCtx(initialValue: unknown) {
         return disposer
       },
       register: (options: SlotOptions) => {
+        registeredOptions.push(options)
         const key = options.key ?? options.id ?? options.name
         active.push(key)
         return () => { active = active.filter(candidate => candidate !== key) }
@@ -40,9 +44,21 @@ function makeCtx(initialValue: unknown) {
     },
     connection: {
       rpc: {
-        call: vi.fn(async (channel: string, endpoint: string) => {
-          if (channel === '/dsh-mnemon-settings' && endpoint === 'get') {
-            return { ok: true, value: { status: 'ready', value: initialValue, base: {}, user: {}, revision: 1, writable: true, mode: 'host' } }
+        call: vi.fn(async (channel: string, endpoint: string, rawPayload: unknown) => {
+          if (channel === '/dsh-mnemon-settings') {
+            const payload = rawPayload as { namespace?: string; ops?: Array<{ op: string; path: string[]; value?: unknown }> }
+            const namespace = payload.namespace
+            if (endpoint === 'mutate' && namespace === 'mnemon-ui') {
+              for (const op of payload.ops ?? []) {
+                if (op.op === 'set') uiValue = { ...uiValue, [op.path[0]!]: op.value }
+                else {
+                  uiValue = { ...uiValue }
+                  delete uiValue[op.path[0]!]
+                }
+              }
+              revision += 1
+            }
+            return { ok: true, value: { status: 'ready', value: namespace === 'mnemon-ui' ? uiValue : {}, base: {}, user: namespace === 'mnemon-ui' ? uiValue : {}, revision, writable: true, mode: 'host' } }
           }
           return { ok: false, error: { code: 'internal', message: 'unexpected', details: {} } }
         }),
@@ -63,7 +79,7 @@ function makeCtx(initialValue: unknown) {
   const injectDisposers = new Map<string, () => void>()
   const effectDisposers: Array<() => void> = []
   const activeRegistrations = () => active
-  return { ctx, injects, injectDisposers, activeRegistrations, effectDisposers }
+  return { ctx, injects, injectDisposers, registeredOptions, activeRegistrations, effectDisposers }
 }
 
 const TOOLVIEW_KEYS = ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related', 'mnemon_status', 'mnemon_document_search', 'mnemon_document_manage', 'mnemon_runtime_memory', 'mnemon_remember', 'mnemon_link', 'mnemon_forget', 'mnemon_memory_body_create', 'mnemon_memory_body_update', 'mnemon_memory_body_merge']
@@ -74,9 +90,9 @@ describe('interaction surfaces binding', () => {
   it('registers no interaction surface by default (opt-in off)', async () => {
     const { ctx, injects, activeRegistrations } = makeCtx({})
     apply(ctx)
-    // conversation.view and settings.plugin.item always register; the
+    // conversation.view and the dedicated Plugins settings tab always register; the
     // interaction surfaces must not until settings explicitly enable them.
-    expect(injects).toEqual(expect.arrayContaining(['conversation.view', 'settings.plugin.item']))
+    expect(injects).toEqual(expect.arrayContaining(['conversation.view', 'settings.plugins.tab']))
     await waitFor(() => {
       expect(activeRegistrations()).not.toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
     })
@@ -85,9 +101,7 @@ describe('interaction surfaces binding', () => {
   })
 
   it('registers explicitly enabled surfaces after settings load', async () => {
-    const { ctx, activeRegistrations } = makeCtx({
-      conversationInteraction: { toolviews: true, turnBar: true, saveAction: true },
-    })
+    const { ctx, activeRegistrations } = makeCtx({ toolviews: true, turnBar: true, saveAction: true })
     apply(ctx)
     await waitFor(() => {
       expect(activeRegistrations()).toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
@@ -96,14 +110,27 @@ describe('interaction surfaces binding', () => {
   })
 
   it('registers only the enabled surfaces when toggles are mixed', async () => {
-    const { ctx, activeRegistrations } = makeCtx({
-      conversationInteraction: { toolviews: true, turnBar: false, saveAction: true },
-    })
+    const { ctx, activeRegistrations } = makeCtx({ toolviews: true, turnBar: false, saveAction: true })
     apply(ctx)
     await waitFor(() => {
       expect(activeRegistrations()).toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
     })
     expect(activeRegistrations()).toEqual(expect.arrayContaining(['mnemon-save']))
     expect(activeRegistrations()).not.toContain('conversation.chat.turnTail')
+  })
+
+  it('registers and disposes interaction surfaces when mnemon-ui changes live', async () => {
+    const { ctx, registeredOptions, activeRegistrations } = makeCtx({})
+    apply(ctx)
+    await waitFor(() => expect(registeredOptions.some(options => options.name === 'settings.plugins.tab')).toBe(true))
+    const settingsEntry = registeredOptions.find(options => options.name === 'settings.plugins.tab')
+    const injected = settingsEntry?.inject?.() as { interactionScope?: { mutate: (ops: unknown[]) => Promise<void> } } | undefined
+    if (injected?.interactionScope === undefined) throw new Error('mnemon-ui settings scope was not injected')
+
+    await injected.interactionScope.mutate([{ op: 'set', path: ['turnBar'], value: true }])
+    await waitFor(() => expect(activeRegistrations()).toContain('conversation.chat.turnTail'))
+
+    await injected.interactionScope.mutate([{ op: 'set', path: ['turnBar'], value: false }])
+    await waitFor(() => expect(activeRegistrations()).not.toContain('conversation.chat.turnTail'))
   })
 })

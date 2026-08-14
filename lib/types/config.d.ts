@@ -28,7 +28,7 @@ export interface Config {
     writebackMode?: 'guided' | 'off';
     /** Continuous root-agent idle time after the QoderWork activity gate is met. */
     idleReviewMs?: number;
-    /** In-conversation interaction surfaces; all default off (opt-in, still stabilizing). */
+    /** @deprecated Migration source for pre-0.2 settings; new writes use the live `mnemon-ui` namespace. */
     conversationInteraction?: {
         /** Memory-flavoured toolview cards for mnemon_* tool calls. */
         toolviews?: boolean;
@@ -38,6 +38,13 @@ export interface Config {
         saveAction?: boolean;
     };
 }
+/** Browser-only interaction settings, registered live under `mnemon-ui`. */
+export interface InteractionConfig {
+    toolviews?: boolean;
+    turnBar?: boolean;
+    saveAction?: boolean;
+}
+export declare const InteractionConfig: z<InteractionConfig>;
 export declare const Config: z<Config>;
 export interface ResolvedConfig {
     storageScope: 'global' | 'workspace' | 'custom';
@@ -59,5 +66,11 @@ export interface ResolvedConfig {
         saveAction: boolean;
     };
 }
+export interface ResolvedInteractionConfig {
+    toolviews: boolean;
+    turnBar: boolean;
+    saveAction: boolean;
+}
+export declare function resolveInteractionConfig(config?: InteractionConfig): ResolvedInteractionConfig;
 export declare function resolveConfig(config?: Config): ResolvedConfig;
 //# sourceMappingURL=config.d.ts.map
