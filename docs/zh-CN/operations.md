@@ -15,7 +15,7 @@ mnemon --version
 /mnemon status
 ```
 
-[![状态页：组件版本、三层数据与实际存储目录](./assets/screenshots/status-overview.png)](./assets/screenshots/status-overview.png)
+[![状态页：组件版本、三层数据与实际存储目录](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
 
 状态页显示 Mnemon / dsh-mnemon 版本、Runtime、Memory Spaces、Documents 和当前实际目录。`mnemon status` 会打开有效 Store，上游 CLI 可能初始化数据或执行迁移，因此不是完全无副作用的只读探测。
 
@@ -23,7 +23,7 @@ mnemon --version
 
 状态页的“检查版本”打开“检查与更新版本”面板：
 
-[![检查与更新 Mnemon CLI 和 dsh-mnemon](./assets/screenshots/version-check.png)](./assets/screenshots/version-check.png)
+[![检查与更新 Mnemon CLI 和 dsh-mnemon](../assets/screenshots/version-check.png)](../assets/screenshots/version-check.png)
 
 - **Mnemon CLI**：本地版本来自 `mnemon --version`，最新版本来自 Mnemon GitHub Releases。
 - **dsh-mnemon**：运行版本来自当前插件包，最新版本来自 npm registry。

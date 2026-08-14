@@ -15,7 +15,7 @@ mnemon --version
 /mnemon status
 ```
 
-[![Status with component versions, three-tier data, and effective directories](../zh-CN/assets/screenshots/status-overview.png)](../zh-CN/assets/screenshots/status-overview.png)
+[![Status with component versions, three-tier data, and effective directories](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
 
 Status shows Mnemon / dsh-mnemon versions, Runtime, Memory Spaces, Documents, and effective directories. `mnemon status` opens the effective Store and may initialize data or run upstream migrations, so it is not a completely side-effect-free probe.
 
@@ -23,7 +23,7 @@ Status shows Mnemon / dsh-mnemon versions, Runtime, Memory Spaces, Documents, an
 
 **Check versions** on Status opens the version panel:
 
-[![Check and update Mnemon CLI and dsh-mnemon](../zh-CN/assets/screenshots/version-check.png)](../zh-CN/assets/screenshots/version-check.png)
+[![Check and update Mnemon CLI and dsh-mnemon](../assets/screenshots/version-check.png)](../assets/screenshots/version-check.png)
 
 - **Mnemon CLI**: installed from `mnemon --version`; latest from Mnemon GitHub Releases.
 - **dsh-mnemon**: installed from the running package; latest from the npm registry.

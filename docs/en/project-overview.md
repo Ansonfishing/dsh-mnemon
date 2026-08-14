@@ -6,7 +6,7 @@
 
 Its goal is not to store more text. It balances long-term continuity, current-fact priority, context cost, and recoverable writes.
 
-[![Memory Space overview with catalog, activation boundary, and multi-space graph](../zh-CN/assets/screenshots/overview-memory-graph.png)](../zh-CN/assets/screenshots/overview-memory-graph.png)
+[![Memory Space overview with catalog, activation boundary, and multi-space graph](../assets/screenshots/overview-memory-graph.png)](../assets/screenshots/overview-memory-graph.png)
 
 ## Why three tiers
 
@@ -52,7 +52,7 @@ See [Storage and the three-tier model](./storage-model.md) for authoritative fil
 
 ## Architecture
 
-[![dsh-mnemon runtime architecture with DSH Web, Root Agent, supervised control, and three local tiers](./assets/project-architecture.svg)](./assets/project-architecture.svg)
+[![dsh-mnemon runtime architecture with DSH Web, Root Agent, supervised control, and three local tiers](../assets/diagrams/en/project-architecture.svg)](../assets/diagrams/en/project-architecture.svg)
 
 Four boundaries shape the system:
 
@@ -65,7 +65,7 @@ Four boundaries shape the system:
 
 This diagram describes stable execution boundaries, not a live status dashboard. Solid lines are deterministic Host paths; dashed lines require supervised LLM judgment.
 
-[![Memory System flow across per-turn context, on-demand semantics, maintenance, and archive](./assets/architecture/memory-system-flow.en.png)](./assets/architecture/memory-system-flow.en.png)
+[![Memory System flow across per-turn context, on-demand semantics, maintenance, and archive](../assets/diagrams/en/memory-system-flow.png)](../assets/diagrams/en/memory-system-flow.png)
 
 The three major flows are:
 

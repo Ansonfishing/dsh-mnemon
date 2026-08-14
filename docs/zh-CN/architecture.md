@@ -12,7 +12,7 @@
 
 ## 组件图
 
-[![dsh-mnemon 运行时架构](./assets/project-architecture.svg)](./assets/project-architecture.svg)
+[![dsh-mnemon 运行时架构](../assets/diagrams/zh-CN/project-architecture.svg)](../assets/diagrams/zh-CN/project-architecture.svg)
 
 图中实线表示确定性数据或控制路径，紫色虚线表示 LLM 监督路径。Runtime Memory 和 Documents 直接使用受管文件；只有 Memory Spaces 通过 `MnemonRunner` 调用本地 Mnemon CLI。点击图片可以查看原始 SVG。
 

@@ -8,7 +8,7 @@ This guide follows the default `sidebar` presentation and a real user path throu
 
 Choose the entry point and storage location under **Settings → Memory System**:
 
-[![Memory System settings: Sidebar, Buildin, storage, conversation UI, and backup](../zh-CN/assets/screenshots/settings-memory-system.png)](../zh-CN/assets/screenshots/settings-memory-system.png)
+[![Memory System settings: Sidebar, Buildin, storage, conversation UI, and backup](../assets/screenshots/settings-memory-system.png)](../assets/screenshots/settings-memory-system.png)
 
 | Mode | Best suited for |
 |---|---|
@@ -25,7 +25,7 @@ The body has four primary tabs: **Status, Runtime, Memory Spaces, and Documents*
 
 ## 1. Status: establish that the system is ready
 
-[![Status summary for versions, Runtime, Memory Spaces, Documents, and storage root](../zh-CN/assets/screenshots/status-overview.png)](../zh-CN/assets/screenshots/status-overview.png)
+[![Status summary for versions, Runtime, Memory Spaces, Documents, and storage root](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
 
 Status aggregates:
 
@@ -41,13 +41,13 @@ If this page reports a failure, avoid Remember or Archive until you follow [Trou
 
 Open the version area for a read-only check:
 
-[![Check and update Mnemon and dsh-mnemon versions](../zh-CN/assets/screenshots/version-check.png)](../zh-CN/assets/screenshots/version-check.png)
+[![Check and update Mnemon and dsh-mnemon versions](../assets/screenshots/version-check.png)](../assets/screenshots/version-check.png)
 
 Checking never installs automatically. Update appears only when a newer release exists and the installation source is supported. After an update, the interface rechecks both components and refreshes Status automatically. Restart `dsh web` after a dsh-mnemon update to load new plugin code.
 
 ## 2. Runtime: maintain hot memory used every turn
 
-[![Runtime capacity, scope filters, content filter, and unified list](../zh-CN/assets/screenshots/runtime-memory.png)](../zh-CN/assets/screenshots/runtime-memory.png)
+[![Runtime capacity, scope filters, content filter, and unified list](../assets/screenshots/runtime-memory.png)](../assets/screenshots/runtime-memory.png)
 
 The top summarizes User Profile (`USER.md`) and Working Memory (`MEMORY.md`); one list below holds both.
 
@@ -59,7 +59,7 @@ The top summarizes User Profile (`USER.md`) and Working Memory (`MEMORY.md`); on
 
 ### Add Runtime Memory
 
-[![Add hot memory dialog with content, category, and importance](../zh-CN/assets/screenshots/runtime-memory-add.png)](../zh-CN/assets/screenshots/runtime-memory-add.png)
+[![Add hot memory dialog with content, category, and importance](../assets/screenshots/runtime-memory-add.png)](../assets/screenshots/runtime-memory-add.png)
 
 A Runtime item should be compact, independent, and repeatedly useful. Put identity, preferences, and explicit collaboration requirements in User Profile; put project, environment, decision, and tool lessons in Working Memory. Temporary progress and raw logs do not belong here.
 
@@ -67,7 +67,7 @@ A Runtime item should be compact, independent, and repeatedly useful. Put identi
 
 ### Overview
 
-[![Memory Space catalog, activation, and multi-space relationship graph](../zh-CN/assets/screenshots/overview-memory-graph.png)](../zh-CN/assets/screenshots/overview-memory-graph.png)
+[![Memory Space catalog, activation, and multi-space relationship graph](../assets/screenshots/overview-memory-graph.png)](../assets/screenshots/overview-memory-graph.png)
 
 Each card leads with its name and routing description, pins read activation at the top right, and keeps statistics plus Edit / Delete in the footer. Activation controls reads only. A write may target an inactive registered space and activates it after success.
 
@@ -75,13 +75,13 @@ The graph aggregates all active spaces. Layout, dragging, and reset affect brows
 
 ### Remember
 
-[![Remember dialog with candidate and optional advanced constraints](../zh-CN/assets/screenshots/remember-dialog.png)](../zh-CN/assets/screenshots/remember-dialog.png)
+[![Remember dialog with candidate and optional advanced constraints](../assets/screenshots/remember-dialog.png)](../assets/screenshots/remember-dialog.png)
 
 Normally, provide only a candidate. On confirmation, an isolated memory subagent decides whether it qualifies, chooses the narrowest space, deduplicates, distills, and writes. Expand advanced options only when a target space, category, or importance must be constrained explicitly.
 
 ### Recall
 
-[![Recall query, category, strategy, raw evidence, and progressive results](../zh-CN/assets/screenshots/recall-agent-answer.png)](../zh-CN/assets/screenshots/recall-agent-answer.png)
+[![Recall query, category, strategy, raw evidence, and progressive results](../assets/screenshots/recall-agent-answer.png)](../assets/screenshots/recall-agent-answer.png)
 
 - **Direct recall** returns raw evidence without an answer Agent.
 - **Agent query** retrieves the same evidence, then gives it to an evidence-only worker with no Mnemon tools.
@@ -95,7 +95,7 @@ Focused questions are more reliable than broad keywords.
 
 | Content | Entities |
 |---|---|
-| [![Memory content and filters](../zh-CN/assets/screenshots/memory-content.png)](../zh-CN/assets/screenshots/memory-content.png) | [![Entity lookup and related memories](../zh-CN/assets/screenshots/entities-context.png)](../zh-CN/assets/screenshots/entities-context.png) |
+| [![Memory content and filters](../assets/screenshots/memory-content.png)](../assets/screenshots/memory-content.png) | [![Entity lookup and related memories](../assets/screenshots/entities-context.png)](../assets/screenshots/entities-context.png) |
 
 - **Content** browses durable memory without recall side effects and supports text/category filtering, Related, clone-from-item, Copy ID, and Forget.
 - **Entities** starts with frequent names, then aggregates related facts, decisions, and context for a selected or entered entity.
@@ -104,7 +104,7 @@ Both expose visible / total counts and progressive loading.
 
 ## 4. Documents: preserve complete project narratives
 
-[![Document capacity, progressive directory, and dedicated Markdown reader](../zh-CN/assets/screenshots/documents-markdown.png)](../zh-CN/assets/screenshots/documents-markdown.png)
+[![Document capacity, progressive directory, and dedicated Markdown reader](../assets/screenshots/documents-markdown.png)](../assets/screenshots/documents-markdown.png)
 
 Documents are for designs, investigations, procedures, postmortems, and handoffs. The directory loads progressively; the reader keeps title, retrieval description, source, revision, hash, size, and full Markdown. Selecting a Document resets the reader to the top.
 
@@ -112,7 +112,7 @@ Before active capacity is exhausted, least-recently-used Documents are cold-inde
 
 ### Create a Document
 
-[![Create managed Document dialog](../zh-CN/assets/screenshots/document-create-dialog.png)](../zh-CN/assets/screenshots/document-create-dialog.png)
+[![Create managed Document dialog](../assets/screenshots/document-create-dialog.png)](../assets/screenshots/document-create-dialog.png)
 
 Title and retrieval description determine future discoverability; source paths preserve provenance; the body retains Markdown structure. Source project files remain read-only—the workbench creates a managed copy.
 
@@ -120,15 +120,15 @@ Title and retrieval description determine future discoverability; source paths p
 
 ### Turn memory
 
-[![Expanded Turn memory with recalls, Document search, and exact tool links](../zh-CN/assets/screenshots/conversation-turn-memory.png)](../zh-CN/assets/screenshots/conversation-turn-memory.png)
+[![Expanded Turn memory with recalls, Document search, and exact tool links](../assets/screenshots/conversation-turn-memory.png)](../assets/screenshots/conversation-turn-memory.png)
 
 The bar appears only on completed turns with memory activity. Expanding lists exact tools; clicking one opens its matching page while retaining the conversation context.
 
-[![Jump from Turn memory to Memory Space Recall](../zh-CN/assets/screenshots/conversation-memory-jump.png)](../zh-CN/assets/screenshots/conversation-memory-jump.png)
+[![Jump from Turn memory to Memory Space Recall](../assets/screenshots/conversation-memory-jump.png)](../assets/screenshots/conversation-memory-jump.png)
 
 ### Save to memory
 
-[![Confirm save to memory and edit the candidate before dispatch](../zh-CN/assets/screenshots/conversation-save-dialog.png)](../zh-CN/assets/screenshots/conversation-save-dialog.png)
+[![Confirm save to memory and edit the candidate before dispatch](../assets/screenshots/conversation-save-dialog.png)](../assets/screenshots/conversation-save-dialog.png)
 
 Save to memory sits in the native action strip for finalized assistant replies. Clicking only opens confirmation and reads that reply. Edit or cancel freely; writing starts only after **Confirm and send to memory subagent**.
 

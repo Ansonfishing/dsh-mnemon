@@ -117,7 +117,7 @@ Capacity limits, CLI timeouts, revision conflicts, and Host restarts should be v
 
 ## Maintaining Documentation Visuals
 
-Public UI screenshots live under `docs/zh-CN/assets/screenshots/`; English documentation reuses the same real-interface captures. Language-specific architecture diagrams remain under each locale's `assets/architecture/`. When layout, primary copy, or defaults change:
+Public UI screenshots live under `docs/assets/screenshots/`, shared by both language editions. Language-specific architecture diagrams live under `docs/assets/diagrams/zh-CN/` and `docs/assets/diagrams/en/`. When layout, primary copy, or defaults change:
 
 1. Use a real DSH Web profile, but first check that the frame contains no token, credential, or private personal data.
 2. Limit capture to inspection, filtering, expansion, and opening dialogs. When showing a write flow, stop before final confirmation.
@@ -127,7 +127,7 @@ Public UI screenshots live under `docs/zh-CN/assets/screenshots/`; English docum
 6. Remove unreferenced assets, stale Buildin layouts, and obsolete terminology.
 7. Run link/image checks, then open both READMEs and UI guides manually.
 
-README demo assets are `docs/assets/dsh-mnemon-memory-system-demo.*`. The demo should cover Status, Runtime, Memory Spaces, Documents, and in-conversation confirmation without actually submitting memory, updating components, or changing settings through automation.
+README demo assets are `docs/assets/media/dsh-mnemon-memory-system-demo.*`. The demo should cover Status, Runtime, Memory Spaces, Documents, and in-conversation confirmation without actually submitting memory, updating components, or changing settings through automation.
 
 ## Modifying Subagent Schemas
 

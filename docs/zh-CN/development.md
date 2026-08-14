@@ -117,7 +117,7 @@ local link installation
 
 ## 维护文档视觉素材
 
-公开 UI 截图位于 `docs/zh-CN/assets/screenshots/`，英文文档复用同一组实机画面；架构图仍分别保存在两种语言的 `assets/architecture/`。界面结构、主要文案或默认行为变化时：
+公开 UI 截图统一位于 `docs/assets/screenshots/`，中英文文档复用同一组实机画面；语言相关架构图分别保存在 `docs/assets/diagrams/zh-CN/` 与 `docs/assets/diagrams/en/`。界面结构、主要文案或默认行为变化时：
 
 1. 使用真实 DSH Web profile，但先检查画面中没有 token、凭据或不应公开的个人数据；
 2. 只做查看、筛选、展开与打开弹窗等可逆交互；需要展示写入前流程时停在最终确认之前；
@@ -127,7 +127,7 @@ local link installation
 6. 删除已无引用、展示旧 Buildin 布局或术语过时的截图；
 7. 运行链接与图片检查，再人工打开中英文 README 和 UI 指南。
 
-README 演示资源位于 `docs/assets/dsh-mnemon-memory-system-demo.*`。演示应覆盖状态、运行时、记忆体、档案和对话内确认，但不要用自动化真正提交记忆、更新组件或更改设置。
+README 演示资源位于 `docs/assets/media/dsh-mnemon-memory-system-demo.*`。演示应覆盖状态、运行时、记忆体、档案和对话内确认，但不要用自动化真正提交记忆、更新组件或更改设置。
 
 ## 修改 subagent schema
 

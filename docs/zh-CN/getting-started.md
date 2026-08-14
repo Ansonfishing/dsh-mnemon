@@ -71,7 +71,7 @@ dsh plugin --profile web remove dsh-mnemon
 
 打开“设置 → 记忆系统”：
 
-[![记忆系统设置：展示形态、存储位置、对话界面与备份](./assets/screenshots/settings-memory-system.png)](./assets/screenshots/settings-memory-system.png)
+[![记忆系统设置：展示形态、存储位置、对话界面与备份](../assets/screenshots/settings-memory-system.png)](../assets/screenshots/settings-memory-system.png)
 
 ### 展示形态
 
@@ -94,7 +94,7 @@ dsh plugin --profile web remove dsh-mnemon
 
 点击左侧栏“记忆系统”，先查看“状态”：
 
-[![状态页：CLI、版本、运行时、记忆体、档案与存储根](./assets/screenshots/status-overview.png)](./assets/screenshots/status-overview.png)
+[![状态页：CLI、版本、运行时、记忆体、档案与存储根](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
 
 确认：
 
@@ -143,7 +143,7 @@ dsh plugin --profile web remove dsh-mnemon
 - 展开后可以看到具体工具名，并点击跳到对应页面；
 - “存入记忆”会先打开可编辑确认弹窗，取消不会写入。
 
-[![本回合记忆与工具跳转](./assets/screenshots/conversation-turn-memory.png)](./assets/screenshots/conversation-turn-memory.png)
+[![本回合记忆与工具跳转](../assets/screenshots/conversation-turn-memory.png)](../assets/screenshots/conversation-turn-memory.png)
 
 普通聊天不应强制召回。当前请求、现有源文件和实时工具结果应优先于历史内容。
 

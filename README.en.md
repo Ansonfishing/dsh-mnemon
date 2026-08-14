@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="./docs/en/ui-guide.md">
-    <img src="./docs/assets/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon Sidebar Memory System with Memory Space catalog and relationship graph" width="760">
+    <img src="./docs/assets/media/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon Sidebar Memory System with Memory Space catalog and relationship graph" width="760">
   </a>
 </p>
 
@@ -21,7 +21,7 @@ Current user instructions, repository files, and live tool results always take p
 
 ## Live demo
 
-![dsh-mnemon Sidebar Memory System and in-conversation interaction demo](./docs/assets/dsh-mnemon-memory-system-demo.gif)
+![dsh-mnemon Sidebar Memory System and in-conversation interaction demo](./docs/assets/media/dsh-mnemon-memory-system-demo.gif)
 
 See the [Sidebar and conversation UI guide](./docs/en/ui-guide.md) for the complete visual walkthrough.
 
@@ -89,7 +89,7 @@ Add and edit use consistent dialogs, destructive actions require confirmation, l
 
 | Turn memory | Save to memory |
 |---|---|
-| [![Expanded Turn memory with exact tool links](./docs/zh-CN/assets/screenshots/conversation-turn-memory.png)](./docs/zh-CN/assets/screenshots/conversation-turn-memory.png) | [![Confirm save to memory dialog](./docs/zh-CN/assets/screenshots/conversation-save-dialog.png)](./docs/zh-CN/assets/screenshots/conversation-save-dialog.png) |
+| [![Expanded Turn memory with exact tool links](./docs/assets/screenshots/conversation-turn-memory.png)](./docs/assets/screenshots/conversation-turn-memory.png) | [![Confirm save to memory dialog](./docs/assets/screenshots/conversation-save-dialog.png)](./docs/assets/screenshots/conversation-save-dialog.png) |
 
 - **Turn memory** summarizes recalls, writes, and Document searches for the turn; expand it to jump to the matching page.
 - **Save to memory** loads an editable candidate. Only confirmation sends it to the memory subagent for qualification, deduplication, distillation, and writing.

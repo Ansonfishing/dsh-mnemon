@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="./docs/zh-CN/ui-guide.md">
-    <img src="./docs/assets/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon Sidebar 记忆系统：记忆体目录与关系图" width="760">
+    <img src="./docs/assets/media/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon Sidebar 记忆系统：记忆体目录与关系图" width="760">
   </a>
 </p>
 
@@ -21,7 +21,7 @@
 
 ## 实机演示
 
-![dsh-mnemon Sidebar 记忆系统与对话内交互演示](./docs/assets/dsh-mnemon-memory-system-demo.gif)
+![dsh-mnemon Sidebar 记忆系统与对话内交互演示](./docs/assets/media/dsh-mnemon-memory-system-demo.gif)
 
 完整逐页说明见 [Sidebar 与对话交互指南](./docs/zh-CN/ui-guide.md)。
 
@@ -89,7 +89,7 @@ dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 
 | 本回合记忆 | 存入记忆 |
 |---|---|
-| [![展开本回合记忆并查看工具入口](./docs/zh-CN/assets/screenshots/conversation-turn-memory.png)](./docs/zh-CN/assets/screenshots/conversation-turn-memory.png) | [![确认存入记忆弹窗](./docs/zh-CN/assets/screenshots/conversation-save-dialog.png)](./docs/zh-CN/assets/screenshots/conversation-save-dialog.png) |
+| [![展开本回合记忆并查看工具入口](./docs/assets/screenshots/conversation-turn-memory.png)](./docs/assets/screenshots/conversation-turn-memory.png) | [![确认存入记忆弹窗](./docs/assets/screenshots/conversation-save-dialog.png)](./docs/assets/screenshots/conversation-save-dialog.png) |
 
 - **本回合记忆**汇总本轮的召回、沉淀与档案检索；展开后可以跳到对应页面。
 - **存入记忆**先加载可编辑候选，只有确认后才交给记忆子 Agent 判断、查重、提炼并写入。

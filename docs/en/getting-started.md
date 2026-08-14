@@ -71,7 +71,7 @@ Uninstall removes the plugin registration, not memory data in global, workspace,
 
 Open **Settings → Memory System**:
 
-[![Memory System settings for display, storage, conversation UI, and backup](../zh-CN/assets/screenshots/settings-memory-system.png)](../zh-CN/assets/screenshots/settings-memory-system.png)
+[![Memory System settings for display, storage, conversation UI, and backup](../assets/screenshots/settings-memory-system.png)](../assets/screenshots/settings-memory-system.png)
 
 ### Display mode
 
@@ -94,7 +94,7 @@ In Workspace mode, the workbench selector changes only what data is being inspec
 
 Click **Memory System** in the sidebar, then start on **Status**:
 
-[![Status with CLI, versions, Runtime, Memory Spaces, Documents, and storage root](../zh-CN/assets/screenshots/status-overview.png)](../zh-CN/assets/screenshots/status-overview.png)
+[![Status with CLI, versions, Runtime, Memory Spaces, Documents, and storage root](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
 
 Confirm that:
 
@@ -143,7 +143,7 @@ Ask a question that genuinely depends on history and allow the Agent to decide w
 - Expanding shows exact tools and links to their pages.
 - Save to memory opens an editable confirmation; canceling performs no write.
 
-[![Turn memory and exact tool navigation](../zh-CN/assets/screenshots/conversation-turn-memory.png)](../zh-CN/assets/screenshots/conversation-turn-memory.png)
+[![Turn memory and exact tool navigation](../assets/screenshots/conversation-turn-memory.png)](../assets/screenshots/conversation-turn-memory.png)
 
 Ordinary conversation should not force recall. Current requests, repository files, and live tool results outrank historical content.
 

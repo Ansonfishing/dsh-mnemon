@@ -6,7 +6,7 @@
 
 它要解决的不是“保存更多文字”，而是让 Agent 在长期连续性、当前事实优先、上下文成本和可恢复写入之间取得平衡。
 
-[![记忆体概览：目录、激活边界与多空间关系图](./assets/screenshots/overview-memory-graph.png)](./assets/screenshots/overview-memory-graph.png)
+[![记忆体概览：目录、激活边界与多空间关系图](../assets/screenshots/overview-memory-graph.png)](../assets/screenshots/overview-memory-graph.png)
 
 ## 为什么需要三个层级
 
@@ -52,7 +52,7 @@
 
 ## 总体架构
 
-[![dsh-mnemon 运行时架构：DSH Web、Root Agent、监督控制层与三层本地存储](./assets/project-architecture.svg)](./assets/project-architecture.svg)
+[![dsh-mnemon 运行时架构：DSH Web、Root Agent、监督控制层与三层本地存储](../assets/diagrams/zh-CN/project-architecture.svg)](../assets/diagrams/zh-CN/project-architecture.svg)
 
 架构由四个边界组成：
 
@@ -65,7 +65,7 @@
 
 下面的架构图是稳定执行边界，不是实时状态面板。实线是 Host 确定性路径，虚线是需要 LLM 判断的受监督 worker 路径。
 
-[![记忆系统流转：每轮上下文、按需语义操作、空闲维护与归档](./assets/architecture/memory-system-flow.zh-CN.png)](./assets/architecture/memory-system-flow.zh-CN.png)
+[![记忆系统流转：每轮上下文、按需语义操作、空闲维护与归档](../assets/diagrams/zh-CN/memory-system-flow.png)](../assets/diagrams/zh-CN/memory-system-flow.png)
 
 三条主链路分别是：
 
