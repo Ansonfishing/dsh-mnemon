@@ -53,6 +53,10 @@ The serial queue does not replace coordination across DSH processes. When multip
 
 These boundaries are not a secret scanner. There is currently no deterministic credential/secret detection. Do not submit keys, tokens, private keys, or raw sensitive logs to hot memory, Documents, or Memory Spaces.
 
+### Security reporting
+
+Report vulnerabilities privately through the channels in [SECURITY.md](../../SECURITY.md) (GitHub Security Advisories or maintainer email) — do not open a public issue. Typical in-scope issues include data loss, path traversal, lock/revision-check bypasses, subagent isolation breaks, and injection via memory content rendered by the WebUI.
+
 ## Backup
 
 All three tiers share `storageRoot`. A consistent backup should cover the entire root, not just `mnemon.db`:

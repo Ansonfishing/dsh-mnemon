@@ -28,7 +28,7 @@ both paths require
   -> depthLimit
 ```
 
-The plugin does not declare a fixed minimum-version matrix for DSH and Mnemon in its code. Before upgrading, run the verification steps on this page against an isolated data directory.
+The plugin does not declare a fixed minimum-version matrix for DSH and Mnemon in its code. **Verified baseline**: `dsh-mnemon` 0.1.0 has been verified end-to-end on a live web profile running `@deepseek-ai/dsh` 0.1.0-rc.6 (2026-08-13 snapshot); last verified 2026-08-14. Before upgrading, run the verification steps on this page against an isolated data directory.
 
 ## 2. Install Mnemon
 
@@ -75,6 +75,22 @@ dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
 The plugin package's `cordis.patch.yml` mounts the Host plugin; the Web client bundle registers the session workspace and plugin settings card.
+
+### Upgrade and uninstall
+
+`dsh plugin` is a pnpm forwarder that runs inside the profile directory:
+
+```sh
+# Upgrade
+dsh plugin --profile web update dsh-mnemon
+
+# Uninstall (also removes its bundle registration from the profile)
+dsh plugin --profile web remove dsh-mnemon
+```
+
+Uninstalling never deletes memory data: `global` data stays in `~/.mnemon`, and `workspace` / `custom` data stays in their directories, so reinstalling picks up where you left off.
+
+To pause automatic reads/writes without uninstalling, turn off `writebackMode` / `recallMode` / `lifecycleEnabled` in the plugin configuration (see the [configuration reference](./configuration.md), “Toggle interactions”). Note that `tabEnabled=false` currently disables the RPC but does not hide the tab entry — do not rely on it for UI removal.
 
 ## 4. Choose a Storage Scope
 

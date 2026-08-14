@@ -53,6 +53,10 @@ mnemon --version
 
 这些边界不等于秘密扫描器。当前还没有确定性的凭据/秘密检测；不要向热记忆、Documents 或 Memory Spaces 提交密钥、token、私钥和原始敏感日志。
 
+### 安全问题报告
+
+发现安全漏洞请按 [SECURITY.md](../../SECURITY.md) 的渠道私下报告（GitHub Security Advisories 或维护者邮箱），不要开公开 issue。范围内的典型问题包括：数据丢失、路径穿越、锁与 revision 检查绕过、子 Agent 隔离破坏、WebUI 对记忆内容的注入。
+
 ## 备份
 
 三层数据共用 `storageRoot`，一致备份应覆盖整个根，而不是只复制 `mnemon.db`：

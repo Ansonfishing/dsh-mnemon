@@ -75,6 +75,8 @@
 - 本地 `mnemon` CLI。
 - 支持 `outputSchema`、`toolFilter`、`persona` 和 `depthLimit` 的子 Agent provider。常规语义操作优先使用 `spawn`；默认后台审查还需要名为 `fork`、可继承父上下文的 provider。
 
+**兼容基线**：`dsh-mnemon` 0.1.0 已在 `@deepseek-ai/dsh` 0.1.0-rc.6（2026-08-13 快照）的 live web profile 上实测通过，最后验证日期 2026-08-14。插件不声明固定的最低版本矩阵；DSH 迭代快，升级前先在隔离 profile 或已备份的数据目录中复跑[快速开始](./docs/zh-CN/getting-started.md)的验证步骤。
+
 ## 快速开始
 
 安装 Mnemon：
@@ -110,6 +112,18 @@ dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 
 打开 DSH 的“设置 -> 插件配置 -> Mnemon”选择存储范围，再进入会话的“记忆系统”Tab 创建或激活记忆体。配置重启后生效；切换范围不会自动迁移、合并或删除旧数据。
 
+升级与卸载（`dsh plugin` 转发给 profile 目录下的 pnpm）：
+
+```sh
+# 升级
+dsh plugin --profile web update dsh-mnemon
+
+# 卸载（同时从 profile 移除其 bundle 注册）
+dsh plugin --profile web remove dsh-mnemon
+```
+
+卸载不会删除记忆数据：`global` 范围数据留在 `~/.mnemon`，`workspace` / `custom` 范围数据留在对应目录，重新安装后即可继续使用。若只想临时停用自动读写而不卸载，可在插件配置里关闭 `writebackMode` / `recallMode` / `lifecycleEnabled`（详见[配置参考](./docs/zh-CN/configuration.md)的“开关交互”与 `tabEnabled` 的当前限制）。
+
 ## 最小配置
 
 配置位于 `$DSH_HOME/settings.yaml`（默认通常为 `~/.dsh/settings.yaml`）：
@@ -141,6 +155,15 @@ Web 工作台提供状态、运行时、记忆体、档案、沉淀、检索、�
 
 推荐的查询顺序是：热记忆 -> active Documents -> 已激活记忆体 -> 命中记录指向的归档原文。不要把临时进度、原始日志、秘密或可直接从仓库重新获得的普通事实写入长期记忆。
 
+## 权限与数据
+
+- **文件**：通过本地 `mnemon` CLI 读写数据目录——`global` 范围是 `~/.mnemon`，`workspace` / `custom` 范围是用户指定的目录；插件不直接写这些目录，WebUI 也不直接读 SQLite。`sourcePaths` 不能逃出发起会话的工作区，也不能指向受管 Documents 目录。
+- **进程**：`mnemon` 以参数数组启动且禁用 shell，输出有上限，超时先 `SIGTERM` 再 `SIGKILL`。
+- **网络**：插件与 Mnemon 均本地运行，不发起远程调用；子 Agent 的模型推理走 DSH 已有的 provider 连接。
+- **凭据**：插件不存储、不读取任何凭据或 API key，模型凭据完全由 DSH 与 provider 管理。
+- **用户数据**：记忆内容（用户画像、项目档案、长期记忆）全部落在本地 SQLite / JSON，不会上传。
+- **诚实披露**：当前没有确定性的凭据/秘密检测器，请勿向热记忆、Documents 或 Memory Spaces 写入密钥、token 或私钥。完整边界（进程/文件/Web/模型）与备份恢复见[运维、安全与故障排查](./docs/zh-CN/operations.md)。
+
 ## 文档
 
 - [文档中心](./docs/zh-CN/README.md)
@@ -166,4 +189,4 @@ pnpm run verify
 
 ## License
 
-MIT。
+MIT。发现安全问题请通过 [SECURITY.md](./SECURITY.md) 中的渠道私下报告，不要直接开公开 issue。

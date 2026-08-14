@@ -16,6 +16,7 @@ These documents use the current implementation as the source of truth. The root 
 8. [Operations, Security, and Troubleshooting](./operations.md): locks, permissions, backup, recovery, and known limitations.
 9. [Development and Verification](./development.md): module structure, tests, builds, and release checks.
 10. [Roadmap](./roadmap.md): unfinished reliability, operations, and internationalization work.
+11. [Security Policy](../../SECURITY.md): supported versions, private vulnerability-reporting channels, and scope.
 
 ## Terminology
 

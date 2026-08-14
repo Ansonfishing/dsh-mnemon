@@ -28,7 +28,7 @@ both paths require
   -> depthLimit
 ```
 
-插件没有在代码中声明固定的 DSH/Mnemon 最低版本矩阵。升级前应先在隔离数据目录中运行本页的验证步骤。
+插件没有在代码中声明固定的 DSH/Mnemon 最低版本矩阵。**已验证基线**：`dsh-mnemon` 0.1.0 在 `@deepseek-ai/dsh` 0.1.0-rc.6（2026-08-13 快照）的 live web profile 上实测通过，最后验证日期 2026-08-14。升级前应先在隔离数据目录中运行本页的验证步骤。
 
 ## 2. 安装 Mnemon
 
@@ -75,6 +75,22 @@ dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 ```
 
 插件包中的 `cordis.patch.yml` 会挂载 Host 插件；Web client bundle 会注册会话工作台和插件设置卡。
+
+### 升级与卸载
+
+`dsh plugin` 是 pnpm 转发器，在 profile 目录下执行：
+
+```sh
+# 升级
+dsh plugin --profile web update dsh-mnemon
+
+# 卸载（同时从 profile 移除其 bundle 注册）
+dsh plugin --profile web remove dsh-mnemon
+```
+
+卸载不会删除记忆数据：`global` 范围数据留在 `~/.mnemon`，`workspace` / `custom` 范围数据留在对应目录，重新安装后继续可用。
+
+临时停用自动读写而不卸载：在插件配置里关闭 `writebackMode` / `recallMode` / `lifecycleEnabled`（见[配置参考](./configuration.md)的“开关交互”）。注意 `tabEnabled=false` 目前只停掉 RPC 而不隐藏 Tab 入口，不应依赖它做 UI 卸载。
 
 ## 4. 选择存储范围
 

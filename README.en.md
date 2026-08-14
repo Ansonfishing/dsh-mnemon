@@ -75,6 +75,8 @@ Reusable knowledge produced by current work
 - A local `mnemon` CLI.
 - A subagent provider supporting `outputSchema`, `toolFilter`, `persona`, and `depthLimit`. Regular semantic work prefers `spawn`; the default background review also requires a provider named `fork` that inherits parent context.
 
+**Compatibility baseline**: `dsh-mnemon` 0.1.0 has been verified end-to-end on a live web profile running `@deepseek-ai/dsh` 0.1.0-rc.6 (2026-08-13 snapshot); last verified 2026-08-14. The plugin declares no fixed minimum-version matrix. DSH moves fast: before upgrading, re-run the [Getting Started](./docs/en/getting-started.md) verification steps in an isolated profile or a backed-up data directory.
+
 ## Quick start
 
 Install Mnemon:
@@ -110,6 +112,18 @@ dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 
 Open “Settings -> Plugin Configuration -> Mnemon” to select a storage scope, then create or activate a Memory Space in the conversation's “Memory System” tab. Configuration applies after restart. Changing the scope never migrates, merges, or deletes old data automatically.
 
+Upgrade and uninstall (`dsh plugin` forwards to pnpm inside the profile directory):
+
+```sh
+# Upgrade
+dsh plugin --profile web update dsh-mnemon
+
+# Uninstall (also removes its bundle registration from the profile)
+dsh plugin --profile web remove dsh-mnemon
+```
+
+Uninstalling never deletes memory data: `global` data stays in `~/.mnemon`, and `workspace` / `custom` data stays in their directories, so reinstalling picks up where you left off. To pause automatic reads/writes without uninstalling, turn off `writebackMode` / `recallMode` / `lifecycleEnabled` in the plugin configuration (see the [configuration reference](./docs/en/configuration.md) for toggle interactions and the current `tabEnabled` limitation).
+
 ## Minimal configuration
 
 Configuration lives in `$DSH_HOME/settings.yaml` (commonly `~/.dsh/settings.yaml` by default):
@@ -141,6 +155,15 @@ Common commands:
 
 The recommended lookup order is: hot memory -> active Documents -> active Memory Spaces -> the archived original referenced by a hit. Do not persist temporary progress, raw logs, secrets, or ordinary facts that can be recovered directly from the repository.
 
+## Permissions & data
+
+- **Files**: reads/writes data directories through the local `mnemon` CLI — `~/.mnemon` for the `global` scope, a user-chosen directory for `workspace` / `custom`. The plugin never writes those directories directly, and the WebUI never reads SQLite directly. `sourcePaths` cannot escape the originating session workspace or point into the managed Documents directory.
+- **Processes**: `mnemon` is started as an argument array with shell disabled, bounded output, and `SIGTERM` then `SIGKILL` on timeout.
+- **Network**: the plugin and Mnemon both run locally and make no remote calls; subagent model inference uses DSH's existing provider connection.
+- **Credentials**: the plugin stores and reads no credentials or API keys; model credentials are fully managed by DSH and your provider.
+- **User data**: all memory content (user profile, project Documents, long-term memory) stays in local SQLite / JSON and is never uploaded.
+- **Honest disclosure**: there is no deterministic credential/secret scanner yet — do not write keys, tokens, or private keys into hot memory, Documents, or Memory Spaces. For the full boundaries (process/file/Web/model) and backup/restore, see [Operations, security, and troubleshooting](./docs/en/operations.md).
+
 ## Documentation
 
 - [Documentation hub](./docs/en/README.md)
@@ -166,4 +189,4 @@ pnpm run verify
 
 ## License
 
-MIT.
+MIT. For security issues, please report privately through the channels in [SECURITY.md](./SECURITY.md) instead of opening a public issue.
