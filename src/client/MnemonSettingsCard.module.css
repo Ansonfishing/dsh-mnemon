@@ -133,20 +133,28 @@
 .directoryControl {
   display: flex;
   min-width: 0;
+  flex: 0 1 420px;
   max-width: 60%;
   align-items: center;
   gap: 8px;
 }
 
-.directoryControl code {
+.directoryInput {
+  width: 100%;
   min-width: 0;
-  overflow: hidden;
-  color: var(--dsw-alias-label-secondary);
+  height: 38px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  outline: none;
+  padding: 0 11px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-3);
   font-family: var(--ds-font-family-code, ui-monospace, monospace);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 12px;
+  line-height: 20px;
 }
+.directoryInput::placeholder { color: var(--dsw-alias-label-caption); }
+.directoryInput:disabled { cursor: default; opacity: .46; }
 
 .rowGroup { border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .toggleRow { cursor: pointer; }
@@ -289,6 +297,7 @@
 
 .choiceCard > input:focus-visible + .choiceFace,
 .toggleRow > input:focus-visible + .switch,
+.directoryInput:focus-visible,
 .pillButton:focus-visible,
 .primaryPill:focus-visible,
   .textButton:focus-visible,

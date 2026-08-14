@@ -8,10 +8,8 @@ export interface MnemonSettingsCardProps {
     interactionScope?: ClientSettingsScope<InteractionConfig>;
     /** Loopback RPC used for whole-directory ZIP backup and restore. */
     connection?: ClientConnectionHandle;
-    /** DSH's native host directory chooser. */
-    pickDirectory?: () => Promise<string | null>;
     t?: MnemonTranslate;
 }
 /** Dedicated Mnemon page contributed directly to DSH's settings navigation. */
-export declare function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, connection, pickDirectory, t }: MnemonSettingsCardProps): JSX.Element | null;
+export declare function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, connection, t }: MnemonSettingsCardProps): JSX.Element | null;
 //# sourceMappingURL=MnemonSettingsCard.d.ts.map

@@ -10,7 +10,7 @@ import { en, zh, type MnemonKey } from './locales.ts'
 import { MnemonSettingsScope } from './settings.ts'
 import type { MnemonClientContext } from './dsh-compat.ts'
 
-export const inject = ['slots', 'connection', 'locale', 'workspaces']
+export const inject = ['slots', 'connection', 'locale']
 
 /** Interaction surfaces: slot name, settings toggle, and the registrations it owns. */
 type MnemonNamespace = 'mnemon'
@@ -129,11 +129,10 @@ export function apply(rawContext: unknown): void {
     order: 20,
     label: () => translate('tab.label'),
     locale: namespace,
-    inject: (): { scope: MnemonSettingsScope<Config>; interactionScope: MnemonSettingsScope<InteractionConfig>; connection: ClientConnectionHandle; pickDirectory: () => Promise<string | null>; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+    inject: (): { scope: MnemonSettingsScope<Config>; interactionScope: MnemonSettingsScope<InteractionConfig>; connection: ClientConnectionHandle; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
       scope: settings,
       interactionScope: interactionSettings,
       connection: ctx.connection,
-      pickDirectory: () => ctx.workspaces.pickDirectory(),
       t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
     }),
   }, MnemonSettingsCard))

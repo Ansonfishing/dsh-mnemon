@@ -67,7 +67,7 @@ describe('MnemonSettingsCard', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
   })
 
-  it('selects and persists one custom directory through the native browser', async () => {
+  it('accepts and persists a manually entered custom directory', async () => {
     const mutate = vi.fn(async () => {})
     const snapshot = {
       status: 'ready' as const,
@@ -86,14 +86,12 @@ describe('MnemonSettingsCard', () => {
       unset: vi.fn(async () => {}),
       mutate,
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
-    const pickDirectory = vi.fn(async () => '/tmp/mnemon-custom')
-    const view = render(<MnemonSettingsCard scope={scope} pickDirectory={pickDirectory} />)
+    const view = render(<MnemonSettingsCard scope={scope} />)
 
     fireEvent.click(view.getByRole('radio', { name: '自定义' }))
-    await waitFor(() => expect(view.getByText('/tmp/mnemon-custom')).toBeTruthy())
+    fireEvent.change(view.getByRole('textbox', { name: 'Mnemon 自定义数据目录' }), { target: { value: '  /tmp/mnemon-custom  ' } })
     fireEvent.click(view.getByRole('button', { name: '保存' }))
 
-    expect(pickDirectory).toHaveBeenCalledTimes(1)
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([
       { op: 'set', path: ['storageScope'], value: 'custom' },
       { op: 'set', path: ['dataDir'], value: '/tmp/mnemon-custom' },
@@ -130,12 +128,10 @@ describe('MnemonSettingsCard', () => {
       set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}), mutate,
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
 
-    const pickDirectory = vi.fn(async () => '/packs/research')
-    render(<MnemonSettingsCard scope={scope} pickDirectory={pickDirectory} />)
-    expect(screen.getByText('/packs/project')).toBeTruthy()
-    expect(screen.queryByRole('combobox')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '重新选择' }))
-    await waitFor(() => expect(screen.getByText('/packs/research')).toBeTruthy())
+    render(<MnemonSettingsCard scope={scope} />)
+    const directory = screen.getByRole('textbox', { name: 'Mnemon 自定义数据目录' }) as HTMLInputElement
+    expect(directory.value).toBe('/packs/project')
+    fireEvent.change(directory, { target: { value: '/packs/research' } })
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([
@@ -145,7 +141,7 @@ describe('MnemonSettingsCard', () => {
     ]))
   })
 
-  it('keeps custom storage invalid when the native browser is cancelled', async () => {
+  it('keeps custom storage invalid until a directory is entered', () => {
     const snapshot = {
       status: 'ready' as const,
       value: { storageScope: 'global' as const },
@@ -163,14 +159,36 @@ describe('MnemonSettingsCard', () => {
       unset: vi.fn(async () => {}),
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
 
-    const pickDirectory = vi.fn(async () => null)
-    render(<MnemonSettingsCard scope={scope} pickDirectory={pickDirectory} />)
+    render(<MnemonSettingsCard scope={scope} />)
     fireEvent.click(screen.getByRole('radio', { name: '自定义' }))
 
-    await waitFor(() => expect(pickDirectory).toHaveBeenCalledTimes(1))
-    expect(screen.getByText('尚未选择')).toBeTruthy()
+    expect((screen.getByRole('textbox', { name: 'Mnemon 自定义数据目录' }) as HTMLInputElement).value).toBe('')
     expect(screen.getByRole('alert').textContent).toBe('选择自定义存储时必须填写数据目录。')
     expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('accepts Windows drive and UNC paths in the browser form', () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+
+    render(<MnemonSettingsCard scope={scope} />)
+    fireEvent.click(screen.getByRole('radio', { name: '自定义' }))
+    const directory = screen.getByRole('textbox', { name: 'Mnemon 自定义数据目录' })
+    fireEvent.change(directory, { target: { value: 'relative/mnemon' } })
+    expect(screen.getByRole('alert').textContent).toContain('绝对路径')
+    fireEvent.change(directory, { target: { value: 'C:\\memory\\mnemon' } })
+    expect(screen.queryByRole('alert')).toBeNull()
+    fireEvent.change(directory, { target: { value: '\\\\server\\share\\mnemon' } })
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('uses native disabled semantics for a read-only settings scope', () => {

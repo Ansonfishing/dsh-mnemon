@@ -11,8 +11,6 @@ export interface MnemonSettingsCardProps {
   interactionScope?: ClientSettingsScope<InteractionConfig>
   /** Loopback RPC used for whole-directory ZIP backup and restore. */
   connection?: ClientConnectionHandle
-  /** DSH's native host directory chooser. */
-  pickDirectory?: () => Promise<string | null>
   t?: MnemonTranslate
 }
 
@@ -64,7 +62,11 @@ function validation(t: MnemonTranslate, draft: Draft): string | null {
   if (draft.storageScope !== 'custom') return null
   const directory = draft.dataDir.trim()
   if (directory === '') return t('config.customRequired')
-  if (!(directory === '~' || directory.startsWith('~/') || directory.startsWith('/'))) return t('config.customAbsolute')
+  const posixAbsolute = directory.startsWith('/')
+  const homeRelative = directory === '~' || directory.startsWith('~/')
+  const windowsDriveAbsolute = /^[a-zA-Z]:[\\/]/.test(directory)
+  const windowsUncAbsolute = /^\\\\[^\\/]+[\\/][^\\/]+/.test(directory)
+  if (!posixAbsolute && !homeRelative && !windowsDriveAbsolute && !windowsUncAbsolute) return t('config.customAbsolute')
   return null
 }
 
@@ -95,14 +97,13 @@ async function commit<T>(scope: ClientSettingsScope<T>, edits: SettingsOperation
 }
 
 /** Dedicated Mnemon page contributed directly to DSH's settings navigation. */
-export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, connection, pickDirectory, t = translateZh }: MnemonSettingsCardProps): JSX.Element | null {
+export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, connection, t = translateZh }: MnemonSettingsCardProps): JSX.Element | null {
   const interactionScope = suppliedInteractionScope ?? scope as unknown as ClientSettingsScope<InteractionConfig>
   const coreSnapshot = useScope(scope)
   const interactionSnapshot = useScope(interactionScope)
   const [draft, setDraft] = useState<Draft>(() => draftOf(coreSnapshot.value, interactionSnapshot.value))
   const [dirty, setDirty] = useState<Set<Field>>(() => new Set())
   const [saving, setSaving] = useState(false)
-  const [browsing, setBrowsing] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
   const [applied, setApplied] = useState(false)
   const [targetRevision, setTargetRevision] = useState(0)
@@ -123,22 +124,6 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
     setDirty(current => new Set(current).add(field))
     setFailed(null)
     setApplied(false)
-  }
-
-  const browse = async (): Promise<void> => {
-    if (pickDirectory === undefined || browsing) return
-    setBrowsing(true); setFailed(null)
-    try {
-      const path = await pickDirectory()
-      if (path !== null) {
-        if (draft.storageScope !== 'custom') edit('storageScope', 'custom')
-        edit('dataDir', path)
-      }
-    } catch (reason) {
-      setFailed(reason instanceof Error ? reason.message : String(reason))
-    } finally {
-      setBrowsing(false)
-    }
   }
 
   const discard = (): void => {
@@ -170,10 +155,10 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
     }
   }
 
-  const coreDisabled = loading || saving || browsing || !coreSnapshot.writable
+  const coreDisabled = loading || saving || !coreSnapshot.writable
   const interactionDisabled = loading || saving || !interactionSnapshot.writable
   return (
-    <section className={css.page} aria-label={t('config.aria')} aria-busy={saving || loading || browsing}>
+    <section className={css.page} aria-label={t('config.aria')} aria-busy={saving || loading}>
       {loading ? <p className={css.loading} role="status">{t('common.loading')}</p> : <>
         <header className={css.pageHeader}>
           <h1>{t('config.title')}</h1>
@@ -187,13 +172,27 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           <div className={css.choiceGrid} role="radiogroup" aria-label={t('config.scopeAria')}>
             <ChoiceCard id="mnemon-storage-global" name="mnemon-storage" label={t('config.global')} detail="~/.mnemon" checked={draft.storageScope === 'global'} disabled={coreDisabled} onChange={() => edit('storageScope', 'global')} />
             <ChoiceCard id="mnemon-storage-workspace" name="mnemon-storage" label={t('config.workspace')} detail="<workspace>/.mnemon" checked={draft.storageScope === 'workspace'} disabled={coreDisabled} onChange={() => edit('storageScope', 'workspace')} />
-            <ChoiceCard id="mnemon-storage-custom" name="mnemon-storage" label={t('config.custom')} detail={draft.dataDir === '' ? t('config.customHintShort') : t('config.customSelected')} checked={draft.storageScope === 'custom'} disabled={coreDisabled} onChange={() => { edit('storageScope', 'custom'); if (draft.dataDir === '') void browse() }} />
+            <ChoiceCard id="mnemon-storage-custom" name="mnemon-storage" label={t('config.custom')} detail={draft.dataDir === '' ? t('config.customHintShort') : t('config.customSelected')} checked={draft.storageScope === 'custom'} disabled={coreDisabled} onChange={() => edit('storageScope', 'custom')} />
           </div>
           {draft.storageScope === 'custom' && <div className={css.settingRow}>
-            <div className={css.settingCopy}><strong>{t('config.customDirectory')}</strong><small>{t('config.customBrowseHint')}</small></div>
+            <div className={css.settingCopy}><strong>{t('config.customDirectory')}</strong><small>{t('config.customDirectoryHint')}</small></div>
             <div className={css.directoryControl}>
-              <code title={draft.dataDir}>{draft.dataDir || t('config.customNotSelected')}</code>
-              <button type="button" className={css.pillButton} disabled={coreDisabled || pickDirectory === undefined} onClick={() => void browse()}>{browsing ? t('config.customBrowsing') : draft.dataDir === '' ? t('config.customBrowse') : t('config.customBrowseAgain')}</button>
+              <input
+                id="mnemon-custom-directory"
+                name="mnemon-custom-directory"
+                type="text"
+                className={css.directoryInput}
+                aria-label={t('config.customAria')}
+                aria-invalid={error !== null}
+                placeholder={t('config.customPlaceholder')}
+                value={draft.dataDir}
+                disabled={coreDisabled}
+                autoComplete="off"
+                spellCheck={false}
+                autoCapitalize="none"
+                autoCorrect="off"
+                onChange={event => edit('dataDir', event.target.value)}
+              />
             </div>
           </div>}
         </section>
@@ -215,7 +214,6 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           {error !== null && <p className={css.error} role="alert">{error}</p>}
           {failed !== null && <p className={css.error} role="alert">{t('config.saveFailed', { error: failed })}</p>}
           {applied && <p className={css.success} role="status">{t('config.ready')}</p>}
-          {pickDirectory === undefined && draft.storageScope === 'custom' && <p className={css.readOnly}>{t('config.customBrowseUnavailable')}</p>}
           {!writable && <p className={css.readOnly}>{t('config.readOnly')}</p>}
         </div>
 

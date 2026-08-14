@@ -27,6 +27,7 @@ The Roadmap records work beyond the current implementation; it is not a commitme
 ## P2: Observability, Experience, and Release Engineering
 
 - [ ] **Background-review history**: show recent scores, checkpoints, waiting/running/failed states, worker receipts, and resulting changes.
+- [ ] **Switch to DSH's shared directory picker** (blocked on [dsh-external/issues#603](https://github.com/dsh-external/issues/issues/603)): custom storage temporarily uses a manually entered Host path because remote `browse` deployments cannot invoke the `native` picker; once DSH exposes a reusable directory-picker service for plugins, move to the provider-selected native / browse flow and retain manual entry only as a fallback if needed.
 - [ ] **Complete internationalization**: cover commands, tool cards, Host errors, compatibility default metadata, and confirmation copy.
 - [ ] **Multi-Memory-Space E2E**: cover automatic space creation, cross-space recall, one-pass migration routing, multiple relationship types, merge, and controlled forget.
 - [ ] **Capacity and fault injection**: exercise real USER/MEMORY boundaries, Document LRU, revision conflicts, CLI timeouts, and mid-operation Host restarts.

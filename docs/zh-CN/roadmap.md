@@ -27,6 +27,7 @@ Roadmap 记录当前实现之外的工作，不是已交付能力承诺。优先
 ## P2：可观测性、体验与发布工程
 
 - [ ] **后台审查历史**：展示最近评分、checkpoint、等待/运行/失败、worker 回执和产生的变更。
+- [ ] **切换到 DSH 通用目录选择器**（等待 [dsh-external/issues#603](https://github.com/dsh-external/issues/issues/603)）：当前自定义存储暂用手动填写 Host 路径，以避开远端 `browse` 部署无法调用 `native` picker 的问题；DSH 暴露插件可复用的 directory-picker 服务后，改用由能力提供方统一选择 native / browse 的流程，并仅在必要时保留手动输入作为兜底。
 - [ ] **完整国际化**：覆盖命令、工具卡、Host 错误、兼容默认元数据和确认文案。
 - [ ] **多记忆体 E2E**：覆盖自动建空间、跨空间召回、一次迁移分流、多种边、合并和受控 forget。
 - [ ] **容量与故障注入**：真实触发 USER/MEMORY 边界、Document LRU、revision 冲突、CLI 超时和 Host 中途重启。
