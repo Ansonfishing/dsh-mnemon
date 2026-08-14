@@ -28,6 +28,16 @@ export class MnemonSettingsScope implements ClientSettingsScope<Config> {
     return this.write({ op: 'unset', path: [field] })
   }
 
+  /** Set a nested field (e.g. ['conversationInteraction', 'toolviews']). */
+  setPath(path: string[], value: unknown): Promise<void> {
+    return this.write({ op: 'set', path, value })
+  }
+
+  /** Unset a nested field, falling back to its schema default. */
+  unsetPath(path: string[]): Promise<void> {
+    return this.write({ op: 'unset', path })
+  }
+
   private async load(): Promise<void> {
     const response = await this.connection.rpc.call(MNEMON_SETTINGS_CHANNEL, 'get', {})
     if (!response.ok) {

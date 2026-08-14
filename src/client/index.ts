@@ -9,6 +9,77 @@ import { MnemonSettingsScope } from './settings.ts'
 
 export const inject = ['slots', 'connection', 'locale']
 
+/** Interaction surfaces: slot name, settings toggle, and the registrations it owns. */
+type InteractionRegister = (ctx: ClientContextShape, namespace: string, translate: (key: MnemonKey, params?: Record<string, unknown>) => string) => () => void
+
+interface InteractionUnit {
+  slot: string
+  enabled: (value: unknown) => boolean
+  register: InteractionRegister
+}
+
+const INTERACTION_UNITS: Record<'toolviews' | 'turnBar' | 'saveAction', InteractionUnit> = {
+  toolviews: {
+    slot: 'tool.call.toolview',
+    enabled: (value: unknown): boolean => enabledOf(value, 'toolviews'),
+    register(ctx: ClientContextShape, namespace: string, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
+      const disposers: Array<() => void> = []
+      for (const toolName of MNEMON_TOOLVIEW_NAMES) {
+        disposers.push(ctx.slots.register({
+          name: 'tool.call.toolview',
+          key: toolName,
+          locale: namespace,
+          inject: (sessionId: unknown): { sessionId?: string; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+            ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
+            t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
+          }),
+        }, MnemonToolView as never) as () => void)
+      }
+      return () => { for (const dispose of disposers.reverse()) dispose() }
+    },
+  },
+  turnBar: {
+    slot: 'conversation.chat.turnTail',
+    enabled: (value: unknown): boolean => enabledOf(value, 'turnBar'),
+    register(ctx: ClientContextShape, namespace: string, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
+      return ctx.slots.register({
+        name: 'conversation.chat.turnTail',
+        locale: namespace,
+        select: selectMnemonTurnTail as never,
+        inject: (sessionId: unknown): { sessionId?: string; connection: ClientConnectionHandle; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+          ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
+          connection: ctx.connection,
+          t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
+        }),
+      }, MnemonTurnTail as never) as () => void
+    },
+  },
+  saveAction: {
+    slot: 'conversation.chat.assistant-actions',
+    enabled: (value: unknown): boolean => enabledOf(value, 'saveAction'),
+    register(ctx: ClientContextShape, namespace: string, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
+      return ctx.slots.register({
+        name: 'conversation.chat.assistant-actions',
+        id: 'mnemon-save',
+        order: 90,
+        locale: namespace,
+        inject: (sessionId: unknown): { sessionId?: string; connection: ClientConnectionHandle; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+          ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
+          connection: ctx.connection,
+          t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
+        }),
+      }, MnemonSaveAction as never) as () => void
+    },
+  },
+}
+
+type InteractionUnitKey = keyof typeof INTERACTION_UNITS
+
+function enabledOf(value: unknown, key: 'toolviews' | 'turnBar' | 'saveAction'): boolean {
+  const group = (value as { conversationInteraction?: Partial<Record<typeof key, boolean>> } | undefined)?.conversationInteraction
+  return group === undefined || group[key] !== false
+}
+
 /** Add one standard conversation.view entry; unloading the plugin removes it with the slot effect. */
 export function apply(rawContext: unknown): void {
   const ctx = rawContext as unknown as ClientContextShape
@@ -38,42 +109,29 @@ export function apply(rawContext: unknown): void {
       t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
     }),
   }, MnemonSettingsCard as never))
-  // Memory-flavoured rows for every mnemon_* tool call in the chat flow; a
-  // keyed hit replaces the generic tool row.
-  for (const toolName of MNEMON_TOOLVIEW_NAMES) {
-    ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({
-      name: 'tool.call.toolview',
-      key: toolName,
-      locale: namespace,
-      inject: (sessionId: unknown): { sessionId?: string; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
-        ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
-        t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
-      }),
-    }, MnemonToolView as never))
+
+  // In-conversation interaction surfaces are bound live: each settings change
+  // registers or disposes the slot contributions without a reload. While the
+  // snapshot is still loading, the defaults apply (all enabled).
+  const active = new Map<InteractionUnitKey, () => void>()
+  const reconcile = (): void => {
+    const value = settings.getSnapshot().value
+    for (const key of Object.keys(INTERACTION_UNITS) as InteractionUnitKey[]) {
+      const unit = INTERACTION_UNITS[key]
+      const enabled = unit.enabled(value)
+      if (enabled && !active.has(key)) {
+        active.set(key, ctx.slots.inject(unit.slot, () => unit.register(ctx, namespace, translate)) as () => void)
+      } else if (!enabled && active.has(key)) {
+        active.get(key)!()
+        active.delete(key)
+      }
+    }
   }
-  // Per-turn memory activity bar under completed turns; the chain selector
-  // declines open turns and the component hides when the turn touched no memory.
-  ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
-    name: 'conversation.chat.turnTail',
-    locale: namespace,
-    select: selectMnemonTurnTail as never,
-    inject: (sessionId: unknown): { sessionId?: string; connection: ClientConnectionHandle; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
-      ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
-      connection: ctx.connection,
-      t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
-    }),
-  }, MnemonTurnTail as never))
-  // Save-to-memory action on finalized assistant messages, routed through the
-  // supervised writeback gate (memory subagent review).
-  ctx.slots.inject('conversation.chat.assistant-actions', () => ctx.slots.register({
-    name: 'conversation.chat.assistant-actions',
-    id: 'mnemon-save',
-    order: 90,
-    locale: namespace,
-    inject: (sessionId: unknown): { sessionId?: string; connection: ClientConnectionHandle; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
-      ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
-      connection: ctx.connection,
-      t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
-    }),
-  }, MnemonSaveAction as never))
+  const unsubscribe = settings.subscribe(reconcile)
+  reconcile()
+  ctx.effect(() => {
+    unsubscribe()
+    for (const dispose of [...active.values()].reverse()) dispose()
+    active.clear()
+  }, 'dsh-mnemon: interaction surfaces')
 }
