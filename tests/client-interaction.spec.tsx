@@ -107,18 +107,15 @@ describe('interaction surfaces binding', () => {
     expect(selectMnemonTurnTail(owner('closed') as never)).toEqual({})
   })
 
-  it('registers no interaction surface by default (opt-in off)', async () => {
+  it('registers both remaining interaction surfaces by default', async () => {
     const { ctx, injects, activeRegistrations } = makeCtx({})
     apply(ctx)
     // The standalone sidebar workspace does not occupy conversation.view; the
-    // interaction surfaces must not register until settings enable them.
+    // Both supported interaction surfaces register from the ready default.
     expect(injects).toContain('settings.section')
     expect(injects).not.toContain('conversation.view')
-    await waitFor(() => {
-      expect(activeRegistrations()).not.toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
-    })
-    expect(activeRegistrations()).not.toContain('conversation.chat.turnTail')
-    expect(activeRegistrations()).not.toContain('mnemon-save')
+    await waitFor(() => expect(activeRegistrations()).toEqual(expect.arrayContaining(['conversation.chat.turnTail', 'mnemon-save'])))
+    expect(activeRegistrations()).not.toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
   })
 
   it('registers explicitly enabled surfaces after settings load', async () => {

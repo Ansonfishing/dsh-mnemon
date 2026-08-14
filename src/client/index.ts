@@ -62,9 +62,10 @@ const INTERACTION_UNITS: Record<'turnBar' | 'saveAction', InteractionUnit> = {
 
 type InteractionUnitKey = keyof typeof INTERACTION_UNITS
 
-/** Interaction surfaces are opt-in: an explicit `true` in settings enables one. */
+/** Ready snapshots default each interaction on; loading has no value and mounts nothing. */
 function enabledOf(value: unknown, key: 'turnBar' | 'saveAction'): boolean {
-  return (value as Partial<Record<typeof key, boolean>> | undefined)?.[key] === true
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  return (value as Partial<Record<typeof key, boolean>>)[key] !== false
 }
 
 type DisplayMode = NonNullable<Config['displayMode']>
@@ -149,7 +150,7 @@ export function apply(rawContext: unknown): void {
     }),
   }, MnemonSettingsCard))
 
-  // In-conversation interaction surfaces are opt-in and bound live: each
+  // In-conversation interaction surfaces default on and are bound live: each
   // settings change registers or disposes the slot contributions without a
   // reload. Until the snapshot loads, nothing registers (conservative default).
   const active = new Map<InteractionUnitKey, () => void>()

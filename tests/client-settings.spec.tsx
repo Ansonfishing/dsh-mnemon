@@ -317,7 +317,7 @@ describe('MnemonSettingsCard', () => {
     ]))
   })
 
-  it('presents interaction toggles unchecked by default (opt-in)', () => {
+  it('presents the two remaining interaction toggles checked by default', () => {
     const snapshot = {
       status: 'ready' as const,
       value: { storageScope: 'global' as const },
@@ -340,8 +340,8 @@ describe('MnemonSettingsCard', () => {
     const view = render(<MnemonSettingsCard scope={scope} />)
 
     expect(view.queryByLabelText('记忆工具卡')).toBeNull()
-    expect((view.getByLabelText('回合记忆条') as HTMLInputElement).checked).toBe(false)
-    expect((view.getByLabelText('存入记忆按钮') as HTMLInputElement).checked).toBe(false)
+    expect((view.getByLabelText('回合记忆条') as HTMLInputElement).checked).toBe(true)
+    expect((view.getByLabelText('存入记忆按钮') as HTMLInputElement).checked).toBe(true)
   })
 
   it('previews and safely imports one complete directory ZIP', async () => {

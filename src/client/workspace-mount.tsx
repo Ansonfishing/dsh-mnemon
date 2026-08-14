@@ -23,9 +23,10 @@ interface MnemonPanelProps {
   ctx: MnemonClientContext
   settings: ClientSettingsScope<Config>
   t: MnemonTranslate
+  onClose: () => void
 }
 
-function MnemonPanel({ ctx, settings, t }: MnemonPanelProps): JSX.Element {
+function MnemonPanel({ ctx, settings, t, onClose }: MnemonPanelProps): JSX.Element {
   const subscribeLocale = useCallback((listener: () => void) => ctx.locale.subscribe(listener), [ctx.locale])
   const getLocaleSnapshot = useCallback(() => ctx.locale.getSnapshot(), [ctx.locale])
   const locale = useSyncExternalStore(subscribeLocale, getLocaleSnapshot, getLocaleSnapshot)
@@ -57,7 +58,7 @@ function MnemonPanel({ ctx, settings, t }: MnemonPanelProps): JSX.Element {
     },
   }), [effectiveWorkspace, resolvedSelectedId, workspaces.items])
 
-  return <MnemonView connection={ctx.connection} settingsScope={settings} {...(sessions.current === undefined ? {} : { sessionId: sessions.current })} {...(resolvedSelectedId === undefined ? {} : { workspaceId: resolvedSelectedId })} workspaceSelection={selection} surface="sidebar" t={t} locale={locale.active} />
+  return <MnemonView connection={ctx.connection} settingsScope={settings} {...(sessions.current === undefined ? {} : { sessionId: sessions.current })} {...(resolvedSelectedId === undefined ? {} : { workspaceId: resolvedSelectedId })} workspaceSelection={selection} surface="sidebar" t={t} locale={locale.active} onClose={onClose} />
 }
 
 function conversationColumn(): HTMLElement | undefined {
@@ -82,7 +83,7 @@ function mountPanel(controller: MnemonWorkspaceController, ctx: MnemonClientCont
     container.className = css.panelView ?? ''
     column.append(container)
     root = createRoot(container)
-    root.render(<MnemonPanel ctx={ctx} settings={settings} t={t} />)
+    root.render(<MnemonPanel ctx={ctx} settings={settings} t={t} onClose={() => { controller.close() }} />)
   }
 
   const waitObserver = new MutationObserver(ensure)

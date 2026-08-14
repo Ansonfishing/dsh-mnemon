@@ -3,12 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, waitFor } from '@testing-library/react'
 
 vi.mock('../src/client/MnemonView.tsx', () => ({
-  MnemonView: ({ sessionId, workspaceId, workspaceSelection, surface, t, locale }: {
+  MnemonView: ({ sessionId, workspaceId, workspaceSelection, surface, t, locale, onClose }: {
     sessionId?: string
     workspaceId?: string
     surface?: 'sidebar' | 'buildin'
     t?: (key: string) => string
     locale?: 'zh' | 'en'
+    onClose?: () => void
     workspaceSelection?: {
       options: Array<{ id: string; title: string }>
       selectedWorkspaceId?: string
@@ -23,6 +24,7 @@ vi.mock('../src/client/MnemonView.tsx', () => ({
       {workspaceSelection?.options.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.title}</option>)}
     </select>
     <button type="button" onClick={workspaceSelection?.onAlign}>align-test-workspace</button>
+    <button type="button" aria-label={t?.('header.backToConversation')} onClick={onClose}>back-test-conversation</button>
   </div>,
 }))
 
@@ -105,9 +107,31 @@ describe('Mnemon sidebar workspace', () => {
     expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
     expect(entry?.getAttribute('data-active')).toBe('true')
 
-    fireEvent.click(entry!)
+    fireEvent.click(document.querySelector('[aria-label="header.backToConversation"]')!)
     expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
     expect(entry?.hasAttribute('data-active')).toBe(false)
+    dispose()
+    currentDispose = undefined
+  })
+
+  it('returns from the panel without replacing visible or hidden conversation blocks', async () => {
+    const conversation = document.querySelector<HTMLElement>('[data-pane="conversation"]')!
+    const visibleBlock = document.querySelector<HTMLElement>('[data-chat-content]')!
+    const hiddenBlock = document.createElement('section')
+    hiddenBlock.dataset.hiddenConversationBlock = ''
+    hiddenBlock.hidden = true
+    conversation.prepend(hiddenBlock)
+    const dispose = currentDispose = mountMnemonWorkspace(context() as never, {} as never, key => String(key))
+    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
+    await waitFor(() => expect(document.querySelector('[aria-label="header.backToConversation"]')).not.toBeNull())
+
+    fireEvent.click(entry)
+    fireEvent.click(document.querySelector('[aria-label="header.backToConversation"]')!)
+
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
+    expect(document.querySelector('[data-chat-content]')).toBe(visibleBlock)
+    expect(document.querySelector('[data-hidden-conversation-block]')).toBe(hiddenBlock)
+    expect(hiddenBlock.hidden).toBe(true)
     dispose()
     currentDispose = undefined
   })

@@ -1,4 +1,4 @@
-/* Save-to-memory assistant action: DSH-sized icon button + confirmation panel. */
+/* Save-to-memory assistant action: DSH-sized icon button + centered native modal. */
 
 .wrap {
   position: relative;
@@ -31,76 +31,28 @@
   width: 16px;
   height: 16px;
   flex: none;
-  stroke: currentColor;
-  stroke-width: 1.25;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
-.panel {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  width: min(340px, calc(100vw - 32px));
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: var(--dsw-alias-bg-layer-1);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
-  color: var(--dsw-alias-label-primary);
-  font-size: 12px;
-  line-height: 18px;
+.modal {
+  width: min(640px, 100%);
+  max-height: calc(100vh - 48px);
 }
 
-/* Modern DSH Chromium promotes the editor into the browser top layer. The
-   absolute rule above remains a conservative fallback for older hosts. */
-.panel:popover-open {
-  position: fixed;
-  top: var(--mn-save-panel-top);
-  right: auto;
-  left: var(--mn-save-panel-left);
-  width: var(--mn-save-panel-width);
-  margin: 0;
+.modalContent {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-.panelHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.panelHeader strong {
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.close {
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 14px;
-  line-height: 18px;
-}
-.close:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
-}
-
-.hint {
-  margin: 6px 0 0;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
-  line-height: 16px;
+.modalAction {
+  min-width: 96px;
 }
 
 .status {
-  margin-top: 8px;
+  margin: 0;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .readOnly {
@@ -114,29 +66,28 @@
 
 .candidate {
   display: block;
-  margin-top: 8px;
 }
 .candidate > span {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
   color: var(--dsw-alias-label-caption);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 650;
-  letter-spacing: .08em;
-  text-transform: uppercase;
+  line-height: 18px;
 }
 .candidate textarea {
   display: block;
   box-sizing: border-box;
   width: 100%;
-  max-height: 160px;
+  min-height: 260px;
+  max-height: 50vh;
   border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 8px;
   padding: 8px 10px;
   resize: vertical;
   background: var(--dsw-specific-input-major, var(--dsw-alias-bg-base));
   color: var(--dsw-alias-label-primary);
-  font: 12px/18px var(--ds-font-family-code, Consolas, monospace);
+  font: 13px/20px var(--ds-font-family-code, Consolas, monospace);
 }
 .candidate textarea:focus-visible {
   outline: 1.5px solid var(--dsw-alias-state-business-primary);
@@ -170,27 +121,8 @@
   overflow-wrap: anywhere;
 }
 
-.submit {
-  margin-top: 10px;
-  width: 100%;
-  height: 28px;
-  border: none;
-  border-radius: 7px;
-  cursor: pointer;
-  background: var(--dsw-alias-button-primary-fill, var(--dsw-alias-state-business-primary));
-  color: var(--dsw-alias-button-primary-text, #fff);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 28px;
-}
-.submit:hover:not(:disabled) {
-  filter: brightness(1.06);
-}
-.submit:disabled {
-  cursor: default;
-  opacity: .5;
-}
-.submit:focus-visible {
-  outline: 1.5px solid var(--dsw-alias-state-business-primary);
-  outline-offset: 2px;
+@supports (height: 100dvh) {
+  .modal {
+    max-height: calc(100dvh - 48px);
+  }
 }

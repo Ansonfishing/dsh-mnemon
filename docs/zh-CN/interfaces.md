@@ -28,7 +28,7 @@ Sidebar 使用贴近 DSH 官方面板的极简皮肤：标题为“记忆系统�
 | 槽位 | 呈现 | 数据与交互 |
 |---|---|---|
 | `conversation.chat.turnTail`（chain） | 回合尾动作行上方一行「本回合记忆 · 召回 N · 沉淀 M · 档案检索 K」；展开列出可点击的具体工具名 | 通过只读 RPC `turn-activity` 从宿主持久会话日志按 turn 统计 `mnemon_*` 调用；chain `select` 拒绝未完成回合，无记忆活动的回合不渲染任何内容；工具名经 `mnemon:anchor` 打开对应的记忆页面 |
-| `conversation.chat.assistant-actions`（list，id `mnemon-save`） | 已定稿助手回复动作区（反馈按钮旁）的单图标「存入记忆」操作；点击展开确认面板 | 面板经只读 RPC `assistant-message` 按 messageId 提取消息文本为可编辑候选；仅确认提交后才走既有写 RPC `supervise`（受监督写回：记忆子 Agent 判断、查重、选择记忆体），显示子 Agent 回执；只读部署提前禁用并提示 |
+| `conversation.chat.assistant-actions`（list，id `mnemon-save`） | 已定稿助手回复动作区（反馈按钮旁）的单图标「存入记忆」操作；悬停显示简短说明，点击打开居中确认窗口 | 复用 DSH 原生 Tooltip、Modal 与 16px 数据图标；模态窗口经只读 RPC `assistant-message` 按 messageId 提取消息文本为可编辑候选，提供独立滚动区域和取消/确认操作；仅确认提交后才走既有写 RPC `supervise`（受监督写回：记忆子 Agent 判断、查重、选择记忆体），显示子 Agent 回执；只读部署提前禁用并提示 |
 
 `turn-activity`、`assistant-message` 为新增只读端点，与既有端点共用同一 Host 通道与错误语义。对话内交互的渲染扩展面契约与后续「正文内联记忆高亮」方案见 Mnemon 档案「dsh-mnemon 对话内记忆交互侦察」。
 

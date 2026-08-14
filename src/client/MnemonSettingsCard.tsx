@@ -49,8 +49,8 @@ function coreDraft(value: Config | undefined): Pick<Draft, CoreField> {
 
 function interactionDraft(value: InteractionConfig | undefined): Pick<Draft, InteractionField> {
   return {
-    turnBar: value?.turnBar === true,
-    saveAction: value?.saveAction === true,
+    turnBar: value?.turnBar !== false,
+    saveAction: value?.saveAction !== false,
   }
 }
 

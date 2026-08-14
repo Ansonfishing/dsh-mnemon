@@ -50,6 +50,7 @@ export declare const zh: {
     'common.count': string;
     'common.showing': string;
     'common.showMore': string;
+    'header.backToConversation': string;
     'header.checking': string;
     'header.connected': string;
     'header.connectedWithCount': string;
@@ -272,6 +273,7 @@ export declare const zh: {
     'turnTail.toolList': string;
     'turnTail.openTool': string;
     'saveAction.button': string;
+    'saveAction.tooltip': string;
     'saveAction.title': string;
     'saveAction.hint': string;
     'saveAction.fetching': string;
@@ -623,6 +625,7 @@ export declare const en: {
     'common.count': string;
     'common.showing': string;
     'common.showMore': string;
+    'header.backToConversation': string;
     'header.checking': string;
     'header.connected': string;
     'header.connectedWithCount': string;
@@ -845,6 +848,7 @@ export declare const en: {
     'turnTail.toolList': string;
     'turnTail.openTool': string;
     'saveAction.button': string;
+    'saveAction.tooltip': string;
     'saveAction.title': string;
     'saveAction.hint': string;
     'saveAction.fetching': string;

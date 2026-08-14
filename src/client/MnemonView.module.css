@@ -47,6 +47,15 @@
   background: var(--mn-bg);
 }
 
+.backButton {
+  display: inline-flex;
+  min-width: max-content;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+.backButton > svg { flex: 0 0 auto; }
+
 .brand { display: flex; min-width: 0; align-items: center; gap: 11px; }
 .brandLogo { width: 32px; height: 32px; flex: 0 0 auto; overflow: hidden; border-radius: 8px; box-shadow: 0 0 0 1px var(--mn-line); }
 .brand h1 { margin: 1px 0 0; font-size: 16px; line-height: 1.15; letter-spacing: -.02em; }

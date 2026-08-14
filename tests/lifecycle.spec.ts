@@ -300,6 +300,33 @@ describe('Mnemon DSH lifecycle integration', () => {
     await expect(value.lifecycle.supervise('session-1', 'Different content.', 'message-1')).rejects.toThrow('different content')
   })
 
+  it('extracts assistant text from the durable DSH message content', () => {
+    const value = fixture()
+    value.events.push({
+      type: 'assistant/message',
+      data: {
+        turn: 1,
+        step: 1,
+        message: {
+          id: 'message-1',
+          role: 'assistant',
+          content: [
+            { type: 'text', text: 'First paragraph.' },
+            { type: 'tool-call', id: 'call-1', name: 'read', arguments: '{}' },
+            { type: 'text', text: 'Second paragraph.' },
+          ],
+          source: { kind: 'model', provider: 'mock', model: 'mock' },
+        },
+      },
+    })
+
+    expect(value.lifecycle.assistantMessage('session-1', 'message-1')).toEqual({
+      messageId: 'message-1',
+      text: 'First paragraph.\n\nSecond paragraph.',
+    })
+    expect(value.lifecycle.assistantMessage('session-1', 'missing')).toBeNull()
+  })
+
   it('keeps disabled lifecycle hooks out of model input while retaining manual supervision', async () => {
     const value = fixture(resolveConfig({ lifecycleEnabled: false, recallMode: 'off', writebackMode: 'off' }))
     const prompt = userMessage()

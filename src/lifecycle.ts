@@ -136,14 +136,14 @@ export interface AssistantMessageText {
   text: string
 }
 
-/** Join the text blocks of an `assistant/message` event whose message id matches. */
+/** Join the text content of an `assistant/message` event whose message id matches. */
 function assistantMessageText(events: readonly HostSessionEvent[], messageId: string): AssistantMessageText | null {
   for (const event of events) {
     if (event.type !== 'assistant/message') continue
-    const message = event.data.message as { id?: unknown; blocks?: Array<{ type?: unknown; text?: unknown }> } | undefined
+    const message = event.data.message as { id?: unknown; content?: Array<{ type?: unknown; text?: unknown }> } | undefined
     if (message === undefined || typeof message !== 'object' || message.id !== messageId) continue
-    const blocks = Array.isArray(message.blocks) ? message.blocks : []
-    const text = blocks
+    const content = Array.isArray(message.content) ? message.content : []
+    const text = content
       .filter(block => block.type === 'text' && typeof block.text === 'string')
       .map(block => String(block.text))
       .join('\n\n')

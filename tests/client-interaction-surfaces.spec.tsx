@@ -66,7 +66,7 @@ describe('conversation interaction surfaces', () => {
     unsubscribe()
   })
 
-  it('prevents a second supervised write while a closed panel still has one in flight', async () => {
+  it('opens a centered modal and prevents a second supervised write while it is closed', async () => {
     const status = deferred<{ ok: true; value: { writeEnabled: boolean } }>()
     const supervision = deferred<{ ok: true; value: { summary: string; action: string } }>()
     let statusCalls = 0
@@ -85,8 +85,15 @@ describe('conversation interaction surfaces', () => {
     const action = screen.getByRole('button', { name: 'saveAction.button' })
     expect(action.textContent).toBe('')
     expect(action.getAttribute('aria-haspopup')).toBe('dialog')
+    expect(action.getAttribute('title')).toBeNull()
+    fireEvent.mouseEnter(action)
+    expect(screen.getByRole('tooltip').textContent).toBe('saveAction.tooltip')
     fireEvent.click(action)
-    expect(screen.getByRole('dialog', { name: 'saveAction.title' })).toBeTruthy()
+    const dialog = screen.getByRole('dialog', { name: 'saveAction.title' })
+    expect(dialog.getAttribute('aria-modal')).toBe('true')
+    expect(action.parentElement?.contains(dialog)).toBe(false)
+    expect(screen.getByRole('button', { name: 'common.cancel' })).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull())
     expect(rpcCall.mock.calls.filter(call => call[1] === 'supervise')).toHaveLength(0)
 
     const submit = await screen.findByRole('button', { name: 'saveAction.submit' }) as HTMLButtonElement

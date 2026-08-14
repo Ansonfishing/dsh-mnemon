@@ -359,7 +359,8 @@ describe('MnemonView', () => {
 
   it('keeps shared functionality but applies the minimal unbranded sidebar appearance', async () => {
     const { connection, call } = createConnection()
-    const { container } = render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+    const onClose = vi.fn()
+    const { container } = render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" onClose={onClose} />)
 
     expect(screen.getByLabelText('存储位置模式：自定义')).toBeTruthy()
     expect(screen.queryByLabelText('存储位置模式：—')).toBeNull()
@@ -367,6 +368,10 @@ describe('MnemonView', () => {
     expect(container.querySelector('[data-mnemon-surface="sidebar"]')).toBeTruthy()
     const sidebarHeader = screen.getByRole('heading', { name: '记忆系统', level: 1 }).closest('header')
     if (sidebarHeader === null) throw new Error('Sidebar header missing')
+    const back = within(sidebarHeader).getByRole('button', { name: '返回会话' })
+    expect(sidebarHeader.firstElementChild).toBe(back)
+    fireEvent.click(back)
+    expect(onClose).toHaveBeenCalledTimes(1)
     expect(within(sidebarHeader).getByLabelText('存储位置模式：自定义')).toBeTruthy()
     expect(within(sidebarHeader).getByText('已连接')).toBeTruthy()
     expect(within(sidebarHeader).queryByText(/个已激活/)).toBeNull()

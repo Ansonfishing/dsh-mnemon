@@ -1,4 +1,5 @@
 import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { IconChevronLeftOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { consumeMnemonAnchor, subscribeMnemonAnchor, type MnemonAnchor } from './anchor.ts'
 import Markdown from 'markdown-to-jsx'
 import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts'
@@ -40,6 +41,7 @@ export interface MnemonViewProps {
   surface?: MnemonViewSurface
   t?: MnemonTranslate
   locale?: 'zh' | 'en'
+  onClose?: () => void
 }
 
 export interface MnemonWorkspaceSelection {
@@ -1731,7 +1733,7 @@ export function MnemonView(props: MnemonViewProps): JSX.Element {
   return <I18nContext.Provider value={t}><LocaleContext.Provider value={props.locale ?? 'zh'}><MnemonViewAppearanceProvider value={appearance}><MnemonWorkspace {...props} /></MnemonViewAppearanceProvider></LocaleContext.Provider></I18nContext.Provider>
 }
 
-function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection }: MnemonViewProps): JSX.Element {
+function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, onClose }: MnemonViewProps): JSX.Element {
   const t = useT()
   const appearance = useMnemonViewAppearance()
   const settingsSnapshot = useSyncExternalStore(settingsScope.subscribe, settingsScope.getSnapshot, settingsScope.getSnapshot)
@@ -1852,6 +1854,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   return (
     <main className={appearanceClass(css.shell, appearance.classes.shell)} data-mnemon-surface={appearance.surface}>
       <header className={appearanceClass(css.masthead, appearance.classes.masthead)}>
+        {appearance.surface === 'sidebar' && onClose !== undefined && <button type="button" className={appearanceClass(css.ghostButton, css.backButton)} onClick={onClose} aria-label={t('header.backToConversation')}><IconChevronLeftOutline14 size={14} /><span>{t('header.backToConversation')}</span></button>}
         <div className={appearanceClass(css.brand, appearance.classes.brand)}>
           {appearance.showLogo && <MnemonLogo className={css.brandLogo} />}
           <h1>{appearance.title}</h1>

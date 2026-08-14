@@ -5,7 +5,7 @@ import type { UserConfig } from 'tsdown'
 import { transform } from 'lightningcss'
 
 const PLUGIN_ID = 'dsh-mnemon'
-const CLIENT_EXTERNALS = ['react', 'react-dom', 'react/jsx-runtime', 'cordis'] as const
+const CLIENT_EXTERNALS = ['react', 'react-dom', 'react/jsx-runtime', 'cordis', '@deepseek-ai/dsh-client-ui-primitives'] as const
 const CSS_VIRTUAL_PREFIX = '\0dsh-mnemon-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
 

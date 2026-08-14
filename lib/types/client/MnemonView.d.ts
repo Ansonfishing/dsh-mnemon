@@ -11,6 +11,7 @@ export interface MnemonViewProps {
     surface?: MnemonViewSurface;
     t?: MnemonTranslate;
     locale?: 'zh' | 'en';
+    onClose?: () => void;
 }
 export interface MnemonWorkspaceSelection {
     options: Array<{
