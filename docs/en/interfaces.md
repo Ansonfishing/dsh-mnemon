@@ -19,6 +19,18 @@ The main Web interface follows DSH's global language and light/dark theme. The t
 
 The graph synchronizes every 15 seconds and can also be refreshed manually. Natural layout, uniform reset, dragging, and keyboard adjustments affect only client-side presentation and do not modify Mnemon data.
 
+### In-Conversation Interaction
+
+The memory system surfaces inside the conversation flow through three native DSH slots, all purely additive registrations that replace no official rendering:
+
+| Slot | Presentation | Data and interaction |
+|---|---|---|
+| `tool.call.toolview` (keyed by tool name) | Every `mnemon_*` tool call renders as a memory-flavoured card row: state dot, Mnemon mark, recall/write title, and a tool-specific summary; hovering reveals “Open in Memory view” and “Inspect” | Summaries derive from the call arguments and the settled result JSON (recall/document-search hit counts, engine health for status, catalogue stats for bodies, …); expanding shows the raw arguments and result; jumps use the `mnemon:anchor` event channel to open the matching Memory view page (with a query seed) |
+| `conversation.chat.turnTail` (chain) | One “Turn memory · recalled N · wrote M · document search K” line above the turn-tail actions; expanding lists the exact tool names and offers a jump to the Status page | The read-only RPC `turn-activity` counts `mnemon_*` calls per turn from the Host's durable session log; the chain `select` declines open turns, and turns without memory activity render nothing |
+| `conversation.chat.assistant-actions` (list, id `mnemon-save`) | A “Save to memory” action beside finalized assistant replies (next to feedback); clicking opens the candidate panel | The panel extracts the message text by messageId through the read-only RPC `assistant-message` into an editable candidate; submission goes through the existing `supervise` write RPC (supervised writeback: memory subagent judgment, dedupe, Memory Space choice) and shows the subagent receipt; read-only deployments are disabled up front with a note |
+
+`turn-activity` and `assistant-message` are new read-only endpoints sharing the existing Host channel and error semantics. The rendering-extension contracts behind the in-conversation interaction and the follow-up inline memory-highlight plan are recorded in the Mnemon document “dsh-mnemon 对话内记忆交互侦察”.
+
 ## Model Tools
 
 ### Read-Only Tools

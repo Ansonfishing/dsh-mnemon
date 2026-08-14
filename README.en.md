@@ -143,6 +143,12 @@ See the [configuration reference](./docs/en/configuration.md) for every option, 
 
 The Web workspace contains Status, Runtime, Memory Spaces, Documents, Distill, Recall, Entities, and Content pages in three divider-separated groups: “Status” stands alone; “Runtime, Memory Spaces, Documents” cover the three storage tiers; “Distill, Recall, Entities, Content” are the read/write tools. Its main interface follows DSH's global Chinese/English locale.
 
+Memory also surfaces inside the conversation flow (in-conversation interaction):
+
+- **Memory tool cards**: every `mnemon_*` tool call renders as a memory-flavoured card — recalls show the query and hit count, writes show the subject summary — expandable to the raw arguments and structured result, with a one-click jump to the matching Memory view page;
+- **Turn memory bar**: a completed turn that touched memory gets a “Turn memory · recalled N · wrote M · document search K” summary under its tail, expandable to the exact tool names;
+- **Save to memory**: every finalized assistant reply carries a “Save to memory” action; the candidate is editable, and submission routes through the isolated memory subagent (judgment, dedupe, distillation) without filling the main conversation context.
+
 Common commands:
 
 ```text

@@ -19,6 +19,18 @@
 
 图谱每 15 秒同步一次，也可以手动刷新。自然布局、均匀重置、拖拽和键盘微调只影响客户端展示，不修改 Mnemon 数据。
 
+### 对话内交互
+
+记忆系统在对话流内以三个 DSH 原生槽位呈现，全部为纯增量注册，不替换任何官方渲染：
+
+| 槽位 | 呈现 | 数据与交互 |
+|---|---|---|
+| `tool.call.toolview`（按工具名 keyed） | 每个 `mnemon_*` 工具调用渲染为记忆风格卡片行：状态点、Mnemon 标、召回/沉淀标题与工具专属摘要；悬停出现「在记忆视图中打开」与「查看轨迹」 | 摘要从调用参数与已定稿结果 JSON 提取（recall/document-search 显示命中数、status 显示引擎健康、bodies 显示目录统计等）；展开显示参数与结果原文；跳转经 `mnemon:anchor` 事件通道落到记忆视图对应页（带查询 seed） |
+| `conversation.chat.turnTail`（chain） | 回合尾动作行上方一行「本回合记忆 · 召回 N · 沉淀 M · 档案检索 K」；展开列出具体工具名，并可跳到状态页 | 通过只读 RPC `turn-activity` 从宿主持久会话日志按 turn 统计 `mnemon_*` 调用；chain `select` 拒绝未完成回合，无记忆活动的回合不渲染任何内容 |
+| `conversation.chat.assistant-actions`（list，id `mnemon-save`） | 已定稿助手回复动作区（反馈按钮旁）的「存入记忆」按钮；点击展开候选面板 | 面板经只读 RPC `assistant-message` 按 messageId 提取消息文本为可编辑候选；提交走既有写 RPC `supervise`（受监督写回：记忆子 Agent 判断、查重、选择记忆体），显示子 Agent 回执；只读部署提前禁用并提示 |
+
+`turn-activity`、`assistant-message` 为新增只读端点，与既有端点共用同一 Host 通道与错误语义。对话内交互的渲染扩展面契约与后续「正文内联记忆高亮」方案见 Mnemon 档案「dsh-mnemon 对话内记忆交互侦察」。
+
 ## 模型工具
 
 ### 只读工具
