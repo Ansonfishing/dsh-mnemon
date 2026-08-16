@@ -53,7 +53,9 @@ Connection secrets never enter the selector prompt. `local-only` excludes every 
 - The WebUI never calls external services or local CLIs directly. Provider I/O stays in the Host with cancellation, timeouts, bounded process output, and shell-disabled argument arrays.
 - Disconnecting an external Memory Space removes only its local registry entry. It does not delete the provider's data. Per-memory Forget remains a separate capability-controlled action.
 - Holographic is a TypeScript adaptation of the local structured-fact semantics, using an atomic JSON store; it is not a byte-for-byte port of Hermes' Python/SQLite/HRR implementation.
+- Hindsight uses a lightweight liveness probe and reads real statistics, entities, and relationships from the provider's bank stats, entity catalog, and graph responses. Recall and graph remain usable against older deployments that lack the newer statistics surfaces.
 - ByteRover exposes focused `status`, `query`, and `curate` operations. Broad knowledge-tree browsing and deletion are intentionally not invented.
+- Supermemory browse results merge extracted memory entries with still-browseable ingested documents and deduplicate by provider ID, so documents do not disappear from Content while extraction is incomplete.
 - Mnemon Packs include Mnemon Native Memory Spaces, Runtime, and Documents. External connections, credentials, local third-party stores, and remote provider data are excluded.
 - Availability, pricing, privacy, retention, and licensing of external products are governed by their respective operators. Review those boundaries before sending private memory to a remote provider.
 

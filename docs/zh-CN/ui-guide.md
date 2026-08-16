@@ -77,7 +77,7 @@ Sidebar 顶部始终回答三个问题：
 
 Native 卡片保留统计、编辑和删除；三方卡片展示 Provider、本地/远程位置、编辑与“断开”。智能创建的卡片还会展示“规则自动确定”或“Agent 智能选择”、置信度和简短理由。断开只移除连接，不删除 Provider 数据。
 
-下方关系图聚合全部已激活记忆体。Mnemon Native 提供完整类型关系；Hindsight 与 Holographic 贡献各自支持的图谱；没有图谱边的 Provider 以有界无边节点参与投影且不会伪造关系。布局、拖拽和重置只影响当前浏览器展示。
+下方“快照可观察范围”先按记忆体列出它能兑现的读取表面，再聚合全部已激活记忆体。Mnemon Native 提供完整类型关系；Hindsight 与 Holographic 贡献各自支持的图谱；没有图谱边的 Provider 以有界无边节点参与内容投影；ByteRover 等查询型 Provider 等待明确问题。快照不会伪造 Provider 不具备的关系。布局、拖拽和重置只影响当前浏览器展示。
 
 ### 沉淀记忆
 
@@ -92,6 +92,7 @@ Native 卡片保留统计、编辑和删除；三方卡片展示 Provider、本�
 - **直接检索**返回原始证据，不启动回答 Agent；
 - **Agent 查询**先取得相同证据，再让无 Mnemon 工具的 evidence-only worker 组织答案；
 - 分类与策略可以缩小范围；
+- “本次检索范围”逐个展示已激活 Provider 的原生检索状态，单个连接失败不会隐藏其他来源；
 - 结果保留记忆体、Provider、分类、重要性、引擎原始分数与 ID；跨 Provider 顺序使用排名融合；
 - 只有 Provider 支持相应语义时才显示关联、链接、浏览与遗忘动作。
 
@@ -103,8 +104,8 @@ Native 卡片保留统计、编辑和删除；三方卡片展示 Provider、本�
 |---|---|
 | [![记忆内容列表与筛选](../assets/screenshots/memory-content.png)](../assets/screenshots/memory-content.png) | [![实体查询与相关记忆](../assets/screenshots/entities-context.png)](../assets/screenshots/entities-context.png) |
 
-- **内容**用于无召回副作用地浏览长期记忆，并按文本或分类筛选；可以查看关联、基于当前内容新建、复制 ID 或忘记。
-- **实体**先显示高频实体，选择或输入名称后聚合跨事实、决策与上下文的相关记忆。
+- **内容**用于无召回副作用地调用 Provider 的只读浏览契约，并按文本或分类筛选；来源卡明确区分可枚举、仅查询与不可浏览。Supermemory 同时投影已抽取记忆和仍可浏览的摄取文档；ByteRover 只在输入查询后读取。结果可以按真实能力查看关联、基于当前内容新建、复制 ID 或忘记。
+- **实体**只从真实实体索引聚合高频名称：当前为 Mnemon Native、Hindsight 与 Holographic。RetainDB、Supermemory、Mem0 等不具备实体索引的 Provider 会明确显示“不支持”，不会从普通文本伪造实体能力。选择或输入名称后再聚合跨事实、决策与上下文的相关记忆。
 
 两页都采用可见数量 / 总数和加载更多，避免大量数据一次撑满页面。
 

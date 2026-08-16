@@ -73,7 +73,7 @@ Each card leads with its name and routing description. Provider identity sits be
 
 Native cards retain statistics, Edit, and Delete. Third-party cards show provider identity, local/remote location, Edit, and **Disconnect**. Smart-created cards additionally show whether rules or the Agent decided, plus confidence and a concise reason. Disconnect never deletes provider data.
 
-The graph aggregates all active spaces. Mnemon Native supplies complete typed relationships; Hindsight and Holographic contribute their supported graphs; providers without graph edges contribute bounded disconnected nodes and never fabricated edges. Layout, dragging, and reset affect browser presentation only.
+The **Snapshot visibility** section first states which read surface each Memory Space can actually honor, then the graph aggregates all active spaces. Mnemon Native supplies complete typed relationships; Hindsight and Holographic contribute their supported graphs; providers without graph edges contribute bounded disconnected content projections; query-only providers such as ByteRover wait for an explicit question. The snapshot never fabricates unsupported relationships. Layout, dragging, and reset affect browser presentation only.
 
 ### Remember
 
@@ -88,6 +88,7 @@ Normally, provide only a candidate. On confirmation, an isolated memory subagent
 - **Direct recall** returns raw evidence without an answer Agent.
 - **Agent query** retrieves the same evidence, then gives it to an evidence-only worker with no Mnemon tools.
 - Category and strategy narrow the search.
+- **Recall scope** reports the provider-native search state for every active searchable Memory Space; one failed connection does not hide other sources.
 - Results retain Memory Space, provider, category, importance, engine-native score, and ID; cross-provider order uses rank fusion.
 - Related, Link, Browse, and Forget appear only when the provider supports their semantics.
 
@@ -99,8 +100,8 @@ Focused questions are more reliable than broad keywords.
 |---|---|
 | [![Memory content and filters](../assets/screenshots/memory-content.png)](../assets/screenshots/memory-content.png) | [![Entity lookup and related memories](../assets/screenshots/entities-context.png)](../assets/screenshots/entities-context.png) |
 
-- **Content** browses durable memory without recall side effects and supports text/category filtering, Related, clone-from-item, Copy ID, and Forget.
-- **Entities** starts with frequent names, then aggregates related facts, decisions, and context for a selected or entered entity.
+- **Content** calls each provider's read-only browse contract without recall side effects. Source cards distinguish enumerable, query-only, and unavailable surfaces. Supermemory projects both extracted memories and still-browseable ingested documents; ByteRover reads only after a query. Results expose Related, clone-from-item, Copy ID, and Forget only when their real capabilities allow it.
+- **Entities** aggregates frequent names only from real entity indexes—currently Mnemon Native, Hindsight, and Holographic. RetainDB, Supermemory, Mem0, and other providers without an entity index are explicitly unsupported rather than inferred from ordinary text. Selecting or entering an entity then aggregates related facts, decisions, and context.
 
 Both expose visible / total counts and progressive loading.
 

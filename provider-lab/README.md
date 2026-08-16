@@ -42,5 +42,31 @@ RetainDB Local viewer is at `http://127.0.0.1:18991`.
 
 Use `docker compose ps` and `node scripts/probe-provider-lab.mjs` for a concise
 health report. The seed command is idempotent by Memory Space name and avoids
-overwriting unrelated user Memory Spaces.
+overwriting unrelated user Memory Spaces. It reconciles the selected lab
+connection settings on every run; set `PROVIDER_LAB_ONLY` to a comma-separated
+provider list when only part of the lab should be checked.
 
+Honcho's lab entrypoint applies migrations, reconciles its embedding model, and
+pins the vector dimension to the 768-dimensional `nomic-embed-text` output
+before starting the API. Mem0 uses the same local embedding dimension and the
+configured Ollama chat model.
+
+## Seeded WebUI fixture
+
+The seed creates one active `Provider Lab · …` Memory Space for each of the nine
+providers and writes five architecture, routing, UI-contract, privacy, and
+Hermes-compatibility facts. Extracting providers may expose more or fewer
+provider-native units than the five source documents. In particular, Hindsight
+can emit observations and graph links, while Supermemory Content merges its
+extracted memories with still-browseable source documents.
+
+Validate the fixture in the real DSH WebUI:
+
+1. **Overview** distinguishes real graphs, disconnected content projections,
+   and query-only providers.
+2. **Recall** shows one source card per active searchable Memory Space and keeps
+   provider attribution on every result.
+3. **Content** marks ByteRover query-only and enumerates the other browseable
+   providers without recall side effects.
+4. **Entities** exposes only Mnemon Native, Hindsight, and Holographic as entity
+   indexes; other providers remain explicitly unsupported.

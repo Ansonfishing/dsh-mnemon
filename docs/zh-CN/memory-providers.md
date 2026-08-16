@@ -53,7 +53,9 @@ Host 只暴露适配器能够兑现的能力；UI 与 Agent 工具不会伪造�
 - WebUI 不直接调用远程服务或本地 CLI；Provider I/O 都留在 Host，统一具备取消、超时、进程输出上限和 shell-disabled 参数执行。
 - “断开”三方记忆体只删除本地目录登记，不删除底层数据。单条记忆的“遗忘”是另一项按能力开放的操作。
 - Holographic 是对本地结构化事实语义的 TypeScript 适配，使用原子 JSON 存储；它不是 Hermes Python/SQLite/HRR 实现的逐字节移植。
+- Hindsight 使用轻量存活检查，并从 Provider 的 bank stats、实体目录与图谱响应读取真实统计、实体和关系；旧版缺少统计接口时仍可使用召回与图谱表面。
 - ByteRover 只开放聚焦的 `status`、`query` 与 `curate`；不会虚构广域知识树浏览和删除能力。
+- Supermemory 的浏览结果合并已抽取 memory entries 与仍可浏览的 ingested documents，并按 Provider ID 去重；文档未完成抽取时也不会从“内容”页消失。
 - Mnemon Pack 包含 Mnemon Native 记忆体、运行时与档案；三方连接、凭据、本地三方 Store 与远程数据都不进入 Pack。
 - 外部产品的可用性、价格、隐私、保留策略和许可证由各自运营方决定。把私有记忆发送给远程 Provider 前应先评估这些边界。
 
