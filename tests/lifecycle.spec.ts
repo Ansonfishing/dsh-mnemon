@@ -29,6 +29,8 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
   const events: HostSessionEvent[] = []
   const followup = vi.fn()
   const steer = vi.fn()
+  const taskAgents: HostAgent[] = []
+  const disposedTaskAgents: string[] = []
   const agentCtx = {
     on: vi.fn((name: string, listener: Listener) => {
       agentListeners.set(name, listener)
@@ -60,10 +62,33 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
     recall: vi.fn(async (_agent, request) => ({ query: request.query, mode: 'smart', results: [], delegation: { runId: 'recall-child', provider: 'spawn', summary: '', selectedMemoryBodyIds: [] } })),
     write: vi.fn(async () => ({ delegated: true, runId: 'write-child', provider: 'spawn', summary: 'No durable memory', action: 'skipped', memoryBodyIds: [] })),
     review: vi.fn(async () => ({ delegated: true, runId: 'review-child', provider: 'fork', summary: 'No durable change', action: 'skipped', memoryBodyIds: [] })),
+    maintainMetadata: vi.fn(async () => ({ delegated: true, runId: 'metadata-child', provider: 'spawn', summary: 'updated', updates: [] })),
+    archiveDocument: vi.fn(async () => ({ success: true, action: 'archived', document: { id: 'doc-1' } })),
     snapshot: vi.fn(() => ({ recalls: 0, writes: 0, answers: 0, reviews: 0, failures: 0 })),
   } as unknown as MnemonSubagentCoordinator
+  const createTaskAgent = vi.fn(async (options: { sessionId: string; meta?: { cwd?: string } }) => {
+    const taskAgent = {
+      id: options.sessionId,
+      status: 'idle' as const,
+      session: { header: options.meta?.cwd === undefined ? {} : { cwd: options.meta.cwd }, events: [] },
+      ctx: agentCtx,
+      followup: vi.fn(),
+      steer: vi.fn(),
+      inject: vi.fn(),
+    } satisfies HostAgent
+    taskAgents.push(taskAgent)
+    rootListeners.get('agent/created')?.({ agent: taskAgent })
+    return {
+      agent: taskAgent,
+      dispose: vi.fn(async () => {
+        disposedTaskAgents.push(taskAgent.id)
+        const index = taskAgents.indexOf(taskAgent)
+        if (index >= 0) taskAgents.splice(index, 1)
+      }),
+    }
+  })
   const ctx = {
-    agents: { get: (id: string) => id === agent.id ? agent : undefined, roots: () => [agent] },
+    agents: { get: (id: string) => id === agent.id ? agent : taskAgents.find(candidate => candidate.id === id), roots: () => [agent, ...taskAgents], create: createTaskAgent },
     on: vi.fn((name: string, listener: Listener) => {
       rootListeners.set(name, listener)
       return () => rootListeners.delete(name)
@@ -82,7 +107,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
     if (listener === undefined) throw new Error('turn-stopping listener missing')
     await listener({ agent, turn, signal: new AbortController().signal })
   }
-  return { agent, agentListeners, events, followup, steer, lifecycle, service, coordinator, preStep, turnStopping, stop }
+  return { agent, agentListeners, events, followup, steer, lifecycle, service, coordinator, createTaskAgent, disposedTaskAgents, preStep, turnStopping, stop }
 }
 
 afterEach(() => vi.useRealTimers())
@@ -94,12 +119,33 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.lifecycle.snapshot()).toMatchObject({
       activeAgents: 1,
       sessionAvailable: true,
+      taskAgentAvailable: true,
       current: { sessionId: 'session-1' },
     })
     expect(value.lifecycle.snapshot('missing-session')).toMatchObject({
       sessionAvailable: true,
       current: { sessionId: 'session-1' },
     })
+  })
+
+  it('runs standalone maintenance under a disposable clean root Agent scoped to the selected workspace', async () => {
+    const value = fixture()
+
+    await value.lifecycle.maintainMetadata('', ['project'], '/tmp/workspace-two')
+    await value.lifecycle.archiveDocument('', 'doc-1', '/tmp/workspace-two')
+
+    expect(value.createTaskAgent).toHaveBeenCalledTimes(2)
+    expect(value.createTaskAgent).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      sessionId: expect.any(String),
+      meta: { cwd: '/tmp/workspace-two' },
+      signal: expect.any(AbortSignal),
+    }))
+    const metadataAgent = vi.mocked(value.coordinator.maintainMetadata).mock.calls[0]?.[0] as HostAgent
+    expect(metadataAgent).not.toBe(value.agent)
+    expect(metadataAgent.session.header?.cwd).toBe('/tmp/workspace-two')
+    expect(value.coordinator.archiveDocument).toHaveBeenCalledWith(expect.objectContaining({ session: { header: { cwd: '/tmp/workspace-two' }, events: [] } }), 'doc-1', expect.any(AbortSignal))
+    expect(value.disposedTaskAgents).toHaveLength(2)
+    expect(value.lifecycle.snapshot()).toMatchObject({ activeAgents: 1, taskAgentAvailable: true })
   })
 
   it('adds a short optional reminder without forcing recall or remember for an ordinary turn', async () => {

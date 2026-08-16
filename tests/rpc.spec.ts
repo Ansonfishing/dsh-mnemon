@@ -196,7 +196,7 @@ describe('Mnemon RPC', () => {
       sessionId: 'session-1', memoryBodyIds: ['project'],
     })).resolves.toMatchObject({ ok: true, value: { runId: 'metadata-1' } })
 
-    expect(lifecycle.maintainMetadata).toHaveBeenCalledWith('session-1', ['project'])
+    expect(lifecycle.maintainMetadata).toHaveBeenCalledWith('session-1', ['project'], undefined)
     expect(service.updateBodyMetadata).toHaveBeenCalledWith(maintained.updates)
   })
 
@@ -228,7 +228,7 @@ describe('Mnemon RPC', () => {
 
     expect(lifecycle.searchDocuments).toHaveBeenCalledWith('session-1', 'design', true, undefined)
     expect(lifecycle.mutateDocument).toHaveBeenCalledWith('session-1', { action: 'create', title: 'Design', content: '# Design', sourcePaths: ['src/index.ts'], sessionIds: ['session-1'] })
-    expect(lifecycle.archiveDocument).toHaveBeenCalledWith('session-1', 'doc-1')
+    expect(lifecycle.archiveDocument).toHaveBeenCalledWith('session-1', 'doc-1', undefined)
   })
 
   it('keeps Tab reads deterministic while delegating semantic writes', async () => {
@@ -332,6 +332,49 @@ describe('Mnemon RPC', () => {
     await expect(createWriteHandler(runtime, lifecycle)('remember', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Use the aligned Agent path' })).resolves.toMatchObject({ ok: true })
     expect(lifecycle.remember).toHaveBeenCalledWith('session-1', expect.objectContaining({ content: 'Use the aligned Agent path' }))
     expect(selectedService.remember).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs workspace-scoped maintenance without a selected conversation session', async () => {
+    const selectedService = fakeService()
+    selectedService.config.storageScope = 'workspace'
+    const selectedWorkspace = { id: 'workspace-2', title: 'Workspace Two', path: '/tmp/workspace-two' }
+    const runtime = {
+      route: vi.fn(() => ({
+        graph: {
+          config: selectedService.config,
+          service: selectedService,
+          runtimeMemory: {},
+          documents: { forWorkspace: vi.fn(() => ({})) },
+          storage: {},
+          packs: {},
+        },
+        selectedWorkspace,
+        selectedRoot: '/tmp/workspace-two/.mnemon',
+        effectiveRoot: '/tmp/global/.mnemon',
+        aligned: false,
+      })),
+    } as unknown as LiveMnemonRuntime
+    const maintained = {
+      delegated: true as const,
+      runId: 'metadata-task',
+      provider: 'spawn',
+      summary: 'updated',
+      updates: [{ memoryBodyId: 'project', title: '产品决策', description: '记录稳定的产品范围与取舍，在规划和复盘产品方向时召回。' }],
+    }
+    const lifecycle = {
+      maintainMetadata: vi.fn(async () => maintained),
+      archiveDocument: vi.fn(async () => ({ success: true, action: 'archived', document: { id: 'doc-1' } })),
+    } as unknown as MnemonLifecycle
+
+    await expect(createWriteHandler(runtime, lifecycle)('body-metadata-maintain', {
+      workspaceId: 'workspace-2', memoryBodyIds: ['project'],
+    })).resolves.toMatchObject({ ok: true, value: { runId: 'metadata-task' } })
+    await expect(createWriteHandler(runtime, lifecycle)('document', {
+      workspaceId: 'workspace-2', action: 'archive', id: 'doc-1',
+    })).resolves.toMatchObject({ ok: true, value: { action: 'archived' } })
+
+    expect(lifecycle.maintainMetadata).toHaveBeenCalledWith('', ['project'], '/tmp/workspace-two')
+    expect(lifecycle.archiveDocument).toHaveBeenCalledWith('', 'doc-1', '/tmp/workspace-two')
   })
 
   it('does not treat a browser workspace hint as an inspection override in global scope', async () => {

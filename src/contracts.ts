@@ -121,9 +121,23 @@ export interface HostAgent {
   inject(message: HostUserMessage): void
 }
 
+export interface HostAgentHandle {
+  agent: HostAgent
+  dispose(): Promise<void>
+}
+
+export interface CreateHostAgentOptions {
+  sessionId: string
+  meta?: { cwd?: string; agentPreset?: string }
+  agentOptions?: { provider?: string; model?: string; maxTokens?: number }
+  signal?: AbortSignal
+}
+
 export interface HostAgentsService {
   get(id: string): HostAgent | undefined
   roots(): HostAgent[]
+  /** DSH rc.6+ factory for an owned, clean top-level Agent. */
+  create?(options: CreateHostAgentOptions): Promise<HostAgentHandle>
 }
 
 export interface HostWorkspace {

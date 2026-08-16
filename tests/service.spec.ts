@@ -258,14 +258,14 @@ describe('MnemonService', () => {
     ]), expect.anything())
   })
 
-  it('uses a Provider browse endpoint directly for a bounded metadata sample', async () => {
+  it('uses a single native search request when Provider browse would fan out', async () => {
     const { service } = fixture()
     const provider = {
       id: 'openviking' as const,
       status: vi.fn(async () => ({ healthy: true })),
-      search: vi.fn(async () => ({ results: [] })),
+      search: vi.fn(async () => ({ results: [{ id: 'memory-1', content: 'Team release gates and rollback decisions.', category: 'decision', entities: ['Release'] }] })),
       graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
-      list: vi.fn(async () => [{ id: 'memory-1', content: 'Team release gates and rollback decisions.', category: 'decision', entities: ['Release'] }]),
+      list: vi.fn(async () => []),
       remember: vi.fn(async () => ({ action: 'stored' })),
     }
     ;(service as unknown as { providers: Map<string, typeof provider> }).providers.set('openviking', provider)
@@ -275,10 +275,14 @@ describe('MnemonService', () => {
     })
 
     await expect(service.metadataSample(body.id)).resolves.toMatchObject({
-      providerId: 'openviking', method: 'browse', evidence: [{ content: 'Team release gates and rollback decisions.' }],
+      providerId: 'openviking', method: 'search', evidence: [{ content: 'Team release gates and rollback decisions.' }],
     })
-    expect(provider.list).toHaveBeenCalledWith(body, { limit: 6 }, undefined)
-    expect(provider.search).not.toHaveBeenCalled()
+    expect(provider.search).toHaveBeenCalledWith(body, {
+      query: 'Shared provider memory.',
+      mode: 'basic',
+      limit: 6,
+    }, undefined)
+    expect(provider.list).not.toHaveBeenCalled()
   })
 
   it('exposes top entities and recalls one entity on demand', async () => {

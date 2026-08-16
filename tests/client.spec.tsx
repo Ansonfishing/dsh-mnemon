@@ -20,7 +20,7 @@ describe('MnemonView', () => {
     unsetPath: async () => {},
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; reconnectPending?: boolean } = {}) {
+  function createConnection(options: { withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -215,6 +215,7 @@ describe('MnemonView', () => {
         status.version = mnemonVersionUpdated ? '0.2.0' : status.version
         return { ok: true, value: { component: payload?.component, previousVersion: '0.1.2', currentVersion: '0.2.0', updated: true, restartRequired: false } }
       }
+      if (endpoint === 'body-directory' && options.directoryPending === true) return await new Promise<never>(() => {})
       if (endpoint === 'bodies' || endpoint === 'body-directory') return { ok: true, value: { items: bodies, providers: MEMORY_PROVIDER_CATALOG, total: bodies.length, activeCount: bodies.filter(item => item.active).length, directory: '/tmp/mnemon/data', generatedAt: '2026-08-13T03:00:00.000Z' } }
       if (endpoint === 'body-reconnect') {
         if (options.reconnectPending === true) return await new Promise<never>(() => {})
@@ -780,7 +781,7 @@ describe('MnemonView', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'AI 生成（1）' }))
 
     await waitFor(() => expect(within(dialog).getByText('产品决策')).toBeTruthy())
-    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['project'], sessionId: 'session-1' })
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['project'] })
     expect(screen.getByRole('dialog', { name: 'AI 维护记忆体元信息' })).toBe(dialog)
     expect(within(dialog).getByText('记录稳定的产品范围、架构取舍与依据，在规划和复盘产品方向时召回。')).toBeTruthy()
     expect(within(dialog).getByText('产品决策').closest('label')?.hasAttribute('data-refreshed')).toBe(true)
@@ -802,7 +803,36 @@ describe('MnemonView', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'AI 生成（1）' }))
 
     await waitFor(() => expect(within(dialog).getByText('产品决策')).toBeTruthy())
-    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['project'], sessionId: 'session-1' })
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['project'] })
+  })
+
+  it('opens metadata maintenance from the status directory while detailed Memory data is pending', async () => {
+    const { connection } = createConnection({ directoryPending: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} surface="sidebar" />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    const action = await screen.findByRole('button', { name: 'AI 维护元信息' })
+    expect(action.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(action)
+
+    const dialog = screen.getByRole('dialog', { name: 'AI 维护记忆体元信息' })
+    expect(within(dialog).getByRole('checkbox', { name: /项目记忆体/ })).toBeTruthy()
+  })
+
+  it('keeps metadata maintenance discoverable while the matching Agent is unavailable', async () => {
+    const { connection } = createConnection({ workspaceMismatch: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
+    const action = screen.getByRole('button', { name: 'AI 维护元信息' })
+    expect(action.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(action)
+
+    const dialog = screen.getByRole('dialog', { name: 'AI 维护记忆体元信息' })
+    expect(within(dialog).getByText('暂时无法运行：未找到与当前记忆范围匹配的活跃 Agent')).toBeTruthy()
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /项目记忆体/ }))
+    expect(within(dialog).getByRole('button', { name: 'AI 生成（1）' }).hasAttribute('disabled')).toBe(true)
   })
 
   it('isolates concurrent metadata subagents and contains failures inside the affected card', async () => {
@@ -819,9 +849,9 @@ describe('MnemonView', () => {
 
     await waitFor(() => expect(within(dialog).getByText('产品决策')).toBeTruthy())
     await waitFor(() => expect(within(dialog).getByText('失败：preferences subagent failed')).toBeTruthy())
-    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['project'], sessionId: 'session-1' })
-    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['preferences'], sessionId: 'session-1' })
-    expect(call).not.toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['project', 'preferences'], sessionId: 'session-1' })
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['project'] })
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['preferences'] })
+    expect(call).not.toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['project', 'preferences'] })
     expect(within(dialog).getByText('产品决策').closest('label')?.hasAttribute('data-refreshed')).toBe(true)
     expect(within(dialog).getByText('偏好记忆体').closest('label')?.hasAttribute('data-failed')).toBe(true)
     expect(screen.getByRole('dialog', { name: 'AI 维护记忆体元信息' })).toBe(dialog)

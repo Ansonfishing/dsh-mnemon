@@ -371,8 +371,8 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
               }))
             }
             if (lifecycle === undefined) throw new Error('Mnemon Documents require lifecycle integration')
+            if (action === 'archive') return success(await lifecycle.archiveDocument(sessionId, String(payload.id ?? ''), selectedWorkspace?.path))
             if (resolved.explicitWorkspace) requireAligned(resolved.route)
-            if (action === 'archive') return success(await lifecycle.archiveDocument(sessionId, String(payload.id ?? '')))
             if (action === 'create') return success(await lifecycle.mutateDocument(sessionId, {
               action: 'create',
               title: String(payload.title ?? ''),
@@ -496,7 +496,6 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
         case 'body-metadata-maintain':
           {
             if (lifecycle === undefined) throw new Error('AI metadata maintenance requires Mnemon lifecycle integration')
-            requireAligned(resolved.route)
             if (!Array.isArray(payload.memoryBodyIds)) throw new Error('memoryBodyIds must be an array')
             const memoryBodyIds = [...new Set(payload.memoryBodyIds.map(String).map(id => id.trim()).filter(Boolean))]
             if (memoryBodyIds.length === 0 || memoryBodyIds.length > 20) throw new Error('metadata maintenance requires 1 through 20 Memory Spaces')
@@ -506,7 +505,7 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
               if (body === undefined) throw new Error(`unknown memory body: ${id}`)
               if (!body.active || body.providerEnabled === false) throw new Error(`metadata maintenance requires an active Memory Space: ${id}`)
             }
-            const maintained = await lifecycle.maintainMetadata(String(payload.sessionId ?? ''), memoryBodyIds)
+            const maintained = await lifecycle.maintainMetadata(String(payload.sessionId ?? ''), memoryBodyIds, selectedWorkspace?.path)
             service.updateBodyMetadata(maintained.updates)
             return success(maintained)
           }

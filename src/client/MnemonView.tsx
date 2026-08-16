@@ -954,7 +954,7 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
   )
 }
 
-function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClient; revision: number; writeEnabled: boolean; agentAvailable: boolean; fallbackBodies: MemoryBodyView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onBodyReconnect: (body: MemoryBodyView) => void; onBodyMetadata: (updates: readonly MemoryBodyMetadataUpdate[]) => void; onExplore: (query: string) => void }): JSX.Element {
+function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClient; revision: number; writeEnabled: boolean; agentAvailable: boolean; fallbackBodies: MemoryBodyView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onAgentRefresh: () => void; onBodyReconnect: (body: MemoryBodyView) => void; onBodyMetadata: (updates: readonly MemoryBodyMetadataUpdate[]) => void; onExplore: (query: string) => void }): JSX.Element {
   const t = useT()
   const locale = useLocale()
   const appearance = useMnemonViewAppearance()
@@ -1215,7 +1215,10 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
   const editingBodyView = editingBody === null ? undefined : catalog?.items.find(body => body.id === editingBody)
   const deletingBodyView = confirmingDeleteBody === null ? undefined : catalog?.items.find(body => body.id === confirmingDeleteBody)
   const providers = catalog?.providers ?? []
-  const metadataCandidates = catalog?.items.filter(body => body.active && body.providerEnabled !== false) ?? []
+  // The status summary already carries the non-blocking control-plane
+  // directory. Keep metadata maintenance usable while the richer Memory page
+  // health/graph requests are still resolving.
+  const metadataCandidates = (catalog?.items ?? props.fallbackBodies).filter(body => body.active && body.providerEnabled !== false)
   const metadataRunningCount = Object.values(metadataTasks).filter(task => task.status === 'running').length
   const metadataBusy = metadataRunningCount > 0
   const metadataSelectable = metadataCandidates.filter(body => metadataTasks[body.id]?.status !== 'running')
@@ -1352,7 +1355,7 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
           <div><h3>{t('overview.directory')}</h3><p>{t('overview.directory.description')}</p><code className={css.bodyDirectoryPath}>{catalogUnavailable ? t('overview.directory.unsynced') : catalog?.directory || props.fallbackDirectory || t('overview.directory.waiting')}</code></div>
           <div className={appearance.surface === 'sidebar' ? appearanceClass(css.bodyDirectoryControls, appearance.classes.bodyDirectoryActions) : css.bodyDirectoryControls}>
             <strong>{catalogUnavailable ? t('overview.directory.unsyncedBadge') : `${catalog?.activeCount ?? '—'} / ${catalog?.total ?? '—'} ${t('common.active')}`}</strong>
-            {props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} disabled={!props.agentAvailable || metadataCandidates.length === 0} title={!props.agentAvailable ? t('overview.metadataUnavailable') : undefined} onClick={() => { setMetadataSelection([]); setMetadataTasks({}); setMetadataOpen(true) }}>{t('overview.metadataAction')}</button>}
+            {props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} title={!props.agentAvailable ? t('overview.metadataUnavailable') : undefined} onClick={() => { setMetadataSelection([]); setMetadataTasks({}); setMetadataOpen(true); if (!props.agentAvailable) props.onAgentRefresh() }}>{t('overview.metadataAction')}</button>}
             {appearance.surface === 'sidebar' && props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} onClick={() => setCreatingBodyOpen(true)}>{t('overview.createTitle')}</button>}
           </div>
         </div>
@@ -1379,13 +1382,14 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
       <div className={css.asyncRegion}><ReadSourcePanel title={t('overview.snapshotSources')} hint={t('overview.snapshotSourcesHint')} sources={graphSources} /></div>
       {appearance.surface === 'sidebar' && creatingBodyOpen && <SidebarModal title={t('overview.createTitle')} description={t('overview.createDialogHint')} busy={creating} wide onClose={() => setCreatingBodyOpen(false)}>{bodyCreateForm}</SidebarModal>}
       {metadataOpen && <SidebarModal title={t('overview.metadataTitle')} description={t('overview.metadataDescription')} busy={metadataBusy} wide onClose={() => setMetadataOpen(false)}><div className={css.metadataDialog}>
+        {!props.agentAvailable && <div className={css.inlineError} role="status">{t('overview.metadataUnavailable')}</div>}
         <div className={css.metadataToolbar}><span>{t('overview.metadataSelected', { count: metadataSelection.length })}{metadataRunningCount > 0 && <em>{t('overview.metadataRunningCount', { count: metadataRunningCount })}</em>}</span><button type="button" className={css.ghostButton} disabled={metadataSelectable.length === 0} onClick={() => setMetadataSelection(metadataAllSelected ? [] : metadataSelectable.map(body => body.id))}>{metadataAllSelected ? t('overview.metadataClear') : t('overview.metadataSelectAll')}</button></div>
-        <div className={css.metadataList} aria-live="polite">{metadataCandidates.map(body => {
+        <div className={css.metadataList} aria-live="polite">{metadataCandidates.length === 0 && <div className={css.metadataEmpty}>{catalogLoading ? t('overview.metadataLoading') : t('overview.metadataEmpty')}</div>}{metadataCandidates.map(body => {
           const selected = metadataSelection.includes(body.id)
           const task = metadataTasks[body.id]
           return <label key={body.id} data-provider={body.provider.id} data-selected={selected || undefined} data-refreshing={task?.status === 'running' || undefined} data-refreshed={task?.status === 'success' || undefined} data-failed={task?.status === 'error' || undefined}><input type="checkbox" checked={selected} disabled={task?.status === 'running'} onChange={event => setMetadataSelection(current => event.target.checked ? [...new Set([...current, body.id])] : current.filter(id => id !== body.id))} /><i className={css.choiceControl} data-kind="check" aria-hidden="true" /><span><strong>{body.name}</strong><small>{body.description || t('overview.noDescription')}</small><span><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} />{task === undefined ? <code>{body.id}</code> : <small className={css.metadataTaskStatus} data-status={task.status} title={task.error}>{task.status === 'running' ? t('overview.metadataTaskRunning') : task.status === 'success' ? t('overview.metadataTaskSuccess') : t('overview.metadataTaskError', { error: task.error ?? t('overview.metadataTaskUnknown') })}</small>}</span></span></label>
         })}</div>
-        <div className={css.metadataActions}><p>{t('overview.metadataSafety')}</p><div><button type="button" className={css.ghostButton} disabled={metadataBusy} onClick={() => setMetadataOpen(false)}>{t('common.cancel')}</button><button type="button" className={css.primaryButton} disabled={metadataSelection.length === 0} onClick={maintainMetadata}>{t('overview.metadataGenerate', { count: metadataSelection.length })}</button></div></div>
+        <div className={css.metadataActions}><p>{t('overview.metadataSafety')}</p><div><button type="button" className={css.ghostButton} disabled={metadataBusy} onClick={() => setMetadataOpen(false)}>{t('common.cancel')}</button><button type="button" className={css.primaryButton} disabled={!props.agentAvailable || metadataSelection.length === 0} title={!props.agentAvailable ? t('overview.metadataUnavailable') : undefined} onClick={maintainMetadata}>{t('overview.metadataGenerate', { count: metadataSelection.length })}</button></div></div>
       </div></SidebarModal>}
       {appearance.surface === 'sidebar' && editingBodyView !== undefined && <SidebarModal title={t('overview.editBodyAria', { name: editingBodyView.name })} description={editingBodyView.id} busy={savingBody === editingBodyView.id} onClose={() => setEditingBody(null)}>{bodyEditForm(editingBodyView)}</SidebarModal>}
       {appearance.surface === 'sidebar' && deletingBodyView !== undefined && <SidebarModal title={t(deletingBodyView.provider.id !== 'mnemon-native' ? 'overview.disconnectTitle' : 'overview.deleteTitle', { name: deletingBodyView.name })} description={deletingBodyView.id} busy={deletingBody === deletingBodyView.id} onClose={() => setConfirmingDeleteBody(null)}><div className={css.bodyDeleteConfirm}><p>{t(deletingBodyView.provider.id !== 'mnemon-native' ? 'overview.disconnectWarning' : 'overview.deleteWarning', { provider: deletingBodyView.provider.label })}</p><div className={css.bodyDeleteSummary}><strong>{deletingBodyView.name}</strong><span>{deletingBodyView.provider.label} · {deletingBodyView.provider.location || t('common.memories', { count: deletingBodyView.stats?.totalInsights ?? 0 })}</span></div><div className={css.bodyEditActions}><button type="button" data-autofocus className={css.ghostButton} disabled={deletingBody === deletingBodyView.id} onClick={() => setConfirmingDeleteBody(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} title={canDeleteBody(deletingBodyView) ? undefined : t('overview.lastStoreDeleteHint')} disabled={deletingBody === deletingBodyView.id || !canDeleteBody(deletingBodyView)} onClick={() => void deleteBody(deletingBodyView)}>{deletingBody === deletingBodyView.id ? t('overview.deletingBody') : t(deletingBodyView.provider.id !== 'mnemon-native' ? 'overview.disconnectAction' : 'overview.deleteAction')}</button></div></div></SidebarModal>}
@@ -2282,7 +2286,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const statusLoading = currentStatusState.loading
   const statusError = currentStatusState.error
   const metadataSessionId = status?.lifecycle?.current?.sessionId
-  const metadataClient = useMemo(() => new MnemonClient(connection, metadataSessionId, workspaceId), [connection, metadataSessionId, workspaceId])
+  const metadataClient = useMemo(() => new MnemonClient(connection, undefined, workspaceId), [connection, workspaceId])
   const statusRequest = useRef(0)
   const [revision, setRevision] = useState(0)
   const [searchSeed, setSearchSeed] = useState('')
@@ -2394,6 +2398,8 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const storageModeText = storageScopeLabel(t, storageMode)
   const showWorkspacePicker = storageMode === 'workspace' && workspaceSelection !== undefined && workspaceSelection.options.length > 0
   const workspaceDiverged = workspaceContext?.mode === 'workspace' && !workspaceContext.aligned
+  const metadataTaskAvailable = status?.lifecycle?.taskAgentAvailable === true
+    || (status?.lifecycle?.taskAgentAvailable === undefined && metadataSessionId !== undefined && status?.lifecycle?.sessionAvailable === true && !workspaceDiverged)
   const canAlignWorkspace = workspaceDiverged && workspaceSelection?.effectiveWorkspaceId !== undefined
   const workspaceDifference = workspaceContext === undefined
     ? ''
@@ -2429,7 +2435,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
         <WorkspaceNavigation page={page} onSelect={selectPrimaryPage} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} writeEnabled={writeEnabled} />
         <MemoryNavigation page={page} writeEnabled={writeEnabled} onSelect={selectPage} onRemember={() => openRemember()} />
         <section key={viewContextKey} className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={!isMemoryPage(page) ? '' : undefined}>
-          {page === 'overview' && <OverviewPage client={client} metadataClient={metadataClient} revision={revision} writeEnabled={writeEnabled} agentAvailable={metadataSessionId !== undefined && status?.lifecycle?.sessionAvailable === true && !workspaceDiverged} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onBodyReconnect={bodyReconnected} onBodyMetadata={bodyMetadataUpdated} onExplore={explore} />}
+          {page === 'overview' && <OverviewPage client={client} metadataClient={metadataClient} revision={revision} writeEnabled={writeEnabled} agentAvailable={metadataTaskAvailable} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onAgentRefresh={() => void loadStatus()} onBodyReconnect={bodyReconnected} onBodyMetadata={bodyMetadataUpdated} onExplore={explore} />}
           {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}
           {page === 'documents' && <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} />}
           {page === 'explore' && <ExplorePage client={client} status={status} seed={searchSeed} writeEnabled={writeEnabled} onForget={forget} />}

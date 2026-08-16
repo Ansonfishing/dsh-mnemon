@@ -82,6 +82,17 @@ export interface MemoryBodyMetadataSample {
   evidence: Array<Pick<Insight, 'content' | 'category' | 'entities'>>
 }
 
+/**
+ * Providers whose native search is a single bounded request while their browse
+ * projection fans out to multiple resources or collections. Prefer search for
+ * metadata sampling so AI maintenance never pays for a detailed projection.
+ */
+const METADATA_SEARCH_FIRST_PROVIDERS = new Set<MemoryBody['provider']['id']>([
+  'openviking',
+  'supermemory',
+  'byterover',
+])
+
 function record(value: JsonValue | undefined): Record<string, JsonValue> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, JsonValue>
@@ -545,13 +556,13 @@ export class MnemonService {
     if (body.provider.id === 'mnemon-native') {
       method = 'native-basic'
       items = await this.nativeMetadataSample(body, limit, signal)
-    } else if (body.provider.capabilities.browse) {
-      method = 'browse'
-      items = await provider.list(body, { limit }, signal)
-    } else {
+    } else if (METADATA_SEARCH_FIRST_PROVIDERS.has(body.provider.id) || !body.provider.capabilities.browse) {
       method = 'search'
       const query = (body.description.trim() || body.name.trim()).slice(0, 400)
       items = (await provider.search(body, { query, mode: 'basic', limit }, signal)).results
+    } else {
+      method = 'browse'
+      items = await provider.list(body, { limit }, signal)
     }
     return {
       memoryBodyId: body.id,

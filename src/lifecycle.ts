@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto'
 import { resolve } from 'node:path'
 import type { ResolvedConfig } from './config.ts'
 import type {
   HostAgent,
+  HostAgentHandle,
   HostContextShape,
   HostPreStepDecision,
   HostSessionEvent,
@@ -338,6 +340,8 @@ class MnemonAgentLifecycle {
 export class MnemonLifecycle {
   private readonly owners = new Map<HostAgent, { lifecycle: MnemonAgentLifecycle; dispose: () => unknown }>()
   private readonly counters: LifecycleCounters = { primes: 0, recallCues: 0, writebackCues: 0, supervisedRequests: 0, failures: 0 }
+  /** Creation ids reserved before DSH publishes clean task-root Agents. */
+  private readonly taskAgentIds = new Set<string>()
   /** Bounded process-local replay fence for finalized-message write actions. */
   private readonly supervisedWritebacks = new Map<string, { content: string; result: Promise<SupervisedWritebackResult> }>()
 
@@ -370,6 +374,7 @@ export class MnemonLifecycle {
       idleReviewMs: this.config.idleReviewMs,
       activeAgents: this.owners.size,
       sessionAvailable: agent !== undefined,
+      taskAgentAvailable: this.ctx.agents.create !== undefined || agent !== undefined,
       counters: { ...this.counters },
       subagents: this.coordinator.snapshot(),
       ...(owner === undefined ? {} : { current: owner.snapshot() }),
@@ -443,8 +448,10 @@ export class MnemonLifecycle {
     return this.coordinator.document(this.liveAgent(sessionId), request, signal)
   }
 
-  archiveDocument(sessionId: string, id: string, signal = new AbortController().signal) {
-    return this.coordinator.archiveDocument(this.liveAgent(sessionId), id, signal)
+  archiveDocument(sessionId: string, id: string, workspaceRoot?: string, signal = new AbortController().signal) {
+    const root = workspaceRoot?.trim() || this.workspaceRoot(sessionId)
+    if (root === undefined || root.trim() === '') throw new Error('a selected DSH workspace is required to archive a Mnemon Document')
+    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.archiveDocument(agent, id, signal))
   }
 
   mutate(sessionId: string, operation: string, request: unknown, signal = new AbortController().signal) {
@@ -455,8 +462,9 @@ export class MnemonLifecycle {
     return this.coordinator.placeProvider(this.liveAgent(sessionId), body, prepared, signal)
   }
 
-  maintainMetadata(sessionId: string, memoryBodyIds: readonly string[], signal = new AbortController().signal) {
-    return this.coordinator.maintainMetadata(this.liveAgent(sessionId), memoryBodyIds, signal)
+  maintainMetadata(sessionId: string, memoryBodyIds: readonly string[], workspaceRoot?: string, signal = new AbortController().signal) {
+    const root = workspaceRoot?.trim() || this.workspaceRoot(sessionId)
+    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.maintainMetadata(agent, memoryBodyIds, signal))
   }
 
   async supervise(sessionId: string, content: string, idempotencyKey?: string, signal = new AbortController().signal): Promise<SupervisedWritebackResult> {
@@ -508,8 +516,48 @@ export class MnemonLifecycle {
     return agent
   }
 
+  /**
+   * Run session-independent maintenance under a fresh top-level Agent. Its cwd
+   * is the explicit Web workbench scope, so LiveMnemonRuntime resolves the same
+   * workspace graph without borrowing conversation history or ownership.
+   */
+  private async runTaskAgent<T>(
+    fallbackSessionId: string,
+    workspaceRoot: string | undefined,
+    signal: AbortSignal,
+    operation: (agent: HostAgent) => Promise<T>,
+  ): Promise<T> {
+    const create = this.ctx.agents.create?.bind(this.ctx.agents)
+    if (create === undefined) {
+      const fallback = workspaceRoot === undefined ? this.ctx.agents.get(fallbackSessionId.trim()) ?? this.availableAgent() : this.availableAgent(workspaceRoot)
+      if (fallback === undefined) throw new Error('current DSH host cannot create a task Agent and no matching live Agent is available')
+      return operation(fallback)
+    }
+
+    const sessionId = randomUUID()
+    this.taskAgentIds.add(sessionId)
+    let handle: HostAgentHandle | undefined
+    let failure: unknown
+    try {
+      handle = await create({
+        sessionId,
+        ...(workspaceRoot === undefined ? {} : { meta: { cwd: resolve(workspaceRoot) } }),
+        signal,
+      })
+      return await operation(handle.agent)
+    } catch (error) {
+      failure = error
+      throw error
+    } finally {
+      if (handle !== undefined) {
+        try { await handle.dispose() } catch (error) { if (failure === undefined) throw error }
+      }
+      this.taskAgentIds.delete(sessionId)
+    }
+  }
+
   private install(agent: HostAgent, source: LifecycleAgentSnapshot['startSource']): void {
-    if (this.owners.has(agent) || !this.ctx.agents.roots().includes(agent)) return
+    if (this.taskAgentIds.has(agent.id) || this.owners.has(agent) || !this.ctx.agents.roots().includes(agent)) return
     const lifecycle = new MnemonAgentLifecycle(agent, this.coordinator, this.config, this.counters, source)
     let dispose: () => unknown
     dispose = agent.ctx.effect(() => {

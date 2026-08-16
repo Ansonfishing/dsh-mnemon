@@ -700,6 +700,8 @@ export interface LifecycleSnapshot {
   idleReviewMs: number
   activeAgents: number
   sessionAvailable: boolean
+  /** A session-independent task Agent can be created for WebUI maintenance. */
+  taskAgentAvailable: boolean
   counters: LifecycleCounters
   subagents: SubagentCounters
   current?: LifecycleAgentSnapshot
