@@ -4,7 +4,7 @@
 
 ## 环境
 
-仓库没有在 `package.json` 中声明 Node、pnpm、DSH 或 Mnemon 的最低版本。使用当前 DSH 开发环境，并在升级依赖时通过完整验证链路确认兼容性。
+`package.json` 要求 Node.js 20 或更高版本。CI 使用 Node.js 24 和 pnpm 10.13.1。升级依赖时，应通过完整验证链路确认 DSH 与 Mnemon 兼容性。
 
 安装依赖：
 
@@ -18,7 +18,7 @@ pnpm install
 pnpm run typecheck  # tsc --noEmit
 pnpm test           # vitest run
 pnpm run build      # declarations + host/client bundles
-pnpm run verify     # typecheck + test + build
+pnpm run verify     # typecheck + tests + reproducible build + package validation
 ```
 
 ## 目录结构
@@ -38,9 +38,11 @@ src/
 +-- tools.ts / commands.ts    # model and human interfaces
 +-- rpc.ts / settings.ts      # Web bridges
 +-- storage-scope.ts          # storage inventory
++-- shared/contracts.ts       # Host/Client wire contract 唯一事实源
 +-- client/                   # React workspace and locales
 tests/                        # Vitest suites
-lib/                          # committed build artifacts
+scripts/                      # 确定性构建与发布包检查
+lib/                          # 生成且忽略的发布产物
 docs/zh-CN/                   # Chinese documentation
 docs/en/                      # English mirror
 cordis.patch.yml              # DSH profile bundle patch
@@ -49,23 +51,22 @@ cordis.patch.yml              # DSH profile bundle patch
 ## 构建产物
 
 ```text
-tsc -p tsconfig.build.json
-  -> lib/types/*              declarations, maps, intermediate ESM
-
-tsdown host bundle
+tsdown（直接读取 src/）
   -> lib/index.js             Node ES2024 ESM
-
-tsdown client bundle
   -> lib/client.js            DSH browser module wrapper
-  -> lib/client.js.map
+
+tsc -p tsconfig.types.json
+  -> lib/types/**/*.d.ts      只生成声明
 
 lightningcss plugin
   -> CSS Modules compiled and injected as scoped <style>
 ```
 
-Host 保持 `cordis` 和 `schemastery` external。Client 保持 React、ReactDOM、JSX runtime 和 Cordis external，其余依赖打入 bundle。
+Host 将所有 package dependency 保持为 external。Client 将 React、ReactDOM、JSX runtime、Cordis 和 DSH UI primitives 保持为 external；来自 `node_modules` 的依赖只允许打入 `markdown-to-jsx`。
 
-`lib/` 是发布输入的一部分。修改 `src/` 后必须重新构建并检查生成 diff；不要手工编辑 `lib/`。
+`lib/` 是发布输入，但已被 Git 忽略，禁止手工编辑。`pnpm run verify:build` 会连续构建两次并比较每个输出文件的 hash；CSS export 顺序或其他非确定性变化会直接失败。
+
+`src/shared/contracts.ts` 是配置结构、RPC 通道、设置协议和 Client 可见 DTO 的唯一事实源。`src/client/` 下的文件只能通过该 contract 导入父级模块。Host 模块可以为兼容性 re-export shared 类型，但不应重新定义 wire DTO。
 
 ## 测试层次
 
@@ -80,6 +81,7 @@ Host 保持 `cordis` 和 `schemastery` external。Client 保持 React、ReactDOM
 - 生命周期 cue、评分、idle debounce、取消和水位保留；
 - RPC authority、只读行为和设置 revision；
 - Web 工作台、双语文案和关键交互。
+- Client/Host 源码边界、确定性构建 hash、发布包内容、exports 和 TypeScript 解析。
 
 这些主要是临时目录、fake runner 和 mock Host 集成测试，不等同于自动化的真实 DSH + Mnemon WebUI E2E。
 
@@ -170,8 +172,8 @@ Web locale 变更时，中文键集合仍是类型事实源；英文词典必须
 
 ```text
 [ ] pnpm run verify
-[ ] review source and generated lib diffs
-[ ] validate package file list includes README.md, README.zh-CN.md, docs/assets and bilingual docs
+[ ] 确认 worktree 中没有生成的 lib diff
+[ ] 确认发布包只包含运行时、声明、根文档和 cordis.patch.yml
 [ ] install the built/local bundle into an isolated Web profile
 [ ] run real Mnemon CLI and WebUI smoke tests
 [ ] verify Chinese and English workspaces
@@ -180,16 +182,19 @@ Web locale 变更时，中文键集合仍是类型事实源；英文词典必须
 [ ] back up any data root used for upgrade testing
 ```
 
-`package.json.files` 当前发布 `lib`、patch、两份根 README、统一管理的文档视觉素材、双语公开 docs 和 License。
+`package.json.files` 当前发布 `lib`、patch、两份根 README、`SECURITY.md` 和 License。文档站点与媒体继续保留在 GitHub，不进入 npm 包。
 
 ## 发布到 npm
 
 发布后 `dsh plugin --profile web add dsh-mnemon` 即按 registry 名称解析（与 dsh-better-sidebar 同路径）。发布步骤：
 
 ```sh
-npm pack --dry-run                 # 检查 tarball 文件清单（含 cordis.patch.yml、lib、docs）
-pnpm publish --access public       # prepublishOnly 会先跑 pnpm run verify
+pnpm run verify
+npm pack --ignore-scripts
+npm publish dsh-mnemon-<version>.tgz --access public --ignore-scripts
 ```
+
+发布已经打好的 tarball，能确保 npm 收到的就是人工检查过的制品。GitHub release workflow 会在核对 tag 与 `package.json` 后执行同一流程。
 
 凭据约定：NPM_TOKEN 只写入用户级 `~/.npmrc`（`npm config set "//registry.npmjs.org/:_authToken" "${NPM_TOKEN}" --userconfig ~/.npmrc`），发布后删除。**不要**把凭据行提交进仓库 `.npmrc`：pnpm 11 出于安全会忽略项目级 `.npmrc` 中未展开的环境变量凭据并告警，且该文件会随仓库传播。
 

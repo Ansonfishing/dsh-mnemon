@@ -180,7 +180,7 @@ pnpm install
 pnpm run verify
 ```
 
-`verify` runs TypeScript checks, Vitest, and the production build. Generated artifacts are committed under `lib/`.
+`verify` runs TypeScript checks, Vitest, a reproducible double build, and published-package validation. `lib/` is generated and intentionally not tracked.
 
 ## License
 
