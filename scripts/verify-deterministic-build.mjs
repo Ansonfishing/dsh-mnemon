@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
-import { join, relative, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 
-const root = resolve(import.meta.dirname, '..')
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const outputRoot = join(root, 'lib')
 
 function build() {
