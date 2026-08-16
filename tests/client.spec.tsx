@@ -6,6 +6,7 @@ import type { ClientSettingsScope, ClientSettingsSnapshot } from '../src/contrac
 import type { Config } from '../src/config.ts'
 import { MnemonView } from '../src/client/MnemonView.tsx'
 import { translateEn } from '../src/client/locales.ts'
+import { MEMORY_PROVIDER_CATALOG } from '../src/providers/catalog.ts'
 
 describe('MnemonView', () => {
   afterEach(cleanup)
@@ -185,7 +186,7 @@ describe('MnemonView', () => {
         status.version = mnemonVersionUpdated ? '0.2.0' : status.version
         return { ok: true, value: { component: payload?.component, previousVersion: '0.1.2', currentVersion: '0.2.0', updated: true, restartRequired: false } }
       }
-      if (endpoint === 'bodies') return { ok: true, value: { items: bodies, total: bodies.length, activeCount: bodies.filter(item => item.active).length, directory: '/tmp/mnemon/data', generatedAt: '2026-08-13T03:00:00.000Z' } }
+      if (endpoint === 'bodies') return { ok: true, value: { items: bodies, providers: MEMORY_PROVIDER_CATALOG, total: bodies.length, activeCount: bodies.filter(item => item.active).length, directory: '/tmp/mnemon/data', generatedAt: '2026-08-13T03:00:00.000Z' } }
       if (endpoint === 'graph') return {
         ok: true,
         value: {

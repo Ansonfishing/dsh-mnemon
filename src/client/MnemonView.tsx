@@ -41,7 +41,6 @@ import {
 import { MnemonClient } from './api.ts'
 import { translateZh, type MnemonKey, type MnemonTranslate } from './locales.ts'
 import { MnemonLogo } from './MnemonLogo.tsx'
-import { MEMORY_PROVIDER_CATALOG } from '../providers/catalog.ts'
 import {
   appearanceClass,
   MnemonViewAppearanceProvider,
@@ -100,6 +99,26 @@ const MEMORY_PROVIDER_LABELS: Record<MemoryProviderId, string> = {
   byterover: 'ByteRover',
   supermemory: 'Supermemory',
 }
+
+const LEGACY_PROVIDER_CATALOG: MemoryProviderDescriptor[] = [
+  {
+    id: 'mnemon-native', label: 'Mnemon Native', kind: 'local', origin: 'native',
+    summary: 'Official local-first memory.', capabilities: LEGACY_NATIVE_CAPABILITIES, fields: [],
+  },
+  {
+    id: 'openviking', label: 'OpenViking', kind: 'remote', origin: 'hermes-inspired',
+    summary: 'Filesystem-shaped shared memory.',
+    capabilities: { ...LEGACY_NATIVE_CAPABILITIES, graph: false, entities: false, related: false, link: false, writeMode: 'async-extracting', deletionMode: 'hard' },
+    fields: [
+      { key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'http://127.0.0.1:1933', placeholder: 'http://127.0.0.1:1933' },
+      { key: 'targetUri', label: 'Memory URI', input: 'text', required: true, defaultValue: 'viking://user/memories', placeholder: 'viking://user/memories' },
+      { key: 'apiKey', label: 'API key', input: 'secret', required: false },
+      { key: 'account', label: 'Account', input: 'text', required: false },
+      { key: 'user', label: 'User', input: 'text', required: false },
+      { key: 'actorPeerId', label: 'Agent peer', input: 'text', required: false, defaultValue: 'dsh' },
+    ],
+  },
+]
 
 /** Preserve the pre-provider Host contract during a rolling Web/Host restart. */
 function normalizeMemoryBody(body: MemoryBodyView): MemoryBodyView {
@@ -938,7 +957,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
         }),
         props.client.graph(),
       ])
-      const normalizedProviders = Array.isArray(nextCatalog.providers) && nextCatalog.providers.length > 0 ? nextCatalog.providers : [...MEMORY_PROVIDER_CATALOG]
+      const normalizedProviders = Array.isArray(nextCatalog.providers) && nextCatalog.providers.length > 0 ? nextCatalog.providers : LEGACY_PROVIDER_CATALOG
       const normalizedCatalog = { ...nextCatalog, providers: normalizedProviders, items: nextCatalog.items.map(normalizeMemoryBody) }
       setProviderDrafts(current => mergeProviderDefaults(normalizedCatalog.providers, current))
       const enriched = enrichMultiSpaceGraph(next, normalizedCatalog.items)
