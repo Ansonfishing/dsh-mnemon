@@ -112,15 +112,30 @@ export class MnemonCliError extends Error {
   }
 }
 
+export interface MnemonRunOptions {
+  signal?: AbortSignal
+  globalFlags?: boolean
+  store?: string
+}
+
+export interface MnemonTextCommand {
+  args: readonly string[]
+  options?: MnemonRunOptions
+}
+
 export interface MnemonRunner {
   readonly command: string
   readonly commandFound: boolean
   readonly config: ResolvedConfig
-  runJson(args: readonly string[], options?: { signal?: AbortSignal; globalFlags?: boolean; store?: string }): Promise<JsonValue>
-  runText(args: readonly string[], options?: { signal?: AbortSignal; globalFlags?: boolean; store?: string }): Promise<string>
+  runJson(args: readonly string[], options?: MnemonRunOptions): Promise<JsonValue>
+  runText(args: readonly string[], options?: MnemonRunOptions): Promise<string>
+  /** Run related CLI commands consecutively without allowing queued work between them. */
+  runTextBatch(commands: readonly MnemonTextCommand[]): Promise<string[]>
   /** Run one operation after all CLI work and hold the same queue until it settles. */
   withExclusive<T>(operation: () => T | Promise<T>): Promise<T>
   effectiveDataDir(): string
+  /** Read Mnemon's persisted active-file selection, ignoring config and environment overrides. */
+  persistedStore(): string
   effectiveStore(): string
 }
 
@@ -144,9 +159,21 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
     if (config.storageScope === 'custom') return expandHome(config.dataDir!)
     return expandHome(process.env.MNEMON_DATA_DIR?.trim() || '~/.mnemon')
   }
+  const persistedStore = (): string => {
+    const active = join(effectiveDataDir(), 'active')
+    if (existsSync(active)) {
+      try {
+        const value = readFileSync(active, 'utf8').trim()
+        if (/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(value)) return value
+      } catch {
+        // Fall through to Mnemon's own default.
+      }
+    }
+    return 'default'
+  }
   const launch = async (
     args: readonly string[],
-    options: { signal?: AbortSignal; globalFlags?: boolean; store?: string } = {},
+    options: MnemonRunOptions = {},
   ): Promise<string> => {
     if (options.signal?.aborted === true) throw new MnemonCliError(`mnemon command aborted: ${String(options.signal.reason ?? 'cancelled')}`)
     const argv = options.globalFlags === false ? [...args] : [...globalArgs(options.store), ...args]
@@ -175,7 +202,7 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
 
   const execute = (
     args: readonly string[],
-    options: { signal?: AbortSignal; globalFlags?: boolean; store?: string } = {},
+    options: MnemonRunOptions = {},
   ): Promise<string> => {
     const result = processQueue.then(() => launch(args, options))
     processQueue = result.then(() => undefined, () => undefined)
@@ -195,6 +222,15 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
       }
     },
     runText: execute,
+    runTextBatch(commands) {
+      const result = processQueue.then(async () => {
+        const outputs: string[] = []
+        for (const command of commands) outputs.push(await launch(command.args, command.options))
+        return outputs
+      })
+      processQueue = result.then(() => undefined, () => undefined)
+      return result
+    },
     withExclusive<T>(operation: () => T | Promise<T>): Promise<T> {
       const result = processQueue.then(operation)
       processQueue = result.then(() => undefined, () => undefined)
@@ -203,20 +239,14 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
     effectiveDataDir() {
       return effectiveDataDir()
     },
+    persistedStore() {
+      return persistedStore()
+    },
     effectiveStore() {
       if (config.store !== undefined) return config.store
       const fromEnvironment = process.env.MNEMON_STORE?.trim()
       if (fromEnvironment !== undefined && fromEnvironment !== '') return fromEnvironment
-      const active = join(this.effectiveDataDir(), 'active')
-      if (existsSync(active)) {
-        try {
-          const value = readFileSync(active, 'utf8').trim()
-          if (value !== '') return value
-        } catch {
-          // Fall through to Mnemon's own default.
-        }
-      }
-      return 'default'
+      return persistedStore()
     },
   }
 }

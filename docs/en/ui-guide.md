@@ -148,6 +148,7 @@ You may inspect project B while staying in project A's conversation; the Agent s
 ## Common interaction rules
 
 - Solid blue is the primary action; blue outline usually means Edit; red is Remove, Delete, Archive, or Forget; neutral actions are View, Copy, and Cancel.
+- A Memory Space toggle controls only whether dsh-mnemon includes it in read routing; it is not Mnemon CLI's default Store selection. Before deleting Mnemon's default Store, the plugin switches to another existing Memory Space. If it is the only Store, create another Memory Space first.
 - Physical destructive operations such as deleting a Memory Space require a dedicated confirmation. Forget is semantic soft deletion and should still be deliberate.
 - Saving settings clears stale page state and reloads automatically; no browser refresh is needed.
 - Sidebar primary headings remain stable; secondary headings within Memory Spaces scroll naturally.

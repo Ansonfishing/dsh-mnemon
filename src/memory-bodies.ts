@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import type { MnemonRunner } from './runner.ts'
+import type { MnemonRunner, MnemonTextCommand } from './runner.ts'
 import type { CreateMemoryBodyRequest, MemoryBody, UpdateMemoryBodyRequest } from './shared/contracts.ts'
 
 export type { CreateMemoryBodyRequest, MemoryBody, UpdateMemoryBodyRequest } from './shared/contracts.ts'
@@ -111,7 +111,29 @@ export class MemoryBodyRegistry {
 
   async remove(id: string, signal?: AbortSignal): Promise<MemoryBody> {
     const body = this.get(id)
-    await this.runner.runText(['store', 'remove', body.id], { ...(signal === undefined ? {} : { signal }), store: body.id })
+    const persistedStore = this.runner.persistedStore()
+    const commands: MnemonTextCommand[] = []
+    let commandStore = persistedStore
+    if (persistedStore === body.id) {
+      const replacement = this.list()
+        .filter(candidate => candidate.id !== body.id)
+        .sort((left, right) => Number(right.active) - Number(left.active) || left.id.localeCompare(right.id))[0]
+      if (replacement === undefined) {
+        throw new Error(`cannot delete the only Mnemon Store "${body.id}"; create another Memory Space first`)
+      }
+      commandStore = replacement.id
+      commands.push({
+        args: ['store', 'set', replacement.id],
+        options: { ...(signal === undefined ? {} : { signal }), store: replacement.id },
+      })
+    }
+    commands.push({
+      args: ['store', 'remove', body.id],
+      // Mnemon treats --store as the active Store even for `store remove`.
+      // Keep the deletion target out of command context or every removal fails.
+      options: { ...(signal === undefined ? {} : { signal }), store: commandStore },
+    })
+    await this.runner.runTextBatch(commands)
     this.bodies = this.bodies.filter(entry => entry.id !== body.id)
     this.save()
     return body
