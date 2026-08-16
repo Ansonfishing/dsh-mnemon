@@ -147,7 +147,7 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
       deletionMode: 'hard',
     },
     fields: [
-      field({ key: 'dataPath', label: 'Fact store path', scope: 'service', input: 'path', required: false }),
+      field({ key: 'dataPath', label: 'Fact store path', scope: 'service', role: 'global-location', input: 'path', required: false }),
       field({ key: 'defaultTrust', label: 'Default trust', scope: 'memory', input: 'number', required: true, defaultValue: 0.5 }),
       field({ key: 'minTrust', label: 'Minimum recall trust', scope: 'memory', input: 'number', required: true, defaultValue: 0.3 }),
     ],
@@ -183,6 +183,7 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     },
     fields: [
       field({ key: 'cliPath', label: 'brv executable', scope: 'service', input: 'path', required: false, defaultValue: 'brv' }),
+      field({ key: 'defaultDirectory', label: 'Default knowledge directory', scope: 'service', role: 'global-location', input: 'path', required: false }),
       field({ key: 'workingDirectory', label: 'Knowledge directory', scope: 'memory', input: 'path', required: false }),
       field({ key: 'apiKey', label: 'Cloud API key', scope: 'service', input: 'secret', required: false }),
     ],

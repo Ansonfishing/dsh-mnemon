@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MnemonSettingsCard } from '../src/client/MnemonSettingsCard.tsx'
 import { translateEn } from '../src/client/locales.ts'
@@ -347,7 +347,7 @@ describe('MnemonSettingsCard', () => {
   it('renders every third-party provider off while local settings hydrate', () => {
     const snapshot = {
       status: 'ready' as const,
-      value: { storageScope: 'global' as const },
+      value: { storageScope: 'workspace' as const },
       base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
     }
     const scope = {
@@ -369,7 +369,58 @@ describe('MnemonSettingsCard', () => {
     const toggles = screen.getAllByRole('checkbox', { name: /^启用 / }) as HTMLInputElement[]
     expect(toggles).toHaveLength(8)
     expect(toggles.every(toggle => !toggle.checked && toggle.disabled)).toBe(true)
+    expect(screen.getByText('官方原生').parentElement?.textContent).toContain('工作区')
+    expect(screen.getByRole('group', { name: 'Holographic 服务配置' }).textContent).toContain('工作区')
+    expect(screen.getByRole('group', { name: 'OpenViking 服务配置' }).textContent).toContain('全局')
     expect(screen.getByRole('status').textContent).toBe('正在读取 Provider 配置…')
+  })
+
+  it('uses the native default/custom location pattern for a scope-aware local provider', async () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+    const provider = {
+      id: 'holographic' as const,
+      label: 'Holographic', kind: 'local' as const, origin: 'third-party' as const, summary: 'Local facts',
+      workspaceBinding: 'optional-override' as const,
+      capabilities: { search: true, browse: true, graph: true, entities: true, related: true, remember: true, link: false, forget: true, writeMode: 'exact' as const, deletionMode: 'hard' as const },
+      fields: [{ key: 'dataPath', label: 'Fact store path', scope: 'service' as const, role: 'global-location' as const, input: 'path' as const, required: false }],
+    }
+    const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'holographic', enabled: true, configured: true, settings: {}, configuredSecrets: [] }], generatedAt: '2026-08-17T00:00:00.000Z' } }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') {
+        const request = payload as { settings: Record<string, string> }
+        return { ok: true as const, value: { providerId: 'holographic', enabled: true, configured: true, settings: request.settings, configuredSecrets: [] } }
+      }
+      if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/active/.mnemon', scope: 'global' } }
+      throw new Error(`unexpected ${channel} ${endpoint}`)
+    })
+
+    render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call } } as ClientConnectionHandle} />)
+
+    const card = await screen.findByRole('group', { name: 'Holographic 服务配置' })
+    fireEvent.click(within(card).getByText('Holographic'))
+    const location = within(card).getByRole('radiogroup', { name: 'Holographic 全局数据位置' })
+    expect((within(location).getByRole('radio', { name: '默认（跟随范围）' }) as HTMLInputElement).checked).toBe(true)
+    fireEvent.click(within(location).getByRole('radio', { name: '自定义' }))
+    const path = within(card).getByRole('textbox', { name: '事实存储路径' })
+    const save = within(card).getByRole('button', { name: '保存服务配置' }) as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    fireEvent.change(path, { target: { value: '/srv/dsh/holographic.json' } })
+    expect(save.disabled).toBe(false)
+    fireEvent.click(save)
+
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', expect.objectContaining({
+      providerId: 'holographic', enabled: true, settings: { dataPath: '/srv/dsh/holographic.json' },
+    })))
   })
 
   it('edits a reusable provider service without creating a Memory Space', async () => {
@@ -410,7 +461,7 @@ describe('MnemonSettingsCard', () => {
     const disclosure = screen.getByText('OpenViking').closest('button') as HTMLButtonElement
     expect(disclosure.getAttribute('aria-expanded')).toBe('false')
     expect((screen.getByRole('checkbox', { name: '启用 OpenViking' }) as HTMLInputElement).checked).toBe(true)
-    expect(screen.getByText('当前 DSH 工作区：dsh-mnemon；只有标记“随工作区”的 Provider 会切换数据范围。')).toBeTruthy()
+    expect(screen.getByText('当前工作区：dsh-mnemon；标记“工作区”的 Provider 配置与记忆体使用此范围。')).toBeTruthy()
     fireEvent.click(screen.getByText('OpenViking'))
     expect(disclosure.getAttribute('aria-expanded')).toBe('true')
     expect((screen.getByLabelText('服务地址') as HTMLInputElement).value).toBe('http://127.0.0.1:1933')

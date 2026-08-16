@@ -17,6 +17,7 @@ interface ProviderSettingsSectionProps {
   sessionId?: string
   workspaceId?: string
   workspaceLabel?: string
+  activeScope: 'global' | 'workspace'
   refreshKey: number
   disabled: boolean
   scopeChanging: boolean
@@ -112,6 +113,10 @@ function serviceFields(provider: MemoryProviderDescriptor): MemoryProviderConfig
   return provider.fields.filter(field => field.scope === 'service')
 }
 
+function globalLocationFields(provider: MemoryProviderDescriptor): MemoryProviderConfigField[] {
+  return serviceFields(provider).filter(field => field.role === 'global-location')
+}
+
 function serviceDefaults(provider: MemoryProviderDescriptor): MemoryProviderConnection {
   return Object.fromEntries(serviceFields(provider).flatMap(field => field.defaultValue === undefined ? [] : [[field.key, field.defaultValue]]))
 }
@@ -132,7 +137,7 @@ function configurationComplete(provider: MemoryProviderDescriptor, draft: Servic
 function fieldLabel(t: MnemonTranslate, field: MemoryProviderConfigField): string {
   const labels: Record<string, MnemonKey> = {
     endpoint: 'overview.providerEndpoint', apiKey: 'overview.providerApiKey', account: 'overview.providerAccount', mode: 'overview.providerField.mode',
-    dataPath: 'overview.providerField.dataPath', cliPath: 'overview.providerField.cliPath',
+    dataPath: 'overview.providerField.dataPath', defaultDirectory: 'overview.providerField.defaultDirectory', cliPath: 'overview.providerField.cliPath',
   }
   return labels[field.key] === undefined ? field.label : t(labels[field.key]!)
 }
@@ -181,22 +186,32 @@ function ServiceField(props: {
 function ProviderServiceForm(props: {
   provider: MemoryProviderDescriptor
   service: MemoryProviderServiceView
+  activeScope: 'global' | 'workspace'
   disabled: boolean
   t: MnemonTranslate
   onSave: (provider: MemoryProviderDescriptor, draft: ServiceDraft) => Promise<void>
 }): JSX.Element {
   const [draft, setDraft] = useState<ServiceDraft>(() => draftFor(props.provider, props.service))
+  const [customLocations, setCustomLocations] = useState<Set<string>>(() => new Set(globalLocationFields(props.provider).filter(field => String(props.service.settings[field.key] ?? '').trim() !== '').map(field => field.key)))
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
-  useEffect(() => setDraft(draftFor(props.provider, props.service)), [props.provider, props.service])
+  useEffect(() => {
+    setDraft(draftFor(props.provider, props.service))
+    setCustomLocations(new Set(globalLocationFields(props.provider).filter(field => String(props.service.settings[field.key] ?? '').trim() !== '').map(field => field.key)))
+  }, [props.provider, props.service])
 
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
-    if (!configurationComplete(props.provider, draft, props.service) || saving || props.disabled) return
+    const locationsComplete = props.activeScope === 'workspace' || globalLocationFields(props.provider).every(field => !customLocations.has(field.key) || String(draft.settings[field.key] ?? '').trim() !== '')
+    if (!configurationComplete(props.provider, draft, props.service) || !locationsComplete || saving || props.disabled) return
     setSaving(true); setFailed(null); setSaved(false)
-    try { await props.onSave(props.provider, draft); setSaved(true) } catch (reason) { setFailed(message(reason)) } finally { setSaving(false) }
+    const settings = { ...draft.settings }
+    for (const field of globalLocationFields(props.provider)) {
+      if (props.activeScope === 'workspace' || !customLocations.has(field.key)) settings[field.key] = ''
+    }
+    try { await props.onSave(props.provider, { settings }); setSaved(true) } catch (reason) { setFailed(message(reason)) } finally { setSaving(false) }
   }
 
   const update = (key: string, value: string | number | boolean): void => {
@@ -204,12 +219,38 @@ function ProviderServiceForm(props: {
     setFailed(null); setSaved(false)
   }
 
+  const useCustomLocation = (field: MemoryProviderConfigField, custom: boolean): void => {
+    setCustomLocations(current => {
+      const next = new Set(current)
+      if (custom) next.add(field.key)
+      else next.delete(field.key)
+      return next
+    })
+    if (!custom) update(field.key, '')
+    else { setFailed(null); setSaved(false) }
+  }
+
+  const locations = globalLocationFields(props.provider)
+  const regularFields = serviceFields(props.provider).filter(field => field.role !== 'global-location')
+  const locationsComplete = props.activeScope === 'workspace' || locations.every(field => !customLocations.has(field.key) || String(draft.settings[field.key] ?? '').trim() !== '')
+  const formComplete = configurationComplete(props.provider, draft, props.service) && locationsComplete
+
   return <form className={css.providerServiceForm} onSubmit={event => void submit(event)} data-provider={props.provider.id}>
     <p className={css.providerServicePrompt}>{props.t(props.service.configured ? 'config.providerServiceHint' : 'config.providerEnableHint')}</p>
-    <div className={css.providerSettingsGrid}>{serviceFields(props.provider).map(field => <ServiceField key={field.key} field={field} value={draft.settings[field.key]} configuredSecrets={props.service.configuredSecrets} disabled={props.disabled || saving} t={props.t} onChange={value => update(field.key, value)} />)}</div>
+    {locations.map(field => <div key={field.key} className={`${css.nativeLocation} ${css.providerServiceLocation}`}>
+      <div className={css.settingCopy}><strong>{props.t('config.providerGlobalLocation')}</strong><small>{props.t(props.activeScope === 'workspace' ? 'config.providerGlobalLocationWorkspaceHint' : 'config.providerGlobalLocationHint', { provider: props.provider.label })}</small></div>
+      <div className={css.inlineChoices} role="radiogroup" aria-label={`${props.provider.label} ${props.t('config.providerGlobalLocation')}`}>
+        <label><input type="radio" name={`${props.provider.id}-${field.key}-location`} checked={props.activeScope === 'workspace' || !customLocations.has(field.key)} disabled={props.disabled || saving || props.activeScope === 'workspace'} onChange={() => useCustomLocation(field, false)} /><span>{props.t('config.providerDefaultLocation')}</span></label>
+        <label><input type="radio" name={`${props.provider.id}-${field.key}-location`} checked={props.activeScope !== 'workspace' && customLocations.has(field.key)} disabled={props.disabled || saving || props.activeScope === 'workspace'} onChange={() => useCustomLocation(field, true)} /><span>{props.t('config.custom')}</span></label>
+      </div>
+    </div>)}
+    <div className={css.providerSettingsGrid}>
+      {locations.filter(field => props.activeScope !== 'workspace' && customLocations.has(field.key)).map(field => <ServiceField key={field.key} field={field} value={draft.settings[field.key]} configuredSecrets={props.service.configuredSecrets} disabled={props.disabled || saving} t={props.t} onChange={value => update(field.key, value)} />)}
+      {regularFields.map(field => <ServiceField key={field.key} field={field} value={draft.settings[field.key]} configuredSecrets={props.service.configuredSecrets} disabled={props.disabled || saving} t={props.t} onChange={value => update(field.key, value)} />)}
+    </div>
     <div className={`${css.memoryConfigFooter} ${css.providerServiceFooter}`}>
       <div className={css.configFeedback} aria-live="polite">{failed !== null && <span className={css.error}>{props.t('config.providerSaveFailed', { error: failed })}</span>}{saved && <span className={css.packSuccess}>{props.t('config.providerServiceSaved')}</span>}</div>
-      <button type="submit" className={css.primaryPill} disabled={props.disabled || saving || !configurationComplete(props.provider, draft, props.service)}>{saving ? props.t('config.saving') : props.t(props.service.configured ? 'config.saveProviderService' : 'config.enableProvider')}</button>
+      <button type="submit" className={css.primaryPill} disabled={props.disabled || saving || !formComplete}>{saving ? props.t('config.saving') : props.t(props.service.configured ? 'config.saveProviderService' : 'config.enableProvider')}</button>
     </div>
   </form>
 }
@@ -221,6 +262,7 @@ function ProviderPanel(props: {
   t: MnemonTranslate
   onSave: (provider: MemoryProviderDescriptor, draft: ServiceDraft) => Promise<void>
   onToggle: (provider: MemoryProviderDescriptor, enabled: boolean) => Promise<MemoryProviderServiceView>
+  activeScope: 'global' | 'workspace'
 }): JSX.Element {
   const [enabled, setEnabled] = useState(props.service.enabled)
   const [expanded, setExpanded] = useState(props.service.enabled && !props.service.configured)
@@ -275,6 +317,7 @@ function ProviderPanel(props: {
   const stateKey: MnemonKey = enabled
     ? props.service.configured ? 'config.providerEnabled' : 'config.providerNeedsConfiguration'
     : props.service.configured ? 'config.providerDisabledConfigured' : 'config.providerDisabled'
+  const providerScope = props.provider.workspaceBinding === 'provider-global' ? 'global' : props.activeScope
   const controlDisabled = props.disabled || toggling
   const toggleExpanded = (): void => {
     stabilizeAfterLayout.current = true
@@ -291,10 +334,11 @@ function ProviderPanel(props: {
   >
     <div className={css.providerRowHeader}>
       <button type="button" className={css.providerDisclosure} aria-expanded={expanded} disabled={!enabled || controlDisabled} onClick={toggleExpanded}>
-        <span className={css.providerIdentity}><ProviderIcon providerId={props.provider.id} className={css.providerMark} /><span><strong>{props.provider.label}</strong><small>{props.t(`overview.workspaceBinding.${props.provider.workspaceBinding}`)} · {props.t(`overview.providerSummary.${props.provider.id}` as MnemonKey)}</small></span></span>
+        <span className={css.providerIdentity}><ProviderIcon providerId={props.provider.id} className={css.providerMark} /><span><strong>{props.provider.label}</strong><small>{props.t(`overview.providerSummary.${props.provider.id}` as MnemonKey)}</small></span></span>
         {enabled && <i className={css.providerChevron} aria-hidden="true">›</i>}
       </button>
       <div className={css.providerEnableControl}>
+        <span className={css.providerScopeTag} data-scope={providerScope}>{props.t(`config.${providerScope}`)}</span>
         <span className={css.providerState} data-enabled={enabled || undefined}>{props.t(stateKey)}</span>
         <label className={css.providerToggle}>
           <input type="checkbox" aria-label={props.t('config.providerToggleAria', { provider: props.provider.label })} checked={enabled} disabled={controlDisabled} onChange={event => void toggle(event.target.checked)} />
@@ -303,7 +347,7 @@ function ProviderPanel(props: {
       </div>
     </div>
     {failed !== null && <p className={css.providerToggleError} role="alert">{props.t('config.providerToggleFailed', { error: failed })}</p>}
-    {enabled && expanded && <div className={css.providerInlineBody}><ProviderServiceForm provider={props.provider} service={props.service} disabled={controlDisabled} t={props.t} onSave={props.onSave} /></div>}
+    {enabled && expanded && <div className={css.providerInlineBody}><ProviderServiceForm provider={props.provider} service={props.service} activeScope={props.activeScope} disabled={controlDisabled} t={props.t} onSave={props.onSave} /></div>}
   </div>
 }
 
@@ -369,7 +413,7 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JS
     {failed !== null && <div className={css.providerLoadError}><span className={css.error}>{props.t('config.providerLoadFailed', { error: failed })}</span><button type="button" className={css.textButton} onClick={() => void load()}>{props.t('config.retryProviders')}</button></div>}
     <div className={css.providerList} aria-busy={loading}>{catalog.providers.map(provider => {
       const service = catalog.items.find(item => item.providerId === provider.id) ?? { providerId: provider.id, enabled: false, configured: false, settings: {}, configuredSecrets: [] }
-      return <ProviderPanel key={provider.id} provider={provider} service={service} disabled={disabled} t={props.t} onSave={save} onToggle={toggle} />
+      return <ProviderPanel key={provider.id} provider={provider} service={service} disabled={disabled} activeScope={props.activeScope} t={props.t} onSave={save} onToggle={toggle} />
     })}</div>
   </>
 }

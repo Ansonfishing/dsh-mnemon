@@ -78,7 +78,7 @@ export class ByteRoverProvider implements MemoryProviderAdapter {
   private async run(body: MemoryBody, args: string[], timeoutMs: number, signal?: AbortSignal): Promise<string> {
     const connection = this.connection(body)
     const command = String(connection.cliPath ?? 'brv')
-    const configuredDirectory = String(connection.workingDirectory ?? '').trim()
+    const configuredDirectory = String(connection.workingDirectory ?? connection.defaultDirectory ?? '').trim()
     const defaultDirectory = join(this.memoryBodies.runner.effectiveDataDir(), 'state', 'byterover', body.id)
     const cwd = configuredDirectory === ''
       ? defaultDirectory

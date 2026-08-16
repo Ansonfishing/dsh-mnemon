@@ -118,6 +118,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   }, [dirty.size, coreSnapshot.value, interactionSnapshot.value])
 
   const coreUser = useMemo(() => record(coreSnapshot.user), [coreSnapshot.user])
+  const activeScope = coreDraft(coreSnapshot.value).storageScope === 'workspace' ? 'workspace' : 'global'
   const error = validation(t, draft)
   const loading = coreSnapshot.status === 'loading' || interactionSnapshot.status === 'loading'
   const writable = coreSnapshot.writable && interactionSnapshot.writable
@@ -205,7 +206,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           <details className={css.providerPanel} open>
             <summary>
               <span className={css.providerIdentity}><ProviderIcon providerId="mnemon-native" className={css.nativeMark} /><span><strong>Mnemon Native</strong><small>{t('config.nativeSummary')}</small></span></span>
-              <span className={css.providerState}>{t('config.officialNative')}</span>
+              <span className={css.providerHeaderMeta}><span className={css.providerScopeTag} data-scope={activeScope}>{t(`config.${activeScope}`)}</span><span className={css.providerState}>{t('config.officialNative')}</span></span>
             </summary>
             <div className={css.providerPanelBody}>
               <div className={css.nativeLocation}>
@@ -243,7 +244,8 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
             {...(connection === undefined ? {} : { connection })}
             {...(sessionId === undefined ? {} : { sessionId })}
             {...(workspaceId === undefined ? {} : { workspaceId })}
-            {...(draft.storageScope !== 'workspace' || workspaceLabel === undefined ? {} : { workspaceLabel })}
+            {...(activeScope !== 'workspace' || workspaceLabel === undefined ? {} : { workspaceLabel })}
+            activeScope={activeScope}
             refreshKey={targetRevision}
             disabled={coreDisabled}
             scopeChanging={scopeChanging}

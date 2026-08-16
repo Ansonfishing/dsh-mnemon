@@ -41,6 +41,8 @@ describe('memory provider catalog', () => {
       ['supermemory', 'provider-global'],
     ])
     expect(memoryProviderDescriptor('byterover').capabilities).toMatchObject({ search: true, browse: false, graph: false, entities: false })
+    expect(memoryProviderDescriptor('holographic').fields.find(field => field.key === 'dataPath')).toMatchObject({ scope: 'service', role: 'global-location' })
+    expect(memoryProviderDescriptor('byterover').fields.find(field => field.key === 'defaultDirectory')).toMatchObject({ scope: 'service', role: 'global-location' })
   })
 
   it('normalizes provider defaults without exposing secrets to clients', () => {

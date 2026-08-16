@@ -532,7 +532,7 @@ export class MemoryBodyRegistry {
       : publicScopedProviderConnection(body.providerId, 'memory', body.connection ?? {})
     const location = body.providerId === 'mnemon-native'
       ? join(this.directory, body.id, 'mnemon.db')
-      : String(connection.endpoint ?? connection.dataPath ?? connection.workingDirectory ?? connection.cliPath ?? '')
+      : String(connection.endpoint ?? connection.workingDirectory ?? connection.dataPath ?? connection.defaultDirectory ?? connection.cliPath ?? '')
     const provider: MemoryBodyProvider = {
       id: descriptor.id,
       label: descriptor.label,
