@@ -1,4 +1,0 @@
-export declare const inject: string[];
-/** Mount the memory workspace plus the optional in-conversation interaction surfaces. */
-export declare function apply(rawContext: unknown): void;
-//# sourceMappingURL=index.d.ts.map

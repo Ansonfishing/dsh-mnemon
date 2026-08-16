@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
 import { dirname, relative, resolve as resolvePath } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { UserConfig } from 'tsdown'
@@ -18,15 +17,15 @@ const CSS_VIRTUAL_SUFFIX = '.mjs'
 
 const host: UserConfig = {
   name: PLUGIN_ID,
-  entry: ['lib/types/index.js'],
+  entry: ['src/index.ts'],
   outDir: 'lib',
   format: ['esm'],
   platform: 'node',
   target: 'es2024',
   fixedExtension: false,
   dts: false,
-  clean: false,
-  deps: { neverBundle: ['cordis', 'schemastery'] },
+  clean: true,
+  deps: { neverBundle: true },
 }
 
 const client: UserConfig = {
@@ -34,6 +33,8 @@ const client: UserConfig = {
   entry: { client: 'src/client/index.ts' },
   outDir: 'lib',
   format: 'cjs',
+  fixedExtension: false,
+  outExtensions: () => ({ js: '.js' }),
   platform: 'browser',
   target: 'es2022',
   dts: false,
@@ -83,7 +84,6 @@ const client: UserConfig = {
     },
   }],
   outputOptions: {
-    entryFileNames: 'client.js',
     banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(PLUGIN_ID)}, factory: (require) => {`,
     footer: 'return module.exports; } });',
     intro: 'var module = { exports: {} }; var exports = module.exports;',
@@ -91,12 +91,7 @@ const client: UserConfig = {
 }
 
 function resolveAssetPath(source: string, importer: string): string {
-  const emitted = resolvePath(dirname(importer), source)
-  if (existsSync(emitted)) return emitted
-  const marker = '/lib/types/'
-  const boundary = emitted.indexOf(marker)
-  if (boundary < 0) return emitted
-  return resolvePath(emitted.slice(0, boundary), 'src', emitted.slice(boundary + marker.length))
+  return resolvePath(dirname(importer), source)
 }
 
 export function portableRelativePath(root: string, path: string): string {

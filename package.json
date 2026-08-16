@@ -94,7 +94,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && tsdown",
+    "build": "tsdown && tsc -p tsconfig.types.json",
     "bundle": "tsdown",
     "prepublishOnly": "pnpm run verify",
     "typecheck": "tsc -p tsconfig.json --noEmit",
