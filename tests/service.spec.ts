@@ -92,6 +92,16 @@ describe('MnemonService', () => {
     expect(process).toHaveBeenCalledWith('/fake/mnemon', ['--version'], expect.anything())
   })
 
+  it('allows every Memory Space to be inactive for DSH without changing the Mnemon default Store', async () => {
+    const { service } = fixture()
+    service.updateBody('work', { active: false })
+
+    const status = await service.status()
+
+    expect(status).toMatchObject({ store: 'none', mnemonDefaultStore: 'work', dshActiveStores: [] })
+    expect(status.memoryBodies).toEqual([expect.objectContaining({ id: 'work', active: false, mnemonDefault: true })])
+  })
+
   it('uses graph recall by default and normalizes compact results', async () => {
     const { service, process, dataDir } = fixture()
     const result = await service.search({ query: ' database choice ' })
