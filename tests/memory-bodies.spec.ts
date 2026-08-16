@@ -246,7 +246,7 @@ describe('MemoryBodyRegistry', () => {
     expect(stored.bodies[0].connection).toEqual({ targetUri: 'viking://user/team/memories', user: 'alice', actorPeerId: 'dsh' })
   })
 
-  it('keeps third-party providers off by default and preserves configuration while disabled', async () => {
+  it('keeps third-party providers off by default and removes local Memory Space projections when disabled', async () => {
     const dataDir = temporaryDirectory()
     const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
     const registry = new MemoryBodyRegistry(runner, true)
@@ -263,11 +263,13 @@ describe('MemoryBodyRegistry', () => {
     const disabled = registry.updateProviderService('openviking', {}, [], false)
     expect(disabled).toMatchObject({ enabled: false, configured: true, configuredSecrets: ['apiKey'] })
     expect(registry.active().map(item => item.id)).not.toContain(body.id)
+    expect(registry.list()).toEqual([])
     expect(registry.placementCandidates({}).find(candidate => candidate.id === 'openviking')).toMatchObject({ configured: false })
 
     const reloaded = new MemoryBodyRegistry(runner, true)
     expect(reloaded.providerServices().items.find(service => service.providerId === 'openviking')).toMatchObject({ enabled: false, configured: true, configuredSecrets: ['apiKey'] })
-    expect(JSON.parse(readFileSync(registry.providerRegistryPath, 'utf8'))).toMatchObject({ enabled: { openviking: false } })
+    expect(reloaded.list()).toEqual([])
+    expect(JSON.parse(readFileSync(registry.providerRegistryPath, 'utf8'))).toMatchObject({ enabled: { openviking: false }, bodies: [] })
   })
 
   it('persists an audited automatic placement and refuses to create before placement resolves', async () => {

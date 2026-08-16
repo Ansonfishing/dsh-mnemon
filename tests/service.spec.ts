@@ -103,7 +103,7 @@ describe('MnemonService', () => {
     expect(status.memoryBodies).toEqual([expect.objectContaining({ id: 'work', active: false, mnemonDefault: true })])
   })
 
-  it('reports enabled provider health and gates its Memory Spaces when disabled', async () => {
+  it('reports enabled provider health and removes its local Memory Space projections when disabled', async () => {
     const { service } = fixture()
     const provider = {
       id: 'openviking' as const,
@@ -128,10 +128,11 @@ describe('MnemonService', () => {
     service.memoryBodies.updateProviderService('openviking', {}, [], false)
     await expect(service.status()).resolves.toMatchObject({
       providerServices: expect.arrayContaining([expect.objectContaining({
-        providerId: 'openviking', enabled: false, configured: true, status: 'disabled', memoryBodyCount: 1, activeMemoryBodyCount: 0,
+        providerId: 'openviking', enabled: false, configured: true, status: 'disabled', memoryBodyCount: 0, activeMemoryBodyCount: 0,
       })]),
     })
-    await expect(service.search({ query: 'anything', memoryBodyIds: [body.id] })).rejects.toThrow('disabled in Settings')
+    expect(service.memoryBodies.list()).toEqual([expect.objectContaining({ provider: { id: 'mnemon-native', label: 'Mnemon Native', kind: 'local', location: expect.any(String), apiKeyConfigured: false, settings: {}, configuredSecrets: [], capabilities: expect.any(Object) } })])
+    await expect(service.search({ query: 'anything', memoryBodyIds: [body.id] })).rejects.toThrow('unknown memory body')
   })
 
   it('uses graph recall by default and normalizes compact results', async () => {

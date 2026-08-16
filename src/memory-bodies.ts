@@ -226,6 +226,12 @@ export class MemoryBodyRegistry {
     const previous = this.services[providerId] ?? {}
     this.services[providerId] = normalizeProviderServiceConnection(providerId, settings, previous, clearSecrets)
     this.serviceEnabled[providerId] = enabled
+    // Third-party Memory Spaces are local projections of provider-owned
+    // namespaces. Once the provider is disconnected those projections are no
+    // longer addressable and must not linger as unhealthy, uneditable cards.
+    // Keep only the reusable service configuration so reconnecting can
+    // discover and rebuild the projections from the source of truth.
+    if (!enabled) this.bodies = this.bodies.filter(body => body.providerId !== providerId)
     this.save()
     return this.providerServices().items.find(item => item.providerId === providerId)!
   }
