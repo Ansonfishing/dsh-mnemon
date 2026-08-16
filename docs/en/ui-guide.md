@@ -69,11 +69,11 @@ A Runtime item should be compact, independent, and repeatedly useful. Put identi
 
 [![Memory Space catalog, activation, and multi-space relationship graph](../assets/screenshots/overview-memory-graph.png)](../assets/screenshots/overview-memory-graph.png)
 
-Each card leads with its name and routing description. Provider identity sits beside the ID and health state, while the familiar read-activation toggle stays at the top right. Creation adds no new top-level concept: it remains **Create Memory Space**, defaulting to **Choose manually** with **Mnemon Native** (official) or **OpenViking** (connect an existing service) inside the dialog. When the current conversation is available, users may opt into **Smart selection**: data boundary and required capabilities are hard rules, while local/shared preference and a strategy prompt guide an isolated subagent. A model runs only when multiple eligible candidates remain, and credentials never enter its context.
+Each card leads with its name and routing description. Provider identity sits beside the ID and health state, while the familiar read-activation toggle stays at the top right. Creation adds no new top-level concept: it remains **Create Memory Space**, defaulting to **Choose manually** with **Mnemon Native** (official and prioritized) or one of the eight third-party engines inside the dialog. When the current conversation is available, users may opt into **Smart selection**: data boundary and required capabilities are hard rules, while local/shared preference and a strategy prompt guide an isolated subagent. A model runs only when multiple eligible candidates remain, and credentials never enter its context.
 
-Native cards retain statistics, Edit, and Delete. OpenViking cards show the remote URI, asynchronous extraction semantics, and **Disconnect**. Smart-created cards additionally show whether rules or the Agent decided, plus confidence and a concise reason. Disconnect never deletes remote data.
+Native cards retain statistics, Edit, and Delete. Third-party cards show provider identity, local/remote location, Edit, and **Disconnect**. Smart-created cards additionally show whether rules or the Agent decided, plus confidence and a concise reason. Disconnect never deletes provider data.
 
-The graph aggregates all active spaces. Mnemon Native supplies complete relationships; OpenViking currently contributes bounded disconnected content nodes and never fabricated edges. Layout, dragging, and reset affect browser presentation only.
+The graph aggregates all active spaces. Mnemon Native supplies complete typed relationships; Hindsight and Holographic contribute their supported graphs; providers without graph edges contribute bounded disconnected nodes and never fabricated edges. Layout, dragging, and reset affect browser presentation only.
 
 ### Remember
 
@@ -89,7 +89,7 @@ Normally, provide only a candidate. On confirmation, an isolated memory subagent
 - **Agent query** retrieves the same evidence, then gives it to an evidence-only worker with no Mnemon tools.
 - Category and strategy narrow the search.
 - Results retain Memory Space, provider, category, importance, engine-native score, and ID; cross-provider order uses rank fusion.
-- Related and Forget appear only when the provider supports them. OpenViking currently exposes neither action.
+- Related, Link, Browse, and Forget appear only when the provider supports their semantics.
 
 Focused questions are more reliable than broad keywords.
 
@@ -151,7 +151,7 @@ You may inspect project B while staying in project A's conversation; the Agent s
 
 - Solid blue is the primary action; blue outline usually means Edit; red is Remove, Delete, Archive, or Forget; neutral actions are View, Copy, and Cancel.
 - A Memory Space toggle controls only whether dsh-mnemon includes it in read routing; it is not Mnemon CLI's default Store selection. Before deleting Mnemon's default Store, the plugin switches to another existing Memory Space. The last native Store may be inactive but cannot be deleted.
-- Physical deletion of a Mnemon Native space requires dedicated confirmation. OpenViking has an explicit Disconnect confirmation that leaves remote data untouched. Forget is currently Mnemon Native semantic soft deletion.
+- Physical deletion of a Mnemon Native space requires dedicated confirmation. Every third-party space has an explicit Disconnect confirmation that leaves provider data untouched. Per-memory Forget follows the provider's declared hard, soft, or unsupported semantics.
 - Saving settings clears stale page state and reloads automatically; no browser refresh is needed.
 - Sidebar primary headings remain stable; secondary headings within Memory Spaces scroll naturally.
 - Buildin preserves its established layout and visuals. Functional concepts still apply, though control positions differ.

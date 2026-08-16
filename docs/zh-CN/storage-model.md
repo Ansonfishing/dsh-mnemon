@@ -147,8 +147,8 @@ id            Host 生成或沿用已发现的 Mnemon Store 名
 name          人类可读名称
 description   路由边界：什么属于这里、何时召回
 active        是否参与 DSH 读取与路由
-provider      mnemon-native 或 openviking
-location      本地 mnemon.db，或远程 endpoint + target URI
+provider      mnemon-native 或已登记的三方引擎
+location      本地 Store/CLI 作用域，或远程 endpoint + Provider 作用域
 ```
 
 ### 读写边界
@@ -157,7 +157,7 @@ location      本地 mnemon.db，或远程 endpoint + target URI
 - dsh-mnemon 的激活状态是独立控制面：任意 0..N 个记忆体可以激活，全部未激活也不会改变 Mnemon 默认 Store 或远程数据。
 - 召回与浏览只使用已激活记忆体；图谱、实体、关联、链接和删除由 Provider 能力决定。
 - 指定未激活记忆体进行读取会被拒绝。
-- 写入可以选择任何支持 `remember` 的已登记记忆体；OpenViking 会等待异步提炼任务完成后才返回落定回执。
+- 写入可以选择任何支持 `remember` 的已登记记忆体；回执会反映 Provider 的精确写入或异步提炼语义。
 - 对未激活目标写入成功后，插件自动激活它。
 - 没有显式目标且激活数量不是 1 时，确定性服务要求调用方先选择目标。
 
@@ -169,19 +169,19 @@ location      本地 mnemon.db，或远程 endpoint + target URI
 - 合并通过 Mnemon import 把来源内容导入目标；来源数据库保留，默认只将来源设为未激活。
 - Pack 替换不能把已初始化的 Store 集合清空；替换后若原默认 Store 已不存在，插件会选择一个现存 Store 修复原生默认指针。
 - `forget` 是按精确 ID 的软删除，不等于删除数据库文件。
-- OpenViking 连接由用户在既有“创建记忆体”弹窗手动选择，或在智能模式中显式加入候选后建立；断开只删除本地连接登记，不删除远程内容。
+- 用户可在既有“创建记忆体”弹窗选择 Mnemon Native 或任意已登记三方引擎，也可在智能模式中显式加入已配置候选；断开只删除本地连接登记，不删除 Provider 数据。
 - 智能 placement 的允许列表、数据边界与必需能力是 Host 强制规则；软偏好与 Prompt 只用于多个合格候选之间的语义选择，不能绕过硬规则。决策回执与记忆体元数据一起保存。
-- 合并、关系与软删除当前仅适用于 Mnemon Native；Provider 能力不会被 UI 或 Agent 假装补齐。
+- 合并仍只适用于 Mnemon Native。图谱、关系、浏览、精确/异步写入以及硬/软/不支持删除都以各 Provider 声明能力为准；UI 与 Agent 不会假装补齐缺失行为。见 [Provider 能力矩阵](./memory-providers.md)。
 
 ### 跨 Agent 可见性
 
 `mnemon.db` 是 Mnemon 原生数据面，不是 dsh-mnemon 私有格式。其他 Mnemon-enabled Agent 在使用同一个 `storageRoot` 和 Store 时，可以访问同一份长期记忆。dsh-mnemon 也会发现磁盘上兼容的 Store；其 DSH 专有名称、说明和激活状态仍由 `.dsh-memory-bodies.json` 管理。
 
-OpenViking 的可见性由服务、目标 URI 与身份头共同决定。两类共享都不延伸到 `runtime/` 或 `documents/`；不能把“共享第三层记忆”表述为自动共享完整 DSH 上下文。
+三方可见性由各自 Provider 作用域决定，例如服务与 URI、workspace/peers、bank、project/user、知识目录或 container。任何 Provider 的共享都不延伸到 `runtime/` 或 `documents/`；不能把“共享第三层记忆”表述为自动共享完整 DSH 上下文。
 
 ## 四类关系
 
-Mnemon Native 保留 `temporal`、`semantic`、`causal` 和 `entity` 关系。OpenViking 当前在图谱中投影为有界的无边节点，不伪造关系。记忆体页会按能力隐藏不适用的关联与忘记动作。
+Mnemon Native 保留 `temporal`、`semantic`、`causal` 和 `entity` 关系；Hindsight 投影 Provider 图谱，Holographic 生成本地实体/语义关系。没有图谱边的 Provider 只贡献有界无边节点，适配器不会伪造关系。记忆体页会按能力隐藏不适用的关联、链接、浏览与遗忘动作。
 
 ## 数据权威表
 

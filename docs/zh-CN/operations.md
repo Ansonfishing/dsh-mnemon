@@ -45,7 +45,7 @@ Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"
 
 “设置 → 记忆系统 → 备份与迁移”针对**当前有效根**工作：
 
-- **导出 ZIP**：包含 Runtime、Documents 和全部 Mnemon Native Memory Spaces；OpenViking 连接和远程数据不进入包；
+- **导出 ZIP**：包含 Runtime、Documents 和全部 Mnemon Native Memory Spaces；三方连接、本地外部 Store 与远程数据不进入包；
 - **导入 ZIP**：先预检，再合并到当前有效根；
 - 包内包含 `manifest.json`、SHA-256 清单和三类数据摘要；
 - 导出与导入持有组件锁，Memory Space 仍有未 checkpoint 的 WAL 时会拒绝；
@@ -58,7 +58,7 @@ Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"
 - 相同 Document ID + 相同内容跳过，ID 冲突且内容不同则生成新 ID；
 - 相同 Memory Space ID + 相同数据库跳过，内容不同则生成新 ID。
 
-导入受 `writeEnabled` 控制，只读部署会拒绝。ZIP 包含私有记忆，应加密、限制访问并验证恢复。OpenViking 的可选 API Key 保存在 `state/memory-providers.json`（`0600`），不会进入 ZIP，也不会返回浏览器；若要备份连接，需要按下述离线快照保护整个 `state/`。
+导入受 `writeEnabled` 控制，只读部署会拒绝。ZIP 包含私有记忆，应加密、限制访问并验证恢复。Provider 凭据保存在 `state/memory-providers.json`（`0600`），不会进入 ZIP，也不会返回浏览器；若要备份连接，需要按下述离线快照保护整个 `state/`。
 
 ### 恢复演练
 

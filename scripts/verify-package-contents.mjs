@@ -17,7 +17,7 @@ if (result.status !== 0) {
 const [pack] = JSON.parse(result.stdout)
 const paths = pack.files.map(file => file.path)
 const required = ['package.json', 'cordis.patch.yml', 'lib/index.js', 'lib/client.js', 'lib/types/index.d.ts', 'lib/types/client/index.d.ts']
-const allowedRootFiles = new Set(['package.json', 'cordis.patch.yml', 'LICENSE', 'README.md', 'README.zh-CN.md', 'SECURITY.md'])
+const allowedRootFiles = new Set(['package.json', 'cordis.patch.yml', 'LICENSE', 'README.md', 'README.zh-CN.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md'])
 const missing = required.filter(path => !paths.includes(path))
 const unexpected = paths.filter(path => !allowedRootFiles.has(path) && !(/^lib\/.+\.(?:js|d\.ts)$/.test(path)))
 const clientBundle = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')

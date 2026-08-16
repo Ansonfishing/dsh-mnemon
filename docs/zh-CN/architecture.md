@@ -8,29 +8,21 @@
 
 - DSH 提供主 Agent、生命周期事件、subagent provider、工具、命令、设置和 Web 扩展点；
 - 插件提供三层知识控制面、路由策略、事务屏障和 UI；
-- Mnemon Native 通过本地 `mnemon` CLI 提供命名 Store、SQLite、四类图、关系和软删除，是官方优先实现；OpenViking 适配器通过 Host HTTP 数据面提供远程检索、浏览与异步语义提炼。
+- Mnemon Native 通过本地 `mnemon` CLI 提供命名 Store、SQLite、四类图、关系和软删除，是官方优先实现；8 个三方适配器提供由 Host 控制的 HTTP、本地文件或 CLI 数据面。
 
 ## 组件图
 
 [![dsh-mnemon 运行时架构](../assets/diagrams/zh-CN/project-architecture.svg)](../assets/diagrams/zh-CN/project-architecture.svg)
 
-图中实线表示确定性数据或控制路径，紫色虚线表示 LLM 监督路径。Runtime Memory 和 Documents 直接使用受管文件；Memory Spaces 先经过 `MemoryProviderAdapter`，再进入 Mnemon Native 或 OpenViking 数据面。现有图主要绘制默认的 Native 路径。点击图片可以查看原始 SVG。
+图中实线表示确定性数据或控制路径，紫色虚线表示 LLM 监督路径。Runtime Memory 和 Documents 直接使用受管文件；Memory Spaces 先经过 `MemoryProviderAdapter`，再进入选中的 Provider 数据面。现有图主要绘制默认的 Native 路径。点击图片可以查看原始 SVG。
 
-因此跨 Agent 互操作只发生在第三层：Mnemon Native 通过对齐本地根和 Store 共享，OpenViking 通过对齐远程服务、目标 URI 与身份共享；两者都不会自动共享 DSH 会话、Runtime 投影或 Documents。
+因此跨 Agent 互操作只发生在第三层：Mnemon Native 通过对齐本地根和 Store 共享，三方引擎通过各自 Provider 作用域共享；任何 Provider 都不会自动共享 DSH 会话、Runtime 投影或 Documents。
 
 ### 第三层 Provider 契约
 
-`MemoryProviderAdapter` 把目录、生命周期和用户操作保持在 dsh-mnemon 控制面，把 `status / search / graph projection / browse / remember / related / link / forget` 交给数据面适配器。能力声明是 UI、Agent 和服务端共同使用的硬边界，不支持的操作会被隐藏并在 Host 拒绝。当前首版矩阵如下：
+`MemoryProviderAdapter` 把目录、生命周期和用户操作保持在 dsh-mnemon 控制面，把 `status / search / graph projection / browse / remember / related / link / forget` 交给数据面适配器。能力声明是 UI、Agent 和服务端共同使用的硬边界，不支持的操作会被隐藏并在 Host 拒绝。完整当前矩阵见[长期记忆 Provider](./memory-providers.md)。
 
-| 能力 | Mnemon Native | OpenViking 首版 |
-|---|---|---|
-| 检索 / 浏览 | 原生召回与只读列表 | `/api/v1/search/find` 与 `fs/ls` |
-| 写入 | 精确同步 `remember` | session commit + task 轮询；等待异步提炼落定 |
-| 图 / 关联 / 实体 | 完整支持 | 不声明；只提供有界无边内容投影 |
-| 链接 / 忘记 | typed relationship / 软删除 | 不开放 |
-| 移除空间 | 删除本地 Store | 仅断开，本地不删除远程内容 |
-
-跨 Provider 检索并发执行，单个失败只生成带记忆体名称的 hint；异构原始分数不直接比较，而是按各 Provider 返回次序做 reciprocal-rank 融合。未来 mem0、GBrain 等适配器应复用同一契约，而不改变上层“记忆体”语义。
+跨 Provider 检索并发执行，单个失败只生成带记忆体名称的 hint；异构原始分数不直接比较，而是按各 Provider 返回次序做 reciprocal-rank 融合。新适配器复用同一契约，不改变上层“记忆体”语义。
 
 创建时的 Provider placement 与召回路由是两个独立阶段。placement 先在 Host 内按已配置状态、允许列表、数据边界和必需能力裁剪候选；只剩一个候选时确定性落定，多个候选时才把脱敏后的能力摘要、记忆体用途和用户策略交给无工具权限的 `spawn` worker。Host 会再次校验结构化结果必须来自合格候选，再实例化 Provider，并把规则、理由、置信度和 worker 审计信息写入记忆体元数据。endpoint、API Key 与身份头始终留在 Host。
 
@@ -73,9 +65,9 @@ root Agent calls mnemon_recall
   -> structured evidence returns to root Agent
 ```
 
-长期语义写入、关系、删除以及记忆体创建/更新采用相同监督模式，但确定性服务会先校验目标 Provider 的能力。Mnemon Native 支持完整关系、软删除与合并；OpenViking 当前支持检索、浏览和等待任务落定的异步提炼。运行时记忆和 Documents 的普通变更仍由确定性控制层提交。
+长期语义写入、关系、删除以及记忆体创建/更新采用相同监督模式，但确定性服务会先校验目标 Provider 的能力。Mnemon Native 仍是完整参考实现；三方适配器只开放各自能兑现的精确/异步写入、图谱、浏览、关联与删除语义。运行时记忆和 Documents 的普通变更仍由确定性控制层提交。
 
-记忆体目录的移除是独立危险操作：Mnemon Native 经确认后调用 `store remove`，成功才移除登记；OpenViking 使用“断开”语义，只删除本地连接元数据，绝不删除远程记忆。
+记忆体目录的移除是独立危险操作：Mnemon Native 经确认后调用 `store remove`，成功才移除登记；所有三方 Provider 都使用“断开”语义，只删除本地连接元数据，绝不删除 Provider 记忆。
 
 ## 两类子 Agent
 
@@ -144,7 +136,7 @@ browser component
 | `src/runner.ts` | CLI 发现、参数、序列化和 JSON 解析 |
 | `src/service.ts` | 长期记忆应用门面 |
 | `src/memory-bodies.ts` | Memory Space 目录元数据 |
-| `src/providers/*` | 第三层 Provider 契约、Mnemon Native 路由与 OpenViking 适配器 |
+| `src/providers/*` | 第三层 Provider 契约、目录、原生路由与三方适配器 |
 | `src/runtime-memory.ts` | 热记忆事实源与投影 |
 | `src/documents.ts` | Documents 控制面 |
 | `src/subagent.ts` | worker 编排与容量事务 |

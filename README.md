@@ -10,10 +10,10 @@
 
 <p align="center"><strong>Local, layered, supervised memory for DeepSeek Harness—with cross-agent sharing through Mnemon.</strong></p>
 
-`dsh-mnemon` integrates [Mnemon](https://github.com/mnemon-dev/mnemon) with DeepSeek Harness (DSH). It brings hot memory needed every turn, full project Documents, and on-demand long-term Memory Spaces into one workbench. The third tier is provider-backed: Mnemon Native remains the official, prioritized engine, while the first experimental adapter can connect an existing OpenViking service without changing the Memory Space workflow.
+`dsh-mnemon` integrates [Mnemon](https://github.com/mnemon-dev/mnemon) with DeepSeek Harness (DSH). It brings hot memory needed every turn, full project Documents, and on-demand long-term Memory Spaces into one workbench. The third tier is provider-backed: Mnemon Native remains the official, prioritized engine, while OpenViking, Honcho, Mem0, Hindsight, Holographic, RetainDB, ByteRover, and Supermemory can enter the same Memory Space workflow.
 
-- **Local-first default**: Mnemon Native keeps memory in local SQLite, JSON, and Markdown; OpenViking is an explicit optional connection.
-- **Cross-agent sharing**: Mnemon Native spaces share local Stores with Mnemon-enabled agents; OpenViking spaces share through the connected remote service.
+- **Local-first default**: Mnemon Native keeps memory in local SQLite, JSON, and Markdown; every third-party engine is an explicit opt-in.
+- **Replaceable long-term tier**: choose among nine engines without changing the Runtime, Documents, Memory Space, or Agent-tool mental model.
 - **Explainable smart placement**: keep manual engine selection or let hard rules plus a strategy prompt guide an isolated subagent among eligible providers; the reason and confidence are retained.
 - **Three cooperating tiers**: Runtime Memory, Project Documents, and Memory Spaces retain information at the right granularity.
 - **Supervised writes**: isolated memory subagents make semantic decisions; the Host enforces paths, permissions, capacity, locks, and revisions.
@@ -108,6 +108,8 @@ Cross-agent sharing applies to the **Memory Spaces** backed by Mnemon. Another M
 
 The default `global` scope uses `~/.mnemon`, making it the simplest shared memory root for local agents. `custom` and `workspace` roots can also be shared, but every participant must align its directory explicitly. A shared root is shared data: establish a trust boundary first, and avoid incompatible offline migration or directory operations while another process is using it.
 
+Third-party spaces follow their provider's own scope—such as an OpenViking URI, Honcho workspace and peers, Hindsight bank, or Supermemory container. See the [provider guide](./docs/en/memory-providers.md) for the capability and connection matrix.
+
 ## Sidebar workbench
 
 | Page | Main purpose |
@@ -164,9 +166,9 @@ Recommended lookup order: Runtime Memory → active Documents → active Memory 
 
 ## Data and security boundaries
 
-- Mnemon Native uses the local `mnemon` CLI; OpenViking uses its HTTP API through the Host. The WebUI neither reads SQLite nor calls remote providers directly.
+- Mnemon Native uses the local `mnemon` CLI. External HTTP providers and the ByteRover CLI are called only through the Host; the WebUI neither reads stores nor calls providers directly.
 - CLI calls use argument arrays with shell disabled, bounded output, timeouts, and cancellation.
-- An optional OpenViking API key is stored mode `0600` in `<storageRoot>/state/memory-providers.json`, is never returned to the browser, and is excluded from Mnemon Pack exports. Subagent inference still uses the model provider configured in DSH.
+- Provider credentials are stored mode `0600` in `<storageRoot>/state/memory-providers.json`, are never returned to the browser or placement subagent, and are excluded from Mnemon Pack exports. Subagent inference still uses the model provider configured in DSH.
 - There is no deterministic secret scanner yet. Never store keys, tokens, private keys, or raw sensitive logs in any tier.
 - Uninstalling the plugin does not remove data under `~/.mnemon`, workspace `.mnemon` roots, or custom directories.
 
@@ -179,6 +181,7 @@ See [Operations, security, and troubleshooting](./docs/en/operations.md) for com
 | Install and complete first-run verification | [Getting Started](./docs/en/getting-started.md) |
 | Learn every page and conversation entry | [Sidebar and conversation UI guide](./docs/en/ui-guide.md) |
 | Understand the three tiers and complete flow | [Project overview](./docs/en/project-overview.md) · [Lifecycle and workflows](./docs/en/workflows.md) |
+| Choose or configure a long-term memory provider | [Long-term memory providers](./docs/en/memory-providers.md) |
 | Choose storage scope or advanced switches | [Configuration reference](./docs/en/configuration.md) |
 | Back up, update, or troubleshoot | [Operations, security, and troubleshooting](./docs/en/operations.md) |
 | Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |

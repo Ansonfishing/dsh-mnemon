@@ -15,6 +15,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 | I want to… | Document |
 |---|---|
 | Decide which tier should retain something | [Storage and the three-tier model](./storage-model.md) |
+| Choose, configure, or compare a Memory Space provider | [Long-term memory providers](./memory-providers.md) |
 | Share durable memory between DSH and other Mnemon-enabled agents | [Project overview: Cross-agent sharing](./project-overview.md#cross-agent-sharing-boundary) · [Configuration: Sharing scope](./configuration.md#choose-a-cross-agent-sharing-scope) |
 | Learn when injection, recall, remembering, and archiving happen | [Lifecycle and workflows](./workflows.md) |
 | Switch Sidebar / Buildin or global / workspace / custom storage | [Configuration reference](./configuration.md) |

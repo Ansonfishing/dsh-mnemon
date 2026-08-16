@@ -10,10 +10,10 @@
 
 <p align="center"><strong>让 DeepSeek Harness 拥有可跨 Agent 共享、分层、可监督的长期记忆。</strong></p>
 
-`dsh-mnemon` 把长期记忆接入 DeepSeek Harness（DSH），并将每轮需要的热记忆、需要完整阅读的项目档案和按需召回的长期记忆体组织在同一个工作台中。第三层采用可替换 Provider：Mnemon Native 是官方优先、默认完整能力实现；首个实验性适配器可以连接已有 OpenViking 服务，而不改变记忆体工作流。
+`dsh-mnemon` 把长期记忆接入 DeepSeek Harness（DSH），并将每轮需要的热记忆、需要完整阅读的项目档案和按需召回的长期记忆体组织在同一个工作台中。第三层采用可替换 Provider：Mnemon Native 是官方优先、默认完整能力实现；OpenViking、Honcho、Mem0、Hindsight、Holographic、RetainDB、ByteRover 与 Supermemory 都可以进入同一套记忆体工作流。
 
-- **默认本地优先**：Mnemon Native 将记忆保存在本机 SQLite、JSON 与 Markdown；OpenViking 是显式可选连接。
-- **跨 Agent 共享**：Mnemon Native 通过本地 Store 共享；OpenViking 通过连接的远程服务共享。
+- **默认本地优先**：Mnemon Native 将记忆保存在本机 SQLite、JSON 与 Markdown；所有三方引擎都需要显式选择。
+- **第三层可替换**：可在 9 种引擎之间选择，而不改变运行时、档案、记忆体与 Agent 工具的用户心智。
 - **可解释的智能选底层**：创建记忆体时可保持手动指定，也可用硬规则与策略 Prompt 让隔离子 Agent 在合格 Provider 中选择；结果会记录理由与置信度。
 - **三层协作**：运行时记忆、项目档案、记忆体各自保存适合自己的信息粒度。
 - **受监督写入**：语义判断交给隔离的记忆子 Agent，路径、权限、容量、锁与 revision 由 Host 控制。
@@ -104,9 +104,11 @@ Headless 没有工作台和对话按钮，但仍会挂载运行时上下文、�
 
 ### 与其他 Agent 共享长期记忆
 
-跨 Agent 共享发生在第三层**记忆体**：Mnemon Native 通过相同 `storageRoot` 和 Store 互操作，OpenViking 通过相同远程服务、目标 URI 与身份互操作。DSH 专有的运行时记忆和项目档案不会因此自动暴露给其他 Agent。
+跨 Agent 共享发生在第三层**记忆体**：Mnemon Native 通过相同 `storageRoot` 和 Store 互操作，三方引擎通过各自 Provider 作用域互操作。DSH 专有的运行时记忆和项目档案不会因此自动暴露给其他 Agent。
 
 默认 `global` 模式使用 `~/.mnemon`，最适合作为本机 Agent 之间的共享记忆根；`custom` 和 `workspace` 也可以共享，但所有参与方必须显式对齐目录。共享同一目录意味着共享同一份数据，请先确认信任边界，并避免并发执行不兼容的离线迁移或目录操作。
+
+三方记忆体按各自 Provider 的作用域共享，例如 OpenViking URI、Honcho workspace/peers、Hindsight bank 或 Supermemory container。完整能力与连接矩阵见[长期记忆 Provider 指南](./docs/zh-CN/memory-providers.md)。
 
 ## Sidebar 工作台
 
@@ -164,9 +166,9 @@ mnemon:
 
 ## 数据与安全边界
 
-- Mnemon Native 通过本地 `mnemon` CLI 访问；OpenViking 通过 Host HTTP API 访问。WebUI 不直接读取 SQLite、启动进程或调用远程 Provider。
+- Mnemon Native 通过本地 `mnemon` CLI；外部 HTTP Provider 与 ByteRover CLI 只由 Host 调用。WebUI 不读取 Store，也不直接调用 Provider。
 - CLI 使用参数数组且禁用 shell；输出、超时和取消均有边界。
-- 可选 OpenViking API Key 以 `0600` 权限保存在 `<storageRoot>/state/memory-providers.json`，不会返回浏览器，也不会进入 Mnemon Pack；子 Agent 推理仍复用 DSH 已配置的模型 Provider。
+- Provider 凭据以 `0600` 权限保存在 `<storageRoot>/state/memory-providers.json`，不会返回浏览器或 placement 子 Agent，也不会进入 Mnemon Pack；子 Agent 推理仍复用 DSH 已配置的模型 Provider。
 - 当前没有确定性的秘密扫描器。不要把密钥、token、私钥或原始敏感日志写入任何记忆层。
 - 卸载插件不会删除 `~/.mnemon`、工作区 `.mnemon` 或自定义目录中的数据。
 
@@ -179,6 +181,7 @@ mnemon:
 | 安装并完成第一次验证 | [快速开始](./docs/zh-CN/getting-started.md) |
 | 认识每个页面与对话内入口 | [Sidebar 与对话交互指南](./docs/zh-CN/ui-guide.md) |
 | 理解三层模型和完整流转 | [项目介绍](./docs/zh-CN/project-overview.md) · [生命周期与核心流程](./docs/zh-CN/workflows.md) |
+| 选择或配置长期记忆 Provider | [长期记忆 Provider](./docs/zh-CN/memory-providers.md) |
 | 选择存储范围或高级开关 | [配置参考](./docs/zh-CN/configuration.md) |
 | 备份、更新或排查问题 | [运维、安全与故障排查](./docs/zh-CN/operations.md) |
 | 集成工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |

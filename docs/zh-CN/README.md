@@ -15,6 +15,7 @@
 | 我想要…… | 文档 |
 |---|---|
 | 决定一条信息应放在哪一层 | [存储与三层记忆模型](./storage-model.md) |
+| 选择、配置或比较记忆体 Provider | [长期记忆 Provider](./memory-providers.md) |
 | 让 DSH 与其他 Mnemon-enabled Agent 共享长期记忆 | [项目介绍：跨 Agent 共享边界](./project-overview.md#跨-agent-共享边界) · [配置参考：共享范围](./configuration.md#选择跨-agent-共享范围) |
 | 了解每轮注入、召回、沉淀和归档何时发生 | [生命周期与核心流程](./workflows.md) |
 | 切换 Sidebar / Buildin、全局 / 工作区 / 自定义目录 | [配置参考](./configuration.md) |

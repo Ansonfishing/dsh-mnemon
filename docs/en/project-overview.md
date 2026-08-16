@@ -2,7 +2,7 @@
 
 [简体中文](../zh-CN/project-overview.md) | **English** | [Documentation hub](./README.md)
 
-`dsh-mnemon` integrates long-term Memory Spaces with DeepSeek Harness, then adds Runtime hot memory, Project Documents, lifecycle routing, bounded subagents, a deterministic control layer, and native DSH interfaces. The third tier is provider-backed: Mnemon Native is the official, prioritized, full-capability implementation, and the first experimental adapter can connect an existing OpenViking service to the same workflow.
+`dsh-mnemon` integrates long-term Memory Spaces with DeepSeek Harness, then adds Runtime hot memory, Project Documents, lifecycle routing, bounded subagents, a deterministic control layer, and native DSH interfaces. The third tier is provider-backed: Mnemon Native is the official, prioritized, full-capability implementation, while eight third-party engines reuse the same workflow through explicit adapters.
 
 Its goal is not to store more text. It balances long-term continuity, current-fact priority, context cost, and recoverable writes.
 
@@ -41,12 +41,12 @@ One body may be up to 2 MiB and active rendered content up to 10 MiB. Before man
 
 ### 3. Memory Spaces
 
-Each Memory Space has a stable ID, name, routing description, activation state, and provider capability set. Mnemon Native maps to an independent Store and `mnemon.db`; OpenViking maps to an existing endpoint and a `viking://user/.../memories` target. Activation remains DSH's unified read-and-routing control plane and may select zero or many spaces; Mnemon's native default Store remains an independent single selection.
+Each Memory Space has a stable ID, name, routing description, activation state, and provider capability set. Mnemon Native maps to an independent Store and `mnemon.db`; third-party spaces map to their provider's endpoint, scope, local file, or CLI directory. Activation remains DSH's unified read-and-routing control plane and may select zero or many spaces; Mnemon's native default Store remains an independent single selection.
 
 - Reads cover active spaces only.
 - Writes may target any registered space and activate it after success.
 - Cross-provider recall retains Memory Space and provider provenance and fuses each engine's internal ranking instead of comparing heterogeneous raw scores.
-- Relationships, entities, deletion, and write semantics follow the target provider's declared capabilities. Mnemon Native keeps the complete graph and soft delete; OpenViking writes wait for asynchronous extraction to settle.
+- Relationships, entities, deletion, and write semantics follow the target provider's declared capabilities. Mnemon Native keeps the complete graph and soft delete; external engines expose only the semantics documented in the [provider matrix](./memory-providers.md).
 
 See [Storage and the three-tier model](./storage-model.md) for authoritative files, capacities, and directories.
 
@@ -58,7 +58,7 @@ See [Storage and the three-tier model](./storage-model.md) for authoritative fil
 2. every participant can access the same `storageRoot`;
 3. durable memories intended for sharing live in Mnemon Stores recognized by those participants.
 
-Under those conditions, another Mnemon-enabled agent can recall durable facts, entities, and relations in Mnemon Native spaces, and DSH can discover compatible memories written in the other direction. OpenViking spaces share through the same remote service and identity headers. This boundary covers third-tier provider data only; `runtime/` and `documents/` do not automatically become another agent's context.
+Under those conditions, another Mnemon-enabled agent can recall durable facts, entities, and relations in Mnemon Native spaces, and DSH can discover compatible memories written in the other direction. Third-party spaces share through their own provider scope. This boundary covers third-tier provider data only; `runtime/` and `documents/` do not automatically become another agent's context.
 
 The default `global` root, `~/.mnemon`, is the simplest choice for several local agents. Use `custom` for an explicitly agreed shared root, or `workspace` to constrain sharing to one project. Concurrent processes rely on Mnemon and SQLite concurrency semantics; stop every user before offline copying, migration, or direct database changes.
 
