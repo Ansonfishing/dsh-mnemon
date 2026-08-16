@@ -359,6 +359,7 @@ describe('MnemonSettingsCard', () => {
     const provider = {
       id: 'openviking' as const,
       label: 'OpenViking', kind: 'remote' as const, origin: 'third-party' as const, summary: 'Shared memory',
+      workspaceBinding: 'provider-global' as const,
       capabilities: { search: true, browse: true, graph: false, entities: false, related: false, remember: true, link: false, forget: true, writeMode: 'async-extracting' as const, deletionMode: 'hard' as const },
       fields: [
         { key: 'endpoint', label: 'Endpoint', scope: 'service' as const, input: 'url' as const, required: true, defaultValue: 'http://127.0.0.1:1933' },
@@ -378,7 +379,7 @@ describe('MnemonSettingsCard', () => {
 
     await waitFor(() => expect(screen.getByText('OpenViking')).toBeTruthy())
     expect((screen.getByText('OpenViking').closest('details') as HTMLDetailsElement).open).toBe(false)
-    expect(screen.getByText('工作区配置目标：dsh-mnemon')).toBeTruthy()
+    expect(screen.getByText('当前 DSH 工作区：dsh-mnemon；只有标记“随工作区”的 Provider 会切换数据范围。')).toBeTruthy()
     fireEvent.click(screen.getByText('OpenViking'))
     expect((screen.getByLabelText('服务地址') as HTMLInputElement).value).toBe('http://127.0.0.1:1933')
     expect(screen.queryByLabelText('记忆范围 URI')).toBeNull()

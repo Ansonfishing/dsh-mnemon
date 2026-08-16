@@ -182,6 +182,8 @@ export interface MemoryProviderDescriptor {
   id: MemoryProviderId
   label: string
   kind: 'local' | 'remote'
+  /** How the provider data scope reacts when DSH switches workspaces. */
+  workspaceBinding: 'automatic' | 'optional-override' | 'provider-global'
   summary: string
   origin: 'native' | 'third-party'
   capabilities: MemoryProviderCapabilities

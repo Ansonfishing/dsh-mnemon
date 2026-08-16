@@ -104,10 +104,12 @@ const MEMORY_PROVIDER_LABELS: Record<MemoryProviderId, string> = {
 const LEGACY_PROVIDER_CATALOG: MemoryProviderDescriptor[] = [
   {
     id: 'mnemon-native', label: 'Mnemon Native', kind: 'local', origin: 'native',
+    workspaceBinding: 'automatic',
     summary: 'Official local-first memory.', capabilities: LEGACY_NATIVE_CAPABILITIES, fields: [],
   },
   {
     id: 'openviking', label: 'OpenViking', kind: 'remote', origin: 'third-party',
+    workspaceBinding: 'provider-global',
     serviceConfigured: true,
     summary: 'Filesystem-shaped shared memory.',
     capabilities: { ...LEGACY_NATIVE_CAPABILITIES, graph: false, entities: false, related: false, link: false, writeMode: 'async-extracting', deletionMode: 'hard' },
@@ -1127,7 +1129,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
     update: (key: string, value: string | number | boolean) => void,
     body?: MemoryBodyView,
   ) => <div className={css.providerFields} data-provider={provider.id}>
-    <div className={css.providerFieldHeading}><div><strong>{provider.label}</strong><small>{providerSummary(provider)}</small></div><span>{provider.kind === 'local' ? t('overview.providerKindLocal') : t('overview.providerKindRemote')}</span></div>
+    <div className={css.providerFieldHeading}><div><strong>{provider.label}</strong><small>{providerSummary(provider)}</small></div><span>{provider.kind === 'local' ? t('overview.providerKindLocal') : t('overview.providerKindRemote')} · {t(`overview.workspaceBinding.${provider.workspaceBinding}`)}</span></div>
     <div className={css.providerAdvancedGrid}>{memoryProviderFields(provider).map(field => {
       const label = fieldLabel(provider, field)
       const value = connection[field.key] ?? ''
@@ -1152,7 +1154,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   </form>
   const bodyCreateForm = <form className={css.bodyEdit} onSubmit={event => void create(event)}>
     <fieldset className={css.placementMode}><legend>{t('overview.placementMode')}</legend><label data-selected={placementMode === 'manual' || undefined}><input type="radio" name="placement-mode" value="manual" checked={placementMode === 'manual'} onChange={() => setPlacementMode('manual')} /><span><strong>{t('overview.placementManual')}</strong><small>{t('overview.placementManualHint')}</small></span></label><label data-selected={placementMode === 'automatic' || undefined} data-disabled={!props.agentAvailable || undefined}><input type="radio" name="placement-mode" value="automatic" checked={placementMode === 'automatic'} disabled={!props.agentAvailable} onChange={() => setPlacementMode('automatic')} /><span><strong>{t('overview.placementAutomatic')} <em>{t('overview.recommended')}</em></strong><small>{props.agentAvailable ? t('overview.placementAutomaticHint') : t('overview.placementUnavailable')}</small></span></label></fieldset>
-    {placementMode === 'manual' && <><fieldset className={css.providerChoice}><legend>{t('overview.providerLabel')}</legend>{providers.map(provider => { const serviceMissing = provider.id !== 'mnemon-native' && provider.serviceConfigured === false; return <label key={provider.id} data-selected={bodyProviderId === provider.id || undefined} data-native={provider.id === 'mnemon-native' || undefined} data-disabled={serviceMissing || undefined}><input type="radio" name="memory-provider" value={provider.id} checked={bodyProviderId === provider.id} disabled={serviceMissing} onChange={() => setBodyProviderId(provider.id)} /><span><strong>{provider.label}{provider.id === 'mnemon-native' && <em>{t('overview.nativeOfficial')}</em>}</strong><small>{serviceMissing ? t('overview.providerServiceRequired') : providerSummary(provider)}</small></span></label> })}</fieldset>{selectedProvider !== undefined && selectedProvider.id !== 'mnemon-native' && providerFields(selectedProvider, providerDrafts[selectedProvider.id] ?? {}, (key, value) => updateProviderDraft(selectedProvider.id, key, value))}</>}
+    {placementMode === 'manual' && <><fieldset className={css.providerChoice}><legend>{t('overview.providerLabel')}</legend>{providers.map(provider => { const serviceMissing = provider.id !== 'mnemon-native' && provider.serviceConfigured === false; return <label key={provider.id} data-selected={bodyProviderId === provider.id || undefined} data-native={provider.id === 'mnemon-native' || undefined} data-disabled={serviceMissing || undefined}><input type="radio" name="memory-provider" value={provider.id} checked={bodyProviderId === provider.id} disabled={serviceMissing} onChange={() => setBodyProviderId(provider.id)} /><span><strong>{provider.label}{provider.id === 'mnemon-native' && <em>{t('overview.nativeOfficial')}</em>}</strong><small>{serviceMissing ? t('overview.providerServiceRequired') : `${t(`overview.workspaceBinding.${provider.workspaceBinding}`)} · ${providerSummary(provider)}`}</small></span></label> })}</fieldset>{selectedProvider !== undefined && selectedProvider.id !== 'mnemon-native' && providerFields(selectedProvider, providerDrafts[selectedProvider.id] ?? {}, (key, value) => updateProviderDraft(selectedProvider.id, key, value))}</>}
     {placementMode === 'automatic' && <section className={css.placementPolicy} aria-label={t('overview.placementPolicy')}>
       <div className={css.placementPolicyHeading}><div><strong>{t('overview.placementPolicy')}</strong><small>{t('overview.placementPolicyHint')}</small></div><span>{t('overview.agentDecision')}</span></div>
       <label>{t('overview.placementPrompt')}<textarea aria-label={t('overview.placementPrompt')} value={placementPrompt} onChange={event => setPlacementPrompt(event.target.value)} placeholder={t('overview.placementPromptPlaceholder')} rows={3} maxLength={4000} /></label>

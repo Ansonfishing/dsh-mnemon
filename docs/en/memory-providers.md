@@ -22,18 +22,20 @@ The Host exposes only capabilities an adapter can honor. UI actions and Agent to
 
 ## Service and Memory Space fields
 
-| Provider | Service configuration in Settings | Instance configuration in Memory Spaces |
-|---|---|---|
-| OpenViking | `endpoint`, `apiKey`, `account` | `targetUri`, `user`, `actorPeerId` |
-| Honcho | `endpoint`, `apiKey` | `workspace`, `userId`, `agentId` |
-| Mem0 | `endpoint`, `apiKey`, `mode` | `userId`, `agentId`, `rerank` |
-| Hindsight | `endpoint`, `apiKey` | `bankId`, `budget` |
-| Holographic | `dataPath` | `defaultTrust`, `minTrust` |
-| RetainDB | `endpoint`, `apiKey` | `project`, `userId` |
-| ByteRover | `cliPath`, `apiKey` | `workingDirectory` |
-| Supermemory | `endpoint`, `apiKey` | `containerTag`, `searchMode` |
+| Provider | Workspace behavior | Service configuration in Settings | Instance configuration in Memory Spaces |
+|---|---|---|---|
+| OpenViking | Keeps the provider-global scope | `endpoint`, `apiKey`, `account` | `targetUri`, `user`, `actorPeerId` |
+| Honcho | Keeps the provider-global scope | `endpoint`, `apiKey` | `workspace`, `userId`, `agentId` |
+| Mem0 | Keeps the provider-global scope | `endpoint`, `apiKey`, `mode` | `userId`, `agentId`, `rerank` |
+| Hindsight | Keeps the provider-global scope | `endpoint`, `apiKey` | `bankId`, `budget` |
+| Holographic | Follows by default; path can override | `dataPath` | `defaultTrust`, `minTrust` |
+| RetainDB | Keeps the provider-global scope | `endpoint`, `apiKey` | `project`, `userId` |
+| ByteRover | Follows by default; directory can override | `cliPath`, `apiKey` | `workingDirectory` |
+| Supermemory | Keeps the provider-global scope | `endpoint`, `apiKey` | `containerTag`, `searchMode` |
 
 **Settings → Memory System** saves only reusable provider service configuration and never creates a Memory Space. **Memory Spaces → Overview** creates, edits, activates, and removes Memory Spaces while showing only instance scopes such as workspace, user, bank, container, or target URI. The Host merges both layers immediately before calling an adapter. Secrets stay in `<storageRoot>/state/memory-providers.json` with mode `0600`; the WebUI sees only which secrets are configured. Leaving a saved secret blank keeps it, while the explicit clear control removes it.
+
+DSH workspace mode does not rewrite every provider namespace. Mnemon Native follows the workspace automatically. Holographic and ByteRover default to workspace-local paths but allow explicit path overrides. Remote providers continue to use the URI, workspace, user, bank, project, or container configured on the Memory Space; switching DSH workspaces never rewrites those identities implicitly.
 
 ## Manual and smart placement
 

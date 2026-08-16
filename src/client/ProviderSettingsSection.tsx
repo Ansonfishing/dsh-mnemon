@@ -123,7 +123,7 @@ function ProviderServiceForm(props: {
 function ProviderPanel(props: { provider: MemoryProviderDescriptor; service: MemoryProviderServiceView; disabled: boolean; t: MnemonTranslate; onSave: (provider: MemoryProviderDescriptor, draft: ServiceDraft) => Promise<void> }): JSX.Element {
   return <details className={css.providerPanel}>
     <summary>
-      <span className={css.providerIdentity}><i className={css.providerMark} aria-hidden="true">{props.provider.label.slice(0, 1).toUpperCase()}</i><span><strong>{props.provider.label}</strong><small>{props.t(`overview.providerSummary.${props.provider.id}` as MnemonKey)}</small></span></span>
+      <span className={css.providerIdentity}><i className={css.providerMark} aria-hidden="true">{props.provider.label.slice(0, 1).toUpperCase()}</i><span><strong>{props.provider.label}</strong><small>{props.t(`overview.workspaceBinding.${props.provider.workspaceBinding}`)} · {props.t(`overview.providerSummary.${props.provider.id}` as MnemonKey)}</small></span></span>
       <span className={css.providerState}>{props.t(props.service.configured ? 'config.providerServiceConfigured' : 'config.providerServiceNotConfigured')}</span>
     </summary>
     <div className={css.providerPanelBody}><ProviderServiceForm {...props} /></div>

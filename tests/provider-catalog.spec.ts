@@ -29,6 +29,17 @@ describe('memory provider catalog', () => {
       'hindsight',
       'holographic',
     ])
+    expect(MEMORY_PROVIDER_CATALOG.map(provider => [provider.id, provider.workspaceBinding])).toEqual([
+      ['mnemon-native', 'automatic'],
+      ['openviking', 'provider-global'],
+      ['honcho', 'provider-global'],
+      ['mem0', 'provider-global'],
+      ['hindsight', 'provider-global'],
+      ['holographic', 'optional-override'],
+      ['retaindb', 'provider-global'],
+      ['byterover', 'optional-override'],
+      ['supermemory', 'provider-global'],
+    ])
     expect(memoryProviderDescriptor('byterover').capabilities).toMatchObject({ search: true, browse: false, graph: false, entities: false })
   })
 
