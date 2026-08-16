@@ -135,7 +135,8 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     const files = entries.flatMap((value): Array<{ item: Record<string, unknown>; uri: string }> => {
       const item = object(value)
       const uri = string(item?.uri)
-      return item === undefined || uri === undefined || item.isDir === true || !uri.endsWith('.md') ? [] : [{ item, uri }]
+      const filename = uri?.slice(uri.lastIndexOf('/') + 1)
+      return item === undefined || uri === undefined || item.isDir === true || filename?.startsWith('.') === true || !uri.endsWith('.md') ? [] : [{ item, uri }]
     }).slice(0, limit)
     return Promise.all(files.map(async ({ item, uri }): Promise<Insight> => {
       let content = string(item.abstract) ?? string(item.overview) ?? ''

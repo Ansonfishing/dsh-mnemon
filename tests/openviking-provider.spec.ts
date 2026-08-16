@@ -89,6 +89,7 @@ describe('OpenVikingProvider', () => {
     const fetchMock = vi.fn<typeof fetch>(async () => ok([
       { uri: 'viking://user/team/memories/preferences/style.md', isDir: false, abstract: '偏好简洁回答。', modTime: '2026-08-16T00:00:00Z' },
       { uri: 'viking://user/team/memories/preferences', isDir: true },
+      { uri: 'viking://user/team/memories/preferences/.abstract.md', isDir: false, abstract: 'system summary' },
       { uri: 'viking://user/team/memories/.meta.json', isDir: false },
     ]))
     const { body, provider } = await bodyAndRegistry(fetchMock)

@@ -99,8 +99,8 @@ function normalizeEndpoint(value: string): string {
 
 function normalizeTargetUri(value: string): string {
   const normalized = requiredText(value, 'OpenViking memory URI', 2000).replace(/\/+$/, '')
-  if (!/^viking:\/\/user(?:\/[^/]+)?\/memories(?:\/.*)?$/u.test(normalized)) {
-    throw new Error('OpenViking memory URI must stay under viking://user/.../memories')
+  if (!/^viking:\/\/user(?:\/[^/]+)?\/memories$/u.test(normalized)) {
+    throw new Error('OpenViking memory URI must be a viking://user/.../memories root')
   }
   return normalized
 }

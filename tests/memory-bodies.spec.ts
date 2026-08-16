@@ -246,6 +246,12 @@ describe('MemoryBodyRegistry', () => {
       description: '不能把资源目录当作长期记忆体。',
       providerId: 'openviking',
       openViking: { endpoint: 'http://127.0.0.1:1933', targetUri: 'viking://resources' },
-    })).rejects.toThrow('must stay under viking://user/.../memories')
+    })).rejects.toThrow('viking://user/.../memories root')
+    await expect(registry.create({
+      name: '过窄范围',
+      description: '异步提炼无法保证写入自定义子目录。',
+      providerId: 'openviking',
+      openViking: { endpoint: 'http://127.0.0.1:1933', targetUri: 'viking://user/memories/team' },
+    })).rejects.toThrow('memories root')
   })
 })
