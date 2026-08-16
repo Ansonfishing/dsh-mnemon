@@ -315,9 +315,26 @@ describe('MemoryBodyRegistry', () => {
     expect(refreshed).toEqual([
       expect.objectContaining({ id: first[0]!.id, name: 'Alice profile', description: 'Updated directly in Hindsight.', active: true, provider: expect.objectContaining({ settings: { bankId: 'bank-a', budget: 'low' } }) }),
     ])
+
+    registry.updateMetadata([{
+      memoryBodyId: first[0]!.id,
+      title: '产品与用户洞察',
+      description: '汇总产品范围、用户反馈与关键取舍，在规划和复盘产品方向时召回。',
+    }])
+    registry.syncProviderService('hindsight', service, [
+      { externalId: 'bank-a', name: 'Alice renamed upstream', description: 'Changed again directly in Hindsight.', connection: { bankId: 'bank-a', budget: 'high' } },
+    ])
+    expect(registry.list()).toEqual([
+      expect.objectContaining({
+        id: first[0]!.id,
+        name: '产品与用户洞察',
+        description: '汇总产品范围、用户反馈与关键取舍，在规划和复盘产品方向时召回。',
+        provider: expect.objectContaining({ settings: { bankId: 'bank-a', budget: 'high' } }),
+      }),
+    ])
     expect(JSON.parse(readFileSync(registry.providerRegistryPath, 'utf8'))).toMatchObject({
       version: 4,
-      bodies: [{ externalId: 'bank-a', name: 'Alice profile' }],
+      bodies: [{ externalId: 'bank-a', name: '产品与用户洞察', metadataSource: 'ai' }],
     })
   })
 

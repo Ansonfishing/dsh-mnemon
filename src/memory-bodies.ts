@@ -48,6 +48,8 @@ interface StoredMemoryBody extends Omit<MemoryBody, 'dbPath' | 'provider'> {
   providerId: MemoryProviderId
   /** Stable provider-side namespace used to refresh this local projection. */
   externalId?: string
+  /** Controls whether discovery may refresh presentation metadata. */
+  metadataSource?: 'provider' | 'manual' | 'ai'
   connection?: MemoryProviderConnection
   /** Provider-registry v1 compatibility; migrated to connection on load. */
   openViking?: StoredOpenVikingConnection
@@ -312,14 +314,16 @@ export class MemoryBodyRegistry {
       }
       reservedIds.add(id)
       const metadata = providerProjectionMetadata(providerId, candidate)
+      const metadataSource = previous?.metadataSource ?? (previous === undefined ? 'provider' : 'manual')
+      const preserveLocalMetadata = previous !== undefined && metadataSource !== 'provider'
       return {
         id,
         externalId,
-        // Provider metadata is not user-controlled by this form. Keep every
-        // discovered namespace addressable even when an upstream title is
-        // blank or exceeds DSH's presentation limits.
-        name: metadata.name,
-        description: metadata.description,
+        // Discovery owns initial presentation metadata. Once a user or AI has
+        // curated it, reconnect only refreshes provider identity and settings.
+        name: preserveLocalMetadata ? previous.name : metadata.name,
+        description: preserveLocalMetadata ? previous.description : metadata.description,
+        metadataSource,
         active: previous?.active ?? true,
         providerId,
         connection,
@@ -406,6 +410,7 @@ export class MemoryBodyRegistry {
       description,
       active: request.active ?? false,
       providerId,
+      ...(providerId === 'mnemon-native' ? {} : { metadataSource: 'manual' as const }),
       ...(normalizedPlacement === undefined ? {} : { placement: normalizedPlacement }),
       ...(connection === undefined ? {} : { connection }),
       createdAt: timestamp,
@@ -449,6 +454,7 @@ export class MemoryBodyRegistry {
       ...(request.name === undefined ? {} : { name: requiredText(request.name, 'name', 100) }),
       ...(request.description === undefined ? {} : { description: optionalText(request.description, 'description', 1000) }),
       ...(request.active === undefined ? {} : { active: request.active }),
+      ...(current.providerId === 'mnemon-native' || (request.name === undefined && request.description === undefined) ? {} : { metadataSource: 'manual' as const }),
       ...(connection === undefined ? {} : { connection }),
       updatedAt: this.now().toISOString(),
     }
@@ -473,6 +479,7 @@ export class MemoryBodyRegistry {
           ...this.bodies[index]!,
           name: requiredText(update.title, 'title', 48),
           description: requiredText(update.description, 'description', 200),
+          metadataSource: 'ai',
           updatedAt: this.now().toISOString(),
         } satisfies StoredMemoryBody,
       }
@@ -620,6 +627,7 @@ export class MemoryBodyRegistry {
                 active: body.active === true,
                 providerId,
                 ...(typeof body.externalId !== 'string' || body.externalId.trim() === '' ? {} : { externalId: body.externalId.trim() }),
+                ...(body.metadataSource === 'provider' || body.metadataSource === 'manual' || body.metadataSource === 'ai' ? { metadataSource: body.metadataSource } : {}),
                 ...(placement === undefined ? {} : { placement }),
                 connection,
                 createdAt: body.createdAt,
@@ -693,7 +701,7 @@ export class MemoryBodyRegistry {
       ...publicConnection,
       capabilities: descriptor.capabilities,
     }
-    const { providerId: _providerId, externalId: _externalId, connection: _connection, openViking: _openViking, ...metadata } = body
+    const { providerId: _providerId, externalId: _externalId, metadataSource: _metadataSource, connection: _connection, openViking: _openViking, ...metadata } = body
     return { ...metadata, dbPath: provider.id === 'mnemon-native' ? provider.location : '', provider }
   }
 

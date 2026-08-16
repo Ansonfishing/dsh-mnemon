@@ -151,7 +151,9 @@ describe('MnemonService', () => {
     const { service } = fixture()
     const provider = {
       id: 'hindsight' as const,
-      discover: vi.fn(async () => [{ externalId: 'bank-1', name: 'Product bank', description: 'Mapped from Hindsight.', connection: { bankId: 'bank-1', budget: 'mid' } }]),
+      discover: vi.fn()
+        .mockResolvedValueOnce([{ externalId: 'bank-1', name: 'Product bank', description: 'Mapped from Hindsight.', connection: { bankId: 'bank-1', budget: 'mid' } }])
+        .mockResolvedValueOnce([{ externalId: 'bank-1', name: 'Upstream renamed bank', description: 'Refreshed from Hindsight.', connection: { bankId: 'bank-1', budget: 'high' } }]),
       status: vi.fn(async () => ({ healthy: true })),
       search: vi.fn(async () => ({ results: [] })),
       graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
@@ -166,7 +168,14 @@ describe('MnemonService', () => {
       expect.objectContaining({ name: 'Product bank', description: 'Mapped from Hindsight.', active: true, provider: expect.objectContaining({ id: 'hindsight' }) }),
     ]))
     const body = service.memoryBodies.list().find(item => item.provider.id === 'hindsight')!
-    await expect(service.reconnectBody(body.id)).resolves.toMatchObject({ id: body.id, healthy: true })
+    service.updateBodyMetadata([{ memoryBodyId: body.id, title: '产品长期洞察', description: 'AI 维护的产品范围、用户反馈与关键取舍。' }])
+    await expect(service.reconnectBody(body.id)).resolves.toMatchObject({
+      id: body.id,
+      name: '产品长期洞察',
+      description: 'AI 维护的产品范围、用户反馈与关键取舍。',
+      provider: expect.objectContaining({ settings: expect.objectContaining({ budget: 'high' }) }),
+      healthy: true,
+    })
     expect(provider.discover).toHaveBeenCalledTimes(2)
     expect(provider.status).toHaveBeenCalledOnce()
   })
