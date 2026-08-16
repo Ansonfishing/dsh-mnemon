@@ -25,11 +25,87 @@ interface ProviderSettingsSectionProps {
 
 interface ServiceDraft {
   settings: MemoryProviderConnection
-  clearSecrets: string[]
+}
+
+const SAVED_SECRET_MASK = '••••••••••••'
+
+const PREVIEW_CAPABILITIES: MemoryProviderDescriptor['capabilities'] = {
+  search: false,
+  browse: false,
+  graph: false,
+  entities: false,
+  related: false,
+  remember: false,
+  link: false,
+  forget: false,
+  writeMode: 'exact',
+  deletionMode: 'unsupported',
+}
+
+function providerPreview(provider: Pick<MemoryProviderDescriptor, 'id' | 'label' | 'kind' | 'workspaceBinding'>): MemoryProviderDescriptor {
+  return { ...provider, origin: 'third-party', summary: '', capabilities: PREVIEW_CAPABILITIES, fields: [] }
+}
+
+const PROVIDER_PREVIEWS: MemoryProviderDescriptor[] = [
+  providerPreview({ id: 'openviking', label: 'OpenViking', kind: 'remote', workspaceBinding: 'provider-global' }),
+  providerPreview({ id: 'honcho', label: 'Honcho', kind: 'remote', workspaceBinding: 'provider-global' }),
+  providerPreview({ id: 'mem0', label: 'Mem0', kind: 'remote', workspaceBinding: 'provider-global' }),
+  providerPreview({ id: 'hindsight', label: 'Hindsight', kind: 'remote', workspaceBinding: 'provider-global' }),
+  providerPreview({ id: 'holographic', label: 'Holographic', kind: 'local', workspaceBinding: 'optional-override' }),
+  providerPreview({ id: 'retaindb', label: 'RetainDB', kind: 'remote', workspaceBinding: 'provider-global' }),
+  providerPreview({ id: 'byterover', label: 'ByteRover', kind: 'local', workspaceBinding: 'optional-override' }),
+  providerPreview({ id: 'supermemory', label: 'Supermemory', kind: 'remote', workspaceBinding: 'provider-global' }),
+]
+
+const EMPTY_PROVIDER_CATALOG: MemoryProviderServiceCatalog = {
+  providers: PROVIDER_PREVIEWS,
+  items: PROVIDER_PREVIEWS.map(provider => ({ providerId: provider.id, enabled: false, configured: false, settings: {}, configuredSecrets: [] })),
+  generatedAt: '',
+}
+
+const providerCatalogCache = new WeakMap<ClientConnectionHandle, Map<string, MemoryProviderServiceCatalog>>()
+
+function catalogRouteKey(sessionId?: string, workspaceId?: string): string {
+  return `${sessionId ?? ''}\u0000${workspaceId ?? ''}`
+}
+
+function cachedCatalog(connection: ClientConnectionHandle | undefined, key: string): MemoryProviderServiceCatalog | undefined {
+  return connection === undefined ? undefined : providerCatalogCache.get(connection)?.get(key)
+}
+
+function cacheCatalog(connection: ClientConnectionHandle | undefined, key: string, catalog: MemoryProviderServiceCatalog): void {
+  if (connection === undefined) return
+  let routes = providerCatalogCache.get(connection)
+  if (routes === undefined) {
+    routes = new Map()
+    providerCatalogCache.set(connection, routes)
+  }
+  routes.set(key, catalog)
 }
 
 function message(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason)
+}
+
+function stabilizeProviderCard(element: HTMLElement): void {
+  const view = element.ownerDocument.defaultView
+  let scrollContainer: HTMLElement | undefined
+
+  for (let ancestor = element.parentElement; ancestor !== null; ancestor = ancestor.parentElement) {
+    const overflowY = view?.getComputedStyle(ancestor).overflowY ?? ancestor.style.overflowY
+    if (scrollContainer !== undefined && overflowY === 'hidden' && ancestor.scrollTop !== 0) ancestor.scrollTop = 0
+    if (scrollContainer === undefined && (overflowY === 'auto' || overflowY === 'scroll') && ancestor.scrollHeight > ancestor.clientHeight) {
+      scrollContainer = ancestor
+    }
+    if (ancestor.getAttribute('role') === 'dialog') break
+  }
+
+  if (scrollContainer === undefined) return
+  const header = element.firstElementChild instanceof HTMLElement ? element.firstElementChild : element
+  const headerRect = header.getBoundingClientRect()
+  const containerRect = scrollContainer.getBoundingClientRect()
+  if (headerRect.top < containerRect.top) scrollContainer.scrollTop -= containerRect.top - headerRect.top
+  else if (headerRect.bottom > containerRect.bottom) scrollContainer.scrollTop += headerRect.bottom - containerRect.bottom
 }
 
 function serviceFields(provider: MemoryProviderDescriptor): MemoryProviderConfigField[] {
@@ -41,13 +117,13 @@ function serviceDefaults(provider: MemoryProviderDescriptor): MemoryProviderConn
 }
 
 function draftFor(provider: MemoryProviderDescriptor, service: MemoryProviderServiceView): ServiceDraft {
-  return { settings: { ...serviceDefaults(provider), ...service.settings }, clearSecrets: [] }
+  return { settings: { ...serviceDefaults(provider), ...service.settings } }
 }
 
 function configurationComplete(provider: MemoryProviderDescriptor, draft: ServiceDraft, service: MemoryProviderServiceView): boolean {
   return serviceFields(provider).every(field => {
     if (!field.required) return true
-    if (field.input === 'secret' && service.configuredSecrets.includes(field.key) && !draft.clearSecrets.includes(field.key)) return true
+    if (field.input === 'secret' && service.configuredSecrets.includes(field.key)) return true
     const value = draft.settings[field.key]
     return field.input === 'boolean' ? typeof value === 'boolean' : String(value ?? '').trim() !== ''
   })
@@ -61,34 +137,44 @@ function fieldLabel(t: MnemonTranslate, field: MemoryProviderConfigField): strin
   return labels[field.key] === undefined ? field.label : t(labels[field.key]!)
 }
 
+function SecretVisibilityIcon({ visible }: { visible: boolean }): JSX.Element {
+  return <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <path d="M2.3 10s2.8-4.5 7.7-4.5 7.7 4.5 7.7 4.5-2.8 4.5-7.7 4.5S2.3 10 2.3 10Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="10" cy="10" r="2.1" stroke="currentColor" strokeWidth="1.4" />
+    {visible && <path d="m3.5 3.5 13 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />}
+  </svg>
+}
+
 function ServiceField(props: {
   field: MemoryProviderConfigField
   value: string | number | boolean | undefined
   configuredSecrets: string[]
-  clearing: boolean
   disabled: boolean
   t: MnemonTranslate
   onChange: (value: string | number | boolean) => void
-  onClear: (clear: boolean) => void
 }): JSX.Element {
+  const [secretVisible, setSecretVisible] = useState(false)
   const label = fieldLabel(props.t, props.field)
   const savedSecret = props.configuredSecrets.includes(props.field.key)
-  const required = props.field.required && (!savedSecret || props.clearing)
+  const required = props.field.required && !savedSecret
+  const secret = props.field.input === 'secret'
+  const fieldValue = String(props.value ?? '')
+  const showingSavedMask = secret && savedSecret && fieldValue === ''
+  const displayValue = showingSavedMask ? SAVED_SECRET_MASK : fieldValue
   const input = props.field.input === 'boolean'
     ? <label className={css.providerBoolean}><input aria-label={label} type="checkbox" checked={Boolean(props.value)} disabled={props.disabled} onChange={event => props.onChange(event.target.checked)} /><span>{label}</span></label>
     : props.field.input === 'select'
       ? <label>{label}<select aria-label={label} value={String(props.value ?? '')} required={required} disabled={props.disabled} onChange={event => props.onChange(event.target.value)}>{props.field.options?.map(option => <option key={option.value} value={option.value}>{props.t(`overview.providerOption.${option.value}` as MnemonKey)}</option>)}</select></label>
-      : <label>{label}<input aria-label={label} type={props.field.input === 'secret' ? 'password' : props.field.input === 'number' ? 'number' : props.field.input === 'url' ? 'url' : 'text'} value={String(props.value ?? '')} required={required} disabled={props.disabled} autoComplete={props.field.input === 'secret' ? 'new-password' : undefined} placeholder={savedSecret ? props.t(props.clearing ? 'config.providerSecretRemovalPlaceholder' : 'overview.providerApiKeyKeep') : props.field.placeholder ?? (props.field.input === 'secret' ? props.t('overview.providerApiKeyOptional') : undefined)} maxLength={props.field.input === 'secret' ? 8000 : 2000} step={props.field.input === 'number' ? 'any' : undefined} onChange={event => {
-        const value = event.target.value
+      : <label>{label}<div className={secret ? css.providerSecretInput : undefined}><input aria-label={label} type={secret ? secretVisible && !showingSavedMask ? 'text' : 'password' : props.field.input === 'number' ? 'number' : props.field.input === 'url' ? 'url' : 'text'} value={displayValue} required={required} disabled={props.disabled} autoComplete={secret ? 'new-password' : undefined} placeholder={props.field.placeholder ?? (secret ? props.t('overview.providerApiKeyOptional') : undefined)} maxLength={secret ? 8000 : 2000} step={props.field.input === 'number' ? 'any' : undefined} onFocus={event => {
+        if (showingSavedMask) event.currentTarget.select()
+      }} onClick={event => {
+        if (showingSavedMask) event.currentTarget.select()
+      }} onChange={event => {
+        const value = showingSavedMask ? event.target.value.replace(SAVED_SECRET_MASK, '') : event.target.value
         props.onChange(value)
-        if (props.field.input === 'secret' && value.trim() !== '' && props.clearing) props.onClear(false)
-      }} /></label>
+      }} />{secret && <button type="button" className={css.providerSecretVisibility} aria-label={props.t(secretVisible ? 'config.providerSecretHide' : 'config.providerSecretShow')} title={props.t(showingSavedMask ? 'config.providerSecretRevealReplacement' : secretVisible ? 'config.providerSecretHide' : 'config.providerSecretShow')} aria-pressed={secretVisible} disabled={props.disabled || showingSavedMask} onClick={() => setSecretVisible(value => !value)}><SecretVisibilityIcon visible={secretVisible} /></button>}</div></label>
   return <div className={css.providerFieldControl} data-input={props.field.input}>
     {input}
-    {props.field.input === 'secret' && savedSecret && <div className={css.providerSecretMeta} data-clearing={props.clearing || undefined}>
-      <span>{props.t(props.clearing ? 'config.providerSecretRemovalPending' : 'config.providerSecretStored')}</span>
-      <button type="button" disabled={props.disabled} onClick={() => props.onClear(!props.clearing)}>{props.t(props.clearing ? 'config.providerSecretUndo' : 'config.providerSecretRemove')}</button>
-    </div>}
   </div>
 }
 
@@ -118,14 +204,9 @@ function ProviderServiceForm(props: {
     setFailed(null); setSaved(false)
   }
 
-  const setClearing = (key: string, clear: boolean): void => {
-    setDraft(current => ({ ...current, clearSecrets: clear ? [...new Set([...current.clearSecrets, key])] : current.clearSecrets.filter(candidate => candidate !== key) }))
-    setFailed(null); setSaved(false)
-  }
-
   return <form className={css.providerServiceForm} onSubmit={event => void submit(event)} data-provider={props.provider.id}>
     <p className={css.providerServicePrompt}>{props.t(props.service.configured ? 'config.providerServiceHint' : 'config.providerEnableHint')}</p>
-    <div className={css.providerSettingsGrid}>{serviceFields(props.provider).map(field => <ServiceField key={field.key} field={field} value={draft.settings[field.key]} configuredSecrets={props.service.configuredSecrets} clearing={draft.clearSecrets.includes(field.key)} disabled={props.disabled || saving} t={props.t} onChange={value => update(field.key, value)} onClear={clear => setClearing(field.key, clear)} />)}</div>
+    <div className={css.providerSettingsGrid}>{serviceFields(props.provider).map(field => <ServiceField key={field.key} field={field} value={draft.settings[field.key]} configuredSecrets={props.service.configuredSecrets} disabled={props.disabled || saving} t={props.t} onChange={value => update(field.key, value)} />)}</div>
     <div className={`${css.memoryConfigFooter} ${css.providerServiceFooter}`}>
       <div className={css.configFeedback} aria-live="polite">{failed !== null && <span className={css.error}>{props.t('config.providerSaveFailed', { error: failed })}</span>}{saved && <span className={css.packSuccess}>{props.t('config.providerServiceSaved')}</span>}</div>
       <button type="submit" className={css.primaryPill} disabled={props.disabled || saving || !configurationComplete(props.provider, draft, props.service)}>{saving ? props.t('config.saving') : props.t(props.service.configured ? 'config.saveProviderService' : 'config.enableProvider')}</button>
@@ -139,28 +220,30 @@ function ProviderPanel(props: {
   disabled: boolean
   t: MnemonTranslate
   onSave: (provider: MemoryProviderDescriptor, draft: ServiceDraft) => Promise<void>
-  onToggle: (provider: MemoryProviderDescriptor, enabled: boolean) => Promise<void>
+  onToggle: (provider: MemoryProviderDescriptor, enabled: boolean) => Promise<MemoryProviderServiceView>
 }): JSX.Element {
   const [enabled, setEnabled] = useState(props.service.enabled)
   const [expanded, setExpanded] = useState(props.service.enabled && !props.service.configured)
   const [toggling, setToggling] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
   const rowRef = useRef<HTMLDivElement>(null)
-  const keepCollapsedHeaderVisible = useRef(false)
+  const stabilizeAfterLayout = useRef(false)
 
   useLayoutEffect(() => {
-    if (expanded || !keepCollapsedHeaderVisible.current) return
-    keepCollapsedHeaderVisible.current = false
-    rowRef.current?.scrollIntoView?.({ block: 'nearest' })
-  }, [expanded])
+    if (!stabilizeAfterLayout.current || rowRef.current === null) return
+    stabilizeAfterLayout.current = false
+    stabilizeProviderCard(rowRef.current)
+  }, [enabled, expanded])
 
   useEffect(() => {
+    if (toggling) return
     setEnabled(props.service.enabled)
     if (!props.service.enabled) setExpanded(false)
-  }, [props.service.enabled])
+  }, [props.service.enabled, toggling])
 
   const toggle = async (next: boolean): Promise<void> => {
     setFailed(null)
+    stabilizeAfterLayout.current = true
     if (next && !props.service.configured) {
       setEnabled(true)
       setExpanded(true)
@@ -171,18 +254,18 @@ function ProviderPanel(props: {
       setExpanded(false)
       return
     }
+    const restoreEnabled = enabled
     const restoreExpanded = expanded
-    if (!next && expanded) {
-      keepCollapsedHeaderVisible.current = true
-      setExpanded(false)
-    }
+    setEnabled(next)
+    if (!next && expanded) setExpanded(false)
     setToggling(true)
     try {
-      await props.onToggle(props.provider, next)
-      setEnabled(next)
+      const updated = await props.onToggle(props.provider, next)
+      setEnabled(updated.enabled)
       if (!next) setExpanded(false)
     } catch (reason) {
-      if (!next && restoreExpanded) setExpanded(true)
+      setEnabled(restoreEnabled)
+      if (restoreExpanded) setExpanded(true)
       setFailed(message(reason))
     } finally {
       setToggling(false)
@@ -193,6 +276,10 @@ function ProviderPanel(props: {
     ? props.service.configured ? 'config.providerEnabled' : 'config.providerNeedsConfiguration'
     : props.service.configured ? 'config.providerDisabledConfigured' : 'config.providerDisabled'
   const controlDisabled = props.disabled || toggling
+  const toggleExpanded = (): void => {
+    stabilizeAfterLayout.current = true
+    setExpanded(value => !value)
+  }
   return <div
     ref={rowRef}
     className={css.providerRow}
@@ -203,12 +290,12 @@ function ProviderPanel(props: {
     aria-label={`${props.provider.label} ${props.t('config.providerServiceTitle')}`}
   >
     <div className={css.providerRowHeader}>
-      <button type="button" className={css.providerDisclosure} aria-expanded={expanded} disabled={!enabled || controlDisabled} onClick={() => setExpanded(value => !value)}>
+      <button type="button" className={css.providerDisclosure} aria-expanded={expanded} disabled={!enabled || controlDisabled} onClick={toggleExpanded}>
         <span className={css.providerIdentity}><ProviderIcon providerId={props.provider.id} className={css.providerMark} /><span><strong>{props.provider.label}</strong><small>{props.t(`overview.workspaceBinding.${props.provider.workspaceBinding}`)} · {props.t(`overview.providerSummary.${props.provider.id}` as MnemonKey)}</small></span></span>
         {enabled && <i className={css.providerChevron} aria-hidden="true">›</i>}
       </button>
       <div className={css.providerEnableControl}>
-        <span className={css.providerState} data-enabled={props.service.enabled || undefined}>{props.t(stateKey)}</span>
+        <span className={css.providerState} data-enabled={enabled || undefined}>{props.t(stateKey)}</span>
         <label className={css.providerToggle}>
           <input type="checkbox" aria-label={props.t('config.providerToggleAria', { provider: props.provider.label })} checked={enabled} disabled={controlDisabled} onChange={event => void toggle(event.target.checked)} />
           <span aria-hidden="true"><i /></span>
@@ -222,41 +309,67 @@ function ProviderPanel(props: {
 
 export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JSX.Element {
   const client = useMemo(() => props.connection === undefined ? null : new MnemonClient(props.connection, props.sessionId, props.workspaceId), [props.connection, props.sessionId, props.workspaceId])
-  const [catalog, setCatalog] = useState<MemoryProviderServiceCatalog | null>(null)
-  const [loading, setLoading] = useState(client !== null)
+  const routeKey = catalogRouteKey(props.sessionId, props.workspaceId)
+  const initialCatalog = cachedCatalog(props.connection, routeKey)
+  const [catalog, setCatalog] = useState<MemoryProviderServiceCatalog>(() => initialCatalog ?? EMPTY_PROVIDER_CATALOG)
+  const [loading, setLoading] = useState(client !== null && initialCatalog === undefined)
   const [failed, setFailed] = useState<string | null>(null)
 
   const load = useCallback(async (quiet = false) => {
     if (client === null) return
     if (!quiet) setLoading(true)
     setFailed(null)
-    try { setCatalog(await client.providerServices()) } catch (reason) { setFailed(message(reason)) } finally { if (!quiet) setLoading(false) }
-  }, [client])
+    try {
+      const next = await client.providerServices()
+      cacheCatalog(props.connection, routeKey, next)
+      setCatalog(next)
+    } catch (reason) {
+      setFailed(message(reason))
+    } finally {
+      if (!quiet) setLoading(false)
+    }
+  }, [client, props.connection, routeKey])
 
-  useEffect(() => { void load() }, [load, props.refreshKey])
+  useEffect(() => {
+    const cached = cachedCatalog(props.connection, routeKey)
+    setCatalog(cached ?? EMPTY_PROVIDER_CATALOG)
+    setLoading(client !== null && cached === undefined)
+    void load(cached !== undefined)
+  }, [client, load, props.connection, props.refreshKey, routeKey])
+
+  const acceptService = useCallback((service: MemoryProviderServiceView): void => {
+    setCatalog(current => {
+      const items = current.items.some(item => item.providerId === service.providerId)
+        ? current.items.map(item => item.providerId === service.providerId ? service : item)
+        : [...current.items, service]
+      const next = { ...current, items, generatedAt: new Date().toISOString() }
+      cacheCatalog(props.connection, routeKey, next)
+      return next
+    })
+  }, [props.connection, routeKey])
 
   const save = async (provider: MemoryProviderDescriptor, draft: ServiceDraft): Promise<void> => {
     if (client === null) throw new Error(props.t('config.providerUnavailable'))
     const settings = Object.fromEntries(Object.entries(draft.settings).filter(([key, value]) => serviceFields(provider).find(field => field.key === key)?.input !== 'secret' || String(value).trim() !== ''))
-    await client.updateProviderService({ providerId: provider.id, settings, enabled: true, ...(draft.clearSecrets.length === 0 ? {} : { clearSecrets: draft.clearSecrets }) })
-    await load(true)
+    acceptService(await client.updateProviderService({ providerId: provider.id, settings, enabled: true }))
   }
 
-  const toggle = async (provider: MemoryProviderDescriptor, enabled: boolean): Promise<void> => {
+  const toggle = async (provider: MemoryProviderDescriptor, enabled: boolean): Promise<MemoryProviderServiceView> => {
     if (client === null) throw new Error(props.t('config.providerUnavailable'))
-    await client.updateProviderService({ providerId: provider.id, settings: {}, enabled })
-    await load(true)
+    const updated = await client.updateProviderService({ providerId: provider.id, settings: {}, enabled })
+    acceptService(updated)
+    return updated
   }
 
-  const disabled = props.disabled || props.scopeChanging || client === null
+  const disabled = props.disabled || props.scopeChanging || client === null || loading || catalog.generatedAt === ''
   return <>
     {props.scopeChanging && <p className={css.scopeChanging} role="status">{props.t('config.saveScopeBeforeProviders')}</p>}
     {props.workspaceLabel !== undefined && <p className={css.providerTarget}>{props.t('config.providerTargetWorkspace', { workspace: props.workspaceLabel })}</p>}
-    {loading && <p className={css.providerLoading}>{props.t('config.loadingProviders')}</p>}
+    {loading && <span className={css.visuallyHidden} role="status">{props.t('config.loadingProviders')}</span>}
     {failed !== null && <div className={css.providerLoadError}><span className={css.error}>{props.t('config.providerLoadFailed', { error: failed })}</span><button type="button" className={css.textButton} onClick={() => void load()}>{props.t('config.retryProviders')}</button></div>}
-    {!loading && failed === null && catalog !== null && <div className={css.providerList}>{catalog.providers.map(provider => {
+    <div className={css.providerList} aria-busy={loading}>{catalog.providers.map(provider => {
       const service = catalog.items.find(item => item.providerId === provider.id) ?? { providerId: provider.id, enabled: false, configured: false, settings: {}, configuredSecrets: [] }
       return <ProviderPanel key={provider.id} provider={provider} service={service} disabled={disabled} t={props.t} onSave={save} onToggle={toggle} />
-    })}</div>}
+    })}</div>
   </>
 }

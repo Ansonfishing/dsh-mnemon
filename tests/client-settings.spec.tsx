@@ -344,6 +344,34 @@ describe('MnemonSettingsCard', () => {
     expect((view.getByLabelText('存入记忆按钮') as HTMLInputElement).checked).toBe(true)
   })
 
+  it('renders every third-party provider off while local settings hydrate', () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+    const providerSettings = new Promise<never>(() => {})
+    const call = vi.fn((channel: string, endpoint: string) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return providerSettings
+      if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return Promise.resolve({ ok: true as const, value: { root: '/active/.mnemon', scope: 'global' } })
+      return Promise.reject(new Error(`unexpected ${channel} ${endpoint}`))
+    })
+
+    render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call } } as ClientConnectionHandle} />)
+
+    expect(screen.getAllByRole('group', { name: /服务配置/ })).toHaveLength(8)
+    const toggles = screen.getAllByRole('checkbox', { name: /^启用 / }) as HTMLInputElement[]
+    expect(toggles).toHaveLength(8)
+    expect(toggles.every(toggle => !toggle.checked && toggle.disabled)).toBe(true)
+    expect(screen.getByRole('status').textContent).toBe('正在读取 Provider 配置…')
+  })
+
   it('edits a reusable provider service without creating a Memory Space', async () => {
     const snapshot = {
       status: 'ready' as const,
@@ -389,12 +417,22 @@ describe('MnemonSettingsCard', () => {
     expect(screen.queryByLabelText('记忆范围 URI')).toBeNull()
     expect(screen.queryByLabelText('记忆体名称')).toBeNull()
     expect(screen.queryByRole('checkbox', { name: '清除已保存的凭据' })).toBeNull()
-    expect(screen.getByText('已安全保存，留空不会更改')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '移除' }))
-    expect(screen.getByText('将在保存后移除')).toBeTruthy()
-    expect((screen.getByLabelText('API Key') as HTMLInputElement).placeholder).toBe('保存后将移除；输入新凭证可替换')
-    fireEvent.click(screen.getByRole('button', { name: '撤销' }))
-    expect(screen.getByText('已安全保存，留空不会更改')).toBeTruthy()
+    const apiKey = screen.getByLabelText('API Key') as HTMLInputElement
+    expect(apiKey.value).toBe('••••••••••••')
+    expect(apiKey.type).toBe('password')
+    expect(screen.queryByText(/已安全保存/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /移除已保存/ })).toBeNull()
+    const showCredential = screen.getByRole('button', { name: '显示凭证' }) as HTMLButtonElement
+    expect(showCredential.disabled).toBe(true)
+    fireEvent.change(apiKey, { target: { value: 'replacement-secret' } })
+    expect(showCredential.disabled).toBe(false)
+    fireEvent.click(showCredential)
+    expect(apiKey.type).toBe('text')
+    expect(apiKey.value).toBe('replacement-secret')
+    fireEvent.click(screen.getByRole('button', { name: '隐藏凭证' }))
+    expect(apiKey.type).toBe('password')
+    fireEvent.change(apiKey, { target: { value: '' } })
+    expect(apiKey.value).toBe('••••••••••••')
     fireEvent.click(screen.getByRole('button', { name: '保存服务配置' }))
 
     await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', {
@@ -406,6 +444,7 @@ describe('MnemonSettingsCard', () => {
     }))
     expect(await screen.findByText('服务配置已保存')).toBeTruthy()
     expect(disclosure.getAttribute('aria-expanded')).toBe('true')
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'provider-services')).toHaveLength(1)
     expect(call.mock.calls.some(([, endpoint]) => endpoint === 'body-create')).toBe(false)
   })
 
@@ -451,8 +490,12 @@ describe('MnemonSettingsCard', () => {
 
     const providerToggle = await screen.findByRole('checkbox', { name: '启用 Supermemory' }) as HTMLInputElement
     const providerCard = screen.getByRole('group', { name: 'Supermemory 服务配置' }) as HTMLDivElement
-    const scrollIntoView = vi.fn()
-    Object.defineProperty(providerCard, 'scrollIntoView', { configurable: true, value: scrollIntoView })
+    const scrollViewport = providerCard.parentElement as HTMLDivElement
+    scrollViewport.style.overflowY = 'auto'
+    Object.defineProperties(scrollViewport, { clientHeight: { configurable: true, value: 100 }, scrollHeight: { configurable: true, value: 1000 } })
+    const hiddenViewport = scrollViewport.parentElement as HTMLDivElement
+    hiddenViewport.style.overflowY = 'hidden'
+    hiddenViewport.scrollTop = 240
     expect(providerToggle.checked).toBe(false)
     expect(screen.queryByLabelText('服务地址')).toBeNull()
 
@@ -474,8 +517,17 @@ describe('MnemonSettingsCard', () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', expect.objectContaining({
       providerId: 'supermemory', enabled: false, settings: {},
     })))
-    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+    expect(hiddenViewport.scrollTop).toBe(0)
     expect(screen.queryByLabelText('服务地址')).toBeNull()
+
+    fireEvent.click(providerToggle)
+    await waitFor(() => expect(call).toHaveBeenLastCalledWith('/dsh-mnemon-write', 'provider-service-update', expect.objectContaining({
+      providerId: 'supermemory', enabled: true, settings: {},
+    })))
+    expect(providerToggle.checked).toBe(true)
+    fireEvent.click(screen.getByText('Supermemory'))
+    expect(screen.getByLabelText('服务地址')).toBeTruthy()
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'provider-services')).toHaveLength(1)
   })
 
   it('previews and safely imports one complete directory ZIP', async () => {
