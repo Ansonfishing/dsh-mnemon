@@ -23,11 +23,22 @@ const unexpected = paths.filter(path => !allowedRootFiles.has(path) && !(/^lib\/
 const clientBundle = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
 const hostLeaks = ['require("node:', "require('node:", '#region src/version-updates.ts', '#region src/rpc.ts']
   .filter(pattern => clientBundle.includes(pattern))
+const readmeFiles = ['README.md', 'README.zh-CN.md']
+const relativeReadmeImages = readmeFiles.flatMap((path) => {
+  const source = readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+  const markdownImages = [...source.matchAll(/!\[[^\]]*\]\(([^)\s]+)(?:\s+['"][^)]*['"])?\)/g)]
+  const htmlImages = [...source.matchAll(/<img\b[^>]*\bsrc=['"]([^'"]+)['"]/gi)]
+  return [...markdownImages, ...htmlImages]
+    .map(match => match[1])
+    .filter(source => !/^https:\/\//.test(source))
+    .map(source => `${path}: ${source}`)
+})
 
-if (missing.length > 0 || unexpected.length > 0 || hostLeaks.length > 0 || pack.unpackedSize > 1_500_000) {
+if (missing.length > 0 || unexpected.length > 0 || hostLeaks.length > 0 || relativeReadmeImages.length > 0 || pack.unpackedSize > 1_500_000) {
   if (missing.length > 0) console.error(`Missing package files:\n${missing.map(path => `- ${path}`).join('\n')}`)
   if (unexpected.length > 0) console.error(`Unexpected package files:\n${unexpected.map(path => `- ${path}`).join('\n')}`)
   if (hostLeaks.length > 0) console.error(`Host-only code leaked into lib/client.js:\n${hostLeaks.map(pattern => `- ${pattern}`).join('\n')}`)
+  if (relativeReadmeImages.length > 0) console.error(`README images must use absolute HTTPS URLs so npm can render assets excluded from the package:\n${relativeReadmeImages.map(image => `- ${image}`).join('\n')}`)
   if (pack.unpackedSize > 1_500_000) console.error(`Unpacked package is ${pack.unpackedSize} bytes; expected at most 1500000.`)
   process.exit(1)
 }
