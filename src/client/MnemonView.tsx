@@ -92,7 +92,7 @@ const LEGACY_NATIVE_CAPABILITIES: MemoryBodyProvider['capabilities'] = {
 }
 
 const MEMORY_PROVIDER_LABELS: Record<MemoryProviderId, string> = {
-  'mnemon-native': 'Mnemon Native',
+  'mnemon-native': 'mnemon',
   openviking: 'OpenViking',
   honcho: 'Honcho',
   mem0: 'Mem0',
@@ -105,7 +105,7 @@ const MEMORY_PROVIDER_LABELS: Record<MemoryProviderId, string> = {
 
 const LEGACY_PROVIDER_CATALOG: MemoryProviderDescriptor[] = [
   {
-    id: 'mnemon-native', label: 'Mnemon Native', kind: 'local', origin: 'native',
+    id: 'mnemon-native', label: 'mnemon', kind: 'local', origin: 'native',
     workspaceBinding: 'automatic',
     summary: 'Official local-first memory.', capabilities: LEGACY_NATIVE_CAPABILITIES, fields: [],
   },
@@ -133,7 +133,7 @@ function normalizeMemoryBody(body: MemoryBodyView): MemoryBodyView {
     ...body,
     provider: {
       id: 'mnemon-native',
-      label: 'Mnemon Native',
+      label: 'mnemon',
       kind: 'local',
       location: body.dbPath,
       apiKeyConfigured: false,
@@ -254,6 +254,10 @@ function PageHeader(props: { title: string; description: string; meta?: string; 
   )
 }
 
+function SectionSpinner({ label }: { label: string }): JSX.Element {
+  return <span className={css.sectionSpinner} role="status" aria-label={label} title={label}><i aria-hidden="true" /></span>
+}
+
 function ProgressiveFooter(props: { visible: number; total: number; pageSize: number; compact?: boolean; onMore: () => void }): JSX.Element | null {
   const t = useT()
   if (props.total === 0) return null
@@ -321,7 +325,7 @@ function EmptyState(props: { glyph: string; title: string; children: string }): 
 }
 
 function MemoryProviderBadge(props: { providerId: MemoryProviderId; label: string }): JSX.Element {
-  const compactLabel = props.providerId === 'mnemon-native' ? 'Mnemon' : props.label
+  const compactLabel = props.providerId === 'mnemon-native' ? 'mnemon' : props.label
   return <span className={css.providerBadge} data-provider={props.providerId} title={compactLabel}>{compactLabel}</span>
 }
 
@@ -952,7 +956,9 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const [graph, setGraph] = useState<MemoryGraphSnapshot | null>(null)
   const [catalog, setCatalog] = useState<MemoryBodyCatalog | null>(null)
   const [selected, setSelected] = useState<MemoryGraphNode | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [healthLoading, setHealthLoading] = useState(true)
+  const [graphLoading, setGraphLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [changing, setChanging] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -977,16 +983,25 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const [confirmingDeleteBody, setConfirmingDeleteBody] = useState<string | null>(null)
   const [deletingBody, setDeletingBody] = useState<string | null>(null)
   const [preview, setPreview] = useState<MemoryGraphNode | null>(null)
-  const graphPending = useRef(false)
+  const [metadataOpen, setMetadataOpen] = useState(false)
+  const [metadataSelection, setMetadataSelection] = useState<string[]>([])
+  const [metadataRunning, setMetadataRunning] = useState(false)
+  const [metadataNotice, setMetadataNotice] = useState<string | null>(null)
+  const [metadataError, setMetadataError] = useState<string | null>(null)
+  const loadRequest = useRef(0)
 
   const load = useCallback(async (quiet = false) => {
-    if (!quiet) setLoading(true)
+    const request = ++loadRequest.current
+    setCatalogLoading(true)
+    setHealthLoading(true)
+    setGraphLoading(true)
     setError(null)
+    let directoryUnavailable = false
     try {
-      // The directory is the control plane for activation and must remain
-      // usable even when a provider's graph projection is slow. Resolve and
-      // render it before starting the best-effort live snapshot refresh.
-      const nextCatalog = await props.client.bodies().then(next => { setCatalogUnavailable(false); return next }).catch(() => {
+      // Render the control-plane directory first. Health and graph I/O then
+      // resolve independently without holding the cards or each other back.
+      const nextCatalog = await props.client.bodyDirectory().then(next => { setCatalogUnavailable(false); return next }).catch(() => {
+        directoryUnavailable = true
         setCatalogUnavailable(!props.catalogKnown)
         return {
           items: props.fallbackBodies,
@@ -999,24 +1014,32 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
       })
       const normalizedProviders = Array.isArray(nextCatalog.providers) && nextCatalog.providers.length > 0 ? nextCatalog.providers : LEGACY_PROVIDER_CATALOG
       const normalizedCatalog = { ...nextCatalog, providers: normalizedProviders, items: nextCatalog.items.map(normalizeMemoryBody) }
+      if (request !== loadRequest.current) return
       setProviderDrafts(current => mergeProviderDefaults(normalizedCatalog.providers, current))
       setCatalog(normalizedCatalog)
-      if (!graphPending.current) {
-        graphPending.current = true
-        void props.client.graph().then(next => {
-          const enriched = enrichMultiSpaceGraph(next, normalizedCatalog.items)
-          setGraph(enriched)
-          setSelected(current => current === null ? null : enriched.nodes.find(node => graphNodeKey(node) === graphNodeKey(current)) ?? null)
-        }).catch(reason => {
-          setError(message(reason))
-        }).finally(() => {
-          graphPending.current = false
-          setLoading(false)
-        })
-      }
+      setCatalogLoading(false)
+      void props.client.bodies().then(next => {
+        if (request !== loadRequest.current) return
+        const full = { ...next, providers: Array.isArray(next.providers) && next.providers.length > 0 ? next.providers : normalizedProviders, items: next.items.map(normalizeMemoryBody) }
+        setCatalog(full)
+      }).catch(reason => {
+        if (request === loadRequest.current && !quiet && !directoryUnavailable) setError(message(reason))
+      }).finally(() => { if (request === loadRequest.current) setHealthLoading(false) })
+      void props.client.graph().then(next => {
+        if (request !== loadRequest.current) return
+        const enriched = enrichMultiSpaceGraph(next, normalizedCatalog.items)
+        setGraph(enriched)
+        setSelected(current => current === null ? null : enriched.nodes.find(node => graphNodeKey(node) === graphNodeKey(current)) ?? null)
+      }).catch(reason => {
+        if (request === loadRequest.current && !directoryUnavailable) setError(message(reason))
+      }).finally(() => { if (request === loadRequest.current) setGraphLoading(false) })
     } catch (reason) {
-      setError(message(reason))
-      setLoading(false)
+      if (request === loadRequest.current) {
+        setError(message(reason))
+        setCatalogLoading(false)
+        setHealthLoading(false)
+        setGraphLoading(false)
+      }
     }
   }, [props.catalogKnown, props.client, props.fallbackBodies, props.fallbackDirectory])
 
@@ -1113,6 +1136,19 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
     } catch (reason) { setError(message(reason)) } finally { setDeletingBody(null) }
   }
 
+  const maintainMetadata = async () => {
+    if (metadataSelection.length === 0) return
+    setMetadataRunning(true); setError(null); setMetadataError(null); setMetadataNotice(null)
+    try {
+      const result = await props.client.maintainBodyMetadata(metadataSelection)
+      setMetadataNotice(result.summary || t('overview.metadataCompleted', { count: result.updates.length }))
+      setMetadataOpen(false)
+      setMetadataSelection([])
+      await load(true)
+      props.onMutate()
+    } catch (reason) { setMetadataError(message(reason)) } finally { setMetadataRunning(false) }
+  }
+
   const generated = graph === null ? t('overview.waitingSnapshot') : t('overview.updatedAt', { time: new Date(graph.generatedAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }) })
   const graphSpaces = graph?.nodes.filter(node => graphNodeKind(node) === 'space').length ?? 0
   const graphEntities = graph?.nodes.filter(node => graphNodeKind(node) === 'entity').length ?? 0
@@ -1123,6 +1159,8 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const editingBodyView = editingBody === null ? undefined : catalog?.items.find(body => body.id === editingBody)
   const deletingBodyView = confirmingDeleteBody === null ? undefined : catalog?.items.find(body => body.id === confirmingDeleteBody)
   const providers = catalog?.providers ?? []
+  const metadataCandidates = catalog?.items.filter(body => body.active && body.providerEnabled !== false) ?? []
+  const loading = catalogLoading || healthLoading || graphLoading
   const selectedProvider = providers.find(provider => provider.id === bodyProviderId)
   const nativeBodyCount = catalog?.items.filter(body => body.provider.id === 'mnemon-native').length ?? 0
   const canDeleteBody = (body: MemoryBodyView): boolean => body.provider.id !== 'mnemon-native' || nativeBodyCount > 1
@@ -1205,7 +1243,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
           return <label key={capability} data-selected={selected || undefined}><input type="checkbox" checked={selected} onChange={() => toggleRequiredCapability(capability)} /><i className={css.choiceControl} data-kind="check" aria-hidden="true" /><span>{t(`overview.capability.${capability}`)}</span></label>
         })}</fieldset>
         <div className={css.placementCandidates}>
-          <span data-selected="true"><ProviderIcon providerId="mnemon-native" className={css.candidateIcon} /><span><strong>Mnemon Native</strong><small>{t('overview.candidateNativeReady')}</small></span><i className={css.choiceControl} data-kind="check" aria-hidden="true" /></span>
+          <span data-selected="true"><ProviderIcon providerId="mnemon-native" className={css.candidateIcon} /><span><strong>mnemon</strong><small>{t('overview.candidateNativeReady')}</small></span><i className={css.choiceControl} data-kind="check" aria-hidden="true" /></span>
           {providers.filter(provider => provider.id !== 'mnemon-native').map(provider => {
             const disabled = provider.serviceConfigured === false || (placementDataBoundary === 'local-only' && provider.kind === 'remote')
             const selected = automaticProviderIds.includes(provider.id)
@@ -1225,32 +1263,48 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
       <PageHeader title={appearance.surface === 'sidebar' ? t('nav.overview') : t('overview.title')} description={t(appearance.surface === 'sidebar' ? 'overview.pageDescription' : 'overview.description')} meta={t('overview.interval')}
         action={<button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void load()}>{loading ? t('overview.syncing') : t('overview.syncNow')}</button>} />
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
+      {metadataNotice !== null && <div className={css.inlineNotice} role="status">{metadataNotice}</div>}
       <section className={css.bodyDirectory} aria-label={t('overview.directory')}>
+        {(catalogLoading || healthLoading) && <SectionSpinner label={catalogLoading ? t('overview.directoryLoading') : t('overview.healthLoading')} />}
         <div className={css.bodyDirectoryHeader}>
           <div><h3>{t('overview.directory')}</h3><p>{t('overview.directory.description')}</p><code className={css.bodyDirectoryPath}>{catalogUnavailable ? t('overview.directory.unsynced') : catalog?.directory || props.fallbackDirectory || t('overview.directory.waiting')}</code></div>
-          {appearance.surface === 'sidebar' ? <div className={appearance.classes.bodyDirectoryActions}><strong>{catalogUnavailable ? t('overview.directory.unsyncedBadge') : `${catalog?.activeCount ?? '—'} / ${catalog?.total ?? '—'} ${t('common.active')}`}</strong>{props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} onClick={() => setCreatingBodyOpen(true)}>{t('overview.createTitle')}</button>}</div> : <strong>{catalogUnavailable ? t('overview.directory.unsyncedBadge') : `${catalog?.activeCount ?? '—'} / ${catalog?.total ?? '—'} ${t('common.active')}`}</strong>}
+          <div className={appearance.surface === 'sidebar' ? appearanceClass(css.bodyDirectoryControls, appearance.classes.bodyDirectoryActions) : css.bodyDirectoryControls}>
+            <strong>{catalogUnavailable ? t('overview.directory.unsyncedBadge') : `${catalog?.activeCount ?? '—'} / ${catalog?.total ?? '—'} ${t('common.active')}`}</strong>
+            {props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} disabled={!props.agentAvailable || metadataCandidates.length === 0} title={!props.agentAvailable ? t('overview.metadataUnavailable') : undefined} onClick={() => { setMetadataSelection([]); setMetadataError(null); setMetadataOpen(true) }}>{t('overview.metadataAction')}</button>}
+            {appearance.surface === 'sidebar' && props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} onClick={() => setCreatingBodyOpen(true)}>{t('overview.createTitle')}</button>}
+          </div>
         </div>
         <div className={css.bodyGrid}>
           {catalog?.items.map(body => (
-            <article key={body.id} className={css.bodyCard} data-provider={body.provider.id} data-active={body.active || undefined} data-healthy={body.healthy || undefined} data-mnemon-default={body.mnemonDefault || undefined} data-editing={(appearance.surface === 'buildin' && editingBody === body.id) || undefined} title={body.error}>
+            <article key={body.id} className={css.bodyCard} data-provider={body.provider.id} data-active={body.active || undefined} data-healthy={!body.statusLoading && body.healthy || undefined} data-status-loading={body.statusLoading || undefined} data-mnemon-default={body.mnemonDefault || undefined} data-editing={(appearance.surface === 'buildin' && editingBody === body.id) || undefined} title={body.statusLoading ? undefined : body.error}>
               {appearance.surface === 'buildin'
                 ? editingBody === body.id
                   ? bodyEditForm(body)
-                  : <><div className={css.bodyCardTop}><span className={css.bodySignal} /><div><strong>{body.name}</strong><code>{body.id}</code><div className={css.bodyProviderRow}><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} /><small className={css.bodyHealth}>{body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small>{body.mnemonDefault && <small className={css.mnemonDefaultBadge}>{t('overview.mnemonDefault')}</small>}</div></div><div className={css.bodyCardActions}>{bodyToggle(body)}<button type="button" className={css.bodyEditButton} aria-label={t('overview.editBodyAria', { name: body.name })} title={t('overview.editBody')} disabled={!props.writeEnabled} onClick={() => beginEdit(body)}>✎</button></div></div><p>{body.description || t('overview.noDescription')}</p>{placementReceipt(body)}<footer>{body.provider.id !== 'mnemon-native' ? <><span>{t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}</span><span title={body.provider.location}>{body.provider.location || body.provider.label}</span></> : <><span>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></>}</footer></>
-                : <><div className={appearance.classes.bodyCardHeader}><div className={appearance.classes.bodyCardIdentity}><span className={css.bodySignal} /><div><strong>{body.name}</strong><div className={appearance.classes.bodyCardMeta}><code>{body.id}</code><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} /><small className={css.bodyHealth}>{body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small>{body.mnemonDefault && <small className={css.mnemonDefaultBadge}>{t('overview.mnemonDefault')}</small>}</div></div></div>{bodyToggle(body)}</div><p title={body.description || t('overview.noDescription')}>{body.description || t('overview.noDescription')}</p>{placementReceipt(body)}<footer className={appearance.classes.bodyCardFooter}><div className={appearance.classes.bodyCardStats}>{body.provider.id !== 'mnemon-native' ? <><span>{t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}</span><span title={body.provider.location}>{body.provider.location || body.provider.label}</span></> : <><span>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></>}</div><div className={css.bodyCardActions}><button type="button" className={bodyEditActionClass} aria-label={t('overview.editBodyAria', { name: body.name })} disabled={!props.writeEnabled || deletingBody === body.id} onClick={() => beginEdit(body)}>{t('overview.editBody')}</button><button type="button" className={bodyDeleteActionClass} aria-label={t(body.provider.id !== 'mnemon-native' ? 'overview.disconnectBodyAria' : 'overview.deleteBodyAria', { name: body.name })} title={canDeleteBody(body) ? undefined : t('overview.lastStoreDeleteHint')} disabled={!props.writeEnabled || deletingBody === body.id || !canDeleteBody(body)} onClick={() => setConfirmingDeleteBody(body.id)}>{body.provider.id !== 'mnemon-native' ? t('overview.disconnectBody') : t('overview.deleteBody')}</button></div></footer></>}
+                  : <><div className={css.bodyCardTop}><span className={css.bodySignal} /><div><strong>{body.name}</strong><code>{body.id}</code><div className={css.bodyProviderRow}><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} /><small className={css.bodyHealth}>{body.statusLoading ? t('overview.storageChecking') : body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small>{body.mnemonDefault && <small className={css.mnemonDefaultBadge}>{t('overview.mnemonDefault')}</small>}</div></div><div className={css.bodyCardActions}>{bodyToggle(body)}<button type="button" className={css.bodyEditButton} aria-label={t('overview.editBodyAria', { name: body.name })} title={t('overview.editBody')} disabled={!props.writeEnabled} onClick={() => beginEdit(body)}>✎</button></div></div><p>{body.description || t('overview.noDescription')}</p>{placementReceipt(body)}<footer>{body.provider.id !== 'mnemon-native' ? <><span>{t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}</span><span title={body.provider.location}>{body.provider.location || body.provider.label}</span></> : <><span>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></>}</footer></>
+                : <><div className={appearance.classes.bodyCardHeader}><div className={appearance.classes.bodyCardIdentity}><span className={css.bodySignal} /><div><strong>{body.name}</strong><div className={appearance.classes.bodyCardMeta}><code>{body.id}</code><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} /><small className={css.bodyHealth}>{body.statusLoading ? t('overview.storageChecking') : body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small>{body.mnemonDefault && <small className={css.mnemonDefaultBadge}>{t('overview.mnemonDefault')}</small>}</div></div></div>{bodyToggle(body)}</div><p title={body.description || t('overview.noDescription')}>{body.description || t('overview.noDescription')}</p>{placementReceipt(body)}<footer className={appearance.classes.bodyCardFooter}><div className={appearance.classes.bodyCardStats}>{body.provider.id !== 'mnemon-native' ? <><span>{t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}</span><span title={body.provider.location}>{body.provider.location || body.provider.label}</span></> : <><span>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></>}</div><div className={css.bodyCardActions}><button type="button" className={bodyEditActionClass} aria-label={t('overview.editBodyAria', { name: body.name })} disabled={!props.writeEnabled || deletingBody === body.id} onClick={() => beginEdit(body)}>{t('overview.editBody')}</button><button type="button" className={bodyDeleteActionClass} aria-label={t(body.provider.id !== 'mnemon-native' ? 'overview.disconnectBodyAria' : 'overview.deleteBodyAria', { name: body.name })} title={canDeleteBody(body) ? undefined : t('overview.lastStoreDeleteHint')} disabled={!props.writeEnabled || deletingBody === body.id || !canDeleteBody(body)} onClick={() => setConfirmingDeleteBody(body.id)}>{body.provider.id !== 'mnemon-native' ? t('overview.disconnectBody') : t('overview.deleteBody')}</button></div></footer></>}
             </article>
           ))}
           {catalog?.total === 0 && <div className={css.bodyDirectoryEmpty}><span>◇</span><div><strong>{catalogUnavailable ? t('overview.unsyncedTitle') : t('overview.emptyTitle')}</strong><p>{catalogUnavailable ? t('overview.unsyncedShort') : t('overview.emptyShort')}</p></div></div>}
         </div>
         {appearance.surface === 'buildin' && props.writeEnabled && !catalogUnavailable && <details className={css.bodyCreate} open={catalog?.total === 0 ? true : undefined}><summary>{t('overview.create')}</summary>{bodyCreateForm}</details>}
       </section>
-      <ReadSourcePanel title={t('overview.snapshotSources')} hint={t('overview.snapshotSourcesHint')} sources={graphSources} />
+      <div className={css.asyncRegion}>{graphLoading && <SectionSpinner label={t('overview.snapshotLoading')} />}<ReadSourcePanel title={t('overview.snapshotSources')} hint={t('overview.snapshotSourcesHint')} sources={graphSources} /></div>
       {appearance.surface === 'sidebar' && creatingBodyOpen && <SidebarModal title={t('overview.createTitle')} description={t('overview.createDialogHint')} busy={creating} wide onClose={() => setCreatingBodyOpen(false)}>{bodyCreateForm}</SidebarModal>}
+      {metadataOpen && <SidebarModal title={t('overview.metadataTitle')} description={t('overview.metadataDescription')} busy={metadataRunning} wide onClose={() => setMetadataOpen(false)}><div className={css.metadataDialog}>
+        <div className={css.metadataToolbar}><span>{t('overview.metadataSelected', { count: metadataSelection.length })}</span><button type="button" className={css.ghostButton} disabled={metadataRunning} onClick={() => setMetadataSelection(metadataSelection.length === metadataCandidates.length ? [] : metadataCandidates.map(body => body.id))}>{metadataSelection.length === metadataCandidates.length ? t('overview.metadataClear') : t('overview.metadataSelectAll')}</button></div>
+        <div className={css.metadataList}>{metadataCandidates.map(body => {
+          const selected = metadataSelection.includes(body.id)
+          return <label key={body.id} data-selected={selected || undefined}><input type="checkbox" checked={selected} disabled={metadataRunning} onChange={event => setMetadataSelection(current => event.target.checked ? [...new Set([...current, body.id])] : current.filter(id => id !== body.id))} /><i className={css.choiceControl} data-kind="check" aria-hidden="true" /><span><strong>{body.name}</strong><small>{body.description || t('overview.noDescription')}</small><span><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} /><code>{body.id}</code></span></span></label>
+        })}</div>
+        {metadataError !== null && <div className={css.inlineError} role="alert">{metadataError}</div>}
+        <div className={css.metadataActions}><p>{t('overview.metadataSafety')}</p><div><button type="button" className={css.ghostButton} disabled={metadataRunning} onClick={() => setMetadataOpen(false)}>{t('common.cancel')}</button><button type="button" className={css.primaryButton} disabled={metadataRunning || metadataSelection.length === 0} onClick={() => void maintainMetadata()}>{metadataRunning ? t('overview.metadataGenerating') : t('overview.metadataGenerate', { count: metadataSelection.length })}</button></div></div>
+      </div></SidebarModal>}
       {appearance.surface === 'sidebar' && editingBodyView !== undefined && <SidebarModal title={t('overview.editBodyAria', { name: editingBodyView.name })} description={editingBodyView.id} busy={savingBody === editingBodyView.id} onClose={() => setEditingBody(null)}>{bodyEditForm(editingBodyView)}</SidebarModal>}
       {appearance.surface === 'sidebar' && deletingBodyView !== undefined && <SidebarModal title={t(deletingBodyView.provider.id !== 'mnemon-native' ? 'overview.disconnectTitle' : 'overview.deleteTitle', { name: deletingBodyView.name })} description={deletingBodyView.id} busy={deletingBody === deletingBodyView.id} onClose={() => setConfirmingDeleteBody(null)}><div className={css.bodyDeleteConfirm}><p>{t(deletingBodyView.provider.id !== 'mnemon-native' ? 'overview.disconnectWarning' : 'overview.deleteWarning', { provider: deletingBodyView.provider.label })}</p><div className={css.bodyDeleteSummary}><strong>{deletingBodyView.name}</strong><span>{deletingBodyView.provider.label} · {deletingBodyView.provider.location || t('common.memories', { count: deletingBodyView.stats?.totalInsights ?? 0 })}</span></div><div className={css.bodyEditActions}><button type="button" data-autofocus className={css.ghostButton} disabled={deletingBody === deletingBodyView.id} onClick={() => setConfirmingDeleteBody(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} title={canDeleteBody(deletingBodyView) ? undefined : t('overview.lastStoreDeleteHint')} disabled={deletingBody === deletingBodyView.id || !canDeleteBody(deletingBodyView)} onClick={() => void deleteBody(deletingBodyView)}>{deletingBody === deletingBodyView.id ? t('overview.deletingBody') : t(deletingBodyView.provider.id !== 'mnemon-native' ? 'overview.disconnectAction' : 'overview.deleteAction')}</button></div></div></SidebarModal>}
       {!catalogUnavailable && graph !== null && graph.nodes.length > 0 ? (
         <div className={css.graphLayout}>
           <section className={css.graphPanel}>
+            {graphLoading && <SectionSpinner label={t('overview.snapshotLoading')} />}
             <div className={css.graphToolbar}>
               <div><span className={css.liveDot} />{t('overview.snapshot')} <small>{generated}</small></div>
               <div className={css.graphLegend}><span data-edge="scope">{t('overview.edgeScope')}</span><span data-edge="temporal">{t('overview.edgeTemporal')}</span><span data-edge="semantic">{t('overview.edgeSemantic')}</span><span data-edge="causal">{t('overview.edgeCausal')}</span><span data-edge="entity">{t('overview.edgeEntity')}</span></div>
@@ -1276,7 +1330,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
             )}
           </aside>
         </div>
-      ) : !loading && error === null ? (
+      ) : !graphLoading && error === null ? (
         catalogUnavailable
           ? <EmptyState glyph="◇" title={t('overview.unsyncedTitle')}>{t('overview.unsyncedLong')}</EmptyState>
           : catalog?.total === 0
@@ -1285,7 +1339,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
             ? <EmptyState glyph="◇" title={t('overview.noActiveTitle')}>{t('overview.noActiveText')}</EmptyState>
             : <EmptyState glyph="◇" title={t(onlyQueryOrUnsupported ? 'overview.noVisualTitle' : 'overview.noContentTitle')}>{t(onlyQueryOrUnsupported ? 'overview.noVisualText' : 'overview.noContentText')}</EmptyState>
       ) : (
-        <div className={css.loadingPanel}>{t('overview.loading')}</div>
+        <div className={css.asyncPlaceholder}><SectionSpinner label={t('overview.snapshotLoading')} /><span>{t('overview.loading')}</span></div>
       )}
       {preview !== null && <ContentPreview node={preview} kind={graphKindLabel(t, preview)} onClose={() => setPreview(null)} />}
     </div>
@@ -1365,6 +1419,8 @@ function ExplorePage(props: { client: MnemonClient; status: StatusView | null; s
         </div>
       </form>
       <ReadSourcePanel title={t('search.sourcesTitle')} sources={sources} />
+      <div className={css.asyncResults}>
+      {searching && <SectionSpinner label={searchKind === 'agent' ? t('search.agentSearching') : t('search.searching')} />}
       {agentAnswer !== null && <section className={css.agentAnswer} aria-label={t('search.agentAnswer')}><div className={css.agentAnswerHeading}><div><span>{t('search.agentAnswerHint')}</span><h3>{t('search.agentAnswer')}</h3></div><code>{agentAnswer.runId.slice(0, 8)}</code></div><p>{agentAnswer.answer}</p>{agentAnswer.citations.length > 0 && <div className={css.agentCitations}>{agentAnswer.citations.map(citation => <code key={citation}>{citation}</code>)}</div>}</section>}
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
       {!searched && <EmptyState glyph="⌕" title={t('search.startTitle')}>{t('search.startText')}</EmptyState>}
@@ -1375,6 +1431,7 @@ function ExplorePage(props: { client: MnemonClient; status: StatusView | null; s
           {relatedTo !== null && <aside id="mnemon-related-pane" className={css.relatedPane}><div className={css.sectionHeading}><div><h3>{t('search.related')}</h3></div><button type="button" onClick={() => setRelatedTo(null)} aria-label={t('search.closeRelated')}>×</button></div><p className={css.relatedSource}>{relatedTo.content}</p>{relatedLoading && <div className={css.loading}>{t('search.traversing')}</div>}{!relatedLoading && related.length === 0 && <div className={css.muted}>{t('search.noRelated')}</div>}{visibleRelated.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}{appearance.surface === 'sidebar' && !relatedLoading && <ProgressiveFooter visible={visibleRelated.length} total={related.length} pageSize={pageSize} onMore={() => setVisibleRelatedLimit(value => value + pageSize)} />}</aside>}
         </div>
       )}
+      </div>
     </div>
   )
 }
@@ -1418,11 +1475,11 @@ function EntitiesPage(props: { client: MnemonClient; revision: number; writeEnab
           {appearance.surface === 'sidebar' && <ProgressiveFooter compact visible={visibleEntities.length} total={view.items.length} pageSize={entityPageSize} onMore={() => setVisibleEntityLimit(value => value + entityPageSize)} />}
           {!loading && view.items.length === 0 && <p className={css.muted}>{t('entities.emptyRail')}</p>}
         </aside>
-        <section className={css.entityResults}>
+        <section className={appearanceClass(css.entityResults, css.asyncResults)}>
+          {loading && <SectionSpinner label={t('entities.loading')} />}
           {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
-          {loading && <div className={css.loadingPanel}>{t('entities.loading')}</div>}
           {!loading && view.selected === undefined && <EmptyState glyph="◎" title={t('entities.selectTitle')}>{t('entities.selectText')}</EmptyState>}
-          {!loading && view.selected !== undefined && <><div className={css.sectionHeading}><div><h3>{view.selected}</h3></div><strong>{view.insights.length}</strong></div>{view.insights.length === 0 ? <EmptyState glyph="0" title={t('entities.emptyTitle')}>{t('entities.emptyText')}</EmptyState> : <>{visibleInsights.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={props.onForget} onRelated={() => props.onExplore(insight.content)} />)}{appearance.surface === 'sidebar' && <ProgressiveFooter visible={visibleInsights.length} total={view.insights.length} pageSize={insightPageSize} onMore={() => setVisibleInsightLimit(value => value + insightPageSize)} />}</>}</>}
+          {view.selected !== undefined && <><div className={css.sectionHeading}><div><h3>{view.selected}</h3></div><strong>{view.insights.length}</strong></div>{!loading && view.insights.length === 0 ? <EmptyState glyph="0" title={t('entities.emptyTitle')}>{t('entities.emptyText')}</EmptyState> : <>{visibleInsights.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={props.onForget} onRelated={() => props.onExplore(insight.content)} />)}{appearance.surface === 'sidebar' && !loading && <ProgressiveFooter visible={visibleInsights.length} total={view.insights.length} pageSize={insightPageSize} onMore={() => setVisibleInsightLimit(value => value + insightPageSize)} />}</>}</>}
         </section>
       </div>}
     </div>
@@ -1695,9 +1752,12 @@ function ListPage(props: { client: MnemonClient; revision: number; writeEnabled:
       <div className={css.listNotice}>{t('content.notice')}</div>
       <ReadSourcePanel title={t('content.sourcesTitle')} sources={sources} selectedBodyId={selectedBodyId} onSelect={selectBody} />
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
-      {!loading && filteredItems.length === 0 && <EmptyState glyph="≡" title={t(waitingForQuery ? 'content.queryRequiredTitle' : 'content.emptyTitle')}>{t(waitingForQuery ? 'content.queryRequiredText' : 'content.emptyText')}</EmptyState>}
-      <div className={css.memoryList}>{visibleItems.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onClone={props.onClone} onRelated={() => props.onExplore(insight.content)} />)}</div>
-      {view !== null && <ProgressiveFooter visible={visibleItems.length} total={filteredItems.length} pageSize={pageSize} onMore={() => setVisibleLimit(value => value + pageSize)} />}
+      <div className={css.asyncResults}>
+        {loading && <SectionSpinner label={t('common.loading')} />}
+        {!loading && filteredItems.length === 0 && <EmptyState glyph="≡" title={t(waitingForQuery ? 'content.queryRequiredTitle' : 'content.emptyTitle')}>{t(waitingForQuery ? 'content.queryRequiredText' : 'content.emptyText')}</EmptyState>}
+        <div className={css.memoryList}>{visibleItems.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onClone={props.onClone} onRelated={() => props.onExplore(insight.content)} />)}</div>
+        {view !== null && !loading && <ProgressiveFooter visible={visibleItems.length} total={filteredItems.length} pageSize={pageSize} onMore={() => setVisibleLimit(value => value + pageSize)} />}
+      </div>
     </div>
   )
 }
@@ -1979,15 +2039,16 @@ function StatusPage(props: { client: MnemonClient; status: StatusView | null; lo
       <PageHeader title={t('status.title')} description={t('status.description')} meta={status === null && props.loading ? t('common.loading') : status === null ? t('status.checkRequired') : t('status.nominal')} action={<div className={css.statusHeaderActions}><button type="button" className={css.ghostButton} disabled={props.loading} onClick={props.onRefresh}>{props.loading ? t('status.rechecking') : t('status.recheck')}</button><button type="button" className={css.secondaryButton} onClick={() => setVersionsOpen(true)}>{t('versions.checkAction')}</button></div>} />
 
       <section className={css.healthStrip} aria-label={t('status.aria')}>
+        {props.loading && <SectionSpinner label={t('status.rechecking')} />}
         <article><span className={`${css.healthIndicator} ${status === null ? css.healthMuted : css.healthGood}`} /><div><small>{t('status.engine')}</small><strong>{status?.dshMnemonVersion === undefined ? 'dsh-mnemon' : `dsh-mnemon ${status.dshMnemonVersion}`}</strong><p>{status === null ? t('status.pluginChecking') : t('status.pluginReady')}</p></div></article>
         <article><span className={`${css.healthIndicator} ${runtimeArea === undefined ? css.healthMuted : runtimeArea.status === 'invalid' ? css.healthBad : css.healthGood}`} /><div><small>{t('status.runtime')}</small><strong>{runtimeArea === undefined ? t('status.runtimeWaiting') : t('status.runtimeRatio', { user: runtimeUserEntries, memory: runtimeMemoryEntries })}</strong><p>{runtimeArea === undefined ? t('status.runtimeWaitingDetail') : t('status.runtimeBytes', { bytes: humanBytes(runtimeArea.bytes) })}</p></div></article>
         <article><span className={`${css.healthIndicator} ${activeBodies > 0 ? css.healthGood : css.healthMuted}`} /><div><small>{t('status.spaces')}</small><strong>{catalogKnown ? t('status.activeRatio', { active: activeBodies, total: memoryBodies.length }) : t('status.directoryUnsynced')}</strong><p>{t('status.activeMemories', { count: status?.stats?.totalInsights ?? 0 })}</p></div></article>
         <article><span className={`${css.healthIndicator} ${documents === undefined ? css.healthMuted : css.healthGood}`} /><div><small>{t('status.documents')}</small><strong>{documents === undefined ? t('status.documentsWaiting') : t('status.documentRatio', { active: documents.activeCount, archived: documents.archivedCount })}</strong><p>{documents === undefined ? t('status.documentsSession') : t('status.documentUsage', { used: humanBytes(documents.activeBytes), limit: humanBytes(documents.limitBytes) })}</p></div></article>
       </section>
 
-      {status !== null && <NativeProviderHealth status={status} />}
-      {status?.providerServices !== undefined && <ProviderHealth services={status.providerServices.filter(service => service.providerId !== 'mnemon-native')} />}
-      <StorageDomains catalog={storage} selected={selectedScope} selectedKind={selectedScopeKind} />
+      <div className={css.asyncStatusBlock}>{props.loading && <SectionSpinner label={t('status.rechecking')} />}{status !== null && <NativeProviderHealth status={status} />}</div>
+      <div className={css.asyncStatusBlock}>{props.loading && <SectionSpinner label={t('status.rechecking')} />}{status?.providerServices !== undefined && <ProviderHealth services={status.providerServices.filter(service => service.providerId !== 'mnemon-native')} />}</div>
+      <div className={css.asyncStatusBlock}>{props.loading && <SectionSpinner label={t('status.rechecking')} />}<StorageDomains catalog={storage} selected={selectedScope} selectedKind={selectedScopeKind} /></div>
       {versionsOpen && <VersionDialog client={props.client} onClose={() => setVersionsOpen(false)} onRefreshStatus={props.onRefresh} />}
     </div>
   )
@@ -2006,7 +2067,7 @@ function NativeProviderHealth({ status }: { status: StatusView }): JSX.Element {
     <ProviderIcon providerId="mnemon-native" className={css.providerHealthMark} />
     <div className={css.nativeProviderCopy}>
       <small>{t('status.nativeLabel')}</small>
-      <strong>Mnemon Native</strong>
+      <strong>mnemon</strong>
       {error !== '' && <p title={error}>{error}</p>}
     </div>
     <div className={css.nativeProviderMeta}>

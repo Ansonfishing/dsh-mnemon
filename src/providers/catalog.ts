@@ -51,7 +51,7 @@ export const MEMORY_PROVIDER_ID_SET = new Set<MemoryProviderId>(MEMORY_PROVIDER_
 export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
   {
     id: 'mnemon-native',
-    label: 'Mnemon Native',
+    label: 'mnemon',
     kind: 'local',
     workspaceBinding: 'automatic',
     summary: 'Official local-first memory with exact writes, typed graph relations, and soft deletion.',

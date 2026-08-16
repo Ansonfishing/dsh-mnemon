@@ -163,7 +163,9 @@ export class MnemonClient {
   }
 
   bodyDirectory(): Promise<MemoryBodyCatalog> {
-    return this.call(MNEMON_READ_CHANNEL, 'body-directory', this.scoped())
+    // Rolling Host upgrades may not expose the fast directory endpoint yet.
+    // Preserve the previous full-catalog path as a transparent compatibility fallback.
+    return this.call<MemoryBodyCatalog>(MNEMON_READ_CHANNEL, 'body-directory', this.scoped()).catch(() => this.bodies())
   }
 
   providerServices(): Promise<MemoryProviderServiceCatalog> {

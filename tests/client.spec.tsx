@@ -212,7 +212,12 @@ describe('MnemonView', () => {
         status.version = mnemonVersionUpdated ? '0.2.0' : status.version
         return { ok: true, value: { component: payload?.component, previousVersion: '0.1.2', currentVersion: '0.2.0', updated: true, restartRequired: false } }
       }
-      if (endpoint === 'bodies') return { ok: true, value: { items: bodies, providers: MEMORY_PROVIDER_CATALOG, total: bodies.length, activeCount: bodies.filter(item => item.active).length, directory: '/tmp/mnemon/data', generatedAt: '2026-08-13T03:00:00.000Z' } }
+      if (endpoint === 'bodies' || endpoint === 'body-directory') return { ok: true, value: { items: bodies, providers: MEMORY_PROVIDER_CATALOG, total: bodies.length, activeCount: bodies.filter(item => item.active).length, directory: '/tmp/mnemon/data', generatedAt: '2026-08-13T03:00:00.000Z' } }
+      if (endpoint === 'body-metadata-maintain') {
+        body.name = '产品决策'
+        body.description = '记录稳定的产品范围、架构取舍与依据，在规划和复盘产品方向时召回。'
+        return { ok: true, value: { delegated: true, runId: 'metadata-child-1', provider: 'spawn', summary: '已更新产品决策元信息。', updates: [{ memoryBodyId: 'project', title: body.name, description: body.description }] } }
+      }
       if (endpoint === 'graph') {
         if (options.graphPending === true) return await new Promise<never>(() => {})
         return {
@@ -360,9 +365,9 @@ describe('MnemonView', () => {
     expect(screen.queryByRole('heading', { name: '子 Agent 生命周期' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '记忆系统流转' })).toBeNull()
     expect(screen.getByRole('heading', { name: '三方 Provider' })).toBeTruthy()
-    const nativeProviderStatus = screen.getByRole('region', { name: 'Mnemon Native Provider 状态' })
+    const nativeProviderStatus = screen.getByRole('region', { name: 'mnemon Provider 状态' })
     const providerStatus = screen.getByRole('region', { name: '三方 Provider 状态' })
-    expect(within(nativeProviderStatus).getByText('Mnemon Native')).toBeTruthy()
+    expect(within(nativeProviderStatus).getByText('mnemon')).toBeTruthy()
     expect(nativeProviderStatus.compareDocumentPosition(providerStatus) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(within(providerStatus).getByText('OpenViking')).toBeTruthy()
     expect(within(providerStatus).getByText('连接正常')).toBeTruthy()
@@ -384,7 +389,7 @@ describe('MnemonView', () => {
     expect(screen.getByText('系统正常')).toBeTruthy()
     expect(screen.queryByText('Mnemon 不可用')).toBeNull()
 
-    const nativeStatus = screen.getByRole('region', { name: 'Mnemon Native Provider 状态' })
+    const nativeStatus = screen.getByRole('region', { name: 'mnemon Provider 状态' })
     expect(within(nativeStatus).getByText('连接需要检查')).toBeTruthy()
     expect(within(nativeStatus).getByText('项目记忆体: Mnemon Store 无法打开')).toBeTruthy()
   })
@@ -417,7 +422,7 @@ describe('MnemonView', () => {
     expect(within(snapshot).getByText('内容投影')).toBeTruthy()
     expect(within(snapshot).getByText('仅查询')).toBeTruthy()
     expect(within(snapshot).getByText(/2 条真实关系/)).toBeTruthy()
-    expect(within(snapshot).getAllByText('Mnemon').length).toBeGreaterThan(0)
+    expect(within(snapshot).getAllByText('mnemon').length).toBeGreaterThan(0)
     const openVikingSnapshot = within(snapshot).getByText('OpenViking 团队知识').closest('article')
     expect(openVikingSnapshot?.getAttribute('data-provider')).toBe('openviking')
     expect(openVikingSnapshot?.querySelector('[data-provider="openviking"]')?.textContent).toBe('OpenViking')
@@ -694,6 +699,25 @@ describe('MnemonView', () => {
     expect(call).toHaveBeenCalledWith(expect.anything(), 'body-update', { memoryBodyId: 'project', name: '项目决策空间', description: '存放架构与交付决策。', sessionId: 'session-1' })
   })
 
+  it('selects active Memory Spaces and generates metadata through a read-only subagent flow', async () => {
+    const { connection, call } = createConnection({ withInactiveBody: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'AI 维护元信息' }))
+    const dialog = screen.getByRole('dialog', { name: 'AI 维护记忆体元信息' })
+    const project = within(dialog).getByRole('checkbox', { name: /项目记忆体/ })
+    expect(within(dialog).queryByRole('checkbox', { name: /偏好记忆体/ })).toBeNull()
+    fireEvent.click(project)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'AI 生成（1）' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'AI 维护记忆体元信息' })).toBeNull())
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['project'], sessionId: 'session-1' })
+    expect((await screen.findAllByText('产品决策')).length).toBeGreaterThan(0)
+    expect(screen.getByText('已更新产品决策元信息。')).toBeTruthy()
+  })
+
   it('adds OpenViking through the existing Memory Space creation flow', async () => {
     const { connection, call } = createConnection({ withInactiveBody: true })
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
@@ -702,7 +726,7 @@ describe('MnemonView', () => {
     await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: '创建记忆体' }))
     const dialog = screen.getByRole('dialog', { name: '创建记忆体' })
-    expect(within(dialog).getByRole('radio', { name: /Mnemon Native/ }).getAttribute('value')).toBe('mnemon-native')
+    expect(within(dialog).getByRole('radio', { name: /mnemon/ }).getAttribute('value')).toBe('mnemon-native')
     const openVikingChoice = within(dialog).getByRole('radio', { name: /OpenViking/ })
     expect(openVikingChoice.closest('label')?.querySelector('[data-provider-icon="openviking"]')).toBeTruthy()
     fireEvent.click(openVikingChoice)
@@ -777,7 +801,7 @@ describe('MnemonView', () => {
     await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: '创建记忆体' }))
     const dialog = screen.getByRole('dialog', { name: '创建记忆体' })
-    for (const provider of ['Mnemon Native', 'OpenViking', 'Honcho', 'Mem0', 'Hindsight', 'Holographic', 'RetainDB', 'ByteRover', 'Supermemory']) {
+    for (const provider of ['mnemon', 'OpenViking', 'Honcho', 'Mem0', 'Hindsight', 'Holographic', 'RetainDB', 'ByteRover', 'Supermemory']) {
       expect(within(dialog).getByRole('radio', { name: new RegExp(provider) })).toBeTruthy()
     }
 

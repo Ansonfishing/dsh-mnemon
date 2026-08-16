@@ -80,6 +80,7 @@
 .workspacePicker select:hover { border-color: color-mix(in srgb, var(--mn-accent) 50%, var(--mn-line-strong)); }
 
 .alert, .inlineError { padding: 10px 13px; border: 1px solid color-mix(in srgb, var(--mn-danger) 32%, transparent); border-radius: 9px; color: var(--mn-danger); background: color-mix(in srgb, var(--mn-danger) 7%, var(--mn-layer-1)); font-size: 12px; }
+.inlineNotice { margin-bottom: 12px; padding: 10px 13px; border: 1px solid color-mix(in srgb, var(--mn-success) 30%, var(--mn-line)); border-radius: 9px; color: var(--mn-success); background: color-mix(in srgb, var(--mn-success) 7%, var(--mn-layer-1)); font-size: 11px; }
 .alert { display: flex; flex: 0 0 auto; flex-direction: column; margin: 10px clamp(18px, 2.5vw, 32px) 0; }
 .workspaceMismatch { display: flex; min-width: 0; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 18px; margin: 10px clamp(18px, 2.5vw, 32px) 0; padding: 11px 12px 11px 14px; border: 1px solid color-mix(in srgb, var(--mn-accent) 36%, var(--mn-line)); border-radius: 10px; background: color-mix(in srgb, var(--mn-accent) 7%, var(--mn-layer-1)); }
 .workspaceMismatch > div { display: grid; min-width: 0; gap: 2px; }
@@ -143,6 +144,12 @@
 .emptyState h3 { margin: 0 0 5px; font-size: 16px; }
 .emptyState p { max-width: 500px; margin: 0; color: var(--mn-muted); }
 .loadingPanel { display: grid; min-height: 220px; place-items: center; border: 1px solid var(--mn-line); border-radius: 13px; color: var(--mn-muted); background: var(--mn-layer-1); }
+.asyncRegion { position: relative; min-width: 0; }
+.asyncResults { position: relative; min-width: 0; min-height: 120px; }
+.asyncPlaceholder { position: relative; display: grid; min-height: 220px; place-items: center; border: 1px solid var(--mn-line); border-radius: 13px; color: var(--mn-muted); background: var(--mn-layer-1); }
+.sectionSpinner { position: absolute; z-index: 6; top: 9px; right: 9px; display: grid; width: 24px; height: 24px; place-items: center; border: 1px solid color-mix(in srgb, var(--mn-accent) 18%, var(--mn-line)); border-radius: 7px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-layer-1) 90%, transparent); box-shadow: 0 4px 12px color-mix(in srgb, var(--mn-text) 6%, transparent); backdrop-filter: blur(7px); }
+.sectionSpinner > i { width: 11px; height: 11px; border: 1.5px solid color-mix(in srgb, currentColor 24%, transparent); border-top-color: currentColor; border-radius: 50%; animation: mnemon-spin .72s linear infinite; }
+@keyframes mnemon-spin { to { transform: rotate(360deg); } }
 .inlineError { margin: 0 0 14px; }
 .muted, .loading { padding: 16px 0; color: var(--mn-faint); font-size: 12px; }
 
@@ -171,12 +178,13 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 .readSourceState em { width: fit-content; padding: 2px 5px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 9%, transparent); font: 650 8px var(--mn-code); font-style: normal; white-space: nowrap; }
 .readSourceState small { color: var(--mn-faint); font-size: 8px; white-space: nowrap; }
 
-.bodyDirectory { margin-bottom: 12px; padding: 12px 14px; border: 1px solid var(--mn-line); border-radius: 11px; background: color-mix(in srgb, var(--mn-layer-1) 72%, var(--mn-bg)); }
+.bodyDirectory { position: relative; margin-bottom: 12px; padding: 12px 14px; border: 1px solid var(--mn-line); border-radius: 11px; background: color-mix(in srgb, var(--mn-layer-1) 72%, var(--mn-bg)); }
 .bodyDirectoryHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 10px; }
 .bodyDirectoryHeader h3 { margin: 1px 0; font-size: 13px; }
 .bodyDirectoryHeader p { margin: 0; color: var(--mn-muted); font-size: 10px; }
 .bodyDirectoryPath { display: block; max-width: min(62vw, 720px); margin-top: 4px; overflow: hidden; color: var(--mn-faint); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.bodyDirectoryHeader > strong { flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 9%, transparent); font: 650 9px var(--mn-code); }
+.bodyDirectoryControls { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 6px; padding-right: 28px; }
+.bodyDirectoryControls > strong { flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 9%, transparent); font: 650 9px var(--mn-code); }
 .bodyGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 7px; }
 .bodyDirectoryEmpty { grid-column: 1 / -1; min-height: 92px; display: flex; align-items: center; justify-content: center; gap: 14px; border: 1px dashed color-mix(in srgb, var(--mn-line) 84%, transparent); border-radius: 12px; color: var(--mn-muted); }
 .bodyDirectoryEmpty > span { font-size: 28px; opacity: .6; }
@@ -188,11 +196,13 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 .bodySignal { width: 7px; height: 7px; border-radius: 50%; background: var(--mn-faint); }
 .bodyCard[data-active] .bodySignal { background: var(--mn-body-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mn-body-accent) 14%, transparent); }
 .bodyCard:not([data-healthy]) .bodySignal { background: var(--mn-danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mn-danger) 12%, transparent); }
+.bodyCard[data-status-loading] .bodySignal { background: var(--mn-faint); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mn-faint) 12%, transparent); }
 .bodyCardTop > div { display: grid; min-width: 0; }
 .bodyCardTop strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .bodyCardTop code { overflow: hidden; color: var(--mn-faint); font: 9px var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
 .bodyHealth { color: var(--mn-success); font: 650 8px var(--mn-code); letter-spacing: .07em; text-transform: uppercase; }
 .bodyCard:not([data-healthy]) .bodyHealth { color: var(--mn-danger); }
+.bodyCard[data-status-loading] .bodyHealth { color: var(--mn-faint); }
 .mnemonDefaultBadge { width: fit-content; padding: 2px 5px; border: 1px solid color-mix(in srgb, var(--mn-accent) 24%, var(--mn-line)); border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 7%, transparent); font: 650 8px var(--mn-code); white-space: nowrap; }
 .bodyProviderRow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 2px; }
 .providerBadge { display: inline-flex; width: fit-content; min-height: 17px; max-width: 100%; flex: 0 0 auto; align-items: center; justify-content: center; padding: 2px 6px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--mn-provider-color) 34%, var(--mn-line)); border-radius: 999px; color: color-mix(in srgb, var(--mn-provider-color) 78%, var(--mn-text)); background: color-mix(in srgb, var(--mn-provider-color) 10%, var(--mn-layer-1)); font: 650 8px/11px var(--mn-code); text-align: center; text-overflow: ellipsis; vertical-align: middle; white-space: nowrap; }
@@ -334,7 +344,7 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 
 .graphLayout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 270px); gap: 10px; }
 .graphPanel, .graphInspector { border: 1px solid var(--mn-line); border-radius: 11px; background: var(--mn-layer-1); }
-.graphPanel { min-width: 0; overflow: hidden; }
+.graphPanel { position: relative; min-width: 0; overflow: hidden; }
 .graphToolbar, .graphFooter { display: flex; min-height: 43px; align-items: center; justify-content: space-between; gap: 14px; padding: 0 13px; color: var(--mn-muted); font-size: 10px; }
 .graphToolbar { border-bottom: 1px solid var(--mn-line); }
 .graphToolbar > div:first-child { display: flex; align-items: center; gap: 7px; }
@@ -668,8 +678,23 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 .modal > header h2 { margin: 0; font-size: 15px; line-height: 22px; }
 .modal > header p { max-width: 64ch; margin: 3px 0 0; color: var(--mn-muted); font-size: 12px; line-height: 1.5; }
 .modal > div:last-child { min-height: 0; overflow-y: auto; padding: 18px; }
+.metadataDialog { display: grid; gap: 12px; }
+.metadataToolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--mn-muted); font-size: 10px; }
+.metadataList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.metadataList > label { position: relative; display: grid; min-width: 0; grid-template-columns: 16px minmax(0, 1fr); align-items: start; gap: 9px; padding: 11px; border: 1px solid var(--mn-line); border-radius: 10px; background: color-mix(in srgb, var(--mn-layer-2) 68%, transparent); cursor: pointer; }
+.metadataList > label[data-selected] { border-color: color-mix(in srgb, var(--mn-accent) 48%, var(--mn-line)); background: color-mix(in srgb, var(--mn-accent) 6%, var(--mn-layer-2)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mn-accent) 10%, transparent); }
+.metadataList > label > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.metadataList > label > span { display: grid; min-width: 0; gap: 4px; }
+.metadataList strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.metadataList small { display: -webkit-box; overflow: hidden; color: var(--mn-muted); font-size: 9px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.metadataList > label > span > span { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.metadataList code { overflow: hidden; color: var(--mn-faint); font: 8px var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
+.metadataActions { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding-top: 12px; border-top: 1px solid var(--mn-line); }
+.metadataActions > p { max-width: 54ch; margin: 0; color: var(--mn-muted); font-size: 9px; line-height: 1.5; }
+.metadataActions > div { display: flex; flex: 0 0 auto; gap: 7px; }
 
-.healthStrip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 13px; overflow: hidden; border: 1px solid var(--mn-line); border-radius: 12px; background: var(--mn-layer-1); }
+.healthStrip { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 13px; overflow: hidden; border: 1px solid var(--mn-line); border-radius: 12px; background: var(--mn-layer-1); }
+.asyncStatusBlock { position: relative; min-width: 0; min-height: 36px; }
 .healthStrip article { display: flex; min-width: 0; min-height: 78px; box-sizing: border-box; align-items: flex-start; gap: 10px; padding: 14px 15px; border-right: 1px solid var(--mn-line); }
 .healthStrip article > div { min-width: 0; }
 .healthStrip article:last-child { border-right: 0; }
@@ -791,6 +816,9 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 }
 
 @media (max-width: 760px) {
+  .metadataList { grid-template-columns: 1fr; }
+  .metadataActions { align-items: stretch; flex-direction: column; }
+  .metadataActions > div { justify-content: flex-end; }
   .shell { min-height: 0; overflow: hidden; }
   .masthead { min-height: 76px; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 10px 14px; }
   .brandLogo { width: 36px; height: 36px; }
