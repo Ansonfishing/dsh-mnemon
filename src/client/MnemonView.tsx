@@ -2,24 +2,35 @@ import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutE
 import { IconChevronLeftOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { consumeMnemonAnchor, subscribeMnemonAnchor, type MnemonAnchor } from './anchor.ts'
 import Markdown from 'markdown-to-jsx'
-import type { ClientConnectionHandle, ClientSettingsScope } from '../contracts.ts'
-import type { Config } from '../config.ts'
-import type { DocumentRecord, DocumentSnapshot, DocumentView } from '../documents.ts'
-import type { RuntimeMemoryEntry, RuntimeMemoryImportance, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts'
-import type { StorageAreaInventory, StorageScopeInventory, StorageScopeKind } from '../storage-scope.ts'
-import type { VersionComponentStatus, VersionInstallMode, VersionStatus, VersionUpdateResult } from '../version-updates.ts'
 import {
   CATEGORIES,
   type Category,
+  type ClientConnectionHandle,
+  type ClientSettingsScope,
+  type Config,
+  type DocumentRecord,
+  type DocumentSnapshot,
+  type DocumentView,
   type EntityView,
   type Insight,
+  type MemoryBodyCatalog,
+  type MemoryBodyView,
   type MemoryGraphNode,
   type MemoryGraphSnapshot,
   type MemoryListView,
-  type MemoryBodyCatalog,
-  type MemoryBodyView,
+  type RuntimeMemoryEntry,
+  type RuntimeMemoryImportance,
+  type RuntimeMemorySnapshot,
+  type RuntimeMemoryTarget,
   type StatusView,
-} from '../service.ts'
+  type StorageAreaInventory,
+  type StorageScopeInventory,
+  type StorageScopeKind,
+  type VersionComponentStatus,
+  type VersionInstallMode,
+  type VersionStatus,
+  type VersionUpdateResult,
+} from '../shared/contracts.ts'
 import { MnemonClient } from './api.ts'
 import { translateZh, type MnemonKey, type MnemonTranslate } from './locales.ts'
 import { MnemonLogo } from './MnemonLogo.tsx'

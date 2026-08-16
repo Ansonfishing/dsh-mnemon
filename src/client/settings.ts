@@ -1,5 +1,11 @@
-import type { ClientConnectionHandle, ClientSettingsScope, ClientSettingsSnapshot, SettingsOperation } from '../contracts.ts'
-import { MNEMON_SETTINGS_CHANNEL, MNEMON_SETTINGS_NAMESPACE } from '../settings.ts'
+import {
+  MNEMON_SETTINGS_CHANNEL,
+  MNEMON_SETTINGS_NAMESPACE,
+  type ClientConnectionHandle,
+  type ClientSettingsScope,
+  type ClientSettingsSnapshot,
+  type SettingsOperation,
+} from '../shared/contracts.ts'
 
 export class MnemonSettingsScope<T extends object> implements ClientSettingsScope<T> {
   private snapshot: ClientSettingsSnapshot<T> = { status: 'loading', writable: false, mode: 'host' }

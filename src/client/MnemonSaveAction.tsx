@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState, type JSX } from 'react'
 import { Button, IconDataOutline16, Modal, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ClientConnectionHandle } from '../contracts.ts'
+import type { ClientConnectionHandle } from '../shared/contracts.ts'
 import { MnemonClient } from './api.ts'
 import type { MnemonKey } from './locales.ts'
 import css from './MnemonSaveAction.module.css'

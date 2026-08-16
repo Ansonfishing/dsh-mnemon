@@ -1,12 +1,37 @@
-import type { ClientConnectionHandle } from '../contracts.ts'
-import { MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from '../channels.ts'
-import type { MemoryBody } from '../memory-bodies.ts'
-import type { DocumentMutation, DocumentMutationResult, DocumentSearchResult, DocumentSnapshot, DocumentView } from '../documents.ts'
-import type { RuntimeMemoryImportance, RuntimeMemoryMutationResult, RuntimeMemorySnapshot, RuntimeMemoryTarget } from '../runtime-memory.ts'
-import type { EntityView, Insight, MemoryBodyCatalog, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, RememberRequest, SearchRequest, StatusView } from '../service.ts'
-import type { AssistantMessageText, TurnMemoryActivity, TurnMemoryActivitySnapshot } from '../lifecycle.ts'
-import type { MnemonPackExport, MnemonPackImportResult, MnemonPackPreview } from '../pack.ts'
-import type { VersionComponentId, VersionStatus, VersionUpdateResult } from '../version-updates.ts'
+import {
+  MNEMON_PACK_CHANNEL,
+  MNEMON_READ_CHANNEL,
+  MNEMON_WRITE_CHANNEL,
+  type AssistantMessageText,
+  type ClientConnectionHandle,
+  type DocumentMutation,
+  type DocumentMutationResult,
+  type DocumentSearchResult,
+  type DocumentSnapshot,
+  type DocumentView,
+  type EntityView,
+  type Insight,
+  type MemoryBody,
+  type MemoryBodyCatalog,
+  type MemoryGraphSnapshot,
+  type MemoryListRequest,
+  type MemoryListView,
+  type MnemonPackExport,
+  type MnemonPackImportResult,
+  type MnemonPackPreview,
+  type RememberRequest,
+  type RuntimeMemoryImportance,
+  type RuntimeMemoryMutationResult,
+  type RuntimeMemorySnapshot,
+  type RuntimeMemoryTarget,
+  type SearchRequest,
+  type StatusView,
+  type TurnMemoryActivity,
+  type TurnMemoryActivitySnapshot,
+  type VersionComponentId,
+  type VersionStatus,
+  type VersionUpdateResult,
+} from '../shared/contracts.ts'
 
 interface TurnActivityCacheEntry {
   cursor: number
