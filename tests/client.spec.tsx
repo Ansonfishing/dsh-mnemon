@@ -25,6 +25,7 @@ describe('MnemonView', () => {
       name: '项目记忆体',
       description: '项目决策、约定与交付上下文。',
       active: true,
+      mnemonDefault: true,
       dbPath: '/tmp/mnemon/data/project/mnemon.db',
       createdAt: '2026-08-13T02:00:00.000Z',
       updatedAt: '2026-08-13T03:00:00.000Z',
@@ -39,6 +40,7 @@ describe('MnemonView', () => {
       name: '偏好记忆体',
       description: '长期稳定的表达与协作偏好。',
       active: secondaryActive,
+      mnemonDefault: false,
       dbPath: '/tmp/mnemon/data/preferences/mnemon.db',
       stats: { ...body.stats, totalInsights: 1, edgeCount: 0, topEntities: [{ entity: 'DSH', count: 1 }] },
     }
@@ -361,7 +363,7 @@ describe('MnemonView', () => {
   })
 
   it('keeps shared functionality but applies the minimal unbranded sidebar appearance', async () => {
-    const { connection, call } = createConnection()
+    const { connection, call } = createConnection({ withInactiveBody: true })
     const onClose = vi.fn()
     const { container } = render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" onClose={onClose} />)
 
@@ -534,6 +536,19 @@ describe('MnemonView', () => {
     fireEvent.click(documentArchiveCancel)
     expect(screen.queryByRole('dialog', { name: '确认建立 Mnemon 索引并迁移这份档案？' })).toBeNull()
     expect(screen.queryByRole('img', { name: 'Mnemon' })).toBeNull()
+  })
+
+  it('keeps DSH activation independent from the protected Mnemon default Store', async () => {
+    const { connection } = createConnection()
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    await waitFor(() => expect(screen.getByText('Mnemon 默认')).toBeTruthy())
+    expect(screen.getByText(/这里的“激活”只控制记忆体是否参与 DSH/)).toBeTruthy()
+    expect(screen.getByRole('switch', { name: '项目记忆体读取开关' }).hasAttribute('disabled')).toBe(false)
+    const deleteButton = screen.getByRole('button', { name: '删除项目记忆体' })
+    expect(deleteButton.hasAttribute('disabled')).toBe(true)
+    expect(deleteButton.getAttribute('title')).toContain('至少一个原生 Store')
   })
 
   it('edits an existing Memory Space name and description', async () => {
