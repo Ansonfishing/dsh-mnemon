@@ -42,7 +42,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 
 ## Documentation boundaries
 
-- User documentation targets the v0.1.5 Sidebar-default experience while covering the compatible Buildin presentation.
+- User documentation targets the v0.1.6 Sidebar-default experience while covering the compatible Buildin presentation.
 - Architecture diagrams describe stable execution boundaries, not live monitoring. Use Status for current counts and versions.
 - RPC is an internal Host-to-client protocol, not a promised stable external API.
 - There is no formal fixed DSH / Mnemon version matrix yet. Back up and validate in an isolated root before upgrading.
