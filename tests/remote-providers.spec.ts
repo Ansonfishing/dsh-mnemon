@@ -195,4 +195,39 @@ describe('Hermes-inspired remote memory providers', () => {
     expect(new Headers(requests[0]?.init?.headers).get('x-sm-source')).toBe('dsh-mnemon')
     expect(JSON.parse(String(requests.at(-1)?.init?.body))).toEqual({ id: 'sm-1', containerTag: 'alice', reason: 'Deleted from dsh-mnemon' })
   })
+
+  it('falls back to Supermemory documents when extraction produced no memory entries', async () => {
+    const requests: string[] = []
+    const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
+      const path = new URL(String(url)).pathname
+      requests.push(`${init?.method ?? 'GET'} ${path}`)
+      if (path === '/v4/memories/list') return response({ memoryEntries: [] })
+      if (path === '/v3/documents/documents') {
+        return response({ documents: [{
+          id: 'doc-1',
+          content: 'A retained document is still browseable.',
+          createdAt: '2026-08-16T00:00:00Z',
+          metadata: { category: 'context' },
+        }] })
+      }
+      if (path === '/v4/memories' && init?.method === 'DELETE') return response({ message: 'memory not found' }, 404)
+      if (path === '/v3/documents/doc-1' && init?.method === 'DELETE') return response({ deleted: true })
+      throw new Error(`unexpected ${init?.method ?? 'GET'} ${path}`)
+    })
+    const { registry, body } = await providerBody('supermemory', {
+      endpoint: 'https://api.supermemory.ai', apiKey: 'sm-secret', containerTag: 'alice', searchMode: 'hybrid',
+    })
+    const provider = new SupermemoryProvider(registry, { fetch: fetchMock })
+
+    await expect(provider.list(body, { limit: 10 })).resolves.toEqual([
+      expect.objectContaining({ id: 'doc-1', content: 'A retained document is still browseable.', category: 'context' }),
+    ])
+    await expect(provider.forget(body, 'doc-1')).resolves.toMatchObject({ action: 'deleted', document: true })
+    expect(requests).toEqual([
+      'POST /v4/memories/list',
+      'POST /v3/documents/documents',
+      'DELETE /v4/memories',
+      'DELETE /v3/documents/doc-1',
+    ])
+  })
 })

@@ -172,7 +172,7 @@ for (const provider of selectedProviders) {
 
     let stored = 0
     const failures = []
-    if (currentCount < 3) {
+    if (currentCount === 0) {
       for (const memory of memories) {
         try {
           await service.remember({ ...memory, source: 'user', memoryBodyId: body.id })

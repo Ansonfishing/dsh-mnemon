@@ -66,7 +66,24 @@ export class SupermemoryProvider extends HttpMemoryProvider implements MemoryPro
       },
       signal,
     })
-    return firstArray(payload, 'memoryEntries', 'results').map(insight).filter((item): item is Insight => item !== undefined)
+    const memories = firstArray(payload, 'memoryEntries', 'results').map(insight).filter((item): item is Insight => item !== undefined)
+    if (memories.length > 0) return memories.filter(item => request.category === undefined || item.category === request.category)
+
+    // Supermemory Lite may retain ingested documents without extracting a
+    // separate memory entry. Those documents are still valid browseable
+    // content, so fall back to the same document projection used by its MCP.
+    const documents = await this.request(body, '/v3/documents/documents', {
+      headers: this.headers(connection),
+      json: {
+        containerTags: [String(connection.containerTag)],
+        limit: Math.min(Math.max(request.limit ?? 200, 1), 200),
+        page: 1,
+        sort: 'createdAt',
+        order: 'desc',
+      },
+      signal,
+    })
+    return firstArray(documents, 'documents', 'memories', 'results').map(insight).filter((item): item is Insight => item !== undefined)
       .filter(item => request.category === undefined || item.category === request.category)
   }
 
@@ -98,17 +115,27 @@ export class SupermemoryProvider extends HttpMemoryProvider implements MemoryPro
 
   async forget(body: MemoryBody, id: string, signal?: AbortSignal): Promise<JsonValue> {
     const connection = this.connection(body)
-    const payload = await this.request(body, '/v4/memories', {
-      method: 'DELETE',
-      headers: this.headers(connection),
-      json: { id, containerTag: String(connection.containerTag), reason: 'Deleted from dsh-mnemon' },
-      signal,
-    })
-    return {
-      action: 'deleted',
-      provider: this.id,
-      id,
-      ...(jsonObject(payload)?.forgotten === undefined ? {} : { forgotten: jsonObject(payload)!.forgotten as JsonValue }),
+    try {
+      const payload = await this.request(body, '/v4/memories', {
+        method: 'DELETE',
+        headers: this.headers(connection),
+        json: { id, containerTag: String(connection.containerTag), reason: 'Deleted from dsh-mnemon' },
+        signal,
+      })
+      return {
+        action: 'deleted',
+        provider: this.id,
+        id,
+        ...(jsonObject(payload)?.forgotten === undefined ? {} : { forgotten: jsonObject(payload)!.forgotten as JsonValue }),
+      }
+    } catch (error) {
+      if (!(error instanceof Error) || !/HTTP 404\b/u.test(error.message)) throw error
+      await this.request(body, `/v3/documents/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: this.headers(connection),
+        signal,
+      })
+      return { action: 'deleted', provider: this.id, id, document: true }
     }
   }
 
