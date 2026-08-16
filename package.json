@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Cross-agent, local-first persistent memory plugin for DeepSeek Harness (DSH), powered by Mnemon. It shares long-term memory across Mnemon-enabled agents and adds runtime memory, searchable project documents, semantic recall, knowledge graph, and a Sidebar UI.",
   "keywords": [
     "deepseek-harness",
