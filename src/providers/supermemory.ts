@@ -2,7 +2,7 @@ import type { JsonValue } from '../contracts.ts'
 import type { MemoryBodyRegistry } from '../memory-bodies.ts'
 import type { Insight, MemoryBody, MemoryListRequest, RememberRequest, SearchRequest } from '../shared/contracts.ts'
 import { HttpMemoryProvider, firstArray, jsonNumber, jsonObject, jsonString, type HttpProviderOptions } from './http.ts'
-import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './provider.ts'
+import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderMemorySpace, ProviderSearchResult } from './provider.ts'
 
 function insight(value: unknown): Insight | undefined {
   const item = jsonObject(value)
@@ -27,6 +27,21 @@ export class SupermemoryProvider extends HttpMemoryProvider implements MemoryPro
 
   constructor(memoryBodies: MemoryBodyRegistry, options: HttpProviderOptions = {}) {
     super(memoryBodies, options)
+  }
+
+  async discover(connection: Record<string, string | number | boolean>, signal?: AbortSignal): Promise<ProviderMemorySpace[]> {
+    const payload = await this.requestConnection(connection, '/v3/container-tags/list', { headers: this.headers(connection), signal })
+    return firstArray(payload, 'containerTags', 'items').flatMap(value => {
+      const item = jsonObject(value)
+      const tag = jsonString(item?.containerTag) ?? jsonString(item?.container_tag)
+      if (tag === undefined) return []
+      return [{
+        externalId: jsonString(item?.id) ?? tag,
+        name: jsonString(item?.name) ?? tag,
+        description: jsonString(item?.description) ?? `Supermemory space ${tag}`,
+        connection: { containerTag: tag, searchMode: 'hybrid' },
+      }]
+    })
   }
 
   async status(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus> {

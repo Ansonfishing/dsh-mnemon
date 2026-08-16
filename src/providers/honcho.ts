@@ -2,7 +2,7 @@ import type { JsonValue } from '../contracts.ts'
 import type { MemoryBodyRegistry } from '../memory-bodies.ts'
 import type { Insight, MemoryBody, MemoryListRequest, RememberRequest, SearchRequest } from '../shared/contracts.ts'
 import { HttpMemoryProvider, firstArray, jsonObject, jsonString, type HttpProviderOptions } from './http.ts'
-import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './provider.ts'
+import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderMemorySpace, ProviderSearchResult } from './provider.ts'
 
 function insight(value: unknown): Insight | undefined {
   const item = jsonObject(value)
@@ -28,6 +28,26 @@ export class HonchoProvider extends HttpMemoryProvider implements MemoryProvider
 
   constructor(memoryBodies: MemoryBodyRegistry, options: HttpProviderOptions = {}) {
     super(memoryBodies, options)
+  }
+
+  async discover(connection: Record<string, string | number | boolean>, signal?: AbortSignal): Promise<ProviderMemorySpace[]> {
+    const payload = await this.requestConnection(connection, '/v3/workspaces/list?page=1&size=100', {
+      headers: this.headers(connection),
+      json: {},
+      signal,
+    })
+    return firstArray(payload, 'items', 'results').flatMap(value => {
+      const item = jsonObject(value)
+      const id = jsonString(item?.id)
+      if (id === undefined) return []
+      const metadata = jsonObject(item?.metadata)
+      return [{
+        externalId: id,
+        name: jsonString(metadata?.name) ?? jsonString(metadata?.title) ?? id,
+        description: jsonString(metadata?.description) ?? `Honcho workspace ${id}`,
+        connection: { workspace: id, userId: '*', agentId: '*' },
+      }]
+    })
   }
 
   async status(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus> {
@@ -76,8 +96,8 @@ export class HonchoProvider extends HttpMemoryProvider implements MemoryProvider
       json: {
         conclusions: [{
           content: request.content,
-          observer_id: String(connection.agentId),
-          observed_id: String(connection.userId),
+          observer_id: String(connection.agentId) === '*' ? 'dsh' : String(connection.agentId),
+          observed_id: String(connection.userId) === '*' ? 'dsh-user' : String(connection.userId),
           session_id: null,
         }],
       },
@@ -107,7 +127,12 @@ export class HonchoProvider extends HttpMemoryProvider implements MemoryProvider
   }
 
   private scope(connection: Record<string, string | number | boolean>): Record<string, JsonValue> {
-    return { observer_id: String(connection.agentId), observed_id: String(connection.userId) }
+    const agentId = String(connection.agentId)
+    const userId = String(connection.userId)
+    return {
+      ...(agentId === '*' ? {} : { observer_id: agentId }),
+      ...(userId === '*' ? {} : { observed_id: userId }),
+    }
   }
 
   private headers(connection: Record<string, string | number | boolean>): HeadersInit {

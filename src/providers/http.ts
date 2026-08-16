@@ -8,6 +8,7 @@ import type {
   MemoryProviderConnection,
   MemoryProviderId,
 } from '../shared/contracts.ts'
+import { memoryProviderDescriptor } from './catalog.ts'
 
 export interface HttpProviderOptions {
   fetch?: typeof fetch
@@ -87,14 +88,19 @@ export abstract class HttpMemoryProvider {
 
   protected async request(body: MemoryBody, path: string, options: JsonRequestOptions = {}): Promise<unknown> {
     const connection = this.connection(body)
+    return this.requestConnection(connection, path, options)
+  }
+
+  protected async requestConnection(connection: MemoryProviderConnection, path: string, options: JsonRequestOptions = {}): Promise<unknown> {
     const endpoint = String(connection.endpoint ?? '').replace(/\/+$/u, '')
-    if (endpoint === '') throw new Error(`${body.provider.label} endpoint is not configured`)
-    if (!path.startsWith('/')) throw new Error(`${body.provider.label} request path must be absolute`)
+    const label = memoryProviderDescriptor(this.id).label
+    if (endpoint === '') throw new Error(`${label} endpoint is not configured`)
+    if (!path.startsWith('/')) throw new Error(`${label} request path must be absolute`)
     const controller = new AbortController()
     const relay = () => controller.abort(options.signal?.reason)
     options.signal?.addEventListener('abort', relay, { once: true })
     const timeoutMs = options.timeoutMs ?? this.requestTimeoutMs
-    const timer = setTimeout(() => controller.abort(new Error(`${body.provider.label} request timed out`)), timeoutMs)
+    const timer = setTimeout(() => controller.abort(new Error(`${label} request timed out`)), timeoutMs)
     const headers = new Headers(options.headers)
     if (options.json !== undefined && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
     try {
@@ -111,12 +117,12 @@ export abstract class HttpMemoryProvider {
       }
       if (!response.ok) {
         const detail = errorDetail(payload)
-        throw new Error(`${body.provider.label} HTTP ${response.status}${detail === undefined ? '' : `: ${detail}`}`)
+        throw new Error(`${label} HTTP ${response.status}${detail === undefined ? '' : `: ${detail}`}`)
       }
       return payload
     } catch (error) {
       if (controller.signal.aborted && options.signal?.aborted !== true) {
-        throw new Error(`${body.provider.label} request timed out after ${timeoutMs}ms`)
+        throw new Error(`${label} request timed out after ${timeoutMs}ms`)
       }
       throw error
     } finally {

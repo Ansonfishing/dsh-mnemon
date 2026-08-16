@@ -621,6 +621,17 @@ export class MnemonService {
     return this.memoryBodies.create(request, signal, placement)
   }
 
+  async updateProviderService(providerId: MemoryBody['provider']['id'], settings: Record<string, string | number | boolean>, clearSecrets: readonly string[] = [], enabled = true, signal?: AbortSignal) {
+    this.assertWritable()
+    if (providerId === 'mnemon-native') throw new Error('Mnemon Native service settings are managed by the native configuration')
+    if (!enabled) return this.memoryBodies.updateProviderService(providerId, settings, clearSecrets, false)
+    const connection = this.memoryBodies.resolveProviderService(providerId, settings, clearSecrets)
+    const provider = this.providers.get(providerId)
+    if (provider?.discover === undefined) throw new Error(`${memoryProviderDescriptor(providerId).label} does not support Memory Space discovery`)
+    const discovered = await provider.discover(connection, signal)
+    return this.memoryBodies.syncProviderService(providerId, connection, discovered)
+  }
+
   updateBody(id: string, request: UpdateMemoryBodyRequest): MemoryBody {
     this.assertWritable()
     return this.memoryBodies.update(id, request)

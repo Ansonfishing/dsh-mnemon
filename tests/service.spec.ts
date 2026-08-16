@@ -135,6 +135,26 @@ describe('MnemonService', () => {
     await expect(service.search({ query: 'anything', memoryBodyIds: [body.id] })).rejects.toThrow('unknown memory body')
   })
 
+  it('discovers provider-owned Memory Spaces before enabling the service', async () => {
+    const { service } = fixture()
+    const provider = {
+      id: 'hindsight' as const,
+      discover: vi.fn(async () => [{ externalId: 'bank-1', name: 'Product bank', description: 'Mapped from Hindsight.', connection: { bankId: 'bank-1', budget: 'mid' } }]),
+      status: vi.fn(async () => ({ healthy: true })),
+      search: vi.fn(async () => ({ results: [] })),
+      graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
+      list: vi.fn(async () => []),
+      remember: vi.fn(async () => ({ action: 'stored' })),
+    }
+    ;(service as unknown as { providers: Map<string, typeof provider> }).providers.set('hindsight', provider)
+
+    await expect(service.updateProviderService('hindsight', { endpoint: 'http://127.0.0.1:18889', apiKey: 'secret' })).resolves.toMatchObject({ enabled: true, configured: true })
+    expect(provider.discover).toHaveBeenCalledWith(expect.objectContaining({ endpoint: 'http://127.0.0.1:18889', apiKey: 'secret' }), undefined)
+    expect(service.memoryBodies.list()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Product bank', description: 'Mapped from Hindsight.', active: true, provider: expect.objectContaining({ id: 'hindsight' }) }),
+    ]))
+  })
+
   it('uses graph recall by default and normalizes compact results', async () => {
     const { service, process, dataDir } = fixture()
     const result = await service.search({ query: ' database choice ' })

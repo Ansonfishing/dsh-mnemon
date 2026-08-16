@@ -39,6 +39,40 @@ function response(payload: unknown, status = 200): Response {
 }
 
 describe('third-party remote memory providers', () => {
+  it('discovers provider-native namespaces and maps their upstream titles and descriptions', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (url) => {
+      const path = new URL(String(url)).pathname
+      if (path === '/v3/workspaces/list') return response({ items: [{ id: 'workspace-1', metadata: { title: 'Product workspace', description: 'Honcho source metadata.' } }] })
+      if (path === '/entities') return response([{ id: 'alice', name: 'Alice', type: 'user', total_memories: 4 }])
+      if (path === '/v1/default/banks') return response({ banks: [{ bank_id: 'bank-1', name: 'Product bank', mission: 'Hindsight source metadata.' }] })
+      if (path === '/v1/projects') return response({ projects: [{ id: 'project-1', name: 'Launch', slug: 'launch', description: 'RetainDB source metadata.' }] })
+      if (path === '/v3/container-tags/list') return response([{ id: 'space-1', name: 'Team space', containerTag: 'team', description: 'Supermemory source metadata.' }])
+      throw new Error(`unexpected discovery path ${path}`)
+    })
+
+    const honcho = await providerBody('honcho', { endpoint: 'https://honcho.example', workspace: 'old', userId: 'user', agentId: 'agent' })
+    const mem0 = await providerBody('mem0', { endpoint: 'https://mem0.example', mode: 'self-hosted', userId: 'user', agentId: 'agent' })
+    const hindsight = await providerBody('hindsight', { endpoint: 'https://hindsight.example', bankId: 'old', budget: 'mid' })
+    const retain = await providerBody('retaindb', { endpoint: 'https://retain.example', apiKey: 'key', project: 'old', userId: 'user' })
+    const supermemory = await providerBody('supermemory', { endpoint: 'https://supermemory.example', apiKey: 'key', containerTag: 'old', searchMode: 'hybrid' })
+
+    await expect(new HonchoProvider(honcho.registry, { fetch: fetchMock }).discover({ endpoint: 'https://honcho.example' })).resolves.toEqual([
+      expect.objectContaining({ externalId: 'workspace-1', name: 'Product workspace', description: 'Honcho source metadata.', connection: { workspace: 'workspace-1', userId: '*', agentId: '*' } }),
+    ])
+    await expect(new Mem0Provider(mem0.registry, { fetch: fetchMock }).discover({ endpoint: 'https://mem0.example', mode: 'self-hosted' })).resolves.toEqual([
+      expect.objectContaining({ externalId: 'user:alice', name: 'Alice', connection: { userId: 'alice', agentId: '*', rerank: false } }),
+    ])
+    await expect(new HindsightProvider(hindsight.registry, { fetch: fetchMock }).discover({ endpoint: 'https://hindsight.example' })).resolves.toEqual([
+      expect.objectContaining({ externalId: 'bank-1', name: 'Product bank', description: 'Hindsight source metadata.' }),
+    ])
+    await expect(new RetainDbProvider(retain.registry, { fetch: fetchMock }).discover({ endpoint: 'https://retain.example', apiKey: 'key' })).resolves.toEqual([
+      expect.objectContaining({ externalId: 'project-1', name: 'Launch', description: 'RetainDB source metadata.', connection: { project: 'launch', userId: '*' } }),
+    ])
+    await expect(new SupermemoryProvider(supermemory.registry, { fetch: fetchMock }).discover({ endpoint: 'https://supermemory.example', apiKey: 'key' })).resolves.toEqual([
+      expect.objectContaining({ externalId: 'space-1', name: 'Team space', description: 'Supermemory source metadata.' }),
+    ])
+  })
+
   it('uses Honcho v3 conclusion scope for recall, explicit writes, and deletion', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = []
     const fetchMock = vi.fn<typeof fetch>(async (url, init) => {

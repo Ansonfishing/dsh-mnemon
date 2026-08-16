@@ -203,7 +203,7 @@ describe('MemoryBodyRegistry', () => {
     expect(registry.openVikingConnection(created.id)).toMatchObject({ apiKey: 'secret-token' })
     expect(JSON.parse(readFileSync(registry.registryPath, 'utf8'))).toEqual({ version: 1, bodies: [] })
     expect(JSON.parse(readFileSync(registry.providerRegistryPath, 'utf8'))).toMatchObject({
-      version: 3,
+      version: 4,
       services: { openviking: expect.objectContaining({ endpoint: 'https://memory.example.com', apiKey: 'secret-token', account: 'acme' }) },
       enabled: { openviking: true },
       bodies: [expect.objectContaining({ id: created.id, providerId: 'openviking', connection: expect.objectContaining({ targetUri: 'viking://user/team/memories', user: 'grivn' }) })],
@@ -270,6 +270,55 @@ describe('MemoryBodyRegistry', () => {
     expect(reloaded.providerServices().items.find(service => service.providerId === 'openviking')).toMatchObject({ enabled: false, configured: true, configuredSecrets: ['apiKey'] })
     expect(reloaded.list()).toEqual([])
     expect(JSON.parse(readFileSync(registry.providerRegistryPath, 'utf8'))).toMatchObject({ enabled: { openviking: false }, bodies: [] })
+  })
+
+  it('repairs legacy disabled providers that still contain stale Memory Space metadata', () => {
+    const dataDir = temporaryDirectory()
+    mkdirSync(join(dataDir, 'state'), { recursive: true })
+    writeFileSync(join(dataDir, 'state', 'memory-providers.json'), JSON.stringify({
+      version: 3,
+      services: { openviking: { endpoint: 'http://127.0.0.1:1933', apiKey: 'secret', account: '' } },
+      enabled: { openviking: false },
+      bodies: [{
+        id: 'openviking-stale', name: 'Stale body', description: 'Must be removed.', active: true, providerId: 'openviking',
+        connection: { targetUri: 'viking://user/memories', user: 'alice', actorPeerId: 'dsh' },
+        createdAt: '2026-08-16T00:00:00.000Z', updatedAt: '2026-08-16T00:00:00.000Z',
+      }],
+    }))
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
+    const registry = new MemoryBodyRegistry(runner, true)
+
+    expect(registry.list()).toEqual([])
+    expect(JSON.parse(readFileSync(registry.providerRegistryPath, 'utf8'))).toMatchObject({ version: 4, enabled: { openviking: false }, bodies: [] })
+  })
+
+  it('atomically maps provider discovery metadata and removes namespaces missing from the next sync', () => {
+    const dataDir = temporaryDirectory()
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
+    const registry = new MemoryBodyRegistry(runner, true, () => new Date('2026-08-17T00:00:00.000Z'))
+    const service = registry.resolveProviderService('hindsight', { endpoint: 'http://127.0.0.1:18889', apiKey: 'secret' })
+
+    registry.syncProviderService('hindsight', service, [
+      { externalId: 'bank-a', name: 'Alice', description: 'Original upstream profile.', connection: { bankId: 'bank-a', budget: 'mid' } },
+      { externalId: 'bank-b', name: 'Team', description: 'Shared upstream bank.', connection: { bankId: 'bank-b', budget: 'high' } },
+    ])
+    const first = registry.list()
+    expect(first).toEqual([
+      expect.objectContaining({ name: 'Alice', description: 'Original upstream profile.', active: true, provider: expect.objectContaining({ id: 'hindsight', settings: { bankId: 'bank-a', budget: 'mid' } }) }),
+      expect.objectContaining({ name: 'Team', description: 'Shared upstream bank.', active: true }),
+    ])
+
+    registry.syncProviderService('hindsight', service, [
+      { externalId: 'bank-a', name: 'Alice profile', description: 'Updated directly in Hindsight.', connection: { bankId: 'bank-a', budget: 'low' } },
+    ])
+    const refreshed = registry.list()
+    expect(refreshed).toEqual([
+      expect.objectContaining({ id: first[0]!.id, name: 'Alice profile', description: 'Updated directly in Hindsight.', active: true, provider: expect.objectContaining({ settings: { bankId: 'bank-a', budget: 'low' } }) }),
+    ])
+    expect(JSON.parse(readFileSync(registry.providerRegistryPath, 'utf8'))).toMatchObject({
+      version: 4,
+      bodies: [{ externalId: 'bank-a', name: 'Alice profile' }],
+    })
   })
 
   it('persists an audited automatic placement and refuses to create before placement resolves', async () => {

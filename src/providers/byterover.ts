@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
-import { isAbsolute, join, resolve } from 'node:path'
+import { basename, isAbsolute, join, resolve } from 'node:path'
 import type { JsonValue } from '../contracts.ts'
 import type { MemoryBodyRegistry } from '../memory-bodies.ts'
 import { runProcess, type ProcessRunner } from '../process.ts'
-import type { Insight, MemoryBody, MemoryGraphSnapshot, MemoryListRequest, RememberRequest, SearchRequest } from '../shared/contracts.ts'
-import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './provider.ts'
+import type { Insight, MemoryBody, MemoryGraphSnapshot, MemoryListRequest, MemoryProviderConnection, RememberRequest, SearchRequest } from '../shared/contracts.ts'
+import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderMemorySpace, ProviderSearchResult } from './provider.ts'
 
 interface ByteRoverProviderOptions {
   process?: ProcessRunner
@@ -23,6 +23,21 @@ export class ByteRoverProvider implements MemoryProviderAdapter {
     this.process = options.process ?? runProcess
     this.queryTimeoutMs = options.queryTimeoutMs ?? 10_000
     this.curateTimeoutMs = options.curateTimeoutMs ?? 120_000
+  }
+
+  async discover(connection: MemoryProviderConnection): Promise<ProviderMemorySpace[]> {
+    const configured = String(connection.defaultDirectory ?? '').trim()
+    const directory = configured === ''
+      ? join(this.memoryBodies.runner.effectiveDataDir(), 'state', 'byterover', 'default')
+      : isAbsolute(configured)
+        ? configured
+        : resolve(this.memoryBodies.runner.effectiveDataDir(), configured)
+    return [{
+      externalId: directory,
+      name: basename(directory) || 'ByteRover',
+      description: `ByteRover knowledge directory at ${directory}`,
+      connection: { workingDirectory: directory },
+    }]
   }
 
   async status(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus> {
@@ -79,7 +94,7 @@ export class ByteRoverProvider implements MemoryProviderAdapter {
     const connection = this.connection(body)
     const command = String(connection.cliPath ?? 'brv')
     const configuredDirectory = String(connection.workingDirectory ?? connection.defaultDirectory ?? '').trim()
-    const defaultDirectory = join(this.memoryBodies.runner.effectiveDataDir(), 'state', 'byterover', body.id)
+    const defaultDirectory = join(this.memoryBodies.runner.effectiveDataDir(), 'state', 'byterover', 'default')
     const cwd = configuredDirectory === ''
       ? defaultDirectory
       : isAbsolute(configuredDirectory)

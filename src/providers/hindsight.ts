@@ -13,7 +13,7 @@ import type {
   SearchRequest,
 } from '../shared/contracts.ts'
 import { HttpMemoryProvider, firstArray, jsonArray, jsonNumber, jsonObject, jsonString, type HttpProviderOptions } from './http.ts'
-import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './provider.ts'
+import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderMemorySpace, ProviderSearchResult } from './provider.ts'
 
 function insight(value: unknown): Insight | undefined {
   const item = jsonObject(value)
@@ -51,6 +51,21 @@ export class HindsightProvider extends HttpMemoryProvider implements MemoryProvi
 
   constructor(memoryBodies: MemoryBodyRegistry, options: HttpProviderOptions = {}) {
     super(memoryBodies, options)
+  }
+
+  async discover(connection: Record<string, string | number | boolean>, signal?: AbortSignal): Promise<ProviderMemorySpace[]> {
+    const payload = await this.requestConnection(connection, '/v1/default/banks', { headers: this.headers(connection), signal })
+    return firstArray(payload, 'banks', 'items').flatMap(value => {
+      const item = jsonObject(value)
+      const id = jsonString(item?.bank_id) ?? jsonString(item?.id)
+      if (id === undefined) return []
+      return [{
+        externalId: id,
+        name: jsonString(item?.name) ?? id,
+        description: jsonString(item?.mission) ?? jsonString(item?.description) ?? `Hindsight memory bank ${id}`,
+        connection: { bankId: id, budget: 'mid' },
+      }]
+    })
   }
 
   async status(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus> {

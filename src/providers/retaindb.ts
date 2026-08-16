@@ -2,7 +2,7 @@ import type { JsonValue } from '../contracts.ts'
 import type { MemoryBodyRegistry } from '../memory-bodies.ts'
 import type { Insight, MemoryBody, MemoryListRequest, RememberRequest, SearchRequest } from '../shared/contracts.ts'
 import { HttpMemoryProvider, firstArray, jsonNumber, jsonObject, jsonString, type HttpProviderOptions } from './http.ts'
-import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './provider.ts'
+import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderMemorySpace, ProviderSearchResult } from './provider.ts'
 
 function insight(value: unknown): Insight | undefined {
   const item = jsonObject(value)
@@ -28,6 +28,21 @@ export class RetainDbProvider extends HttpMemoryProvider implements MemoryProvid
     super(memoryBodies, options)
   }
 
+  async discover(connection: Record<string, string | number | boolean>, signal?: AbortSignal): Promise<ProviderMemorySpace[]> {
+    const payload = await this.requestConnection(connection, '/v1/projects', { headers: this.headers(connection, '/v1/projects'), signal })
+    return firstArray(payload, 'projects', 'items').flatMap(value => {
+      const item = jsonObject(value)
+      const project = jsonString(item?.slug) ?? jsonString(item?.name) ?? jsonString(item?.id)
+      if (project === undefined) return []
+      return [{
+        externalId: jsonString(item?.id) ?? project,
+        name: jsonString(item?.name) ?? project,
+        description: jsonString(item?.description) ?? `RetainDB project ${project}`,
+        connection: { project, userId: '*' },
+      }]
+    })
+  }
+
   async status(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus> {
     try {
       await this.list(body, { limit: 1 }, signal)
@@ -44,7 +59,7 @@ export class RetainDbProvider extends HttpMemoryProvider implements MemoryProvid
       json: {
         project: String(connection.project),
         query: request.query,
-        user_id: String(connection.userId),
+        ...(String(connection.userId) === '*' ? {} : { user_id: String(connection.userId) }),
         session_id: `dsh-${body.id}`,
         top_k: request.limit ?? 10,
         include_pending: true,
@@ -59,12 +74,13 @@ export class RetainDbProvider extends HttpMemoryProvider implements MemoryProvid
     const params = new URLSearchParams({ project: String(connection.project), include_pending: 'true' })
     let payload: unknown
     try {
+      if (String(connection.userId) === '*') throw new Error('project-wide scope uses the collection endpoint')
       payload = await this.request(body, `/v1/memory/profile/${encodeURIComponent(String(connection.userId))}?${params}`, {
         headers: this.headers(connection, '/v1/memory/profile'),
         signal,
       })
     } catch {
-      params.set('user_id', String(connection.userId))
+      if (String(connection.userId) !== '*') params.set('user_id', String(connection.userId))
       params.set('limit', String(Math.min(Math.max(request.limit ?? 200, 1), 200)))
       payload = await this.request(body, `/v1/memories?${params}`, { headers: this.headers(connection, '/v1/memories'), signal })
     }
@@ -79,7 +95,7 @@ export class RetainDbProvider extends HttpMemoryProvider implements MemoryProvid
       project: String(connection.project),
       content: request.content,
       memory_type: request.category ?? 'factual',
-      user_id: String(connection.userId),
+      user_id: String(connection.userId) === '*' ? 'dsh-user' : String(connection.userId),
       session_id: `dsh-${body.id}`,
       importance: request.importance ?? 0.7,
       write_mode: 'sync',

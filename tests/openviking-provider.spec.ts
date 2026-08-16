@@ -49,6 +49,22 @@ function ok(result: unknown): Response {
 }
 
 describe('OpenVikingProvider', () => {
+  it('discovers every registered user namespace in the configured account', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (url) => {
+      expect(new URL(String(url)).pathname).toBe('/api/v1/admin/accounts/acme/users')
+      return ok([
+        { user_id: 'alice', display_name: 'Alice', description: 'Product lead memory.' },
+        { user_id: 'bob', name: 'Bob', role: 'Engineer' },
+      ])
+    })
+    const { provider } = await bodyAndRegistry(fetchMock)
+
+    await expect(provider.discover({ endpoint: 'https://memory.example.com', apiKey: 'private-key', account: 'acme' })).resolves.toEqual([
+      { externalId: 'acme:alice', name: 'Alice', description: 'Product lead memory.', connection: { targetUri: 'viking://user/memories', user: 'alice', actorPeerId: 'dsh' } },
+      { externalId: 'acme:bob', name: 'Bob', description: 'Engineer', connection: { targetUri: 'viking://user/memories', user: 'bob', actorPeerId: 'dsh' } },
+    ])
+  })
+
   it('scopes semantic retrieval to the configured memory URI and keeps credentials in host headers', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = []
     const fetchMock = vi.fn<typeof fetch>(async (url, init) => {

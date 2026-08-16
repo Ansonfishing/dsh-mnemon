@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import type { JsonValue } from '../contracts.ts'
 import type { MemoryBodyRegistry } from '../memory-bodies.ts'
 import type {
@@ -9,10 +9,11 @@ import type {
   MemoryBodyStats,
   MemoryGraphSnapshot,
   MemoryListRequest,
+  MemoryProviderConnection,
   RememberRequest,
   SearchRequest,
 } from '../shared/contracts.ts'
-import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './provider.ts'
+import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderMemorySpace, ProviderSearchResult } from './provider.ts'
 
 interface HolographicFact {
   id: string
@@ -81,6 +82,22 @@ export class HolographicProvider implements MemoryProviderAdapter {
   readonly id = 'holographic' as const
 
   constructor(private readonly memoryBodies: MemoryBodyRegistry) {}
+
+  async discover(connection: MemoryProviderConnection): Promise<ProviderMemorySpace[]> {
+    const configured = String(connection.dataPath ?? '').trim()
+    const path = configured === ''
+      ? join(this.memoryBodies.runner.effectiveDataDir(), 'state', 'holographic', 'store.json')
+      : isAbsolute(configured)
+        ? configured
+        : resolve(this.memoryBodies.runner.effectiveDataDir(), configured)
+    const label = basename(path).replace(/\.json$/iu, '') || 'Holographic'
+    return [{
+      externalId: path,
+      name: label === 'store' ? 'Holographic' : label,
+      description: `Holographic fact store at ${path}`,
+      connection: { defaultTrust: 0.5, minTrust: 0.3 },
+    }]
+  }
 
   async status(body: MemoryBody): Promise<ProviderBodyStatus> {
     try {
@@ -196,7 +213,7 @@ export class HolographicProvider implements MemoryProviderAdapter {
 
   private path(body: MemoryBody): string {
     const configured = String(this.connection(body).dataPath ?? '').trim()
-    if (configured === '') return join(this.memoryBodies.runner.effectiveDataDir(), 'state', 'holographic', `${body.id}.json`)
+    if (configured === '') return join(this.memoryBodies.runner.effectiveDataDir(), 'state', 'holographic', 'store.json')
     return isAbsolute(configured) ? configured : resolve(this.memoryBodies.runner.effectiveDataDir(), configured)
   }
 

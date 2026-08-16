@@ -6,11 +6,12 @@ import type {
   MemoryBody,
   MemoryGraphSnapshot,
   MemoryListRequest,
+  MemoryProviderConnection,
   OpenVikingBodyConnection,
   RememberRequest,
   SearchRequest,
 } from '../shared/contracts.ts'
-import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './provider.ts'
+import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderMemorySpace, ProviderSearchResult } from './provider.ts'
 
 interface OpenVikingEnvelope {
   status?: string
@@ -73,6 +74,33 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     this.requestTimeoutMs = options.requestTimeoutMs ?? 15_000
     this.settlementTimeoutMs = options.settlementTimeoutMs ?? 120_000
     this.pollIntervalMs = options.pollIntervalMs ?? 750
+  }
+
+  async discover(connection: MemoryProviderConnection, signal?: AbortSignal): Promise<ProviderMemorySpace[]> {
+    let account = String(connection.account ?? '').trim()
+    if (account === '') {
+      const accounts = await this.requestConnection(connection, '/api/v1/admin/accounts', {}, { signal })
+      const items = Array.isArray(accounts) ? accounts : []
+      const ids = items.flatMap(value => {
+        const id = string(object(value)?.account_id) ?? string(object(value)?.id)
+        return id === undefined ? [] : [id]
+      })
+      if (ids.length > 1) throw new Error('OpenViking exposes multiple accounts; configure the account to select one discovery scope')
+      account = ids[0] ?? 'default'
+    }
+    const users = await this.requestConnection({ ...connection, account }, `/api/v1/admin/accounts/${encodeURIComponent(account)}/users?limit=100`, {}, { signal })
+    const items = Array.isArray(users) ? users : []
+    return items.flatMap(value => {
+      const item = object(value)
+      const user = string(item?.user_id) ?? string(item?.id) ?? string(item?.name)
+      if (user === undefined) return []
+      return [{
+        externalId: `${account}:${user}`,
+        name: string(item?.display_name) ?? string(item?.name) ?? user,
+        description: string(item?.description) ?? string(item?.role) ?? `OpenViking memory namespace for ${user}`,
+        connection: { targetUri: 'viking://user/memories', user, actorPeerId: 'dsh' },
+      }]
+    })
   }
 
   async status(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus> {
@@ -246,6 +274,10 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
 
   private async request(body: MemoryBody, path: string, init: RequestInit = {}, options: OpenVikingRequestOptions = {}): Promise<unknown> {
     const connection = this.connection(body)
+    return this.requestConnection(connection, path, init, options)
+  }
+
+  private async requestConnection(connection: MemoryProviderConnection | OpenVikingBodyConnection, path: string, init: RequestInit = {}, options: OpenVikingRequestOptions = {}): Promise<unknown> {
     const controller = new AbortController()
     const relay = () => controller.abort(options.signal?.reason)
     options.signal?.addEventListener('abort', relay, { once: true })
@@ -256,9 +288,9 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
         headers: {
           'Content-Type': 'application/json',
           ...(connection.apiKey === undefined || connection.apiKey === '' ? {} : { Authorization: `Bearer ${connection.apiKey}` }),
-          ...(connection.account === undefined || connection.account === '' ? {} : { 'X-OpenViking-Account': connection.account }),
-          ...(connection.user === undefined || connection.user === '' ? {} : { 'X-OpenViking-User': connection.user }),
-          ...(connection.actorPeerId === undefined || connection.actorPeerId === '' ? {} : { 'X-OpenViking-Actor-Peer': connection.actorPeerId }),
+          ...(connection.account === undefined || connection.account === '' ? {} : { 'X-OpenViking-Account': String(connection.account) }),
+          ...(connection.user === undefined || connection.user === '' ? {} : { 'X-OpenViking-User': String(connection.user) }),
+          ...(connection.actorPeerId === undefined || connection.actorPeerId === '' ? {} : { 'X-OpenViking-Actor-Peer': String(connection.actorPeerId) }),
           ...init.headers,
         },
         signal: controller.signal,

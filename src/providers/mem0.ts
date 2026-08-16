@@ -10,7 +10,7 @@ import {
   jsonString,
   type HttpProviderOptions,
 } from './http.ts'
-import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './provider.ts'
+import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderMemorySpace, ProviderSearchResult } from './provider.ts'
 
 function category(item: Record<string, unknown>): string {
   const categories = jsonArray(item.categories).filter((value): value is string => typeof value === 'string')
@@ -41,6 +41,30 @@ export class Mem0Provider extends HttpMemoryProvider implements MemoryProviderAd
 
   constructor(memoryBodies: MemoryBodyRegistry, options: HttpProviderOptions = {}) {
     super(memoryBodies, options)
+  }
+
+  async discover(connection: Record<string, string | number | boolean>, signal?: AbortSignal): Promise<ProviderMemorySpace[]> {
+    const mode = String(connection.mode ?? 'platform')
+    const payload = await this.requestConnection(connection, mode === 'self-hosted' ? '/entities' : '/v1/entities', {
+      headers: this.headers(connection, mode),
+      signal,
+    })
+    return firstArray(payload, 'entities', 'results').flatMap(value => {
+      const item = jsonObject(value)
+      const id = jsonString(item?.id)
+      const type = jsonString(item?.type)
+      if (id === undefined || (type !== 'user' && type !== 'agent')) return []
+      const metadata = jsonObject(item?.metadata)
+      const count = jsonNumber(item?.total_memories)
+      return [{
+        externalId: `${type}:${id}`,
+        name: jsonString(item?.name) ?? jsonString(metadata?.name) ?? id,
+        description: jsonString(metadata?.description) ?? `${type === 'user' ? 'User' : 'Agent'} memory${count === undefined ? '' : ` · ${count} memories`}`,
+        connection: type === 'user'
+          ? { userId: id, agentId: '*', rerank: false }
+          : { userId: '*', agentId: id, rerank: false },
+      }]
+    })
   }
 
   async status(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus> {
@@ -74,7 +98,7 @@ export class Mem0Provider extends HttpMemoryProvider implements MemoryProviderAd
     const mode = String(connection.mode ?? 'platform')
     const limit = Math.min(Math.max(request.limit ?? 200, 1), 200)
     const payload = mode === 'self-hosted'
-      ? await this.request(body, `/memories?${new URLSearchParams({ user_id: String(connection.userId), agent_id: String(connection.agentId), limit: String(limit) })}`, {
+      ? await this.request(body, `/memories?${new URLSearchParams({ ...this.filters(connection) as Record<string, string>, limit: String(limit) })}`, {
           headers: this.headers(connection, mode),
           signal,
         })
@@ -93,8 +117,8 @@ export class Mem0Provider extends HttpMemoryProvider implements MemoryProviderAd
       headers: this.headers(connection, mode),
       json: {
         messages: [{ role: 'user', content: request.content }],
-        user_id: String(connection.userId),
-        agent_id: String(connection.agentId),
+        user_id: String(connection.userId) === '*' ? 'dsh-user' : String(connection.userId),
+        agent_id: String(connection.agentId) === '*' ? 'dsh' : String(connection.agentId),
         ...(mode === 'self-hosted' ? { infer: false } : {}),
         metadata: {
           source: 'dsh-mnemon',
@@ -125,9 +149,11 @@ export class Mem0Provider extends HttpMemoryProvider implements MemoryProviderAd
   }
 
   private filters(connection: Record<string, string | number | boolean>): Record<string, JsonValue> {
+    const userId = String(connection.userId)
+    const agentId = String(connection.agentId ?? '')
     return {
-      user_id: String(connection.userId),
-      ...(String(connection.agentId ?? '') === '' ? {} : { agent_id: String(connection.agentId) }),
+      ...(userId === '*' ? {} : { user_id: userId }),
+      ...(agentId === '' || agentId === '*' ? {} : { agent_id: agentId }),
     }
   }
 

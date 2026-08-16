@@ -6,6 +6,7 @@ import type {
   MemoryBodyStats,
   MemoryGraphSnapshot,
   MemoryListRequest,
+  MemoryProviderConnection,
   RememberRequest,
   SearchRequest,
 } from '../shared/contracts.ts'
@@ -21,12 +22,23 @@ export interface ProviderSearchResult {
   hint?: string
 }
 
+/** One provider-owned namespace projected into DSH as a Memory Space. */
+export interface ProviderMemorySpace {
+  /** Stable identifier owned by the provider, never a DSH-generated title. */
+  externalId: string
+  name: string
+  description: string
+  connection: MemoryProviderConnection
+}
+
 /**
  * Third-layer memory data plane. DSH owns routing and lifecycle; adapters own
  * only one body's persistence and retrieval semantics.
  */
 export interface MemoryProviderAdapter {
   readonly id: MemoryBody['provider']['id']
+  /** Enumerate the complete set of namespaces visible to this service connection. */
+  discover?(connection: MemoryProviderConnection, signal?: AbortSignal): Promise<ProviderMemorySpace[]>
   status(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus>
   search(body: MemoryBody, request: SearchRequest, signal?: AbortSignal): Promise<ProviderSearchResult>
   graph(body: MemoryBody, signal?: AbortSignal): Promise<MemoryGraphSnapshot>

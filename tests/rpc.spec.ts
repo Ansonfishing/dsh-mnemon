@@ -13,9 +13,9 @@ function fakeService(writeEnabled = true): MnemonService {
   return {
     config: resolveConfig({ writeEnabled }),
     status: vi.fn(async () => ({ healthy: true })),
+    updateProviderService: vi.fn(async (providerId, settings) => ({ providerId, configured: true, settings, configuredSecrets: [] })),
     memoryBodies: {
       providerServices: vi.fn(() => ({ providers: [], items: [], generatedAt: 'now' })),
-      updateProviderService: vi.fn((providerId, settings) => ({ providerId, configured: true, settings, configuredSecrets: [] })),
     },
     bodies: vi.fn(async () => ({ items: [], total: 0, activeCount: 0, directory: '/tmp/mnemon/data', generatedAt: 'now' })),
     graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
@@ -124,7 +124,7 @@ describe('Mnemon RPC', () => {
     await expect(createWriteHandler(service)('provider-service-update', {
       providerId: 'openviking', settings: { endpoint: 'http://127.0.0.1:1933' }, clearSecrets: ['apiKey'], enabled: false,
     })).resolves.toMatchObject({ ok: true, value: { providerId: 'openviking', configured: true } })
-    expect(service.memoryBodies.updateProviderService).toHaveBeenCalledWith('openviking', { endpoint: 'http://127.0.0.1:1933' }, ['apiKey'], false)
+    expect(service.updateProviderService).toHaveBeenCalledWith('openviking', { endpoint: 'http://127.0.0.1:1933' }, ['apiKey'], false)
     expect(service.createBody).not.toHaveBeenCalled()
   })
 

@@ -285,7 +285,7 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
                 ? payload.clearSecrets.map(String)
                 : (() => { throw new Error('clearSecrets must be an array') })()
             const enabled = payload.enabled === undefined ? true : payload.enabled === true
-            const updated = service.memoryBodies.updateProviderService(providerId, settings, clearSecrets, enabled)
+            const updated = await service.updateProviderService(providerId, settings, clearSecrets, enabled)
             return success(service.memoryBodies.providerServices({ includeSecrets: true }).items.find(item => item.providerId === providerId) ?? updated)
           }
         case 'runtime-memory':
