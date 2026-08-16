@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -93,6 +93,26 @@ try {
 
   const install = await run(['plugin', '--profile', 'headless', 'add', `link:${root}`], { env })
   assertSuccess('installing dsh-mnemon into the Headless profile', install)
+
+  // The verification exercises Mnemon composition, not DSH's native PTY
+  // transport. Disable the unrelated shell stack so the check remains
+  // hermetic on CI Node/platform combinations without a node-pty prebuild.
+  await writeFile(join(dshHome, 'profiles', 'headless', 'cordis.patch.yml'), `
+- id: subprocess
+  disabled: true
+- id: bash-sandbox
+  disabled: true
+- id: pwsh-sandbox
+  disabled: true
+- id: tool-bash
+  disabled: true
+- id: tool-pwsh
+  disabled: true
+- id: permission
+  disabled: true
+- id: tool-fs-search
+  disabled: true
+`.trimStart())
 
   const execution = await run(['--profile', 'headless', 'Verify that the Mnemon tool surface is available.'], {
     cwd: workspaceRoot,
