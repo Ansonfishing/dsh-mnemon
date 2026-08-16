@@ -43,6 +43,7 @@ import {
 import { MnemonClient } from './api.ts'
 import { translateZh, type MnemonKey, type MnemonTranslate } from './locales.ts'
 import { MnemonLogo } from './MnemonLogo.tsx'
+import { ProviderIcon } from './ProviderIcon.tsx'
 import {
   appearanceClass,
   MnemonViewAppearanceProvider,
@@ -1952,7 +1953,7 @@ function ProviderHealth({ services }: { services: MemoryProviderRuntimeStatus[] 
       <span className={css.phaseBadge}>{t('status.providersEnabled', { enabled, total: services.length })}</span>
     </div>
     <div className={css.providerHealthList}>{services.map(service => <article key={service.providerId} data-status={service.status}>
-      <span className={css.providerHealthMark} aria-hidden="true">{service.label.slice(0, 1).toUpperCase()}</span>
+      <ProviderIcon providerId={service.providerId} className={css.providerHealthMark} />
       <div className={css.providerHealthCopy}>
         <strong>{service.label}</strong>
         <small>{t(`status.providerState.${service.status}` as MnemonKey)}</small>

@@ -10,6 +10,7 @@ import type {
 import { MnemonClient } from './api.ts'
 import css from './MnemonSettingsCard.module.css'
 import type { MnemonKey, MnemonTranslate } from './locales.ts'
+import { ProviderIcon } from './ProviderIcon.tsx'
 
 interface ProviderSettingsSectionProps {
   connection?: ClientConnectionHandle
@@ -181,7 +182,7 @@ function ProviderPanel(props: {
   return <div className={css.providerRow} data-provider={props.provider.id} data-enabled={enabled || undefined}>
     <div className={css.providerRowHeader}>
       <button type="button" className={css.providerDisclosure} aria-expanded={expanded} disabled={!enabled || controlDisabled} onClick={() => setExpanded(value => !value)}>
-        <span className={css.providerIdentity}><i className={css.providerMark} aria-hidden="true">{props.provider.label.slice(0, 1).toUpperCase()}</i><span><strong>{props.provider.label}</strong><small>{props.t(`overview.workspaceBinding.${props.provider.workspaceBinding}`)} · {props.t(`overview.providerSummary.${props.provider.id}` as MnemonKey)}</small></span></span>
+        <span className={css.providerIdentity}><ProviderIcon providerId={props.provider.id} className={css.providerMark} /><span><strong>{props.provider.label}</strong><small>{props.t(`overview.workspaceBinding.${props.provider.workspaceBinding}`)} · {props.t(`overview.providerSummary.${props.provider.id}` as MnemonKey)}</small></span></span>
         {enabled && <i className={css.providerChevron} aria-hidden="true">›</i>}
       </button>
       <div className={css.providerEnableControl}>
