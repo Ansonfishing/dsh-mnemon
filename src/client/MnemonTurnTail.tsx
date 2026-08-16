@@ -1,6 +1,5 @@
 import { memo, useEffect, useState, type JSX, type MouseEvent as ReactMouseEvent } from 'react'
-import type { ClientConnectionHandle } from '../contracts.ts'
-import type { TurnMemoryActivity } from '../lifecycle.ts'
+import type { ClientConnectionHandle, TurnMemoryActivity } from '../shared/contracts.ts'
 import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { MnemonClient } from './api.ts'
 import { dispatchMnemonAnchor, type MnemonAnchorPage } from './anchor.ts'

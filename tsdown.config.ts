@@ -1,25 +1,31 @@
 import { readFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-import { basename, dirname, resolve as resolvePath } from 'node:path'
+import { dirname, relative, resolve as resolvePath } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { UserConfig } from 'tsdown'
 import { transform } from 'lightningcss'
 
 const PLUGIN_ID = 'dsh-mnemon'
-const CLIENT_EXTERNALS = ['react', 'react-dom', 'react/jsx-runtime', 'cordis', '@deepseek-ai/dsh-client-ui-primitives'] as const
+const PROJECT_ROOT = dirname(fileURLToPath(import.meta.url))
+const CLIENT_EXTERNALS = [
+  /^react(?:\/.*)?$/,
+  /^react-dom(?:\/.*)?$/,
+  /^cordis(?:\/.*)?$/,
+  /^@deepseek-ai\/dsh-client-ui-primitives(?:\/.*)?$/,
+]
 const CSS_VIRTUAL_PREFIX = '\0dsh-mnemon-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
 
 const host: UserConfig = {
   name: PLUGIN_ID,
-  entry: ['lib/types/index.js'],
+  entry: ['src/index.ts'],
   outDir: 'lib',
   format: ['esm'],
   platform: 'node',
   target: 'es2024',
   fixedExtension: false,
   dts: false,
-  clean: false,
-  deps: { neverBundle: ['cordis', 'schemastery'] },
+  clean: true,
+  deps: { neverBundle: true },
 }
 
 const client: UserConfig = {
@@ -27,14 +33,17 @@ const client: UserConfig = {
   entry: { client: 'src/client/index.ts' },
   outDir: 'lib',
   format: 'cjs',
+  fixedExtension: false,
+  outExtensions: () => ({ js: '.js' }),
   platform: 'browser',
   target: 'es2022',
   dts: false,
-  sourcemap: true,
+  sourcemap: false,
   clean: false,
   deps: {
-    neverBundle: [...CLIENT_EXTERNALS],
-    alwaysBundle: (id: string) => CLIENT_EXTERNALS.includes(id as typeof CLIENT_EXTERNALS[number]) ? undefined : true,
+    neverBundle: CLIENT_EXTERNALS,
+    alwaysBundle: ['markdown-to-jsx'],
+    onlyBundle: ['markdown-to-jsx'],
   },
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
@@ -51,15 +60,15 @@ const client: UserConfig = {
       const fileId = virtualId.slice(CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length)
       this.addWatchFile(fileId)
       const source = await readFile(fileId)
+      const filename = portableRelativePath(PROJECT_ROOT, fileId)
       const { code, exports: cssExports } = transform({
-        filename: fileId,
+        filename,
         code: source,
         cssModules: { pattern: '[hash]_[local]' },
         minify: true,
       })
-      const classMap: Record<string, string> = {}
-      for (const [local, exported] of Object.entries(cssExports ?? {})) classMap[local] = exported.name
-      const tagId = `${PLUGIN_ID}/${basename(fileId)}`
+      const classMap = stableCssClassMap(cssExports)
+      const tagId = `${PLUGIN_ID}/${filename}`
       return [
         `const css = ${JSON.stringify(code.toString())};`,
         `const tagId = ${JSON.stringify(tagId)};`,
@@ -75,7 +84,6 @@ const client: UserConfig = {
     },
   }],
   outputOptions: {
-    entryFileNames: 'client.js',
     banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(PLUGIN_ID)}, factory: (require) => {`,
     footer: 'return module.exports; } });',
     intro: 'var module = { exports: {} }; var exports = module.exports;',
@@ -83,12 +91,17 @@ const client: UserConfig = {
 }
 
 function resolveAssetPath(source: string, importer: string): string {
-  const emitted = resolvePath(dirname(importer), source)
-  if (existsSync(emitted)) return emitted
-  const marker = '/lib/types/'
-  const boundary = emitted.indexOf(marker)
-  if (boundary < 0) return emitted
-  return resolvePath(emitted.slice(0, boundary), 'src', emitted.slice(boundary + marker.length))
+  return resolvePath(dirname(importer), source)
+}
+
+export function portableRelativePath(root: string, path: string): string {
+  return relative(root, path).replaceAll('\\', '/')
+}
+
+export function stableCssClassMap(cssExports: Record<string, { name: string }> | void): Record<string, string> {
+  return Object.fromEntries(Object.entries(cssExports ?? {})
+    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+    .map(([local, exported]) => [local, exported.name]))
 }
 
 export default [host, client]

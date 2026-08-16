@@ -3,38 +3,9 @@ import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { ResolvedConfig } from './config.ts'
 import type { MnemonRunner } from './runner.ts'
+import type { StorageAreaInventory, StorageAreaKind, StorageAreaStatus, StorageScopeCatalog, StorageScopeInventory, StorageScopeKind } from './shared/contracts.ts'
 
-export type StorageScopeKind = 'global' | 'workspace' | 'custom'
-export type StorageAreaKind = 'runtime' | 'memory-bodies' | 'documents' | 'state'
-export type StorageAreaStatus = 'ready' | 'empty' | 'missing' | 'invalid'
-
-export interface StorageAreaInventory {
-  kind: StorageAreaKind
-  path: string
-  status: StorageAreaStatus
-  bytes: number
-  itemCount: number
-  details: Record<string, number | string | boolean>
-  issue?: string
-}
-
-export interface StorageScopeInventory {
-  kind: StorageScopeKind
-  root?: string
-  configured: boolean
-  active: boolean
-  available: boolean
-  totalBytes: number
-  areas: StorageAreaInventory[]
-  issue?: string
-}
-
-export interface StorageScopeCatalog {
-  activeKind: StorageScopeKind
-  activeRoot: string
-  scopes: StorageScopeInventory[]
-  generatedAt: string
-}
+export type { StorageAreaInventory, StorageAreaKind, StorageAreaStatus, StorageScopeCatalog, StorageScopeInventory, StorageScopeKind } from './shared/contracts.ts'
 
 function expandHome(path: string): string {
   if (path === '~') return homedir()

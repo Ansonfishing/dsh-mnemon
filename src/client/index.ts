@@ -1,6 +1,10 @@
-import type { ClientConnectionHandle } from '../contracts.ts'
-import type { Config, InteractionConfig } from '../config.ts'
-import { MNEMON_SETTINGS_NAMESPACE, MNEMON_UI_SETTINGS_NAMESPACE } from '../settings.ts'
+import {
+  MNEMON_SETTINGS_NAMESPACE,
+  MNEMON_UI_SETTINGS_NAMESPACE,
+  type ClientConnectionHandle,
+  type Config,
+  type InteractionConfig,
+} from '../shared/contracts.ts'
 import { MnemonSettingsCard } from './MnemonSettingsCard.tsx'
 import { MnemonView } from './MnemonView.tsx'
 import { MnemonTurnTail, selectMnemonTurnTail } from './MnemonTurnTail.tsx'

@@ -180,7 +180,7 @@ pnpm install
 pnpm run verify
 ```
 
-`verify` 依次运行 TypeScript 检查、Vitest 和生产构建。构建产物提交在 `lib/` 中。
+`verify` 依次运行 TypeScript 检查、Vitest、两次可复现构建和发布包校验。`lib/` 是生成目录，不再提交到仓库。
 
 ## License
 

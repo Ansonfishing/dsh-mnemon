@@ -15,6 +15,9 @@ import {
   type RuntimeMemoryMutationResult,
 } from './runtime-memory.ts'
 import type { Insight, RememberRequest, SearchRequest } from './service.ts'
+import type { SubagentCounters } from './shared/contracts.ts'
+
+export type { SubagentCounters } from './shared/contracts.ts'
 
 interface AgentRuntimeSource {
   forAgent(agent: HostAgent): { runtimeMemory: RuntimeMemoryController; documents: DocumentManager }
@@ -151,20 +154,6 @@ export function assertDshOutputSchema(schema: unknown, path = 'schema'): void {
   }
   if (value.items !== undefined) assertDshOutputSchema(value.items, `${path}.items`)
   if (Array.isArray(value.oneOf)) value.oneOf.forEach((child, index) => assertDshOutputSchema(child, `${path}.oneOf[${index}]`))
-}
-
-export interface SubagentCounters {
-  recalls: number
-  writes: number
-  answers: number
-  reviews: number
-  migrations: number
-  compactions: number
-  documentArchives: number
-  failures: number
-  lastRunId?: string
-  lastOperation?: 'recall' | 'write' | 'review' | 'migration' | 'compaction' | 'document-archive'
-  lastAt?: string
 }
 
 export interface DelegatedRecallResult {

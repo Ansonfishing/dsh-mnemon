@@ -4,7 +4,7 @@
 
 ## Environment
 
-The repository does not declare minimum Node, pnpm, DSH, or Mnemon versions in `package.json`. Use the current DSH development environment and verify compatibility through the full validation chain whenever dependencies are upgraded.
+`package.json` requires Node.js 20 or newer. CI uses Node.js 24 and pnpm 10.13.1. Verify DSH and Mnemon compatibility through the full validation chain whenever dependencies are upgraded.
 
 Install dependencies:
 
@@ -18,7 +18,7 @@ pnpm install
 pnpm run typecheck  # tsc --noEmit
 pnpm test           # vitest run
 pnpm run build      # declarations + host/client bundles
-pnpm run verify     # typecheck + test + build
+pnpm run verify     # typecheck + tests + reproducible build + package validation
 ```
 
 ## Directory Structure
@@ -38,9 +38,11 @@ src/
 +-- tools.ts / commands.ts    # model and human interfaces
 +-- rpc.ts / settings.ts      # Web bridges
 +-- storage-scope.ts          # storage inventory
++-- shared/contracts.ts       # canonical Host/Client wire contracts
 +-- client/                   # React workspace and locales
 tests/                        # Vitest suites
-lib/                          # committed build artifacts
+scripts/                      # deterministic build and package checks
+lib/                          # generated, ignored publish artifacts
 docs/zh-CN/                   # Chinese documentation
 docs/en/                      # English mirror
 cordis.patch.yml              # DSH profile bundle patch
@@ -49,23 +51,22 @@ cordis.patch.yml              # DSH profile bundle patch
 ## Build Artifacts
 
 ```text
-tsc -p tsconfig.build.json
-  -> lib/types/*              declarations, maps, intermediate ESM
-
-tsdown host bundle
+tsdown (directly from src/)
   -> lib/index.js             Node ES2024 ESM
-
-tsdown client bundle
   -> lib/client.js            DSH browser module wrapper
-  -> lib/client.js.map
+
+tsc -p tsconfig.types.json
+  -> lib/types/**/*.d.ts      declarations only
 
 lightningcss plugin
   -> CSS Modules compiled and injected as scoped <style>
 ```
 
-The Host keeps `cordis` and `schemastery` external. The client keeps React, ReactDOM, the JSX runtime, and Cordis external; all other dependencies are included in the bundle.
+The Host keeps all package dependencies external. The client keeps React, ReactDOM, the JSX runtime, Cordis, and DSH UI primitives external; only `markdown-to-jsx` is allowed to be bundled from `node_modules`.
 
-`lib/` is part of the publishing input. After modifying `src/`, rebuild and inspect the generated diff. Do not edit `lib/` manually.
+`lib/` is a publishing input but is ignored by Git. Never edit it manually. `pnpm run verify:build` builds twice and compares every output hash, so unstable CSS export ordering or other generated churn fails verification.
+
+`src/shared/contracts.ts` is the canonical boundary for configuration shapes, RPC channels, settings protocol, and Client-visible DTOs. Files under `src/client/` may import parent modules only through that contract. Host modules may re-export shared types for compatibility, but must not redefine wire DTOs.
 
 ## Test Layers
 
@@ -80,6 +81,7 @@ The existing Vitest suites cover:
 - lifecycle cues, scoring, idle debounce, cancellation, and watermark retention;
 - RPC authority, read-only behavior, and settings revisions;
 - the Web workspace, bilingual copy, and key interactions.
+- Client/Host source boundaries, deterministic build hashes, package contents, exports, and TypeScript resolution.
 
 These are primarily integration tests using temporary directories, fake runners, and a mock Host. They are not equivalent to automated end-to-end tests of the real DSH + Mnemon WebUI.
 
@@ -170,8 +172,8 @@ When the Web locale changes, the Chinese key set remains the type source of trut
 
 ```text
 [ ] pnpm run verify
-[ ] review source and generated lib diffs
-[ ] validate package file list includes README.md, README.zh-CN.md, docs/assets, and bilingual docs
+[ ] confirm the worktree contains no generated lib changes
+[ ] confirm package validation reports only runtime files, declarations, root documents, and cordis.patch.yml
 [ ] install the built/local bundle into an isolated Web profile
 [ ] run real Mnemon CLI and WebUI smoke tests
 [ ] verify Chinese and English workspaces
@@ -180,16 +182,19 @@ When the Web locale changes, the Chinese key set remains the type source of trut
 [ ] back up any data root used for upgrade testing
 ```
 
-`package.json.files` currently publishes `lib`, the patch, both root READMEs, centrally managed documentation visuals, the public bilingual docs, and the License.
+`package.json.files` publishes `lib`, the patch, both root READMEs, `SECURITY.md`, and the License. The documentation site and media stay in GitHub and are intentionally excluded from npm.
 
 ## Publishing to npm
 
 After publication, `dsh plugin --profile web add dsh-mnemon` resolves by registry name — the same path as dsh-better-sidebar. Steps:
 
 ```sh
-npm pack --dry-run                 # inspect the tarball file list (cordis.patch.yml, lib, docs)
-pnpm publish --access public       # prepublishOnly runs pnpm run verify first
+pnpm run verify
+npm pack --ignore-scripts
+npm publish dsh-mnemon-<version>.tgz --access public --ignore-scripts
 ```
+
+Publishing the already-packed tarball ensures npm receives the same artifact that was inspected. The GitHub release workflow follows this sequence after checking that the tag matches `package.json`.
 
 Credential convention: write NPM_TOKEN only to the user-level `~/.npmrc` (`npm config set "//registry.npmjs.org/:_authToken" "${NPM_TOKEN}" --userconfig ~/.npmrc`) and remove it after publishing. Do **not** commit the credential line to the repository `.npmrc`: pnpm 11 deliberately ignores unexpanded environment-variable credentials in project-level `.npmrc` (with a warning), and that file travels with the repo.
 

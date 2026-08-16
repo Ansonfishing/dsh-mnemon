@@ -12,6 +12,31 @@ import {
 import { createHash } from 'node:crypto'
 import { basename, join } from 'node:path'
 import type { MnemonRunner } from './runner.ts'
+import type {
+  RuntimeMemoryAction,
+  RuntimeMemoryCompactedEntry,
+  RuntimeMemoryEntry,
+  RuntimeMemoryImportance,
+  RuntimeMemoryMutation,
+  RuntimeMemoryMutationResult,
+  RuntimeMemorySnapshot,
+  RuntimeMemoryTarget,
+  RuntimeMemoryTargetView,
+  RuntimeMemoryUsage,
+} from './shared/contracts.ts'
+
+export type {
+  RuntimeMemoryAction,
+  RuntimeMemoryCompactedEntry,
+  RuntimeMemoryEntry,
+  RuntimeMemoryImportance,
+  RuntimeMemoryMutation,
+  RuntimeMemoryMutationResult,
+  RuntimeMemorySnapshot,
+  RuntimeMemoryTarget,
+  RuntimeMemoryTargetView,
+  RuntimeMemoryUsage,
+} from './shared/contracts.ts'
 
 export const RUNTIME_MEMORY_VERSION = 1
 export const RUNTIME_ENTRY_DELIMITER = '\n§\n'
@@ -22,72 +47,9 @@ const LOCK_STALE_MS = 30_000
 const LOCK_RETRY_MS = 20
 const MAX_ENTRY_BYTES = 8 * 1024
 
-export type RuntimeMemoryTarget = keyof typeof RUNTIME_MEMORY_LIMITS
-export type RuntimeMemoryImportance = 'critical' | 'normal' | 'low'
-export type RuntimeMemoryAction = 'add' | 'replace' | 'remove'
-
-export interface RuntimeMemoryEntry {
-  content: string
-  created_at: string
-  updated_at: string
-  target: RuntimeMemoryTarget
-  importance: RuntimeMemoryImportance
-}
-
 interface RuntimeMemoryFile {
   version: typeof RUNTIME_MEMORY_VERSION
   entries: RuntimeMemoryEntry[]
-}
-
-export interface RuntimeMemoryUsage {
-  used: number
-  limit: number
-}
-
-export interface RuntimeMemoryTargetView extends RuntimeMemoryUsage {
-  target: RuntimeMemoryTarget
-  entryCount: number
-  markdownPath: string
-}
-
-export interface RuntimeMemorySnapshot {
-  directory: string
-  sourcePath: string
-  revision: string
-  generatedAt: string
-  entries: RuntimeMemoryEntry[]
-  targets: Record<RuntimeMemoryTarget, RuntimeMemoryTargetView>
-}
-
-export interface RuntimeMemoryCompactedEntry {
-  content: string
-  importance: RuntimeMemoryImportance
-}
-
-export interface RuntimeMemoryMutation {
-  action: RuntimeMemoryAction
-  target: RuntimeMemoryTarget
-  content?: string
-  oldText?: string
-  importance?: RuntimeMemoryImportance
-}
-
-export type RuntimeMemoryMutationResult = {
-  success: true
-  message: string
-  target: RuntimeMemoryTarget
-  entryCount: number
-  usage: RuntimeMemoryUsage
-  added?: string
-  replaced?: { from: string; to: string }
-  removed?: string
-  maintenance?: {
-    kind: 'local-compaction' | 'mnemon-archive'
-    runId: string
-    provider: string
-    summary: string
-    memoryBodyIds: string[]
-  }
 }
 
 export class RuntimeMemoryCapacityError extends Error {

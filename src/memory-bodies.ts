@@ -2,37 +2,18 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import type { MnemonRunner } from './runner.ts'
+import type { CreateMemoryBodyRequest, MemoryBody, UpdateMemoryBodyRequest } from './shared/contracts.ts'
+
+export type { CreateMemoryBodyRequest, MemoryBody, UpdateMemoryBodyRequest } from './shared/contracts.ts'
 
 const REGISTRY_VERSION = 1
 const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/
-
-export interface MemoryBody {
-  id: string
-  name: string
-  description: string
-  active: boolean
-  dbPath: string
-  createdAt: string
-  updatedAt: string
-}
 
 interface StoredMemoryBody extends Omit<MemoryBody, 'dbPath'> {}
 
 interface RegistryFile {
   version: 1
   bodies: StoredMemoryBody[]
-}
-
-export interface CreateMemoryBodyRequest {
-  name: string
-  description: string
-  active?: boolean
-}
-
-export interface UpdateMemoryBodyRequest {
-  name?: string
-  description?: string
-  active?: boolean
 }
 
 function requiredText(value: string, label: string, max: number): string {

@@ -1,23 +1,7 @@
 import type { HostSessionEvent } from './contracts.ts'
+import type { TurnMemoryActivity, TurnMemoryActivitySnapshot } from './shared/contracts.ts'
 
-/** Settled per-turn Mnemon activity shown below a completed DSH turn. */
-export interface TurnMemoryActivity {
-  turn: number
-  /** Successful and failed settled Mnemon calls. Running calls are excluded. */
-  count: number
-  names: string[]
-  recalls: number
-  writes: number
-  documentSearches: number
-  inspections: number
-  failures: number
-}
-
-export interface TurnMemoryActivitySnapshot {
-  /** Last durable event represented by this snapshot. */
-  cursor: number
-  activities: TurnMemoryActivity[]
-}
+export type { TurnMemoryActivity, TurnMemoryActivitySnapshot } from './shared/contracts.ts'
 
 interface PendingCall {
   turn: number

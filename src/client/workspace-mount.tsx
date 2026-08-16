@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import type { Config } from '../config.ts'
-import type { ClientSettingsScope } from '../contracts.ts'
+import type { ClientSettingsScope, Config } from '../shared/contracts.ts'
 import { MNEMON_ANCHOR_EVENT } from './anchor.ts'
 import type { MnemonClientContext } from './dsh-compat.ts'
 import type { MnemonTranslate } from './locales.ts'

@@ -1,20 +1,15 @@
-import type { ConnectionHandle as DshClientConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
+import type { JsonValue, RpcResult, SettingsOperation } from './shared/contracts.ts'
 
-export type JsonPrimitive = string | number | boolean | null
-export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue }
-
-/** Plugin RPC failures use only error branches accepted by DSH's closed wire schema. */
-export type RpcError =
-  | { code: 'bad-request'; message: string; details: { issues: JsonValue[] } }
-  | { code: 'settings-rejected'; message: string; details: { ns: string } }
-  | { code: 'internal'; message: string; details: Record<string, never> }
-
-export type RpcResult<T = JsonValue> =
-  | { ok: true; value: T }
-  | { ok: false; error: RpcError }
-
-/** Public DSH browser RPC face; the plugin intentionally consumes no other connection state. */
-export type ClientConnectionHandle = Pick<DshClientConnectionHandle, 'rpc'>
+export type {
+  ClientConnectionHandle,
+  ClientSettingsScope,
+  ClientSettingsSnapshot,
+  JsonPrimitive,
+  JsonValue,
+  RpcError,
+  RpcResult,
+  SettingsOperation,
+} from './shared/contracts.ts'
 
 export type HostRpcHandler = (endpoint: string, payload: unknown) => Promise<RpcResult<unknown>>
 
@@ -189,26 +184,3 @@ export interface HostContextShape {
   on(name: string, listener: (...args: never[]) => unknown): () => unknown
   effect(callback: () => (() => unknown) | void, label?: string): () => unknown
 }
-
-export interface ClientSettingsSnapshot<T> {
-  status: 'loading' | 'ready' | 'unavailable'
-  value?: T
-  base?: unknown
-  user?: unknown
-  revision?: number
-  writable: boolean
-  mode: 'host' | 'memory'
-}
-
-export interface ClientSettingsScope<T> {
-  getSnapshot(): ClientSettingsSnapshot<T>
-  subscribe(listener: () => void): () => void
-  set(field: string, value: unknown): Promise<void>
-  unset(field: string): Promise<void>
-  setPath(path: string[], value: unknown): Promise<void>
-  unsetPath(path: string[]): Promise<void>
-  /** Commit one namespace mutation behind a single revision fence. */
-  mutate?(ops: SettingsOperation[]): Promise<void>
-}
-
-export type SettingsOperation = { op: 'set'; path: string[]; value: unknown } | { op: 'unset'; path: string[] }

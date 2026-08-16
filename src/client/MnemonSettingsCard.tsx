@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type JSX } from 'react'
-import type { Config, InteractionConfig } from '../config.ts'
-import type { ClientConnectionHandle, ClientSettingsScope, ClientSettingsSnapshot, SettingsOperation } from '../contracts.ts'
+import type { ClientConnectionHandle, ClientSettingsScope, ClientSettingsSnapshot, Config, InteractionConfig, SettingsOperation } from '../shared/contracts.ts'
 import css from './MnemonSettingsCard.module.css'
 import { translateZh, type MnemonTranslate } from './locales.ts'
 import { MnemonPackSection } from './MnemonPackSection.tsx'

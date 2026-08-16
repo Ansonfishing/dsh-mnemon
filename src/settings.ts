@@ -1,8 +1,7 @@
 import type { HostConnectionHandle, HostRpcHandler, HostSettingsService, RpcResult } from './contracts.ts'
+import { MNEMON_SETTINGS_CHANNEL, MNEMON_SETTINGS_NAMESPACE, MNEMON_UI_SETTINGS_NAMESPACE } from './shared/contracts.ts'
 
-export const MNEMON_SETTINGS_CHANNEL = '/dsh-mnemon-settings'
-export const MNEMON_SETTINGS_NAMESPACE = 'mnemon'
-export const MNEMON_UI_SETTINGS_NAMESPACE = 'mnemon-ui'
+export { MNEMON_SETTINGS_CHANNEL, MNEMON_SETTINGS_NAMESPACE, MNEMON_UI_SETTINGS_NAMESPACE } from './shared/contracts.ts'
 
 function success(value: unknown): RpcResult<unknown> {
   return { ok: true, value }
