@@ -19,7 +19,7 @@ describe('MnemonView', () => {
     unsetPath: async () => {},
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { withInactiveBody?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean } = {}) {
+  function createConnection(options: { withInactiveBody?: boolean; withPlacement?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -29,6 +29,18 @@ describe('MnemonView', () => {
       dbPath: '/tmp/mnemon/data/project/mnemon.db',
       createdAt: '2026-08-13T02:00:00.000Z',
       updatedAt: '2026-08-13T03:00:00.000Z',
+      ...(options.withPlacement === true ? {
+        placement: {
+          mode: 'automatic' as const,
+          providerId: 'mnemon-native' as const,
+          decidedBy: 'llm' as const,
+          reason: '精确写入与关系图谱比跨项目共享更重要。',
+          confidence: 'high' as const,
+          candidateProviderIds: ['mnemon-native' as const, 'openviking' as const],
+          appliedRules: ['preference:balanced'],
+          decidedAt: '2026-08-13T02:00:00.000Z',
+        },
+      } : {}),
       healthy: true,
       stats: { totalInsights: 12, deletedInsights: 0, edgeCount: 9, oplogCount: 20, dbSizeBytes: 4096, byCategory: {}, topEntities: [{ entity: 'SQLite', count: 2 }] },
     }
@@ -600,6 +612,56 @@ describe('MnemonView', () => {
       }),
       sessionId: 'session-1',
     }))
+  })
+
+  it('lets rules and a strategy prompt drive automatic provider selection without changing the manual default', async () => {
+    const { connection, call } = createConnection({ withInactiveBody: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '创建记忆体' }))
+    const dialog = screen.getByRole('dialog', { name: '创建记忆体' })
+    expect((within(dialog).getByRole('radio', { name: /手动指定/ }) as HTMLInputElement).checked).toBe(true)
+    fireEvent.click(within(dialog).getByRole('radio', { name: /智能选择/ }))
+    fireEvent.change(within(dialog).getByRole('textbox', { name: '策略 Prompt（可选）' }), { target: { value: '这是团队知识；满足精确写入后优先共享。' } })
+    fireEvent.change(within(dialog).getByRole('combobox', { name: '软偏好' }), { target: { value: 'shared-first' } })
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: '精确写入' }))
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /OpenViking/ }))
+    fireEvent.change(within(dialog).getByRole('textbox', { name: '新记忆体名称' }), { target: { value: '团队产品知识' } })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: '新记忆体描述' }), { target: { value: '团队共享的产品约束与决策。' } })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: '服务地址' }), { target: { value: 'https://memory.example.com' } })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: '记忆范围 URI' }), { target: { value: 'viking://user/team/memories' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: '创建' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '创建记忆体' })).toBeNull())
+    const bodyCreateCall = call.mock.calls.find(([, endpoint]) => endpoint === 'body-create')
+    expect(bodyCreateCall?.[2]).toMatchObject({
+      name: '团队产品知识',
+      placement: {
+        mode: 'automatic',
+        prompt: '这是团队知识；满足精确写入后优先共享。',
+        rules: {
+          allowedProviderIds: ['mnemon-native', 'openviking'],
+          dataBoundary: 'allow-remote',
+          preference: 'shared-first',
+          requiredCapabilities: ['exact-write'],
+        },
+      },
+      openViking: { endpoint: 'https://memory.example.com', targetUri: 'viking://user/team/memories' },
+      sessionId: 'session-1',
+    })
+    expect(bodyCreateCall?.[2]).not.toHaveProperty('providerId')
+  })
+
+  it('shows the persisted provider decision on the Memory Space card', async () => {
+    const { connection } = createConnection({ withPlacement: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    await waitFor(() => expect(screen.getByText('Agent 智能选择')).toBeTruthy())
+    expect(screen.getByText('置信度：高')).toBeTruthy()
+    expect(screen.getByText('精确写入与关系图谱比跨项目共享更重要。')).toBeTruthy()
   })
 
   it('shows the inspected workspace, warns on divergence, and offers one-click alignment', async () => {

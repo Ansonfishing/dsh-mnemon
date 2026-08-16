@@ -18,6 +18,8 @@ import {
   type MemoryBodyView,
   type MemoryGraphNode,
   type MemoryGraphSnapshot,
+  type MemoryPlacementCapability,
+  type MemoryPlacementPreference,
   type MemoryListView,
   type MemoryProviderId,
   type RuntimeMemoryEntry,
@@ -67,6 +69,7 @@ export interface MnemonWorkspaceSelection {
 
 type Page = 'overview' | 'runtime' | 'documents' | 'explore' | 'entities' | 'remember' | 'list' | 'status'
 type SidebarMemoryPage = Extract<Page, 'overview' | 'explore' | 'list' | 'entities'>
+type MemoryPlacementMode = 'manual' | 'automatic'
 
 const LEGACY_NATIVE_CAPABILITIES: MemoryBodyProvider['capabilities'] = {
   search: true,
@@ -852,7 +855,7 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
   )
 }
 
-function OverviewPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; fallbackBodies: MemoryBodyView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onExplore: (query: string) => void }): JSX.Element {
+function OverviewPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; agentAvailable: boolean; fallbackBodies: MemoryBodyView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onExplore: (query: string) => void }): JSX.Element {
   const t = useT()
   const locale = useLocale()
   const appearance = useMnemonViewAppearance()
@@ -866,6 +869,12 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const [creatingBodyOpen, setCreatingBodyOpen] = useState(false)
   const [bodyName, setBodyName] = useState('')
   const [bodyDescription, setBodyDescription] = useState('')
+  const [placementMode, setPlacementMode] = useState<MemoryPlacementMode>('manual')
+  const [placementPrompt, setPlacementPrompt] = useState('')
+  const [placementDataBoundary, setPlacementDataBoundary] = useState<'allow-remote' | 'local-only'>('allow-remote')
+  const [placementPreference, setPlacementPreference] = useState<MemoryPlacementPreference>('balanced')
+  const [requiredCapabilities, setRequiredCapabilities] = useState<MemoryPlacementCapability[]>([])
+  const [includeOpenViking, setIncludeOpenViking] = useState(false)
   const [bodyProviderId, setBodyProviderId] = useState<MemoryProviderId>('mnemon-native')
   const [openVikingEndpoint, setOpenVikingEndpoint] = useState('http://127.0.0.1:1933')
   const [openVikingTargetUri, setOpenVikingTargetUri] = useState('viking://user/memories')
@@ -969,14 +978,26 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
 
   const create = async (event: FormEvent) => {
     event.preventDefault()
-    if (bodyName.trim() === '' || bodyDescription.trim() === '' || (bodyProviderId === 'openviking' && (openVikingEndpoint.trim() === '' || openVikingTargetUri.trim() === ''))) return
+    const useOpenViking = placementMode === 'manual' ? bodyProviderId === 'openviking' : includeOpenViking && placementDataBoundary === 'allow-remote'
+    if (bodyName.trim() === '' || bodyDescription.trim() === '' || (placementMode === 'automatic' && !props.agentAvailable) || (useOpenViking && (openVikingEndpoint.trim() === '' || openVikingTargetUri.trim() === ''))) return
     setCreating(true); setError(null)
     try {
       await props.client.createBody({
         name: bodyName,
         description: bodyDescription,
-        providerId: bodyProviderId,
-        ...(bodyProviderId !== 'openviking' ? {} : {
+        ...(placementMode === 'manual' ? { providerId: bodyProviderId } : {
+          placement: {
+            mode: 'automatic',
+            ...(placementPrompt.trim() === '' ? {} : { prompt: placementPrompt }),
+            rules: {
+              allowedProviderIds: ['mnemon-native', ...(useOpenViking ? ['openviking' as const] : [])],
+              dataBoundary: placementDataBoundary,
+              preference: placementPreference,
+              ...(requiredCapabilities.length === 0 ? {} : { requiredCapabilities }),
+            },
+          },
+        }),
+        ...(!useOpenViking ? {} : {
           openViking: {
             endpoint: openVikingEndpoint,
             targetUri: openVikingTargetUri,
@@ -987,7 +1008,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
           },
         }),
       })
-      setBodyName(''); setBodyDescription(''); setBodyProviderId('mnemon-native'); setOpenVikingApiKey('')
+      setBodyName(''); setBodyDescription(''); setBodyProviderId('mnemon-native'); setPlacementPrompt(''); setRequiredCapabilities([]); setOpenVikingApiKey('')
       if (appearance.surface === 'sidebar') setCreatingBodyOpen(false)
       await load(true)
       props.onMutate()
@@ -1013,6 +1034,18 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const deletingBodyView = confirmingDeleteBody === null ? undefined : catalog?.items.find(body => body.id === confirmingDeleteBody)
   const nativeBodyCount = catalog?.items.filter(body => body.provider.id === 'mnemon-native').length ?? 0
   const canDeleteBody = (body: MemoryBodyView): boolean => body.provider.id === 'openviking' || nativeBodyCount > 1
+  const toggleRequiredCapability = (capability: MemoryPlacementCapability) => setRequiredCapabilities(current => current.includes(capability) ? current.filter(value => value !== capability) : [...current, capability])
+  const openVikingFields = <div className={css.providerFields}>
+    <label>{t('overview.providerEndpoint')}<input aria-label={t('overview.providerEndpoint')} value={openVikingEndpoint} onChange={event => setOpenVikingEndpoint(event.target.value)} placeholder={t('overview.providerEndpointPlaceholder')} maxLength={2000} required /></label>
+    <label>{t('overview.providerTargetUri')}<input aria-label={t('overview.providerTargetUri')} value={openVikingTargetUri} onChange={event => setOpenVikingTargetUri(event.target.value)} placeholder={t('overview.providerTargetPlaceholder')} maxLength={2000} required /></label>
+    <details><summary>{t('overview.providerAdvanced')}</summary><div className={css.providerAdvancedGrid}>
+      <label>{t('overview.providerApiKey')}<input type="password" autoComplete="new-password" value={openVikingApiKey} onChange={event => setOpenVikingApiKey(event.target.value)} placeholder={t('overview.providerApiKeyOptional')} /></label>
+      <label>{t('overview.providerAccount')}<input value={openVikingAccount} onChange={event => setOpenVikingAccount(event.target.value)} /></label>
+      <label>{t('overview.providerUser')}<input value={openVikingUser} onChange={event => setOpenVikingUser(event.target.value)} /></label>
+      <label>{t('overview.providerActorPeer')}<input value={openVikingActorPeerId} onChange={event => setOpenVikingActorPeerId(event.target.value)} /></label>
+    </div></details>
+  </div>
+  const placementReceipt = (body: MemoryBodyView) => body.placement === undefined ? null : <div className={css.placementReceipt} title={body.placement.reason}><span aria-hidden="true">✦</span><div><strong>{t(body.placement.decidedBy === 'llm' ? 'overview.placementByLlm' : 'overview.placementByRules')}</strong><small>{t('overview.placementConfidence', { confidence: t(`overview.confidence.${body.placement.confidence}`) })}</small><p>{body.placement.reason}</p></div></div>
   const bodyEditForm = (body: MemoryBodyView) => <form className={css.bodyEdit} onSubmit={event => void saveEdit(event, body)}>
     <label>{t('overview.editName')}<input aria-label={t('overview.editName')} value={editName} onChange={event => setEditName(event.target.value)} maxLength={100} required /></label>
     <label>{t('overview.editDescription')}<textarea aria-label={t('overview.editDescription')} value={editDescription} onChange={event => setEditDescription(event.target.value)} rows={4} maxLength={1000} /></label>
@@ -1029,20 +1062,19 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
     <div className={css.bodyEditActions}>{appearance.surface === 'sidebar' && <button type="button" className={css.ghostButton} disabled={savingBody === body.id} onClick={() => setEditingBody(null)}>{t('common.cancel')}</button>}<button type="submit" className={css.primaryButton} disabled={savingBody === body.id || editName.trim() === ''}>{savingBody === body.id ? t('overview.savingBody') : t('overview.saveBody')}</button>{appearance.surface === 'buildin' && <button type="button" className={css.ghostButton} onClick={() => setEditingBody(null)}>{t('common.cancel')}</button>}</div>
   </form>
   const bodyCreateForm = <form className={css.bodyEdit} onSubmit={event => void create(event)}>
-    <fieldset className={css.providerChoice}><legend>{t('overview.providerLabel')}</legend><label data-selected={bodyProviderId === 'mnemon-native' || undefined}><input type="radio" name="memory-provider" value="mnemon-native" checked={bodyProviderId === 'mnemon-native'} onChange={() => setBodyProviderId('mnemon-native')} /><span><strong>Mnemon Native</strong><small>{t('overview.providerNativeHint')}</small></span></label><label data-selected={bodyProviderId === 'openviking' || undefined}><input type="radio" name="memory-provider" value="openviking" checked={bodyProviderId === 'openviking'} onChange={() => setBodyProviderId('openviking')} /><span><strong>OpenViking</strong><small>{t('overview.providerOpenVikingHint')}</small></span></label></fieldset>
+    <fieldset className={css.placementMode}><legend>{t('overview.placementMode')}</legend><label data-selected={placementMode === 'manual' || undefined}><input type="radio" name="placement-mode" value="manual" checked={placementMode === 'manual'} onChange={() => setPlacementMode('manual')} /><span><strong>{t('overview.placementManual')}</strong><small>{t('overview.placementManualHint')}</small></span></label><label data-selected={placementMode === 'automatic' || undefined} data-disabled={!props.agentAvailable || undefined}><input type="radio" name="placement-mode" value="automatic" checked={placementMode === 'automatic'} disabled={!props.agentAvailable} onChange={() => setPlacementMode('automatic')} /><span><strong>{t('overview.placementAutomatic')} <em>{t('overview.recommended')}</em></strong><small>{props.agentAvailable ? t('overview.placementAutomaticHint') : t('overview.placementUnavailable')}</small></span></label></fieldset>
+    {placementMode === 'manual' && <fieldset className={css.providerChoice}><legend>{t('overview.providerLabel')}</legend><label data-selected={bodyProviderId === 'mnemon-native' || undefined}><input type="radio" name="memory-provider" value="mnemon-native" checked={bodyProviderId === 'mnemon-native'} onChange={() => setBodyProviderId('mnemon-native')} /><span><strong>Mnemon Native</strong><small>{t('overview.providerNativeHint')}</small></span></label><label data-selected={bodyProviderId === 'openviking' || undefined}><input type="radio" name="memory-provider" value="openviking" checked={bodyProviderId === 'openviking'} onChange={() => setBodyProviderId('openviking')} /><span><strong>OpenViking</strong><small>{t('overview.providerOpenVikingHint')}</small></span></label></fieldset>}
+    {placementMode === 'automatic' && <section className={css.placementPolicy} aria-label={t('overview.placementPolicy')}>
+      <div className={css.placementPolicyHeading}><div><strong>{t('overview.placementPolicy')}</strong><small>{t('overview.placementPolicyHint')}</small></div><span>{t('overview.agentDecision')}</span></div>
+      <label>{t('overview.placementPrompt')}<textarea aria-label={t('overview.placementPrompt')} value={placementPrompt} onChange={event => setPlacementPrompt(event.target.value)} placeholder={t('overview.placementPromptPlaceholder')} rows={3} maxLength={4000} /></label>
+      <div className={css.placementRuleGrid}><label>{t('overview.dataBoundary')}<select aria-label={t('overview.dataBoundary')} value={placementDataBoundary} onChange={event => { const value = event.target.value as 'allow-remote' | 'local-only'; setPlacementDataBoundary(value); if (value === 'local-only') setIncludeOpenViking(false) }}><option value="allow-remote">{t('overview.dataBoundaryRemote')}</option><option value="local-only">{t('overview.dataBoundaryLocal')}</option></select></label><label>{t('overview.preference')}<select aria-label={t('overview.preference')} value={placementPreference} onChange={event => setPlacementPreference(event.target.value as MemoryPlacementPreference)}><option value="balanced">{t('overview.preferenceBalanced')}</option><option value="local-first">{t('overview.preferenceLocal')}</option><option value="shared-first">{t('overview.preferenceShared')}</option></select></label></div>
+      <fieldset className={css.capabilityRules}><legend>{t('overview.requiredCapabilities')}</legend>{(['graph', 'exact-write', 'forget'] as const).map(capability => <label key={capability}><input type="checkbox" checked={requiredCapabilities.includes(capability)} onChange={() => toggleRequiredCapability(capability)} /><span>{t(`overview.capability.${capability}`)}</span></label>)}</fieldset>
+      <div className={css.placementCandidates}><span><strong>Mnemon Native</strong><small>{t('overview.candidateNativeReady')}</small></span><label data-selected={includeOpenViking || undefined}><input type="checkbox" checked={includeOpenViking} onChange={event => setIncludeOpenViking(event.target.checked)} /><span><strong>OpenViking</strong><small>{t('overview.candidateOpenViking')}</small></span></label></div>
+    </section>}
     <label>{t('overview.createName')}<input aria-label={t('overview.createName')} value={bodyName} onChange={event => setBodyName(event.target.value)} placeholder={t('overview.createNamePlaceholder')} maxLength={100} required /></label>
     <label>{t('overview.createDescription')}<textarea aria-label={t('overview.createDescription')} value={bodyDescription} onChange={event => setBodyDescription(event.target.value)} placeholder={t('overview.createDescriptionPlaceholder')} rows={5} maxLength={1000} required /></label>
-    {bodyProviderId === 'openviking' && <div className={css.providerFields}>
-      <label>{t('overview.providerEndpoint')}<input aria-label={t('overview.providerEndpoint')} value={openVikingEndpoint} onChange={event => setOpenVikingEndpoint(event.target.value)} placeholder={t('overview.providerEndpointPlaceholder')} maxLength={2000} required /></label>
-      <label>{t('overview.providerTargetUri')}<input aria-label={t('overview.providerTargetUri')} value={openVikingTargetUri} onChange={event => setOpenVikingTargetUri(event.target.value)} placeholder={t('overview.providerTargetPlaceholder')} maxLength={2000} required /></label>
-      <details><summary>{t('overview.providerAdvanced')}</summary><div className={css.providerAdvancedGrid}>
-        <label>{t('overview.providerApiKey')}<input type="password" autoComplete="new-password" value={openVikingApiKey} onChange={event => setOpenVikingApiKey(event.target.value)} placeholder={t('overview.providerApiKeyOptional')} /></label>
-        <label>{t('overview.providerAccount')}<input value={openVikingAccount} onChange={event => setOpenVikingAccount(event.target.value)} /></label>
-        <label>{t('overview.providerUser')}<input value={openVikingUser} onChange={event => setOpenVikingUser(event.target.value)} /></label>
-        <label>{t('overview.providerActorPeer')}<input value={openVikingActorPeerId} onChange={event => setOpenVikingActorPeerId(event.target.value)} /></label>
-      </div></details>
-    </div>}
-    <div className={css.bodyEditActions}><button type="button" className={css.ghostButton} disabled={creating} onClick={() => setCreatingBodyOpen(false)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={creating || bodyName.trim() === '' || bodyDescription.trim() === ''}>{creating ? t('overview.creating') : t('overview.createAction')}</button></div>
+    {(placementMode === 'manual' ? bodyProviderId === 'openviking' : includeOpenViking) && openVikingFields}
+    <div className={css.bodyEditActions}><button type="button" className={css.ghostButton} disabled={creating} onClick={() => setCreatingBodyOpen(false)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={creating || bodyName.trim() === '' || bodyDescription.trim() === '' || (placementMode === 'automatic' && !props.agentAvailable)}>{creating ? t('overview.creating') : t('overview.createAction')}</button></div>
   </form>
   const bodyToggle = (body: MemoryBodyView) => <button type="button" className={css.bodySwitch} role="switch" aria-checked={body.active} aria-label={t('overview.toggleAria', { name: body.name })} disabled={!props.writeEnabled || changing === body.id || deletingBody === body.id} onClick={() => void toggle(body)}><span className={css.bodySwitchTrack} aria-hidden="true"><i /></span><span>{changing === body.id ? t('overview.toggling') : body.active ? t('common.active') : t('common.inactive')}</span></button>
   const bodyEditActionClass = appearanceClass(css.ghostButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemEditAction))
@@ -1063,8 +1095,8 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
               {appearance.surface === 'buildin'
                 ? editingBody === body.id
                   ? bodyEditForm(body)
-                  : <><div className={css.bodyCardTop}><span className={css.bodySignal} /><div><strong>{body.name}</strong><code>{body.id}</code><div className={css.bodyProviderRow}><small className={css.providerBadge} data-provider={body.provider.id}>{body.provider.label}</small><small className={css.bodyHealth}>{body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small>{body.mnemonDefault && <small className={css.mnemonDefaultBadge}>{t('overview.mnemonDefault')}</small>}</div></div><div className={css.bodyCardActions}>{bodyToggle(body)}<button type="button" className={css.bodyEditButton} aria-label={t('overview.editBodyAria', { name: body.name })} title={t('overview.editBody')} disabled={!props.writeEnabled} onClick={() => beginEdit(body)}>✎</button></div></div><p>{body.description || t('overview.noDescription')}</p><footer>{body.provider.id === 'openviking' ? <><span>{t('overview.providerRemote')}</span><span title={body.provider.targetUri}>{body.provider.targetUri}</span></> : <><span>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></>}</footer></>
-                : <><div className={appearance.classes.bodyCardHeader}><div className={appearance.classes.bodyCardIdentity}><span className={css.bodySignal} /><div><strong>{body.name}</strong><div className={appearance.classes.bodyCardMeta}><code>{body.id}</code><small className={css.providerBadge} data-provider={body.provider.id}>{body.provider.label}</small><small className={css.bodyHealth}>{body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small>{body.mnemonDefault && <small className={css.mnemonDefaultBadge}>{t('overview.mnemonDefault')}</small>}</div></div></div>{bodyToggle(body)}</div><p title={body.description || t('overview.noDescription')}>{body.description || t('overview.noDescription')}</p><footer className={appearance.classes.bodyCardFooter}><div className={appearance.classes.bodyCardStats}>{body.provider.id === 'openviking' ? <><span>{t('overview.providerRemote')}</span><span title={body.provider.targetUri}>{body.provider.targetUri}</span></> : <><span>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></>}</div><div className={css.bodyCardActions}><button type="button" className={bodyEditActionClass} aria-label={t('overview.editBodyAria', { name: body.name })} disabled={!props.writeEnabled || deletingBody === body.id} onClick={() => beginEdit(body)}>{t('overview.editBody')}</button><button type="button" className={bodyDeleteActionClass} aria-label={t(body.provider.id === 'openviking' ? 'overview.disconnectBodyAria' : 'overview.deleteBodyAria', { name: body.name })} title={canDeleteBody(body) ? undefined : t('overview.lastStoreDeleteHint')} disabled={!props.writeEnabled || deletingBody === body.id || !canDeleteBody(body)} onClick={() => setConfirmingDeleteBody(body.id)}>{body.provider.id === 'openviking' ? t('overview.disconnectBody') : t('overview.deleteBody')}</button></div></footer></>}
+                  : <><div className={css.bodyCardTop}><span className={css.bodySignal} /><div><strong>{body.name}</strong><code>{body.id}</code><div className={css.bodyProviderRow}><small className={css.providerBadge} data-provider={body.provider.id}>{body.provider.label}</small><small className={css.bodyHealth}>{body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small>{body.mnemonDefault && <small className={css.mnemonDefaultBadge}>{t('overview.mnemonDefault')}</small>}</div></div><div className={css.bodyCardActions}>{bodyToggle(body)}<button type="button" className={css.bodyEditButton} aria-label={t('overview.editBodyAria', { name: body.name })} title={t('overview.editBody')} disabled={!props.writeEnabled} onClick={() => beginEdit(body)}>✎</button></div></div><p>{body.description || t('overview.noDescription')}</p>{placementReceipt(body)}<footer>{body.provider.id === 'openviking' ? <><span>{t('overview.providerRemote')}</span><span title={body.provider.targetUri}>{body.provider.targetUri}</span></> : <><span>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></>}</footer></>
+                : <><div className={appearance.classes.bodyCardHeader}><div className={appearance.classes.bodyCardIdentity}><span className={css.bodySignal} /><div><strong>{body.name}</strong><div className={appearance.classes.bodyCardMeta}><code>{body.id}</code><small className={css.providerBadge} data-provider={body.provider.id}>{body.provider.label}</small><small className={css.bodyHealth}>{body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small>{body.mnemonDefault && <small className={css.mnemonDefaultBadge}>{t('overview.mnemonDefault')}</small>}</div></div></div>{bodyToggle(body)}</div><p title={body.description || t('overview.noDescription')}>{body.description || t('overview.noDescription')}</p>{placementReceipt(body)}<footer className={appearance.classes.bodyCardFooter}><div className={appearance.classes.bodyCardStats}>{body.provider.id === 'openviking' ? <><span>{t('overview.providerRemote')}</span><span title={body.provider.targetUri}>{body.provider.targetUri}</span></> : <><span>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></>}</div><div className={css.bodyCardActions}><button type="button" className={bodyEditActionClass} aria-label={t('overview.editBodyAria', { name: body.name })} disabled={!props.writeEnabled || deletingBody === body.id} onClick={() => beginEdit(body)}>{t('overview.editBody')}</button><button type="button" className={bodyDeleteActionClass} aria-label={t(body.provider.id === 'openviking' ? 'overview.disconnectBodyAria' : 'overview.deleteBodyAria', { name: body.name })} title={canDeleteBody(body) ? undefined : t('overview.lastStoreDeleteHint')} disabled={!props.writeEnabled || deletingBody === body.id || !canDeleteBody(body)} onClick={() => setConfirmingDeleteBody(body.id)}>{body.provider.id === 'openviking' ? t('overview.disconnectBody') : t('overview.deleteBody')}</button></div></footer></>}
             </article>
           ))}
           {catalog?.total === 0 && <div className={css.bodyDirectoryEmpty}><span>◇</span><div><strong>{catalogUnavailable ? t('overview.unsyncedTitle') : t('overview.emptyTitle')}</strong><p>{catalogUnavailable ? t('overview.unsyncedShort') : t('overview.emptyShort')}</p></div></div>}
@@ -1998,7 +2030,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
         <WorkspaceNavigation page={page} onSelect={selectPrimaryPage} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} writeEnabled={writeEnabled} />
         <MemoryNavigation page={page} writeEnabled={writeEnabled} onSelect={selectPage} onRemember={() => openRemember()} />
         <section key={viewContextKey} className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={!isMemoryPage(page) ? '' : undefined}>
-          {page === 'overview' && <OverviewPage client={client} revision={revision} writeEnabled={writeEnabled} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onExplore={explore} />}
+          {page === 'overview' && <OverviewPage client={client} revision={revision} writeEnabled={writeEnabled} agentAvailable={sessionId !== undefined && status?.lifecycle?.sessionAvailable === true && !workspaceDiverged} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onExplore={explore} />}
           {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}
           {page === 'documents' && <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} />}
           {page === 'explore' && <ExplorePage client={client} status={status} seed={searchSeed} writeEnabled={writeEnabled} onForget={forget} />}

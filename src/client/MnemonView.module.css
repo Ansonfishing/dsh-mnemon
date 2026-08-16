@@ -189,6 +189,35 @@
 .bodyEdit textarea { resize: vertical; }
 .bodyEdit input:focus, .bodyEdit select:focus, .bodyEdit textarea:focus { border-color: var(--mn-accent); }
 .bodyEditActions { display: flex; justify-content: flex-end; gap: 7px; }
+.placementMode { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 0; padding: 0; border: 0; }
+.placementMode legend { margin-bottom: 5px; color: var(--mn-muted); font-size: 10px; }
+.placementMode label { position: relative; display: block; min-width: 0; padding: 9px 10px; border: 1px solid var(--mn-line); border-radius: 9px; cursor: pointer; background: color-mix(in srgb, var(--mn-layer-2) 62%, transparent); }
+.placementMode label[data-selected] { border-color: color-mix(in srgb, var(--mn-accent) 52%, var(--mn-line)); background: color-mix(in srgb, var(--mn-accent) 5%, var(--mn-layer-2)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mn-accent) 12%, transparent); }
+.placementMode label[data-disabled] { cursor: not-allowed; opacity: .58; }
+.placementMode input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.placementMode span { display: grid; gap: 3px; }
+.placementMode strong { color: var(--mn-text); font-size: 11px; }
+.placementMode strong em { margin-left: 4px; padding: 2px 5px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 10%, transparent); font: 650 8px var(--mn-code); font-style: normal; }
+.placementMode small { color: var(--mn-muted); font-size: 9px; line-height: 1.45; }
+.placementPolicy { display: grid; gap: 9px; margin: 0; padding: 11px; border: 1px solid color-mix(in srgb, var(--mn-accent) 26%, var(--mn-line)); border-radius: 10px; background: color-mix(in srgb, var(--mn-accent) 4%, var(--mn-layer-1)); }
+.placementPolicyHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.placementPolicyHeading > div { display: grid; gap: 2px; }
+.placementPolicyHeading strong { font-size: 11px; }
+.placementPolicyHeading small { color: var(--mn-muted); font-size: 9px; line-height: 1.45; }
+.placementPolicyHeading > span { flex: 0 0 auto; padding: 3px 6px; border: 1px solid color-mix(in srgb, var(--mn-accent) 22%, var(--mn-line)); border-radius: 999px; color: var(--mn-accent); font: 650 8px var(--mn-code); }
+.placementRuleGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.capabilityRules { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; border: 0; }
+.capabilityRules legend { width: 100%; margin-bottom: 1px; color: var(--mn-faint); font-size: 9px; }
+.capabilityRules label { display: flex; width: fit-content; align-items: center; gap: 5px; padding: 5px 7px; border: 1px solid var(--mn-line); border-radius: 7px; color: var(--mn-muted); background: var(--mn-input); cursor: pointer; }
+.capabilityRules input { width: 13px; height: 13px; margin: 0; padding: 0; accent-color: var(--mn-accent); }
+.placementCandidates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.placementCandidates > span, .placementCandidates > label { position: relative; display: grid; min-width: 0; gap: 2px; padding: 8px 9px 8px 30px; border: 1px solid var(--mn-line); border-radius: 8px; background: color-mix(in srgb, var(--mn-layer-2) 70%, transparent); }
+.placementCandidates > span::before { position: absolute; top: 12px; left: 10px; color: var(--mn-success); content: "●"; font-size: 8px; }
+.placementCandidates > label { cursor: pointer; }
+.placementCandidates > label[data-selected] { border-color: color-mix(in srgb, #6574d9 38%, var(--mn-line)); background: color-mix(in srgb, #6574d9 7%, transparent); }
+.placementCandidates input { position: absolute; top: 10px; left: 9px; width: 14px; height: 14px; margin: 0; padding: 0; accent-color: #6574d9; }
+.placementCandidates strong { color: var(--mn-text); font-size: 10px; }
+.placementCandidates small { color: var(--mn-muted); font-size: 8.5px; line-height: 1.4; }
 .providerChoice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; border: 0; }
 .providerChoice legend { margin-bottom: 5px; color: var(--mn-muted); font-size: 10px; }
 .providerChoice label { position: relative; display: block; min-width: 0; padding: 10px 11px; border: 1px solid var(--mn-line); border-radius: 9px; cursor: pointer; background: color-mix(in srgb, var(--mn-layer-2) 72%, transparent); }
@@ -202,6 +231,13 @@
 .providerFields summary { width: fit-content; color: var(--mn-accent); cursor: pointer; font-size: 9px; }
 .providerAdvancedGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
 .providerWriteHint { display: block; margin-top: 4px; color: color-mix(in srgb, #8793ef 72%, var(--mn-muted)); font-size: 9px; line-height: 1.45; }
+.placementReceipt { display: flex; min-width: 0; align-items: flex-start; gap: 7px; margin: 7px 0; padding: 7px 8px; border: 1px solid color-mix(in srgb, var(--mn-accent) 20%, var(--mn-line)); border-radius: 8px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 4%, transparent); }
+.placementReceipt > span { flex: 0 0 auto; font-size: 10px; }
+.placementReceipt > div { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; }
+.placementReceipt strong, .placementReceipt small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.placementReceipt strong { font-size: 9px; }
+.placementReceipt small { color: var(--mn-muted); font-size: 8px; }
+.placementReceipt p { grid-column: 1 / -1; margin: 0; overflow: hidden; color: var(--mn-muted); font-size: 8.5px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
 .bodyDeleteConfirm { display: grid; gap: 16px; }
 .bodyDeleteConfirm > p { margin: 0; color: var(--mn-muted); font-size: 12px; line-height: 1.6; }
 .bodyDeleteSummary { display: grid; gap: 3px; padding: 12px; border: 1px solid color-mix(in srgb, var(--mn-danger) 22%, var(--mn-line)); border-radius: 8px; background: color-mix(in srgb, var(--mn-danger) 5%, var(--mn-layer-1)); }
@@ -690,7 +726,7 @@
   .listToolbar { grid-template-columns: 1fr; }
   .bodyDirectoryHeader { display: grid; }
   .bodyCreate form { grid-template-columns: 1fr; }
-  .providerChoice, .providerAdvancedGrid { grid-template-columns: 1fr; }
+  .placementMode, .placementRuleGrid, .placementCandidates, .providerChoice, .providerAdvancedGrid { grid-template-columns: 1fr; }
   .graphViewport { min-height: 360px; }
   .graphSvg { height: 390px; }
   .graphCanvasControls { right: 7px; top: 7px; }
