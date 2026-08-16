@@ -228,6 +228,7 @@ function commaList(values: string[] | undefined, label: string, limit: number): 
 export class MnemonService {
   readonly memoryBodies: MemoryBodyRegistry
   private readonly providers: Map<MemoryBody['provider']['id'], MemoryProviderAdapter>
+  private bodiesInFlight: Promise<MemoryBodyCatalog> | undefined
 
   constructor(readonly runner: MnemonRunner, readonly config: ResolvedConfig, memoryBodies?: MemoryBodyRegistry) {
     this.memoryBodies = memoryBodies ?? new MemoryBodyRegistry(runner)
@@ -267,6 +268,19 @@ export class MnemonService {
   }
 
   async bodies(signal?: AbortSignal): Promise<MemoryBodyCatalog> {
+    if (signal !== undefined) return this.collectBodies(signal)
+    if (this.bodiesInFlight !== undefined) return this.bodiesInFlight
+    const pending = this.collectBodies()
+    this.bodiesInFlight = pending
+    try {
+      return await pending
+    } finally {
+      if (this.bodiesInFlight === pending) this.bodiesInFlight = undefined
+    }
+  }
+
+  /** Coalesce simultaneous Status/Memory-page probes without caching mutations. */
+  private async collectBodies(signal?: AbortSignal): Promise<MemoryBodyCatalog> {
     const directory = this.bodyDirectory()
     const items: MemoryBodyView[] = await Promise.all(directory.items.map(async body => {
       let status: ProviderBodyStatus
@@ -306,8 +320,56 @@ export class MnemonService {
     }
   }
 
+  /** Return a usable system snapshot without waiting for any Provider I/O. */
+  statusSummary(): StatusView {
+    const catalog = this.bodyDirectory()
+    const active = catalog.items.filter(body => body.active && body.providerEnabled !== false)
+    const dshActiveStores = active.map(body => body.id)
+    const providerServices = this.memoryBodies.providerServices().items.map(service => {
+      const descriptor = memoryProviderDescriptor(service.providerId)
+      const bodies = catalog.items.filter(body => body.provider.id === service.providerId)
+      const activeBodies = bodies.filter(body => body.active && body.providerEnabled !== false)
+      return {
+        providerId: service.providerId,
+        label: descriptor.label,
+        enabled: service.enabled,
+        configured: service.configured,
+        status: !service.enabled ? 'disabled' as const : 'idle' as const,
+        memoryBodyCount: bodies.length,
+        activeMemoryBodyCount: activeBodies.length,
+      }
+    })
+    return {
+      // Provider availability is projected below and must never make the
+      // dsh-mnemon engine itself appear disconnected.
+      healthy: true,
+      cliPath: this.runner.command,
+      commandFound: this.runner.commandFound,
+      dataDir: this.runner.effectiveDataDir(),
+      store: dshActiveStores.join(', ') || 'none',
+      mnemonDefaultStore: this.runner.persistedStore(),
+      dshActiveStores,
+      writeEnabled: this.config.writeEnabled,
+      timeoutMs: this.config.timeoutMs,
+      defaultRecallLimit: this.config.defaultRecallLimit,
+      memoryBodyDirectory: catalog.directory,
+      memoryBodies: catalog.items,
+      providerServices,
+    }
+  }
+
   async status(signal?: AbortSignal): Promise<StatusView> {
-    const catalog = await this.bodies(signal)
+    const hasNativeBody = this.memoryBodies.list().some(body => body.provider.id === 'mnemon-native')
+    let versionError: unknown
+    const [catalog, rawVersion] = await Promise.all([
+      this.bodies(signal),
+      hasNativeBody
+        ? this.runner.runText(['--version'], signal === undefined ? { globalFlags: false } : { signal, globalFlags: false }).catch(error => {
+            versionError = error
+            return undefined
+          })
+        : Promise.resolve(undefined),
+    ])
     const active = catalog.items.filter(body => body.active && body.providerEnabled !== false)
     const dshActiveStores = active.map(body => body.id)
     const providerServices = this.memoryBodies.providerServices().items.map(service => {
@@ -348,10 +410,7 @@ export class MnemonService {
       providerServices,
     }
     try {
-      const hasNativeBody = catalog.items.some(body => body.provider.id === 'mnemon-native')
-      const rawVersion = hasNativeBody
-        ? await this.runner.runText(['--version'], signal === undefined ? { globalFlags: false } : { signal, globalFlags: false })
-        : undefined
+      if (versionError !== undefined) throw versionError
       const healthyBodies = active.filter(body => body.healthy && body.stats !== undefined)
       const topEntities = new Map<string, number>()
       const byCategory: Record<string, number> = {}
@@ -371,14 +430,36 @@ export class MnemonService {
       }
       const failed = active.filter(body => !body.healthy)
       return {
-        healthy: failed.length === 0,
+        healthy: true,
         ...base,
         ...(rawVersion === undefined ? {} : { version: rawVersion.trim().replace(/^mnemon version\s+/i, '') }),
         stats,
         ...(failed.length === 0 ? {} : { error: failed.map(body => `${body.name}: ${body.error ?? 'unavailable'}`).join('; ') }),
       }
     } catch (error) {
-      return { healthy: false, ...base, error: error instanceof Error ? error.message : String(error) }
+      return { healthy: true, ...base, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  async reconnectBody(id: string, signal?: AbortSignal): Promise<MemoryBodyView> {
+    this.assertWritable()
+    let body = this.memoryBodies.list().find(candidate => candidate.id === id)
+    if (body === undefined) throw new Error(`unknown memory body: ${id}`)
+    if (body.provider.id !== 'mnemon-native') {
+      const providerId = body.provider.id
+      if (!this.memoryBodies.providerServiceEnabled(providerId)) throw new Error(`${body.provider.label} is disabled in Settings`)
+      await this.updateProviderService(providerId, {}, [], true, signal)
+      body = this.memoryBodies.list().find(candidate => candidate.id === id)
+      if (body === undefined) throw new Error(`memory body was not returned by ${memoryProviderDescriptor(providerId).label} discovery: ${id}`)
+    }
+    const provider = this.providerFor(body)
+    provider.invalidateStatus?.(body.id)
+    const status = await provider.status(body, signal)
+    return {
+      ...body,
+      providerEnabled: true,
+      mnemonDefault: body.provider.id === 'mnemon-native' && body.id === this.runner.persistedStore(),
+      ...status,
     }
   }
 

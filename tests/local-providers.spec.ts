@@ -84,6 +84,8 @@ describe('third-party local memory providers', () => {
     const provider = new ByteRoverProvider(registry, { process, queryTimeoutMs: 1_000, curateTimeoutMs: 2_000 })
 
     await expect(provider.status(body)).resolves.toEqual({ healthy: true })
+    await expect(provider.status(body)).resolves.toEqual({ healthy: true })
+    expect(calls.filter(call => call.args[0] === 'status')).toHaveLength(1)
     const recalled = await provider.search(body, { query: 'How should we deploy?' })
     expect(recalled.results).toEqual([expect.objectContaining({ id: expect.stringMatching(/^byterover:/), category: 'context', score: 1 })])
     expect(JSON.stringify(recalled)).not.toContain('brv-secret')
@@ -94,5 +96,8 @@ describe('third-party local memory providers', () => {
     expect(calls[1]?.options.cwd).toBe(resolve(dataDir, 'brv-space'))
     expect(calls[1]?.options.env?.BRV_API_KEY).toBe('brv-secret')
     expect(calls[1]?.options.label).toBe('ByteRover')
+    provider.invalidateStatus(body.id)
+    await expect(provider.status(body)).resolves.toEqual({ healthy: true })
+    expect(calls.filter(call => call.args[0] === 'status')).toHaveLength(2)
   })
 })

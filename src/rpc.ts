@@ -162,6 +162,33 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
             }),
           })
           }
+        case 'status-summary':
+          {
+            const sessionId = payload.sessionId === undefined ? '' : String(payload.sessionId).trim()
+            let documents
+            if (documentController !== undefined) {
+              try { documents = documentController.snapshot() } catch {}
+            } else if (lifecycle !== undefined && sessionId !== '') {
+              try { documents = lifecycle.documents(sessionId) } catch {}
+            }
+            return success({
+              ...service.statusSummary(),
+              ...(versions === undefined ? {} : { dshMnemonVersion: versions.currentDshMnemonVersion }),
+              ...(lifecycle === undefined ? {} : { lifecycle: lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId)) }),
+              ...(documents === undefined ? {} : { documents }),
+              ...(resolved.graph.storage === undefined ? {} : { storage: resolved.graph.storage.catalog(selectedWorkspace?.path ?? lifecycle?.workspaceRoot(sessionId)) }),
+              ...(resolved.route === undefined ? {} : {
+                workspaceContext: {
+                  mode: service.config.storageScope,
+                  selectedRoot: resolved.route.selectedRoot,
+                  effectiveRoot: resolved.route.effectiveRoot,
+                  aligned: resolved.route.aligned,
+                  ...(resolved.route.selectedWorkspace === undefined ? {} : { selectedWorkspace: resolved.route.selectedWorkspace }),
+                  ...(resolved.route.effectiveWorkspace === undefined ? {} : { effectiveWorkspace: resolved.route.effectiveWorkspace }),
+                },
+              }),
+            })
+          }
         case 'documents':
           if (documentController !== undefined) return success(documentController.snapshot())
           if (lifecycle === undefined) throw new Error('Mnemon Documents require lifecycle integration')
@@ -477,6 +504,8 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
             service.updateBodyMetadata(maintained.updates)
             return success(maintained)
           }
+        case 'body-reconnect':
+          return success(await service.reconnectBody(String(payload.memoryBodyId ?? '')))
         case 'body-delete':
           return success(await service.deleteBody(String(payload.memoryBodyId ?? '')))
         default:

@@ -13,6 +13,7 @@ function fakeService(writeEnabled = true): MnemonService {
   return {
     config: resolveConfig({ writeEnabled }),
     status: vi.fn(async () => ({ healthy: true })),
+    statusSummary: vi.fn(() => ({ healthy: true, memoryBodies: [] })),
     updateProviderService: vi.fn(async (providerId, settings) => ({ providerId, configured: true, settings, configuredSecrets: [] })),
     memoryBodies: {
       providerServices: vi.fn(() => ({ providers: [], items: [], generatedAt: 'now' })),
@@ -36,6 +37,7 @@ function fakeService(writeEnabled = true): MnemonService {
     createBody: vi.fn(async request => ({ id: '00000000-0000-4000-8000-000000000001', name: request.name, description: request.description, active: request.active ?? false })),
     updateBody: vi.fn((id, request) => ({ id, name: request.name ?? id, description: request.description ?? '', active: request.active ?? false })),
     updateBodyMetadata: vi.fn(updates => updates),
+    reconnectBody: vi.fn(async id => ({ id, name: id, description: '', active: true, healthy: true })),
     deleteBody: vi.fn(async id => ({ id, name: id, description: '', active: false })),
   } as unknown as MnemonService
 }
@@ -61,6 +63,7 @@ describe('Mnemon RPC', () => {
     await expect(createReadHandler(service)('graph', {})).resolves.toMatchObject({ ok: true, value: { nodes: [] } })
     await expect(createReadHandler(service)('bodies', {})).resolves.toMatchObject({ ok: true, value: { items: [], total: 0 } })
     await expect(createReadHandler(service)('body-directory', {})).resolves.toMatchObject({ ok: true, value: { total: 1 } })
+    await expect(createReadHandler(service)('status-summary', {})).resolves.toMatchObject({ ok: true, value: { healthy: true } })
     await expect(createReadHandler(service)('provider-services', {})).resolves.toMatchObject({ ok: true, value: { items: [] } })
     await expect(createReadHandler(service)('list', { category: 'decision' })).resolves.toMatchObject({ ok: true, value: { total: 0 } })
     await expect(createReadHandler(service)('entities', { entity: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { insights: [] } })
@@ -120,6 +123,12 @@ describe('Mnemon RPC', () => {
     const service = fakeService()
     await expect(createWriteHandler(service)('body-delete', { memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { id: 'project' } })
     expect(service.deleteBody).toHaveBeenCalledWith('project')
+  })
+
+  it('reconnects one Memory Space through the loopback write channel', async () => {
+    const service = fakeService()
+    await expect(createWriteHandler(service)('body-reconnect', { memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { id: 'project', healthy: true } })
+    expect(service.reconnectBody).toHaveBeenCalledWith('project')
   })
 
   it('updates provider service settings without creating a Memory Space', async () => {

@@ -77,6 +77,9 @@ function fixture(): { service: MnemonService; process: ReturnType<typeof vi.fn<P
 describe('MnemonService', () => {
   it('projects status and reports the effective configuration', async () => {
     const { service, process, dataDir } = fixture()
+    const summary = service.statusSummary()
+    expect(summary).toMatchObject({ healthy: true, store: 'work', memoryBodies: [expect.objectContaining({ id: 'work', statusLoading: true })] })
+    expect(process).not.toHaveBeenCalled()
     const status = await service.status()
     expect(status).toMatchObject({
       healthy: true,
@@ -91,6 +94,15 @@ describe('MnemonService', () => {
     expect(status.memoryBodies).toEqual([expect.objectContaining({ id: 'work', active: true, mnemonDefault: true })])
     expect(process).toHaveBeenCalledWith('/fake/mnemon', ['--data-dir', dataDir, '--store', 'work', 'status'], expect.anything())
     expect(process).toHaveBeenCalledWith('/fake/mnemon', ['--version'], expect.anything())
+  })
+
+  it('coalesces simultaneous Memory Space health snapshots', async () => {
+    const { service, process } = fixture()
+
+    const [first, second] = await Promise.all([service.bodies(), service.bodies()])
+
+    expect(first).toEqual(second)
+    expect(process.mock.calls.filter(([, args]) => args.includes('status'))).toHaveLength(1)
   })
 
   it('allows every Memory Space to be inactive for DSH without changing the Mnemon default Store', async () => {
@@ -153,6 +165,10 @@ describe('MnemonService', () => {
     expect(service.memoryBodies.list()).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'Product bank', description: 'Mapped from Hindsight.', active: true, provider: expect.objectContaining({ id: 'hindsight' }) }),
     ]))
+    const body = service.memoryBodies.list().find(item => item.provider.id === 'hindsight')!
+    await expect(service.reconnectBody(body.id)).resolves.toMatchObject({ id: body.id, healthy: true })
+    expect(provider.discover).toHaveBeenCalledTimes(2)
+    expect(provider.status).toHaveBeenCalledOnce()
   })
 
   it('keeps the previous provider projection untouched when reconnect discovery fails', async () => {

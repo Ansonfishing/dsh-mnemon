@@ -77,4 +77,15 @@ describe('MnemonClient turn activity batching', () => {
       providerId: 'mem0', settings: { endpoint: 'http://127.0.0.1:8888', mode: 'self-hosted' }, enabled: true, sessionId: 'session-1', workspaceId: 'workspace-1',
     })
   })
+
+  it('routes a card-level Memory Space reconnect with the active scope', async () => {
+    const call = vi.fn(async () => ({ ok: true as const, value: { id: 'mem0-body', healthy: true } }))
+    const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle, 'session-1', 'workspace-1')
+
+    await client.reconnectBody('mem0-body')
+
+    expect(call).toHaveBeenCalledWith(expect.any(String), 'body-reconnect', {
+      memoryBodyId: 'mem0-body', sessionId: 'session-1', workspaceId: 'workspace-1',
+    })
+  })
 })

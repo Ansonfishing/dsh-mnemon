@@ -39,6 +39,8 @@ export interface MemoryProviderAdapter {
   readonly id: MemoryBody['provider']['id']
   /** Enumerate the complete set of namespaces visible to this service connection. */
   discover?(connection: MemoryProviderConnection, signal?: AbortSignal): Promise<ProviderMemorySpace[]>
+  /** Drop a short-lived health result before an explicit user reconnect. */
+  invalidateStatus?(memoryBodyId?: string): void
   status(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus>
   search(body: MemoryBody, request: SearchRequest, signal?: AbortSignal): Promise<ProviderSearchResult>
   graph(body: MemoryBody, signal?: AbortSignal): Promise<MemoryGraphSnapshot>

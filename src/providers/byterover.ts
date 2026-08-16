@@ -18,6 +18,8 @@ export class ByteRoverProvider implements MemoryProviderAdapter {
   private readonly process: ProcessRunner
   private readonly queryTimeoutMs: number
   private readonly curateTimeoutMs: number
+  private readonly statusCache = new Map<string, { checkedAt: number; value: ProviderBodyStatus }>()
+  private readonly statusInFlight = new Map<string, Promise<ProviderBodyStatus>>()
 
   constructor(private readonly memoryBodies: MemoryBodyRegistry, options: ByteRoverProviderOptions = {}) {
     this.process = options.process ?? runProcess
@@ -43,6 +45,28 @@ export class ByteRoverProvider implements MemoryProviderAdapter {
   }
 
   async status(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus> {
+    if (signal !== undefined) return this.checkStatus(body, signal)
+    const cached = this.statusCache.get(body.id)
+    if (cached !== undefined && Date.now() - cached.checkedAt < 60_000) return cached.value
+    const running = this.statusInFlight.get(body.id)
+    if (running !== undefined) return running
+    const pending = this.checkStatus(body)
+    this.statusInFlight.set(body.id, pending)
+    try {
+      const value = await pending
+      this.statusCache.set(body.id, { checkedAt: Date.now(), value })
+      return value
+    } finally {
+      if (this.statusInFlight.get(body.id) === pending) this.statusInFlight.delete(body.id)
+    }
+  }
+
+  invalidateStatus(memoryBodyId?: string): void {
+    if (memoryBodyId === undefined) this.statusCache.clear()
+    else this.statusCache.delete(memoryBodyId)
+  }
+
+  private async checkStatus(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus> {
     try {
       await this.run(body, ['status'], 15_000, signal)
       return { healthy: true }

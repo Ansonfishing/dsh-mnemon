@@ -13,6 +13,7 @@ import {
   type EntityView,
   type Insight,
   type MemoryBody,
+  type MemoryBodyView,
   type MemoryBodyMetadataMaintenanceResult,
   type MemoryBodyCatalog,
   type MemoryProviderServiceCatalog,
@@ -114,6 +115,10 @@ export class MnemonClient {
 
   status(): Promise<StatusView> {
     return this.call(MNEMON_READ_CHANNEL, 'status', this.scoped())
+  }
+
+  statusSummary(): Promise<StatusView> {
+    return this.call<StatusView>(MNEMON_READ_CHANNEL, 'status-summary', this.scoped()).catch(() => this.status())
   }
 
   versions(): Promise<VersionStatus> {
@@ -232,6 +237,10 @@ export class MnemonClient {
 
   updateBody(memoryBodyId: string, request: UpdateMemoryBodyRequest): Promise<MemoryBody> {
     return this.call(MNEMON_WRITE_CHANNEL, 'body-update', this.scoped({ memoryBodyId, ...request }))
+  }
+
+  reconnectBody(memoryBodyId: string): Promise<MemoryBodyView> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'body-reconnect', this.scoped({ memoryBodyId }))
   }
 
   maintainBodyMetadata(memoryBodyIds: string[]): Promise<MemoryBodyMetadataMaintenanceResult> {
