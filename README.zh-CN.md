@@ -34,21 +34,24 @@
 # macOS
 brew install --cask mnemon-dev/tap/mnemon
 
-# macOS / Linux / Windows，也可以通过 Go 安装
+# macOS / Linux，也可以通过 Go 安装
 go install github.com/mnemon-dev/mnemon@latest
 
-# macOS / Linux
 mnemon --version
 ```
 
-Windows PowerShell 即使尚未把 Go bin 加入 `PATH`，也可直接验证安装结果：
+Windows 推荐安装 v0.2.3 或更高版本的官方 ZIP；解压到以下目录后无需修改 `PATH` 即可自动发现。checksum 校验步骤见[入门指南](./docs/zh-CN/getting-started.md#2-安装-mnemon)：
 
 ```powershell
-$mnemonBin = go env GOBIN
-if (-not $mnemonBin) {
-  $mnemonBin = Join-Path (((go env GOPATH) -split ';')[0]) 'bin'
-}
-& (Join-Path $mnemonBin 'mnemon.exe') --version
+$version = '0.2.3'
+$arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
+$archiveName = "mnemon_${version}_windows_${arch}.zip"
+$archive = Join-Path $env:TEMP $archiveName
+Invoke-WebRequest "https://github.com/mnemon-dev/mnemon/releases/download/v${version}/${archiveName}" -OutFile $archive
+$installDir = Join-Path $env:LOCALAPPDATA 'Programs\mnemon'
+New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+Expand-Archive -Path $archive -DestinationPath $installDir -Force
+& (Join-Path $installDir 'mnemon.exe') --version
 ```
 
 ### 2. 安装插件

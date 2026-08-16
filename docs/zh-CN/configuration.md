@@ -207,7 +207,7 @@ mnemon:
 
 ```yaml
 mnemon:
-  cliPath: 'C:\Users\alice\go\bin\mnemon.exe'
+  cliPath: 'C:\Users\alice\AppData\Local\Programs\mnemon\mnemon.exe'
 ```
 
 自定义数据盘和较长 CLI 超时：

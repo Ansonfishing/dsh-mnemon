@@ -15,7 +15,7 @@ Windows PowerShell:
 
 ```powershell
 Get-Command mnemon -ErrorAction SilentlyContinue
-Test-Path "$HOME\go\bin\mnemon.exe"
+Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"
 ```
 
 ```text
@@ -132,7 +132,7 @@ Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md), not a
 
 | Symptom | Check and resolution |
 |---|---|
-| Mnemon unavailable | macOS/Linux: run `command -v mnemon`, `mnemon --version`. Windows PowerShell: run `Get-Command mnemon`, `Test-Path "$HOME\go\bin\mnemon.exe"`. Set `MNEMON_CLI_PATH` or `mnemon.cliPath`, then restart |
+| Mnemon unavailable | macOS/Linux: run `command -v mnemon`, `mnemon --version`. Windows PowerShell: run `Get-Command mnemon`, `Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"`. Set `MNEMON_CLI_PATH` or `mnemon.cliPath`, then restart |
 | Memory System missing from sidebar | Check `tabEnabled=true`, `displayMode=sidebar`; Buildin is in the conversation area; for a local link run `pnpm run build`, then restart |
 | Status healthy but recall empty | Check active spaces, storage scope, inspected root, effective session root, and query focus |
 | Header reports misalignment | The workbench is inspecting another workspace; align or keep deliberate read-only inspection; Agent-backed actions are rejected |

@@ -207,7 +207,7 @@ An explicit Windows CLI path:
 
 ```yaml
 mnemon:
-  cliPath: 'C:\Users\alice\go\bin\mnemon.exe'
+  cliPath: 'C:\Users\alice\AppData\Local\Programs\mnemon\mnemon.exe'
 ```
 
 A custom data volume and a longer CLI timeout:
