@@ -97,7 +97,49 @@ describe('MemoryBodyRegistry', () => {
 
     await expect(registry.remove('project')).resolves.toMatchObject({ id: 'project', name: 'project' })
     expect(registry.list()).toEqual([])
-    expect(process).toHaveBeenCalledWith('/fake/mnemon', ['--data-dir', dataDir, '--store', 'project', 'store', 'remove', 'project'], expect.anything())
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', ['--data-dir', dataDir, '--store', 'default', 'store', 'remove', 'project'], expect.anything())
+  })
+
+  it('switches Mnemon away from a deactivated default Store before deleting it', async () => {
+    const dataDir = temporaryDirectory()
+    for (const id of ['default', 'research']) {
+      mkdirSync(join(dataDir, 'data', id), { recursive: true })
+      writeFileSync(join(dataDir, 'data', id, 'mnemon.db'), `${id} database`)
+    }
+    writeFileSync(join(dataDir, 'active'), 'default\n')
+    const process = vi.fn<ProcessRunner>(async (_command, args) => {
+      const operation = args.indexOf('store')
+      if (args[operation + 1] === 'set') writeFileSync(join(dataDir, 'active'), `${args[operation + 2]}\n`)
+      if (args[operation + 1] === 'remove') rmSync(join(dataDir, 'data', String(args[operation + 2])), { recursive: true, force: true })
+      return { stdout: '', stderr: '', exitCode: 0 }
+    })
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), process)
+    const registry = new MemoryBodyRegistry(runner, true)
+    registry.setActive('default', false)
+    registry.setActive('research', true)
+
+    await expect(registry.remove('default')).resolves.toMatchObject({ id: 'default', active: false })
+
+    expect(readFileSync(join(dataDir, 'active'), 'utf8')).toBe('research\n')
+    expect(registry.list()).toEqual([expect.objectContaining({ id: 'research', active: true })])
+    expect(process.mock.calls.map(([, args]) => args)).toEqual([
+      ['--data-dir', dataDir, '--store', 'research', 'store', 'set', 'research'],
+      ['--data-dir', dataDir, '--store', 'research', 'store', 'remove', 'default'],
+    ])
+  })
+
+  it('preserves the last active Store when Mnemon has nowhere to switch', async () => {
+    const dataDir = temporaryDirectory()
+    mkdirSync(join(dataDir, 'data', 'default'), { recursive: true })
+    writeFileSync(join(dataDir, 'data', 'default', 'mnemon.db'), 'default database')
+    const process = vi.fn<ProcessRunner>()
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), process)
+    const registry = new MemoryBodyRegistry(runner, true)
+    registry.setActive('default', false)
+
+    await expect(registry.remove('default')).rejects.toThrow('create another Memory Space first')
+    expect(registry.list()).toEqual([expect.objectContaining({ id: 'default', active: false })])
+    expect(process).not.toHaveBeenCalled()
   })
 
   it('requires a routing description and never derives a new id from model-authored text', async () => {

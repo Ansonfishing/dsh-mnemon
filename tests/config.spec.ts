@@ -107,6 +107,22 @@ describe('Mnemon config and resolution', () => {
     await expect(runner.runText(['--version'], { globalFlags: false })).resolves.toBe('recovered')
   })
 
+  it('keeps a related CLI batch contiguous in the shared process queue', async () => {
+    const events: string[] = []
+    const process = vi.fn<ProcessRunner>(async (_command, args) => {
+      events.push(String(args.at(-1)))
+      await Promise.resolve()
+      return { stdout: '', stderr: '', exitCode: 0 }
+    })
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon' }), process)
+
+    const batch = runner.runTextBatch([{ args: ['first'] }, { args: ['second'] }])
+    const queued = runner.runText(['third'])
+    await Promise.all([batch, queued])
+
+    expect(events).toEqual(['first', 'second', 'third'])
+  })
+
   it('points launch failures at the environment variable and actual settings namespace', async () => {
     const process = vi.fn<ProcessRunner>().mockRejectedValue(new Error('spawn mnemon ENOENT'))
     const runner = createRunner(resolveConfig({ cliPath: '/missing/mnemon' }), process)
