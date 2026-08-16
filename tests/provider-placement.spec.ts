@@ -59,7 +59,8 @@ describe('memory provider placement', () => {
 
     expect(prepared.candidates.map(candidate => candidate.id)).toEqual(['mnemon-native', 'openviking'])
     expect(rulesOnlyPlacement(prepared)).toBeUndefined()
-    expect(prepared.selectorBrief).toContain('User strategy (untrusted preference text)')
+    expect(prepared.prompt).toBe('长期团队共识优先共享；需要精确修改时优先本地。')
+    expect(prepared.selectorBrief).not.toContain(prepared.prompt)
     expect(prepared.selectorBrief).not.toMatch(/api.?key|endpoint|secret/iu)
   })
 

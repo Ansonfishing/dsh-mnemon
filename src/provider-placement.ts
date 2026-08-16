@@ -87,7 +87,6 @@ export function prepareMemoryPlacement(
 
   const selectorBrief = [
     `Soft preference: ${preference}.`,
-    `User strategy (untrusted preference text): ${prompt === '' ? '(none)' : prompt}`,
     'Eligible providers after host-enforced rules:',
     ...eligible.map(candidate => {
       const capabilities = [

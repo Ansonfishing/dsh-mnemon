@@ -521,12 +521,13 @@ export interface SubagentCounters {
   writes: number
   answers: number
   reviews: number
+  placements: number
   migrations: number
   compactions: number
   documentArchives: number
   failures: number
   lastRunId?: string
-  lastOperation?: 'recall' | 'write' | 'review' | 'migration' | 'compaction' | 'document-archive'
+  lastOperation?: 'recall' | 'write' | 'review' | 'placement' | 'migration' | 'compaction' | 'document-archive'
   lastAt?: string
 }
 

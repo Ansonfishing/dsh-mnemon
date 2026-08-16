@@ -6,6 +6,7 @@ import type { HostAgent, HostContextShape, HostSubagentsService, ToolDefinition 
 import { DocumentManager } from '../src/documents.ts'
 import type { MnemonService } from '../src/service.ts'
 import { assertDshOutputSchema, MnemonSubagentCoordinator } from '../src/subagent.ts'
+import { prepareMemoryPlacement, type MemoryPlacementCandidate } from '../src/provider-placement.ts'
 import { registerTools } from '../src/tools.ts'
 import { RuntimeMemoryCapacityError, type RuntimeMemoryController } from '../src/runtime-memory.ts'
 
@@ -109,6 +110,46 @@ describe('Mnemon memory subagent coordinator', () => {
       toolFilter: { allow: expect.arrayContaining(['mnemon_recall', 'mnemon_remember', 'mnemon_memory_body_create', 'mnemon_memory_body_merge']) },
     }))
     expect((host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }> }])[1].prompt[0]!.text).not.toMatch(/catalog_json|request_json|dbPath/)
+  })
+
+  it('selects a provider in a tool-free child and keeps user policy out of the persona', async () => {
+    const host = subagents({
+      providerId: 'openviking',
+      reason: 'A shared remote scope matches this team knowledge body.',
+      confidence: 'high',
+    })
+    const coordinator = new MnemonSubagentCoordinator(host.value)
+    const placementCandidates: MemoryPlacementCandidate[] = [
+      {
+        id: 'mnemon-native', label: 'Mnemon Native', kind: 'local', configured: true, summary: 'Local exact memory.',
+        capabilities: { search: true, browse: true, graph: true, entities: true, related: true, remember: true, link: true, forget: true, writeMode: 'exact', deletionMode: 'soft' },
+      },
+      {
+        id: 'openviking', label: 'OpenViking', kind: 'remote', configured: true, summary: 'Shared extracting memory.',
+        capabilities: { search: true, browse: true, graph: false, entities: false, related: false, remember: true, link: false, forget: false, writeMode: 'async-extracting', deletionMode: 'hard' },
+      },
+    ]
+    const prepared = prepareMemoryPlacement({ mode: 'automatic', prompt: '团队知识优先 OpenViking。' }, placementCandidates)
+
+    await expect(coordinator.placeProvider(parent(), {
+      name: '团队发布经验',
+      description: '跨成员共享发布门禁与回滚经验。',
+    }, prepared, new AbortController().signal)).resolves.toMatchObject({
+      providerId: 'openviking',
+      decidedBy: 'llm',
+      runId: 'child-run-1',
+    })
+
+    expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
+      toolFilter: { allow: [] },
+      maxDepth: 1,
+      persona: expect.stringContaining('host-filtered eligible list'),
+    }))
+    const request = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }>; persona: string }])[1]
+    expect(request.prompt[0]!.text).toContain('团队知识优先 OpenViking。')
+    expect(request.persona).not.toContain('团队知识优先 OpenViking。')
+    expect(request.persona).not.toMatch(/api.?key|endpoint|secret/iu)
+    expect(coordinator.snapshot()).toMatchObject({ placements: 1, lastOperation: 'placement' })
   })
 
   it('reviews a completed full-context checkpoint through fork with a maintenance-only tool set', async () => {
