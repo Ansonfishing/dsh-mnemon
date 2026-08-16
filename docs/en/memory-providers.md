@@ -20,20 +20,20 @@ The first multi-provider implementation covers popular open-source and hosted me
 
 The Host exposes only capabilities an adapter can honor. UI actions and Agent tools do not fabricate missing graph, related, link, browse, or deletion behavior.
 
-## Connection fields
+## Service and Memory Space fields
 
-| Provider | Required or defaulted settings | Optional settings |
+| Provider | Service configuration in Settings | Instance configuration in Memory Spaces |
 |---|---|---|
-| OpenViking | `endpoint`, `targetUri` | `apiKey`, `account`, `user`, `actorPeerId` |
-| Honcho | `endpoint`, `workspace`, `userId`, `agentId` | `apiKey` |
-| Mem0 | `endpoint`, `mode`, `userId`, `agentId` | `apiKey`, `rerank` |
-| Hindsight | `endpoint`, `bankId`, `budget` | `apiKey` |
-| Holographic | `defaultTrust`, `minTrust` | `dataPath` |
-| RetainDB | `endpoint`, `apiKey`, `project`, `userId` | — |
-| ByteRover | `cliPath` | `workingDirectory`, `apiKey` |
-| Supermemory | `endpoint`, `apiKey`, `containerTag`, `searchMode` | — |
+| OpenViking | `endpoint`, `apiKey`, `account` | `targetUri`, `user`, `actorPeerId` |
+| Honcho | `endpoint`, `apiKey` | `workspace`, `userId`, `agentId` |
+| Mem0 | `endpoint`, `apiKey`, `mode` | `userId`, `agentId`, `rerank` |
+| Hindsight | `endpoint`, `apiKey` | `bankId`, `budget` |
+| Holographic | `dataPath` | `defaultTrust`, `minTrust` |
+| RetainDB | `endpoint`, `apiKey` | `project`, `userId` |
+| ByteRover | `cliPath`, `apiKey` | `workingDirectory` |
+| Supermemory | `endpoint`, `apiKey` | `containerTag`, `searchMode` |
 
-**Settings → Memory System** exposes one collapsible configuration area per provider; saving one configuration directly creates or updates a ready-to-use Memory Space. **Memory Spaces → Overview** remains the status, editing, and lifecycle surface for the same set of Memory Spaces. Secret fields are stored in `<storageRoot>/state/memory-providers.json` with mode `0600`; the Host returns only which secret fields are configured. Leaving a saved secret blank keeps it, while the explicit clear control removes it.
+**Settings → Memory System** saves only reusable provider service configuration and never creates a Memory Space. **Memory Spaces → Overview** creates, edits, activates, and removes Memory Spaces while showing only instance scopes such as workspace, user, bank, container, or target URI. The Host merges both layers immediately before calling an adapter. Secrets stay in `<storageRoot>/state/memory-providers.json` with mode `0600`; the WebUI sees only which secrets are configured. Leaving a saved secret blank keeps it, while the explicit clear control removes it.
 
 ## Manual and smart placement
 

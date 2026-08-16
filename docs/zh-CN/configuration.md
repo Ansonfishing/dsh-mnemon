@@ -12,7 +12,7 @@ $DSH_HOME/settings.yaml
 
 默认通常是 `~/.dsh/settings.yaml`。当前全部配置标记为 `live` 生效；保存后会先初始化候选运行图，再原子切换 Host 服务。
 
-Web 设置页编辑 `displayMode`、`storageScope`、`dataDir`，以及 `mnemon-ui` 下的回合记忆条和存入记忆按钮。“全局 / 工作区”是整个三层记忆系统的范围；`custom` 数据位置与 ZIP 备份 / 迁移收纳在 Mnemon Native 折叠栏。每个第三方 Provider 有独立折叠栏，一份连接配置会直接成为一个可用记忆体。其他高级项需要直接修改 YAML。
+Web 设置页编辑 `displayMode`、`storageScope`、`dataDir`，以及 `mnemon-ui` 下的回合记忆条和存入记忆按钮。“全局 / 工作区”是整个三层记忆系统的范围；`custom` 数据位置与 ZIP 备份 / 迁移收纳在 Mnemon Native 折叠栏。每个第三方 Provider 有独立的服务配置折叠栏；这里保存的是 endpoint、凭据或可执行文件等可复用服务信息，不会创建记忆体。具体记忆体及其数据范围仍在“记忆体 → 概览”中创建。其他高级项需要直接修改 YAML。
 
 ## 完整示例
 
@@ -99,7 +99,7 @@ mnemon:
 
 Mnemon Native 通过 `data/<store>/mnemon.db` 与其他 Mnemon-enabled Agent 原生互操作；三方引擎通过配置的 Provider 作用域互操作。Runtime、Documents、DSH 激活状态和 UI 元数据仍属于 dsh-mnemon 管理范围。见[长期记忆 Provider](./memory-providers.md)。
 
-第三方连接与 Secret 保存在当前范围根目录的 `state/memory-providers.json`，不会写入 `settings.yaml`。Mnemon Native 的 ZIP 只包含 Runtime、Documents 与原生记忆体；第三方服务数据、连接凭据和本地三方 Store 不进入该 ZIP。
+第三方服务配置、记忆体范围配置与 Secret 保存在当前范围根目录的 `state/memory-providers.json`，不会写入 `settings.yaml`。服务配置由同一 Provider 的多个记忆体复用；运行时才与单个记忆体配置合并。Mnemon Native 的 ZIP 只包含 Runtime、Documents 与原生记忆体；第三方服务数据、连接凭据和本地三方 Store 不进入该 ZIP。
 
 ## CLI 发现优先级
 

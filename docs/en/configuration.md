@@ -12,7 +12,7 @@ $DSH_HOME/settings.yaml
 
 The default is commonly `~/.dsh/settings.yaml`. All current settings are marked `live`; after Save, the Host initializes a candidate runtime graph and then switches to it atomically.
 
-The Web settings page edits `displayMode`, `storageScope`, and `dataDir`, plus the Turn memory and Save-to-memory switches under `mnemon-ui`. Global and Workspace define the scope of the complete three-tier system. Mnemon Native owns its Custom data location and ZIP backup/migration controls. Each external provider has its own collapsible configuration; one saved connection becomes one ready-to-use Memory Space. Other advanced settings must be changed directly in YAML.
+The Web settings page edits `displayMode`, `storageScope`, and `dataDir`, plus the Turn memory and Save-to-memory switches under `mnemon-ui`. Global and Workspace define the scope of the complete three-tier system. Mnemon Native owns its Custom data location and ZIP backup/migration controls. Each external provider has a collapsible service configuration for reusable endpoints, credentials, or executables; saving it does not create a Memory Space. Create concrete Memory Spaces and choose their data scopes in Memory Spaces → Overview. Other advanced settings must be changed directly in YAML.
 
 ## Complete Example
 
@@ -99,7 +99,7 @@ mnemon:
 
 Mnemon Native interoperates with other Mnemon-enabled agents through `data/<store>/mnemon.db`; third-party engines interoperate through their configured provider scope. Runtime, Documents, DSH activation state, and UI metadata remain managed by dsh-mnemon. See [Long-term memory providers](./memory-providers.md).
 
-External connections and secrets are stored in `state/memory-providers.json` under the selected scope root, not in `settings.yaml`. The Mnemon Native ZIP contains only Runtime, Documents, and native Memory Spaces; external service data, credentials, and local third-party stores are excluded.
+External service settings, Memory Space scope settings, and secrets are stored in `state/memory-providers.json` under the selected scope root, not in `settings.yaml`. Multiple Memory Spaces reuse one provider service configuration; the Host merges both layers only at runtime. The Mnemon Native ZIP contains only Runtime, Documents, and native Memory Spaces; external service data, credentials, and local third-party stores are excluded.
 
 ## CLI Discovery Precedence
 

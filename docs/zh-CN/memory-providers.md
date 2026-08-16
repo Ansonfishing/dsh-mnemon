@@ -20,20 +20,20 @@
 
 Host 只暴露适配器能够兑现的能力；UI 与 Agent 工具不会伪造缺失的图谱、关联、链接、浏览或删除语义。
 
-## 连接字段
+## 服务与记忆体字段
 
-| Provider | 必填或已有默认值 | 可选 |
+| Provider | 设置中的服务配置 | 记忆体中的实例配置 |
 |---|---|---|
-| OpenViking | `endpoint`、`targetUri` | `apiKey`、`account`、`user`、`actorPeerId` |
-| Honcho | `endpoint`、`workspace`、`userId`、`agentId` | `apiKey` |
-| Mem0 | `endpoint`、`mode`、`userId`、`agentId` | `apiKey`、`rerank` |
-| Hindsight | `endpoint`、`bankId`、`budget` | `apiKey` |
-| Holographic | `defaultTrust`、`minTrust` | `dataPath` |
-| RetainDB | `endpoint`、`apiKey`、`project`、`userId` | — |
-| ByteRover | `cliPath` | `workingDirectory`、`apiKey` |
-| Supermemory | `endpoint`、`apiKey`、`containerTag`、`searchMode` | — |
+| OpenViking | `endpoint`、`apiKey`、`account` | `targetUri`、`user`、`actorPeerId` |
+| Honcho | `endpoint`、`apiKey` | `workspace`、`userId`、`agentId` |
+| Mem0 | `endpoint`、`apiKey`、`mode` | `userId`、`agentId`、`rerank` |
+| Hindsight | `endpoint`、`apiKey` | `bankId`、`budget` |
+| Holographic | `dataPath` | `defaultTrust`、`minTrust` |
+| RetainDB | `endpoint`、`apiKey` | `project`、`userId` |
+| ByteRover | `cliPath`、`apiKey` | `workingDirectory` |
+| Supermemory | `endpoint`、`apiKey` | `containerTag`、`searchMode` |
 
-“**设置 → 记忆系统**”按 Provider 展示折叠配置；每保存一份配置，就直接创建或更新一个可用记忆体。“**记忆体 → 概览**”继续提供同一批记忆体的状态、编辑与生命周期入口。Secret 字段保存在 `<storageRoot>/state/memory-providers.json`，权限为 `0600`，Host 只返回哪些 Secret 已配置。编辑时将已保存 Secret 留空会保持原值，显式“清除”才会移除。
+“**设置 → 记忆系统**”只保存 Provider 服务配置，不创建记忆体；同一范围内该 Provider 的所有记忆体复用它。“**记忆体 → 概览**”负责创建、编辑、启停与删除记忆体，并只呈现 workspace、user、bank、container、target URI 等实例范围。Host 在调用适配器前合并两层配置。Secret 保存在 `<storageRoot>/state/memory-providers.json`，权限为 `0600`，WebUI 只知道哪些 Secret 已配置；留空保持原值，显式“清除”才会移除。
 
 ## 手动与智能选择
 
