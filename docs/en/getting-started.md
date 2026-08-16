@@ -159,6 +159,8 @@ If Mnemon is unavailable, run `command -v mnemon` and `mnemon --version` on macO
 4. Describe what belongs there and which tasks should recall it.
 5. Enable read activation.
 
+In an empty storage root, the first Memory Space uses Mnemon's native `default` Store ID while keeping the name and description you supplied. Its activation toggle affects DSH only.
+
 ### Remember one test item
 
 Open **Remember** and enter something stable, self-contained, future-useful, and secret-free. Leave advanced options collapsed so the memory subagent can select a target, deduplicate, and distill.

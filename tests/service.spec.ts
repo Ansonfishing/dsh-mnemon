@@ -25,6 +25,7 @@ function populatedDataDir(): string {
   temporaryDirectories.push(dataDir)
   mkdirSync(join(dataDir, 'data', 'work'), { recursive: true })
   writeFileSync(join(dataDir, 'data', 'work', 'mnemon.db'), 'fixture database')
+  writeFileSync(join(dataDir, 'active'), 'work\n')
   return dataDir
 }
 
@@ -80,12 +81,25 @@ describe('MnemonService', () => {
       healthy: true,
       version: '0.1.2',
       store: 'work',
+      mnemonDefaultStore: 'work',
+      dshActiveStores: ['work'],
       dataDir,
       timeoutMs: 4321,
       stats: { totalInsights: 3, edgeCount: 4, byCategory: { decision: 2 } },
     })
+    expect(status.memoryBodies).toEqual([expect.objectContaining({ id: 'work', active: true, mnemonDefault: true })])
     expect(process).toHaveBeenCalledWith('/fake/mnemon', ['--data-dir', dataDir, '--store', 'work', 'status'], expect.anything())
     expect(process).toHaveBeenCalledWith('/fake/mnemon', ['--version'], expect.anything())
+  })
+
+  it('allows every Memory Space to be inactive for DSH without changing the Mnemon default Store', async () => {
+    const { service } = fixture()
+    service.updateBody('work', { active: false })
+
+    const status = await service.status()
+
+    expect(status).toMatchObject({ store: 'none', mnemonDefaultStore: 'work', dshActiveStores: [] })
+    expect(status.memoryBodies).toEqual([expect.objectContaining({ id: 'work', active: false, mnemonDefault: true })])
   })
 
   it('uses graph recall by default and normalizes compact results', async () => {

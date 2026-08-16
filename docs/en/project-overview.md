@@ -41,7 +41,7 @@ One body may be up to 2 MiB and active rendered content up to 10 MiB. Before man
 
 ### 3. Memory Spaces
 
-Each Memory Space maps to an independent Mnemon Store and `mnemon.db`, with a stable ID, name, routing description, and activation state.
+Each Memory Space maps to an independent Mnemon Store and `mnemon.db`, with a stable ID, name, routing description, and activation state. Activation is DSH's read-and-routing control plane and may select zero or many spaces; Mnemon's native default Store remains an independent single selection for ordinary Mnemon agents.
 
 - Reads cover active spaces only.
 - Writes may target any registered space and activate it after success.

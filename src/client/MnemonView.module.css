@@ -168,6 +168,7 @@
 .bodyCardTop code { overflow: hidden; color: var(--mn-faint); font: 9px var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
 .bodyHealth { color: var(--mn-success); font: 650 8px var(--mn-code); letter-spacing: .07em; text-transform: uppercase; }
 .bodyCard:not([data-healthy]) .bodyHealth { color: var(--mn-danger); }
+.mnemonDefaultBadge { width: fit-content; padding: 2px 5px; border: 1px solid color-mix(in srgb, var(--mn-accent) 24%, var(--mn-line)); border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 7%, transparent); font: 650 8px var(--mn-code); white-space: nowrap; }
 .bodySwitch { display: flex; min-height: 32px; align-items: center; gap: 6px; border: 0; padding: 0 1px; color: var(--mn-faint); background: transparent; font-size: 9.5px; cursor: pointer; }
 .bodySwitchTrack { position: relative; width: 29px; height: 17px; flex: 0 0 auto; border: 1px solid var(--mn-line-strong); border-radius: 999px; background: var(--mn-layer-2); transition: border-color .18s, background-color .18s; }
 .bodySwitchTrack i { position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--mn-faint); transition: transform .2s cubic-bezier(.2, .8, .2, 1), background-color .18s; }
