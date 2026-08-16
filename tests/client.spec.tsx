@@ -539,7 +539,7 @@ describe('MnemonView', () => {
     expect(overviewTab.getAttribute('aria-selected')).toBe('true')
     expect(rememberAction.className).toContain('primaryButton')
     expect(screen.getByRole('heading', { name: '记忆体', level: 2 })).toBeTruthy()
-    expect(screen.getByText('统一管理 Mnemon 记忆体与第三方 Provider 自动同步的记忆空间；激活后的记忆体共同参与读取、路由与实时快照。')).toBeTruthy()
+    expect(screen.getByText('统一管理 Mnemon 记忆体与第三方 Provider 接入的记忆空间；激活后的记忆体共同参与读取、路由与实时快照。')).toBeTruthy()
     expect(screen.getByRole('heading', { name: '概览', level: 2 })).toBeTruthy()
     await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
 
@@ -666,7 +666,7 @@ describe('MnemonView', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
     await waitFor(() => expect(screen.getByText('Mnemon 默认')).toBeTruthy())
-    expect(screen.getByText(/第三方标题、描述和范围由 Provider 同步，服务关闭后本地映射会被移除/)).toBeTruthy()
+    expect(screen.getByText(/首次接入时建立映射，之后点击卡片只检测当前记忆体；本地维护的标题与说明不会被重连覆盖/)).toBeTruthy()
     const toggle = screen.getByRole('switch', { name: '项目记忆体读取开关' })
     expect(toggle.hasAttribute('disabled')).toBe(false)
     fireEvent.click(toggle)
@@ -712,8 +712,8 @@ describe('MnemonView', () => {
     fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
     const title = await screen.findByText('项目记忆体')
     await waitFor(() => expect(screen.getByText('存储正常')).toBeTruthy())
-    expect(screen.getByText('进入时全量同步 · 点击卡片按需同步')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '立即同步' })).toBeNull()
+    expect(screen.getByText('上次全量同步：刚刚')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '立即同步' })).toBeTruthy()
     expect(interval.mock.calls.some(([, delay]) => delay === 15_000)).toBe(false)
 
     const wholeSyncs = () => call.mock.calls.filter(([, endpoint]) => endpoint === 'bodies' || endpoint === 'body-directory').length
@@ -726,6 +726,8 @@ describe('MnemonView', () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith(expect.anything(), 'body-reconnect', expect.objectContaining({ memoryBodyId: 'project' })))
     await waitFor(() => expect(card.hasAttribute('data-reconnecting')).toBe(false))
     expect(wholeSyncs()).toBe(entrySyncCount)
+    fireEvent.click(screen.getByRole('button', { name: '立即同步' }))
+    await waitFor(() => expect(wholeSyncs()).toBeGreaterThan(entrySyncCount))
     interval.mockRestore()
   })
 

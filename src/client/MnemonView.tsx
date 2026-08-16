@@ -993,9 +993,12 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const [metadataRunning, setMetadataRunning] = useState(false)
   const [metadataRefreshed, setMetadataRefreshed] = useState<string[]>([])
   const [metadataError, setMetadataError] = useState<string | null>(null)
+  const [lastFullSyncAt, setLastFullSyncAt] = useState<number | null>(null)
+  const [syncClock, setSyncClock] = useState(() => Date.now())
   const loadRequest = useRef(0)
   const initialSyncStarted = useRef(false)
   const compatibilityRetryStarted = useRef(false)
+  const fullSyncObserved = useRef(true)
 
   const load = useCallback(async (quiet = false) => {
     const request = ++loadRequest.current
@@ -1060,6 +1063,10 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
     compatibilityRetryStarted.current = true
     void load(true)
   }, [catalogUnavailable, load, props.catalogKnown])
+  useEffect(() => {
+    const timer = window.setInterval(() => setSyncClock(Date.now()), 1_000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   const toggle = async (body: MemoryBodyView) => {
     setChanging(body.id); setError(null)
@@ -1206,6 +1213,30 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const providers = catalog?.providers ?? []
   const metadataCandidates = catalog?.items.filter(body => body.active && body.providerEnabled !== false) ?? []
   const loading = catalogLoading || healthLoading || graphLoading
+  useEffect(() => {
+    if (loading) {
+      fullSyncObserved.current = true
+      return
+    }
+    if (!fullSyncObserved.current) return
+    fullSyncObserved.current = false
+    if (error !== null) return
+    const completedAt = Date.now()
+    setLastFullSyncAt(completedAt)
+    setSyncClock(completedAt)
+  }, [error, loading])
+  const fullSyncAge = lastFullSyncAt === null
+    ? t('overview.fullSyncPending')
+    : (() => {
+        const seconds = Math.max(0, Math.floor((syncClock - lastFullSyncAt) / 1_000))
+        if (seconds < 5) return t('overview.fullSyncJustNow')
+        if (seconds < 60) return t('overview.fullSyncSeconds', { count: seconds })
+        const minutes = Math.floor(seconds / 60)
+        if (minutes < 60) return t('overview.fullSyncMinutes', { count: minutes })
+        const hours = Math.floor(minutes / 60)
+        if (hours < 24) return t('overview.fullSyncHours', { count: hours })
+        return t('overview.fullSyncDays', { count: Math.floor(hours / 24) })
+      })()
   const selectedProvider = providers.find(provider => provider.id === bodyProviderId)
   const nativeBodyCount = catalog?.items.filter(body => body.provider.id === 'mnemon-native').length ?? 0
   const canDeleteBody = (body: MemoryBodyView): boolean => body.provider.id !== 'mnemon-native' || nativeBodyCount > 1
@@ -1305,7 +1336,8 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const bodyDeleteActionClass = appearanceClass(css.dangerButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemDangerAction))
   return (
     <div className={css.page}>
-      <PageHeader title={appearance.surface === 'sidebar' ? t('nav.overview') : t('overview.title')} description={t(appearance.surface === 'sidebar' ? 'overview.pageDescription' : 'overview.description')} meta={t('overview.interval')} {...(loading ? { loadingLabel: catalogLoading ? t('overview.directoryLoading') : graphLoading ? t('overview.snapshotLoading') : t('overview.healthLoading') } : {})} />
+      <PageHeader title={appearance.surface === 'sidebar' ? t('nav.overview') : t('overview.title')} description={t(appearance.surface === 'sidebar' ? 'overview.pageDescription' : 'overview.description')} meta={fullSyncAge} {...(loading ? { loadingLabel: catalogLoading ? t('overview.directoryLoading') : graphLoading ? t('overview.snapshotLoading') : t('overview.healthLoading') } : {})}
+        action={<button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void load()}>{loading ? t('overview.syncing') : t('overview.syncNow')}</button>} />
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
       <section className={css.bodyDirectory} aria-label={t('overview.directory')}>
         <div className={css.bodyDirectoryHeader}>
