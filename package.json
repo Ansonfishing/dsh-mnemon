@@ -72,10 +72,6 @@
     "README.md",
     "README.zh-CN.md",
     "SECURITY.md",
-    "docs/README.md",
-    "docs/assets",
-    "docs/zh-CN",
-    "docs/en",
     "LICENSE"
   ],
   "dsh": {
@@ -100,7 +96,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "verify:build": "node scripts/verify-deterministic-build.mjs",
-    "verify": "pnpm run typecheck && pnpm run test && pnpm run verify:build"
+    "verify:package": "node scripts/verify-package-contents.mjs",
+    "verify": "pnpm run typecheck && pnpm run test && pnpm run verify:build && pnpm run verify:package"
   },
   "dependencies": {
     "fflate": "^0.8.3",

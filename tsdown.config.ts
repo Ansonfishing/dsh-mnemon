@@ -38,7 +38,7 @@ const client: UserConfig = {
   platform: 'browser',
   target: 'es2022',
   dts: false,
-  sourcemap: true,
+  sourcemap: false,
   clean: false,
   deps: {
     neverBundle: CLIENT_EXTERNALS,
