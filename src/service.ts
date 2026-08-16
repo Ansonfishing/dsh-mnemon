@@ -33,6 +33,7 @@ import {
   type Intent,
   type MemoryBodyCatalog,
   type MemoryBodyStats,
+  type MemoryBodyMetadataUpdate,
   type MemoryBodyView,
   type MemoryGraphEdge,
   type MemoryGraphNode,
@@ -266,16 +267,32 @@ export class MnemonService {
   }
 
   async bodies(signal?: AbortSignal): Promise<MemoryBodyCatalog> {
-    const mnemonDefaultStore = this.runner.persistedStore()
-    const items: MemoryBodyView[] = await Promise.all(this.memoryBodies.list().map(async body => {
+    const directory = this.bodyDirectory()
+    const items: MemoryBodyView[] = await Promise.all(directory.items.map(async body => {
       let status: ProviderBodyStatus
-      const providerEnabled = body.provider.id === 'mnemon-native' || this.memoryBodies.providerServiceEnabled(body.provider.id)
+      const providerEnabled = body.providerEnabled !== false
       if (!providerEnabled) status = { healthy: false, error: `${body.provider.label} is disabled in Settings` }
       else try { status = await this.providerFor(body).status(body, signal) } catch (error) {
           status = { healthy: false, error: error instanceof Error ? error.message : String(error) }
       }
-      return { ...body, providerEnabled, mnemonDefault: body.provider.id === 'mnemon-native' && body.id === mnemonDefaultStore, ...status }
+      const { statusLoading: _statusLoading, ...metadata } = body
+      return { ...metadata, ...status }
     }))
+    return {
+      ...directory,
+      items,
+      activeCount: items.filter(body => body.active && body.providerEnabled !== false).length,
+      generatedAt: new Date().toISOString(),
+    }
+  }
+
+  /** Return the control-plane directory without waiting for provider I/O. */
+  bodyDirectory(): MemoryBodyCatalog {
+    const mnemonDefaultStore = this.runner.persistedStore()
+    const items: MemoryBodyView[] = this.memoryBodies.list().map(body => {
+      const providerEnabled = body.provider.id === 'mnemon-native' || this.memoryBodies.providerServiceEnabled(body.provider.id)
+      return { ...body, providerEnabled, mnemonDefault: body.provider.id === 'mnemon-native' && body.id === mnemonDefaultStore, healthy: false, statusLoading: true }
+    })
     return {
       items,
       providers: MEMORY_PROVIDER_CATALOG.map(provider => ({
@@ -635,6 +652,11 @@ export class MnemonService {
   updateBody(id: string, request: UpdateMemoryBodyRequest): MemoryBody {
     this.assertWritable()
     return this.memoryBodies.update(id, request)
+  }
+
+  updateBodyMetadata(updates: readonly MemoryBodyMetadataUpdate[]): MemoryBody[] {
+    this.assertWritable()
+    return this.memoryBodies.updateMetadata(updates)
   }
 
   async deleteBody(id: string, signal?: AbortSignal): Promise<MemoryBody> {

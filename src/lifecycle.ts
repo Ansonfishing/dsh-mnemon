@@ -440,6 +440,10 @@ export class MnemonLifecycle {
     return this.coordinator.placeProvider(this.liveAgent(sessionId), body, prepared, signal)
   }
 
+  maintainMetadata(sessionId: string, memoryBodyIds: readonly string[], signal = new AbortController().signal) {
+    return this.coordinator.maintainMetadata(this.liveAgent(sessionId), memoryBodyIds, signal)
+  }
+
   async supervise(sessionId: string, content: string, idempotencyKey?: string, signal = new AbortController().signal): Promise<SupervisedWritebackResult> {
     if (!this.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
     const normalizedSessionId = sessionId.trim()

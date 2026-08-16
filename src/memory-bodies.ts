@@ -23,6 +23,7 @@ import type {
   MemoryProviderServiceView,
   MemoryProviderConnection,
   MemoryProviderId,
+  MemoryBodyMetadataUpdate,
   OpenVikingBodyConnection,
   UpdateMemoryBodyRequest,
 } from './shared/contracts.ts'
@@ -454,6 +455,31 @@ export class MemoryBodyRegistry {
     this.bodies[index] = body
     this.save()
     return this.view(body)
+  }
+
+  /** Validate every model-authored update before committing the batch. */
+  updateMetadata(updates: readonly MemoryBodyMetadataUpdate[]): MemoryBody[] {
+    if (updates.length === 0 || updates.length > 20) throw new Error('metadata maintenance requires 1 through 20 Memory Spaces')
+    const seen = new Set<string>()
+    const replacements = updates.map(update => {
+      const id = validateMemoryBodyId(update.memoryBodyId)
+      if (seen.has(id)) throw new Error(`duplicate metadata update: ${id}`)
+      seen.add(id)
+      const index = this.bodies.findIndex(body => body.id === id)
+      if (index < 0) throw new Error(`unknown memory body: ${id}`)
+      return {
+        index,
+        body: {
+          ...this.bodies[index]!,
+          name: requiredText(update.title, 'title', 48),
+          description: requiredText(update.description, 'description', 200),
+          updatedAt: this.now().toISOString(),
+        } satisfies StoredMemoryBody,
+      }
+    })
+    for (const replacement of replacements) this.bodies[replacement.index] = replacement.body
+    this.save()
+    return replacements.map(replacement => this.view(replacement.body))
   }
 
   async remove(id: string, signal?: AbortSignal): Promise<MemoryBody> {

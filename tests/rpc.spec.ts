@@ -17,6 +17,7 @@ function fakeService(writeEnabled = true): MnemonService {
     memoryBodies: {
       providerServices: vi.fn(() => ({ providers: [], items: [], generatedAt: 'now' })),
     },
+    bodyDirectory: vi.fn(() => ({ items: [{ id: 'project', name: 'Project', description: 'Project memory.', active: true, providerEnabled: true }], providers: [], total: 1, activeCount: 1, directory: '/tmp/mnemon/data', generatedAt: 'now' })),
     bodies: vi.fn(async () => ({ items: [], total: 0, activeCount: 0, directory: '/tmp/mnemon/data', generatedAt: 'now' })),
     graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
     list: vi.fn(async () => ({ items: [], total: 0, generatedAt: 'now' })),
@@ -34,6 +35,7 @@ function fakeService(writeEnabled = true): MnemonService {
     })),
     createBody: vi.fn(async request => ({ id: '00000000-0000-4000-8000-000000000001', name: request.name, description: request.description, active: request.active ?? false })),
     updateBody: vi.fn((id, request) => ({ id, name: request.name ?? id, description: request.description ?? '', active: request.active ?? false })),
+    updateBodyMetadata: vi.fn(updates => updates),
     deleteBody: vi.fn(async id => ({ id, name: id, description: '', active: false })),
   } as unknown as MnemonService
 }
@@ -58,6 +60,7 @@ describe('Mnemon RPC', () => {
     await expect(createReadHandler(service)('search', { query: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { query: 'SQLite' } })
     await expect(createReadHandler(service)('graph', {})).resolves.toMatchObject({ ok: true, value: { nodes: [] } })
     await expect(createReadHandler(service)('bodies', {})).resolves.toMatchObject({ ok: true, value: { items: [], total: 0 } })
+    await expect(createReadHandler(service)('body-directory', {})).resolves.toMatchObject({ ok: true, value: { total: 1 } })
     await expect(createReadHandler(service)('provider-services', {})).resolves.toMatchObject({ ok: true, value: { items: [] } })
     await expect(createReadHandler(service)('list', { category: 'decision' })).resolves.toMatchObject({ ok: true, value: { total: 0 } })
     await expect(createReadHandler(service)('entities', { entity: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { insights: [] } })
@@ -167,6 +170,25 @@ describe('Mnemon RPC', () => {
       description: '精确记录产品决策并维护关系。',
     }, expect.objectContaining({ selectorBrief: 'eligible providers' }))
     expect(service.createBody).toHaveBeenCalledWith(expect.objectContaining({ placement: expect.any(Object) }), undefined, decision)
+  })
+
+  it('applies AI-generated Memory Space metadata only after exact selected-space validation', async () => {
+    const service = fakeService()
+    const maintained = {
+      delegated: true as const,
+      runId: 'metadata-1',
+      provider: 'spawn',
+      summary: 'Updated project metadata.',
+      updates: [{ memoryBodyId: 'project', title: '产品决策', description: '记录稳定的产品范围与取舍，在规划和复盘产品方向时召回。' }],
+    }
+    const lifecycle = { maintainMetadata: vi.fn(async () => maintained) } as unknown as MnemonLifecycle
+
+    await expect(createWriteHandler(service, lifecycle)('body-metadata-maintain', {
+      sessionId: 'session-1', memoryBodyIds: ['project'],
+    })).resolves.toMatchObject({ ok: true, value: { runId: 'metadata-1' } })
+
+    expect(lifecycle.maintainMetadata).toHaveBeenCalledWith('session-1', ['project'])
+    expect(service.updateBodyMetadata).toHaveBeenCalledWith(maintained.updates)
   })
 
   it('routes supervised Tab writeback through an isolated memory subagent', async () => {

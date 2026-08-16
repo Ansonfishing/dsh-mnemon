@@ -358,6 +358,28 @@ describe('MemoryBodyRegistry', () => {
     })
   })
 
+  it('commits validated AI metadata as one batch without partially applying invalid output', async () => {
+    const dataDir = temporaryDirectory()
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>(async () => ({ stdout: '', stderr: '', exitCode: 0 })))
+    const registry = new MemoryBodyRegistry(runner, true)
+    const first = await registry.create({ name: 'First', description: 'First durable scope.' })
+    const second = await registry.create({ name: 'Second', description: 'Second durable scope.' })
+
+    expect(() => registry.updateMetadata([
+      { memoryBodyId: first.id, title: '产品决策', description: '记录稳定的产品范围与取舍，在规划和复盘产品方向时召回。' },
+      { memoryBodyId: second.id, title: 'x'.repeat(49), description: '记录稳定的发布规则和经验，在上线或故障处理时召回。' },
+    ])).toThrow('title is too long')
+    expect(registry.get(first.id).name).toBe('First')
+
+    expect(registry.updateMetadata([
+      { memoryBodyId: first.id, title: '产品决策', description: '记录稳定的产品范围与取舍，在规划和复盘产品方向时召回。' },
+      { memoryBodyId: second.id, title: '发布运行手册', description: '记录稳定的发布规则和经验，在上线或故障处理时召回。' },
+    ])).toEqual([
+      expect.objectContaining({ id: first.id, name: '产品决策' }),
+      expect.objectContaining({ id: second.id, name: '发布运行手册' }),
+    ])
+  })
+
   it('persists an audited automatic placement and refuses to create before placement resolves', async () => {
     const dataDir = temporaryDirectory()
     const process = vi.fn<ProcessRunner>(async () => ({ stdout: 'Created store', stderr: '', exitCode: 0 }))

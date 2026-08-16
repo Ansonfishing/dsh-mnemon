@@ -152,6 +152,31 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(coordinator.snapshot()).toMatchObject({ placements: 1, lastOperation: 'placement' })
   })
 
+  it('curates metadata in a read-only child and validates exact selected-space coverage', async () => {
+    const host = subagents({
+      summary: 'Updated both scopes.',
+      updates: [
+        { memoryBodyId: 'product', title: '产品决策', description: '记录稳定的产品范围、取舍与依据，在规划和复盘产品方向时召回。' },
+        { memoryBodyId: 'release', title: '发布运行手册', description: '沉淀发布门禁、部署约束和回滚经验，在准备上线或处理故障时召回。' },
+      ],
+    })
+    const coordinator = new MnemonSubagentCoordinator(host.value)
+
+    await expect(coordinator.maintainMetadata(parent(), ['product', 'release'], new AbortController().signal)).resolves.toMatchObject({
+      delegated: true,
+      runId: 'child-run-1',
+      updates: [{ memoryBodyId: 'product', title: '产品决策' }, { memoryBodyId: 'release', title: '发布运行手册' }],
+    })
+    expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
+      toolFilter: { allow: ['mnemon_memory_bodies', 'mnemon_recall'] },
+      persona: expect.stringContaining('call mnemon_recall separately for every supplied id'),
+    }))
+    expect(coordinator.snapshot()).toMatchObject({ metadataMaintenances: 1, lastOperation: 'metadata-maintenance' })
+
+    const incomplete = subagents({ summary: 'Only one.', updates: [{ memoryBodyId: 'product', title: '产品决策', description: '记录稳定的产品范围与取舍，在规划和复盘产品方向时召回。' }] })
+    await expect(new MnemonSubagentCoordinator(incomplete.value).maintainMetadata(parent(), ['product', 'release'], new AbortController().signal)).rejects.toThrow('omitted')
+  })
+
   it('reviews a completed full-context checkpoint through fork with a maintenance-only tool set', async () => {
     const host = subagents({ summary: 'No mutation needed.', action: 'skipped', memoryBodyIds: [] }, 'completed', ['spawn', 'fork'])
     const coordinator = new MnemonSubagentCoordinator(host.value)

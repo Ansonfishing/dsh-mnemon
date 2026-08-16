@@ -186,6 +186,8 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
           return success(await service.graph(undefined, Array.isArray(payload.memoryBodyIds) ? payload.memoryBodyIds.map(String) : undefined))
         case 'bodies':
           return success(await service.bodies())
+        case 'body-directory':
+          return success(service.bodyDirectory())
         case 'provider-services':
           return success(service.memoryBodies.providerServices({ includeSecrets: true }))
         case 'list':
@@ -457,6 +459,23 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
               }),
             }
             return success(service.updateBody(String(payload.memoryBodyId ?? ''), request))
+          }
+        case 'body-metadata-maintain':
+          {
+            if (lifecycle === undefined) throw new Error('AI metadata maintenance requires Mnemon lifecycle integration')
+            requireAligned(resolved.route)
+            if (!Array.isArray(payload.memoryBodyIds)) throw new Error('memoryBodyIds must be an array')
+            const memoryBodyIds = [...new Set(payload.memoryBodyIds.map(String).map(id => id.trim()).filter(Boolean))]
+            if (memoryBodyIds.length === 0 || memoryBodyIds.length > 20) throw new Error('metadata maintenance requires 1 through 20 Memory Spaces')
+            const directory = service.bodyDirectory()
+            for (const id of memoryBodyIds) {
+              const body = directory.items.find(item => item.id === id)
+              if (body === undefined) throw new Error(`unknown memory body: ${id}`)
+              if (!body.active || body.providerEnabled === false) throw new Error(`metadata maintenance requires an active Memory Space: ${id}`)
+            }
+            const maintained = await lifecycle.maintainMetadata(String(payload.sessionId ?? ''), memoryBodyIds)
+            service.updateBodyMetadata(maintained.updates)
+            return success(maintained)
           }
         case 'body-delete':
           return success(await service.deleteBody(String(payload.memoryBodyId ?? '')))

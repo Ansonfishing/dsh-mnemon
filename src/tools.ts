@@ -56,7 +56,9 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
     description: 'List the Memory Space catalog, including each space id, name, routing description, provider, capabilities, activation state, location, health, and statistics when available. Read only. Use this before choosing a read or write target. Recall may only read active spaces; writes may target any space whose provider supports remember.',
     parameters: { type: 'object', properties: {} },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    execute: (_args: unknown, exec: ToolExecution) => runtimeFor(exec).service.bodies(exec.signal),
+    execute: (_args: unknown, exec: ToolExecution) => isSubagent(exec.agent)
+      ? runtimeFor(exec).service.bodyDirectory()
+      : runtimeFor(exec).service.bodies(exec.signal),
     presentCall: () => ({ card: 'generic', title: 'Inspect Mnemon Memory Spaces', kind: 'search' }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon Memory Spaces ready' }),
   } as never))

@@ -13,6 +13,7 @@ import {
   type EntityView,
   type Insight,
   type MemoryBody,
+  type MemoryBodyMetadataMaintenanceResult,
   type MemoryBodyCatalog,
   type MemoryProviderServiceCatalog,
   type MemoryProviderServiceView,
@@ -161,6 +162,10 @@ export class MnemonClient {
     return this.call(MNEMON_READ_CHANNEL, 'bodies', this.scoped())
   }
 
+  bodyDirectory(): Promise<MemoryBodyCatalog> {
+    return this.call(MNEMON_READ_CHANNEL, 'body-directory', this.scoped())
+  }
+
   providerServices(): Promise<MemoryProviderServiceCatalog> {
     return this.call(MNEMON_READ_CHANNEL, 'provider-services', this.scoped())
   }
@@ -225,6 +230,10 @@ export class MnemonClient {
 
   updateBody(memoryBodyId: string, request: UpdateMemoryBodyRequest): Promise<MemoryBody> {
     return this.call(MNEMON_WRITE_CHANNEL, 'body-update', this.scoped({ memoryBodyId, ...request }))
+  }
+
+  maintainBodyMetadata(memoryBodyIds: string[]): Promise<MemoryBodyMetadataMaintenanceResult> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'body-metadata-maintain', this.scoped({ memoryBodyIds }))
   }
 
   deleteBody(memoryBodyId: string): Promise<MemoryBody> {

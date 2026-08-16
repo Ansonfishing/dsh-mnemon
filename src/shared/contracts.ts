@@ -285,6 +285,20 @@ export interface UpdateMemoryBodyRequest {
   openViking?: Partial<OpenVikingBodyConnection> & { clearApiKey?: boolean }
 }
 
+export interface MemoryBodyMetadataUpdate {
+  memoryBodyId: string
+  title: string
+  description: string
+}
+
+export interface MemoryBodyMetadataMaintenanceResult {
+  delegated: true
+  runId: string
+  provider: string
+  summary: string
+  updates: MemoryBodyMetadataUpdate[]
+}
+
 export type Category = 'preference' | 'decision' | 'fact' | 'insight' | 'context' | 'general'
 export const CATEGORIES = ['preference', 'decision', 'fact', 'insight', 'context', 'general'] as const satisfies readonly Category[]
 export type Source = 'user' | 'agent' | 'external'
@@ -355,6 +369,8 @@ export interface MemoryBodyView extends MemoryBody {
   /** False when an external provider is disabled while its Memory Space registration remains preserved. */
   providerEnabled?: boolean
   healthy: boolean
+  /** A fast directory response is visible while provider health resolves independently. */
+  statusLoading?: boolean
   error?: string
   stats?: MemoryBodyStats
 }
@@ -641,9 +657,10 @@ export interface SubagentCounters {
   migrations: number
   compactions: number
   documentArchives: number
+  metadataMaintenances: number
   failures: number
   lastRunId?: string
-  lastOperation?: 'recall' | 'write' | 'review' | 'placement' | 'migration' | 'compaction' | 'document-archive'
+  lastOperation?: 'recall' | 'write' | 'review' | 'placement' | 'migration' | 'compaction' | 'document-archive' | 'metadata-maintenance'
   lastAt?: string
 }
 
