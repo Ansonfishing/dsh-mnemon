@@ -20,7 +20,7 @@ function dataDir(): string {
   return directory
 }
 
-function context() {
+function context(options: { connection?: boolean; workspaceRegistry?: boolean } = {}) {
   const tools: unknown[] = []
   const sections: unknown[] = []
   const channels: unknown[] = []
@@ -41,27 +41,66 @@ function context() {
         return { get: () => (args[2] as { base?: object } | undefined)?.base ?? {} }
       }),
     },
-    connection,
     agents: { get: vi.fn(), roots: vi.fn(() => []) },
-    workspaceRegistry: { get: vi.fn(), list: vi.fn(() => []) },
     subagents: {
       list: vi.fn(() => ['spawn']),
       getProvider: vi.fn(() => ({ capabilities: { outputSchema: true, depthLimit: true, toolFilter: true, persona: true } })),
       start: vi.fn(),
     },
-    get: vi.fn((name: string) => name === 'systemPrompt'
-      ? { section: (section: unknown) => { sections.push(section) } }
-      : undefined),
-    inject: vi.fn((_services: string[], callback: (value: unknown) => void) => { callback(ctx) }),
+    get: vi.fn((name: string) => {
+      if (name === 'systemPrompt') return { section: (section: unknown) => { sections.push(section) } }
+      if (name === 'workspaceRegistry' && 'workspaceRegistry' in ctx) return ctx.workspaceRegistry
+      return undefined
+    }),
+    inject: vi.fn((services: string[], callback: (value: unknown) => void) => {
+      if (services.includes('connection') && !('connection' in ctx)) return
+      callback(ctx)
+    }),
     on: vi.fn((...args: unknown[]) => { listeners.push(args); return () => {} }),
     effect: vi.fn((callback: () => unknown) => { callback(); return () => {} }),
   }
+  if (options.connection !== false) Object.assign(ctx, { connection })
+  if (options.workspaceRegistry !== false) Object.assign(ctx, { workspaceRegistry: { get: vi.fn(), list: vi.fn(() => []) } })
   return { ctx, tools, sections, channels, registrations, commands, listeners }
 }
 
 describe('dsh-mnemon plugin composition', () => {
-  it('requests the Host workspace registry for authorized per-workspace routing', () => {
-    expect(inject).toEqual(['tools', 'settings', 'commands', 'agents', 'subagents', 'workspaceRegistry'])
+  it('keeps Web-only workspace and connection services out of its core dependencies', () => {
+    expect(inject).toEqual(['tools', 'settings', 'commands', 'agents', 'subagents'])
+  })
+
+  it('mounts its complete Agent surface without Web-only Host services', () => {
+    const fixture = context({ connection: false, workspaceRegistry: false })
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
+
+    expect(fixture.tools).toHaveLength(13)
+    expect(fixture.sections).toEqual([
+      expect.objectContaining({ name: 'mnemon:routing' }),
+      expect.objectContaining({ name: 'mnemon:runtime-memory' }),
+    ])
+    expect(fixture.commands).toEqual([expect.objectContaining({ name: 'mnemon' })])
+    expect(fixture.channels).toEqual([])
+  })
+
+  it('discovers a Web workspace registry that becomes available after core activation', async () => {
+    const fixture = context({ workspaceRegistry: false })
+    const workspace = dataDir()
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', storageScope: 'workspace' })
+    Object.assign(fixture.ctx, {
+      workspaceRegistry: {
+        get: (id: string) => id === 'late-workspace' ? { id, title: 'Late Workspace', path: workspace } : undefined,
+        list: () => [{ id: 'late-workspace', title: 'Late Workspace', path: workspace }],
+      },
+    })
+
+    const readRegistration = fixture.channels.find(channel => (channel as unknown[])[0] === '/dsh-mnemon-read') as [
+      string,
+      (endpoint: string, payload: unknown) => Promise<{ ok: boolean; value?: { directory: string } }>,
+    ]
+    await expect(readRegistration[1]('runtime-memory', { workspaceId: 'late-workspace' })).resolves.toMatchObject({
+      ok: true,
+      value: { directory: join(workspace, '.mnemon', 'runtime') },
+    })
   })
 
   it('exports a DSH Web client with its ordering dependencies', () => {

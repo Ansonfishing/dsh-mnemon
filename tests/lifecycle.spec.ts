@@ -162,6 +162,24 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.lifecycle.snapshot('session-1').current?.reviewActivity).toMatchObject({ score: 6, turnCount: 3 })
   })
 
+  it('cancels delayed review work when a one-shot Host disposes the plugin', async () => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    await value.preStep([userMessage('x'.repeat(150))], 1)
+    value.events.push({ type: 'turn/end', data: { turn: 1 } })
+    await value.turnStopping(1)
+    await value.preStep([userMessage('threshold turn')], 2)
+    value.events.push({ type: 'turn/end', data: { turn: 2 } })
+    await value.turnStopping(2)
+    expect(value.lifecycle.snapshot('session-1').current?.idleReviewPending).toBe(true)
+
+    value.stop()
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    expect(value.coordinator.review).not.toHaveBeenCalled()
+    expect(value.lifecycle.snapshot('session-1').activeAgents).toBe(0)
+  })
+
   it('counts completed tool results and unique tool names with QoderWork weights', async () => {
     vi.useFakeTimers()
     const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))

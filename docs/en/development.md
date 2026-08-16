@@ -80,10 +80,11 @@ The existing Vitest suites cover:
 - worker tool isolation, the schema subset, and structured receipts;
 - lifecycle cues, scoring, idle debounce, cancellation, and watermark retention;
 - RPC authority, read-only behavior, and settings revisions;
-- the Web workspace, bilingual copy, and key interactions.
+- the Web workspace, bilingual copy, and key interactions;
+- core activation without Web-only services and Agent-cwd routing for Headless;
 - Client/Host source boundaries, deterministic build hashes, package contents, exports, and TypeScript resolution.
 
-These are primarily integration tests using temporary directories, fake runners, and a mock Host. They are not equivalent to automated end-to-end tests of the real DSH + Mnemon WebUI.
+These are primarily integration tests using temporary directories, fake runners, and a mock Host. In addition, `verify:headless` builds the package, installs it into an isolated real DSH Headless profile, serves a local mock model, and asserts that representative Mnemon tools reach the model request. Automated end-to-end testing of the real DSH + Mnemon WebUI remains separate.
 
 ## Real WebUI Verification
 
@@ -175,6 +176,7 @@ When the Web locale changes, the Chinese key set remains the type source of trut
 [ ] confirm the worktree contains no generated lib changes
 [ ] confirm package validation reports only runtime files, declarations, root documents, and cordis.patch.yml
 [ ] install the built/local bundle into an isolated Web profile
+[ ] confirm `verify:headless` activates the built bundle in an isolated Headless profile
 [ ] run real Mnemon CLI and WebUI smoke tests
 [ ] verify Chinese and English workspaces
 [ ] verify global/workspace/custom paths as applicable

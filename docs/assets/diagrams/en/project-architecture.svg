@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1040" viewBox="0 0 1600 1040" role="img" aria-labelledby="title description" lang="en">
   <title id="title">dsh-mnemon runtime architecture</title>
-  <desc id="description">DSH Web, the root Agent, and tools and commands enter the dsh-mnemon control and supervision layer, which connects to Runtime Memory, Project Documents, and long-term Mnemon Memory Spaces.</desc>
+  <desc id="description">DSH Web or Headless root Agents enter the dsh-mnemon control and supervision layer through memory context, tools, and commands, which connect to Runtime Memory, Project Documents, and long-term Mnemon Memory Spaces.</desc>
   <style>
     text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Arial, sans-serif; fill: #172033; }
     .canvas { fill: #f7f9fc; }

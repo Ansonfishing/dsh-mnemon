@@ -84,4 +84,27 @@ describe('LiveMnemonRuntime workspace routing', () => {
     expect(customRuntime.forAgent(sessionAgent)).toBe(customRuntime.snapshot())
     expect(customRuntime.route({ sessionId: 'session-1' })).toMatchObject({ selectedRoot: customRoot, effectiveRoot: customRoot, aligned: true })
   })
+
+  it('routes Headless workspace storage by Agent cwd without a Web workspace registry', () => {
+    const initialRoot = temporaryDirectory('headless-initial')
+    const workspace = temporaryDirectory('headless-workspace')
+    const sessionAgent = agent('headless-session', workspace)
+    const agents = {
+      get: (id: string) => id === sessionAgent.id ? sessionAgent : undefined,
+      roots: () => [sessionAgent],
+    } satisfies HostAgentsService
+    const runtime = new LiveMnemonRuntime(
+      createRuntimeGraph(resolveConfig({ storageScope: 'workspace', cliPath: '/fake/mnemon' }), initialRoot),
+      undefined,
+      agents,
+    )
+
+    expect(runtime.forAgent(sessionAgent).runner.effectiveDataDir()).toBe(join(workspace, '.mnemon'))
+    expect(runtime.route({ sessionId: sessionAgent.id })).toMatchObject({
+      selectedRoot: join(workspace, '.mnemon'),
+      effectiveRoot: join(workspace, '.mnemon'),
+      aligned: true,
+    })
+    expect(() => runtime.forWorkspaceId('web-only-selection')).toThrow('selected DSH workspace is unavailable')
+  })
 })

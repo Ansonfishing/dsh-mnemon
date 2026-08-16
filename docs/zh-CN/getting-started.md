@@ -8,7 +8,7 @@
 
 你需要：
 
-- 一个可以启动的 DSH Web profile；
+- 一个可以启动的 DSH Web 或 Headless profile；
 - 本地可执行的 `mnemon` CLI；
 - 一个可用于隔离记忆任务的 DSH subagent Provider。
 
@@ -84,7 +84,7 @@ mnemon:
 
 ## 3. 安装 dsh-mnemon
 
-安装到 Web profile：
+需要完整工作台时安装到 Web profile：
 
 ```sh
 dsh plugin --profile web add dsh-mnemon
@@ -110,6 +110,17 @@ dsh plugin --profile web remove dsh-mnemon
 ```
 
 卸载只移除插件注册，不删除全局、工作区或自定义目录中的记忆数据。
+
+不同 profile 的插件清单彼此独立。一次性任务也需要记忆时，应另行安装到 Headless：
+
+```sh
+dsh plugin --profile headless add dsh-mnemon
+dsh --profile headless "回答前先检查持久化的项目上下文。"
+```
+
+开发检出时把包名替换为 `"link:/absolute/path/to/dsh-mnemon"`。Headless 会挂载与 Web Agent 相同的运行时上下文、档案、记忆体工具、生命周期提示和受监督写入路径，但不会挂载工作台、对话按钮、RPC 通道或交互式斜杠命令界面。
+
+`storageScope=workspace` 时，Headless 直接解析 `<启动命令 cwd>/.mnemon`，不需要 Web 工作区目录。一次性 runner 会在 Agent 进入 idle 后退出，因此尚未开始的评分后台审查会在关闭时取消；任务内已经完成的显式或模型引导写入仍会持久化。
 
 ## 4. 选择入口与存储位置
 

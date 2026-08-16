@@ -64,7 +64,7 @@
 
 ## 总体架构
 
-[![dsh-mnemon 运行时架构：DSH Web、Root Agent、监督控制层与三层本地存储](../assets/diagrams/zh-CN/project-architecture.svg)](../assets/diagrams/zh-CN/project-architecture.svg)
+[![dsh-mnemon 运行时架构：DSH Web 或 Headless、Root Agent、监督控制层与三层本地存储](../assets/diagrams/zh-CN/project-architecture.svg)](../assets/diagrams/zh-CN/project-architecture.svg)
 
 架构由四个边界组成：
 

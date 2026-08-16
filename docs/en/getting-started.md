@@ -8,7 +8,7 @@ This guide goes from a blank environment to the first verified recall. It uses S
 
 You need:
 
-- a DSH Web profile that starts successfully;
+- a DSH Web or Headless profile that starts successfully;
 - a locally executable `mnemon` CLI;
 - a DSH subagent provider for isolated memory tasks.
 
@@ -84,7 +84,7 @@ mnemon:
 
 ## 3. Install dsh-mnemon
 
-Install into the Web profile:
+Install into the Web profile for the complete workbench:
 
 ```sh
 dsh plugin --profile web add dsh-mnemon
@@ -110,6 +110,17 @@ dsh plugin --profile web remove dsh-mnemon
 ```
 
 Uninstall removes the plugin registration, not memory data in global, workspace, or custom roots.
+
+Profiles have independent plugin rosters. Install the package separately into Headless when one-shot tasks also need memory:
+
+```sh
+dsh plugin --profile headless add dsh-mnemon
+dsh --profile headless "Check durable project context before answering this task."
+```
+
+For a development checkout, replace the package name with `"link:/absolute/path/to/dsh-mnemon"`. Headless mounts the same Runtime context, Documents, Memory Space tools, lifecycle guidance, and supervised write path as a Web Agent. It does not mount the workbench, conversation buttons, RPC channels, or an interactive slash-command surface.
+
+With `storageScope=workspace`, Headless resolves `<invocation cwd>/.mnemon`; no Web workspace registry is required. The one-shot runner exits when its Agent becomes idle, so shutdown cancels any delayed score-based background review that has not started. Explicit or model-guided writes that finish during the task are durable.
 
 ## 4. Choose entry point and storage
 

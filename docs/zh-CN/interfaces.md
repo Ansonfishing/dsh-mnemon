@@ -1,4 +1,4 @@
-# WebUI、工具、命令与 RPC
+# Web、Headless、工具、命令与 RPC
 
 **简体中文** | [English](../en/interfaces.md) | [文档中心](./README.md)
 
@@ -16,6 +16,19 @@
 | 模型工具 | — | Root Agent 的结构化读写入口 |
 
 Sidebar 与 Buildin 实时互斥挂载，共享功能、数据和 Host 服务。对话内两个入口可在 `mnemon-ui` 设置中分别关闭。
+
+## Profile 能力面
+
+| 能力 | Web | Headless |
+|---|---:|---:|
+| 运行时上下文与生命周期提示 | 是 | 是 |
+| 模型工具与受监督子 Agent | 是 | 是 |
+| `workspace` 范围按 Agent cwd 路由 | 是 | 是 |
+| Sidebar / Buildin / 对话操作 | 是 | 否 |
+| Host 到客户端 RPC | 是 | 否 |
+| Agent idle 后的延迟评分审查 | Host 持续运行时执行 | 一次性进程退出时取消 |
+
+Headless 会获得完整模型工具面。它把命令行任务作为普通用户消息提交，不提供交互式斜杠命令分发；Agent 进入 idle 前已经完成的显式和模型引导写入会持久化。
 
 ## 模型工具
 
@@ -83,12 +96,14 @@ worker 内调用同名工具时直接进入服务层，不再递归委派。
 
 ## 工作区路由
 
-工作台请求携带 `sessionId` 和可选 `workspaceId`。Host 只接受 `workspaceRegistry` 已登记的 ID：
+Web 工作台请求携带 `sessionId` 和可选 `workspaceId`。Host 只接受 `workspaceRegistry` 已登记的 ID：
 
 - 确定性读取与人工维护可以路由到 `workspaceId` 选择的查看根；
 - Agent、工具、命令和生命周期仍按 `sessionId` 对应 Agent cwd 路由；
 - `status.workspaceContext` 返回 selected / effective roots 与 `aligned`；
 - 需要 Agent 的操作在未对齐时拒绝。
+
+Headless 等没有 Web 工作区目录的 profile 不提供任意查看目标；Agent 执行仍直接根据 session cwd 路由 `workspace` 范围。
 
 ## RPC 通道
 

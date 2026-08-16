@@ -64,7 +64,7 @@ The default `global` root, `~/.mnemon`, is the simplest choice for several local
 
 ## Architecture
 
-[![dsh-mnemon runtime architecture with DSH Web, Root Agent, supervised control, and three local tiers](../assets/diagrams/en/project-architecture.svg)](../assets/diagrams/en/project-architecture.svg)
+[![dsh-mnemon runtime architecture with DSH Web or Headless, Root Agent, supervised control, and three local tiers](../assets/diagrams/en/project-architecture.svg)](../assets/diagrams/en/project-architecture.svg)
 
 Four boundaries shape the system:
 

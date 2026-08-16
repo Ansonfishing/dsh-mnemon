@@ -77,6 +77,8 @@ Web 工作台查看：resolve(workspaceRegistry.get(selectedWorkspaceId).path, "
 
 每个 DSH 工作区拥有独立的三层记忆根。Agent、模型工具、命令和生命周期按当前会话的 cwd 路由，不受 Web 工作台查看目标影响。工作台只能从 Host 已登记的工作区中选择，不能提交任意路径；查看目标与会话实际目录不一致时，顶部会显示两条路径并提供“一键对齐当前会话”。需要 Agent 子任务的操作在未对齐时会被 Host 拒绝，避免写入错误项目。
 
+Headless 没有 `workspaceRegistry`；其新 session 的 cwd 就是启动 `dsh --profile headless ...` 的目录，因此 `workspace` 直接解析为 `<启动命令 cwd>/.mnemon`。
+
 ### `custom`
 
 ```yaml

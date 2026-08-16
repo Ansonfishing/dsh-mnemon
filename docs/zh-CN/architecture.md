@@ -36,7 +36,13 @@ settings.register("mnemon")
   -> register RPC when a Web connection exists
 ```
 
-Host 声明依赖 `tools`、`settings`、`commands`、`agents` 和 `subagents`。Web client 另外依赖 slots、connection 和 DSH locale 服务。
+Host 声明依赖 `tools`、`settings`、`commands`、`agents` 和 `subagents`。`workspaceRegistry` 通过 Host 服务目录可选发现，只用于 Web 的受权查看。Web client 另外依赖 slots、connection 和 DSH locale 服务。
+
+## Web 与 Headless 边界
+
+核心 Host 组合与 profile 无关。Web 和 Headless 都会挂载设置、运行时上下文、档案、记忆体工具、生命周期钩子和受监督 worker；Agent 操作始终根据 session cwd 解析 `workspace` 存储。
+
+Web 额外提供 `workspaceRegistry`、客户端 slots 和 `connection`，用于跨工作区查看、RPC、Sidebar / Buildin、设置界面、本回合记忆和存入记忆。Headless 不提供这些浏览器服务；一次性 runner 把任务作为普通用户消息提交，等待 Agent idle、flush session、输出最终答案后退出。插件销毁会取消尚未执行的延迟审查，因此 Headless 依赖任务内完成的显式或模型引导写入，而不是 idle 后维护。
 
 ## 主 Agent 与 worker 的双路径
 
@@ -91,7 +97,7 @@ whether a reusable artifact exists  UTF-8 capacity accounting
 
 必须区分“persona 约束”和“Host 硬保证”。例如 MEMORY 归档 worker 被要求覆盖每条已提交热记忆，但 Host 只能硬校验结构化 action、revision 和字节预算；USER 压缩的 source coverage 则由 Host 逐项验证。
 
-## Web 边界
+## Web RPC 边界
 
 WebUI 不启动系统进程，也不直接打开 SQLite：
 
