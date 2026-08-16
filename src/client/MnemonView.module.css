@@ -600,6 +600,9 @@
 .versionNumbers small { color: var(--mn-faint); font-size: 9px; }
 .versionNumbers code { font-size: 12px; }
 .versionNumbers > span { padding-bottom: 1px; color: var(--mn-faint); }
+.versionExecutable { display: flex; min-width: 0; gap: 6px; margin-top: 9px; color: var(--mn-faint); font-size: 9px; }
+.versionExecutable > span { flex: none; }
+.versionExecutable > code { min-width: 0; overflow: hidden; color: inherit; text-overflow: ellipsis; white-space: nowrap; font-size: inherit; }
 .versionList article > footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--mn-line); }
 .versionList article > footer p { max-width: 470px; margin: 0; color: var(--mn-muted); font-size: 10.5px; line-height: 1.5; }
 .versionList article > footer button { flex: none; }

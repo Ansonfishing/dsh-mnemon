@@ -11,6 +11,7 @@ export type VersionInstallMode = 'homebrew' | 'go' | 'npm' | 'link' | 'manual' |
 export interface VersionComponentStatus {
   id: VersionComponentId
   name: string
+  executablePath?: string
   current?: string
   latest?: string
   outdated: boolean
@@ -349,6 +350,7 @@ export class VersionUpdateManager {
         {
           id: 'mnemon',
           name: 'Mnemon CLI',
+          ...(mnemonLocal.install.command === undefined ? {} : { executablePath: mnemonLocal.install.command }),
           ...(mnemonLocal.current === undefined ? {} : { current: mnemonLocal.current }),
           ...(mnemonLatest === undefined ? {} : { latest: mnemonLatest }),
           outdated: mnemonOutdated,

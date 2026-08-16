@@ -50,6 +50,28 @@ describe('VersionUpdateManager', () => {
     })
   })
 
+  it('reports the Mnemon executable used for the version check', async () => {
+    const root = directory('executable-path')
+    const command = join(root, 'mnemon')
+    writeFileSync(command, '#!/bin/sh\n', 'utf8')
+    chmodSync(command, 0o755)
+    const manager = new VersionUpdateManager({
+      packageManifestPath: join(root, 'package.json'),
+      mnemonCliPath: () => command,
+      resolveExecutable: value => value === command ? command : undefined,
+      processRunner: async () => ({ stdout: 'mnemon version 0.2.3\n', stderr: '', exitCode: 0 }),
+      fetchNpmLatest: async () => '0.1.4',
+      fetchMnemonLatest: async () => '0.2.3',
+    })
+
+    const status = await manager.check()
+    expect(status.components.find(component => component.id === 'mnemon')).toMatchObject({
+      executablePath: command,
+      current: '0.2.3',
+      latest: '0.2.3',
+    })
+  })
+
   it('updates an npm-managed plugin only inside its owning DSH profile', async () => {
     const profile = directory('npm-profile')
     const packageRoot = join(profile, 'node_modules', 'dsh-mnemon')
