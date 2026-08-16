@@ -108,12 +108,50 @@ export interface ResolvedInteractionConfig {
   saveAction: boolean
 }
 
+export type MemoryProviderId = 'mnemon-native' | 'openviking'
+
+export interface MemoryProviderCapabilities {
+  search: boolean
+  browse: boolean
+  graph: boolean
+  entities: boolean
+  related: boolean
+  remember: boolean
+  link: boolean
+  forget: boolean
+  writeMode: 'exact' | 'async-extracting'
+  deletionMode: 'soft' | 'hard' | 'unsupported'
+}
+
+export interface MemoryBodyProvider {
+  id: MemoryProviderId
+  label: string
+  kind: 'local' | 'remote'
+  location: string
+  targetUri?: string
+  account?: string
+  user?: string
+  actorPeerId?: string
+  apiKeyConfigured: boolean
+  capabilities: MemoryProviderCapabilities
+}
+
+export interface OpenVikingBodyConnection {
+  endpoint: string
+  targetUri: string
+  apiKey?: string
+  account?: string
+  user?: string
+  actorPeerId?: string
+}
+
 export interface MemoryBody {
   id: string
   name: string
   description: string
   active: boolean
   dbPath: string
+  provider: MemoryBodyProvider
   createdAt: string
   updatedAt: string
 }
@@ -122,12 +160,15 @@ export interface CreateMemoryBodyRequest {
   name: string
   description: string
   active?: boolean
+  providerId?: MemoryProviderId
+  openViking?: OpenVikingBodyConnection
 }
 
 export interface UpdateMemoryBodyRequest {
   name?: string
   description?: string
   active?: boolean
+  openViking?: Partial<OpenVikingBodyConnection> & { clearApiKey?: boolean }
 }
 
 export type Category = 'preference' | 'decision' | 'fact' | 'insight' | 'context' | 'general'
@@ -156,6 +197,8 @@ export interface Insight {
   edgeType?: string
   memoryBodyId?: string
   memoryBodyName?: string
+  memoryProviderId?: MemoryProviderId
+  externalUri?: string
 }
 
 export interface SearchRequest {

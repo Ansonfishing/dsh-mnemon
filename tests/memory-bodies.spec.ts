@@ -37,7 +37,13 @@ describe('MemoryBodyRegistry', () => {
     const registry = new MemoryBodyRegistry(runner, true, () => new Date('2026-08-13T00:00:00.000Z'))
 
     expect(registry.list()).toEqual([
-      expect.objectContaining({ id: 'project', name: 'project', active: true, dbPath: join(dataDir, 'data', 'project', 'mnemon.db') }),
+      expect.objectContaining({
+        id: 'project',
+        name: 'project',
+        active: true,
+        dbPath: join(dataDir, 'data', 'project', 'mnemon.db'),
+        provider: expect.objectContaining({ id: 'mnemon-native', label: 'Mnemon Native', kind: 'local' }),
+      }),
     ])
     expect(readFileSync(join(dataDir, 'data', 'project', 'mnemon.db'), 'utf8')).toBe('existing database')
     expect(existsSync(join(dataDir, 'data', '.dsh-memory-bodies.json'))).toBe(true)
@@ -156,5 +162,63 @@ describe('MemoryBodyRegistry', () => {
     const created = await registry.create({ name: '发布与交付', description: '发布门禁、部署约束与回滚经验；准备发布时召回。' })
     expect(created.id).not.toContain('发布')
     expect(created.id).toMatch(/^[0-9a-f-]{36}$/)
+  })
+
+  it('registers an OpenViking memory body without creating or deleting a native Store', async () => {
+    const dataDir = temporaryDirectory()
+    const process = vi.fn<ProcessRunner>()
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), process)
+    const registry = new MemoryBodyRegistry(runner, true, () => new Date('2026-08-16T00:00:00.000Z'))
+
+    const created = await registry.create({
+      name: '团队 OpenViking',
+      description: '团队共享的远程长期记忆。',
+      active: true,
+      providerId: 'openviking',
+      openViking: {
+        endpoint: 'https://memory.example.com/',
+        targetUri: 'viking://user/team/memories/',
+        apiKey: 'secret-token',
+        account: 'acme',
+        user: 'grivn',
+      },
+    })
+
+    expect(created).toMatchObject({
+      id: expect.stringMatching(/^openviking-/),
+      active: true,
+      dbPath: '',
+      provider: {
+        id: 'openviking',
+        label: 'OpenViking',
+        kind: 'remote',
+        location: 'https://memory.example.com',
+        targetUri: 'viking://user/team/memories',
+        account: 'acme',
+        user: 'grivn',
+        apiKeyConfigured: true,
+        capabilities: expect.objectContaining({ graph: false, remember: true, writeMode: 'async-extracting' }),
+      },
+    })
+    expect(registry.openVikingConnection(created.id)).toMatchObject({ apiKey: 'secret-token' })
+    expect(JSON.parse(readFileSync(registry.registryPath, 'utf8'))).toMatchObject({ version: 2 })
+    expect(process).not.toHaveBeenCalled()
+
+    await expect(registry.remove(created.id)).resolves.toMatchObject({ id: created.id })
+    expect(registry.list()).toEqual([])
+    expect(process).not.toHaveBeenCalled()
+  })
+
+  it('rejects OpenViking targets outside the user memory namespace', async () => {
+    const dataDir = temporaryDirectory()
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
+    const registry = new MemoryBodyRegistry(runner, true)
+
+    await expect(registry.create({
+      name: '错误范围',
+      description: '不能把资源目录当作长期记忆体。',
+      providerId: 'openviking',
+      openViking: { endpoint: 'http://127.0.0.1:1933', targetUri: 'viking://resources' },
+    })).rejects.toThrow('must stay under viking://user/.../memories')
   })
 })
