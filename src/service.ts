@@ -443,15 +443,13 @@ export class MnemonService {
 
   async reconnectBody(id: string, signal?: AbortSignal): Promise<MemoryBodyView> {
     this.assertWritable()
-    let body = this.memoryBodies.list().find(candidate => candidate.id === id)
+    const body = this.memoryBodies.list().find(candidate => candidate.id === id)
     if (body === undefined) throw new Error(`unknown memory body: ${id}`)
     if (body.provider.id !== 'mnemon-native') {
-      const providerId = body.provider.id
-      if (!this.memoryBodies.providerServiceEnabled(providerId)) throw new Error(`${body.provider.label} is disabled in Settings`)
-      await this.updateProviderService(providerId, {}, [], true, signal)
-      body = this.memoryBodies.list().find(candidate => candidate.id === id)
-      if (body === undefined) throw new Error(`memory body was not returned by ${memoryProviderDescriptor(providerId).label} discovery: ${id}`)
+      if (!this.memoryBodies.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled in Settings`)
     }
+    // Card-level reconnect is deliberately scoped to this projected namespace.
+    // Whole-service discovery only runs when its service is enabled or saved.
     const provider = this.providerFor(body)
     provider.invalidateStatus?.(body.id)
     const status = await provider.status(body, signal)

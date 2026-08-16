@@ -994,6 +994,8 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const [metadataRefreshed, setMetadataRefreshed] = useState<string[]>([])
   const [metadataError, setMetadataError] = useState<string | null>(null)
   const loadRequest = useRef(0)
+  const initialSyncStarted = useRef(false)
+  const compatibilityRetryStarted = useRef(false)
 
   const load = useCallback(async (quiet = false) => {
     const request = ++loadRequest.current
@@ -1049,10 +1051,15 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   }, [props.catalogKnown, props.client, props.fallbackBodies, props.fallbackDirectory])
 
   useEffect(() => {
+    if (initialSyncStarted.current) return
+    initialSyncStarted.current = true
     void load()
-    const timer = window.setInterval(() => void load(true), 15_000)
-    return () => window.clearInterval(timer)
-  }, [load, props.revision])
+  }, [load])
+  useEffect(() => {
+    if (!catalogUnavailable || !props.catalogKnown || compatibilityRetryStarted.current) return
+    compatibilityRetryStarted.current = true
+    void load(true)
+  }, [catalogUnavailable, load, props.catalogKnown])
 
   const toggle = async (body: MemoryBodyView) => {
     setChanging(body.id); setError(null)
@@ -1072,29 +1079,9 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
     })
     try {
       const next = normalizeMemoryBody(await props.client.reconnectBody(body.id))
-      const directory = await props.client.bodyDirectory().catch(() => null)
-      setCatalog(current => {
-        if (directory === null) return current === null ? current : {
-          ...current,
-          items: current.items.map(item => item.id === next.id ? next : item),
-        }
-        const currentById = new Map(current?.items.map(item => [item.id, item]) ?? [])
-        return {
-          ...directory,
-          providers: Array.isArray(directory.providers) && directory.providers.length > 0 ? directory.providers : current?.providers ?? LEGACY_PROVIDER_CATALOG,
-          items: directory.items.map(item => {
-            const normalized = normalizeMemoryBody(item)
-            if (normalized.id === next.id) return next
-            const previous = currentById.get(normalized.id)
-            return previous === undefined ? normalized : {
-              ...normalized,
-              healthy: previous.healthy,
-              ...(previous.statusLoading === undefined ? {} : { statusLoading: previous.statusLoading }),
-              ...(previous.error === undefined ? {} : { error: previous.error }),
-              ...(previous.stats === undefined ? {} : { stats: previous.stats }),
-            }
-          }),
-        }
+      setCatalog(current => current === null ? current : {
+        ...current,
+        items: current.items.map(item => item.id === next.id ? next : item),
       })
       props.onBodyReconnect(next)
     } catch (reason) {
@@ -1318,8 +1305,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const bodyDeleteActionClass = appearanceClass(css.dangerButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemDangerAction))
   return (
     <div className={css.page}>
-      <PageHeader title={appearance.surface === 'sidebar' ? t('nav.overview') : t('overview.title')} description={t(appearance.surface === 'sidebar' ? 'overview.pageDescription' : 'overview.description')} meta={t('overview.interval')} {...(loading ? { loadingLabel: catalogLoading ? t('overview.directoryLoading') : graphLoading ? t('overview.snapshotLoading') : t('overview.healthLoading') } : {})}
-        action={<button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void load()}>{loading ? t('overview.syncing') : t('overview.syncNow')}</button>} />
+      <PageHeader title={appearance.surface === 'sidebar' ? t('nav.overview') : t('overview.title')} description={t(appearance.surface === 'sidebar' ? 'overview.pageDescription' : 'overview.description')} meta={t('overview.interval')} {...(loading ? { loadingLabel: catalogLoading ? t('overview.directoryLoading') : graphLoading ? t('overview.snapshotLoading') : t('overview.healthLoading') } : {})} />
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
       <section className={css.bodyDirectory} aria-label={t('overview.directory')}>
         <div className={css.bodyDirectoryHeader}>

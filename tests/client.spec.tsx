@@ -704,6 +704,31 @@ describe('MnemonView', () => {
     expect(card.querySelector('[class*="bodySignal"]')).toBeTruthy()
   })
 
+  it('runs one full entry sync and keeps later card sync scoped to one Memory Space', async () => {
+    const interval = vi.spyOn(window, 'setInterval')
+    const { connection, call } = createConnection()
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    const title = await screen.findByText('项目记忆体')
+    await waitFor(() => expect(screen.getByText('存储正常')).toBeTruthy())
+    expect(screen.getByText('进入时全量同步 · 点击卡片按需同步')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '立即同步' })).toBeNull()
+    expect(interval.mock.calls.some(([, delay]) => delay === 15_000)).toBe(false)
+
+    const wholeSyncs = () => call.mock.calls.filter(([, endpoint]) => endpoint === 'bodies' || endpoint === 'body-directory').length
+    const entrySyncCount = wholeSyncs()
+    expect(entrySyncCount).toBeGreaterThan(0)
+    const card = title.closest('article')
+    if (card === null) throw new Error('Memory Space card missing')
+    fireEvent.click(card)
+
+    await waitFor(() => expect(call).toHaveBeenCalledWith(expect.anything(), 'body-reconnect', expect.objectContaining({ memoryBodyId: 'project' })))
+    await waitFor(() => expect(card.hasAttribute('data-reconnecting')).toBe(false))
+    expect(wholeSyncs()).toBe(entrySyncCount)
+    interval.mockRestore()
+  })
+
   it('shows one page-level spinner while deep status checks continue in the background', async () => {
     const { connection } = createConnection({ statusPending: true })
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)

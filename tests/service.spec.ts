@@ -152,8 +152,10 @@ describe('MnemonService', () => {
     const provider = {
       id: 'hindsight' as const,
       discover: vi.fn()
-        .mockResolvedValueOnce([{ externalId: 'bank-1', name: 'Product bank', description: 'Mapped from Hindsight.', connection: { bankId: 'bank-1', budget: 'mid' } }])
-        .mockResolvedValueOnce([{ externalId: 'bank-1', name: 'Upstream renamed bank', description: 'Refreshed from Hindsight.', connection: { bankId: 'bank-1', budget: 'high' } }]),
+        .mockResolvedValueOnce([
+          { externalId: 'bank-1', name: 'Product bank', description: 'Mapped from Hindsight.', connection: { bankId: 'bank-1', budget: 'mid' } },
+          { externalId: 'bank-2', name: 'Engineering bank', description: 'A second provider-owned namespace.', connection: { bankId: 'bank-2', budget: 'low' } },
+        ]),
       status: vi.fn(async () => ({ healthy: true })),
       search: vi.fn(async () => ({ results: [] })),
       graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
@@ -173,11 +175,12 @@ describe('MnemonService', () => {
       id: body.id,
       name: '产品长期洞察',
       description: 'AI 维护的产品范围、用户反馈与关键取舍。',
-      provider: expect.objectContaining({ settings: expect.objectContaining({ budget: 'high' }) }),
+      provider: expect.objectContaining({ settings: expect.objectContaining({ bankId: 'bank-1', budget: 'mid' }) }),
       healthy: true,
     })
-    expect(provider.discover).toHaveBeenCalledTimes(2)
+    expect(provider.discover).toHaveBeenCalledOnce()
     expect(provider.status).toHaveBeenCalledOnce()
+    expect(provider.status).toHaveBeenCalledWith(expect.objectContaining({ id: body.id, provider: expect.objectContaining({ settings: expect.objectContaining({ bankId: 'bank-1' }) }) }), undefined)
   })
 
   it('keeps the previous provider projection untouched when reconnect discovery fails', async () => {
