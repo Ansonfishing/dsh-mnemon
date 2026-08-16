@@ -169,6 +169,9 @@
 .bodyHealth { color: var(--mn-success); font: 650 8px var(--mn-code); letter-spacing: .07em; text-transform: uppercase; }
 .bodyCard:not([data-healthy]) .bodyHealth { color: var(--mn-danger); }
 .mnemonDefaultBadge { width: fit-content; padding: 2px 5px; border: 1px solid color-mix(in srgb, var(--mn-accent) 24%, var(--mn-line)); border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 7%, transparent); font: 650 8px var(--mn-code); white-space: nowrap; }
+.bodyProviderRow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 2px; }
+.providerBadge { width: fit-content; padding: 2px 6px; border: 1px solid color-mix(in srgb, var(--mn-line-strong) 82%, transparent); border-radius: 999px; color: var(--mn-muted); background: color-mix(in srgb, var(--mn-layer-2) 84%, transparent); font: 650 8px var(--mn-code); white-space: nowrap; }
+.providerBadge[data-provider="openviking"] { border-color: color-mix(in srgb, #6574d9 38%, var(--mn-line)); color: color-mix(in srgb, #8793ef 80%, var(--mn-text)); background: color-mix(in srgb, #6574d9 11%, transparent); }
 .bodySwitch { display: flex; min-height: 32px; align-items: center; gap: 6px; border: 0; padding: 0 1px; color: var(--mn-faint); background: transparent; font-size: 9.5px; cursor: pointer; }
 .bodySwitchTrack { position: relative; width: 29px; height: 17px; flex: 0 0 auto; border: 1px solid var(--mn-line-strong); border-radius: 999px; background: var(--mn-layer-2); transition: border-color .18s, background-color .18s; }
 .bodySwitchTrack i { position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--mn-faint); transition: transform .2s cubic-bezier(.2, .8, .2, 1), background-color .18s; }
@@ -182,10 +185,23 @@
 .bodyEditButton:hover { color: var(--mn-text); border-color: var(--mn-line); background: var(--mn-hover); }
 .bodyEdit { display: grid; gap: 9px; padding-top: 2px; }
 .bodyEdit label { display: grid; gap: 4px; color: var(--mn-faint); font-size: 9px; }
-.bodyEdit input, .bodyEdit textarea { width: 100%; border: 1px solid var(--mn-line); border-radius: 8px; outline: 0; padding: 7px 9px; color: var(--mn-text); background: var(--mn-input); font-size: 12px; line-height: 1.5; }
+.bodyEdit input, .bodyEdit select, .bodyEdit textarea { width: 100%; border: 1px solid var(--mn-line); border-radius: 8px; outline: 0; padding: 7px 9px; color: var(--mn-text); background: var(--mn-input); font-size: 12px; line-height: 1.5; }
 .bodyEdit textarea { resize: vertical; }
-.bodyEdit input:focus, .bodyEdit textarea:focus { border-color: var(--mn-accent); }
+.bodyEdit input:focus, .bodyEdit select:focus, .bodyEdit textarea:focus { border-color: var(--mn-accent); }
 .bodyEditActions { display: flex; justify-content: flex-end; gap: 7px; }
+.providerChoice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; border: 0; }
+.providerChoice legend { margin-bottom: 5px; color: var(--mn-muted); font-size: 10px; }
+.providerChoice label { position: relative; display: block; min-width: 0; padding: 10px 11px; border: 1px solid var(--mn-line); border-radius: 9px; cursor: pointer; background: color-mix(in srgb, var(--mn-layer-2) 72%, transparent); }
+.providerChoice label[data-selected] { border-color: color-mix(in srgb, var(--mn-accent) 48%, var(--mn-line)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mn-accent) 12%, transparent); }
+.providerChoice input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.providerChoice span { display: grid; gap: 3px; }
+.providerChoice strong { color: var(--mn-text); font-size: 11px; }
+.providerChoice small { color: var(--mn-muted); font-size: 9px; line-height: 1.45; }
+.providerFields { display: grid; gap: 8px; padding: 10px; border: 1px solid color-mix(in srgb, #6574d9 25%, var(--mn-line)); border-radius: 9px; background: color-mix(in srgb, #6574d9 5%, transparent); }
+.providerFields details { min-width: 0; }
+.providerFields summary { width: fit-content; color: var(--mn-accent); cursor: pointer; font-size: 9px; }
+.providerAdvancedGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.providerWriteHint { display: block; margin-top: 4px; color: color-mix(in srgb, #8793ef 72%, var(--mn-muted)); font-size: 9px; line-height: 1.45; }
 .bodyDeleteConfirm { display: grid; gap: 16px; }
 .bodyDeleteConfirm > p { margin: 0; color: var(--mn-muted); font-size: 12px; line-height: 1.6; }
 .bodyDeleteSummary { display: grid; gap: 3px; padding: 12px; border: 1px solid color-mix(in srgb, var(--mn-danger) 22%, var(--mn-line)); border-radius: 8px; background: color-mix(in srgb, var(--mn-danger) 5%, var(--mn-layer-1)); }
@@ -197,7 +213,7 @@
 .bodyCreate { margin-top: 10px; border-top: 1px solid var(--mn-line); padding-top: 8px; }
 .bodyCreate summary { width: max-content; cursor: pointer; color: var(--mn-accent); font-size: 10px; list-style: none; }
 .bodyCreate summary::-webkit-details-marker { display: none; }
-.bodyCreate form { display: grid; grid-template-columns: minmax(130px, .7fr) minmax(150px, .9fr) minmax(230px, 1.7fr) auto; gap: 7px; margin-top: 9px; }
+.bodyCreate form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 9px; }
 .bodyCreate input { min-width: 0; height: 34px; border: 1px solid var(--mn-line); border-radius: 8px; outline: 0; padding: 0 9px; background: var(--mn-input); }
 .bodyCreate input:focus { border-color: var(--mn-accent); }
 
@@ -674,6 +690,7 @@
   .listToolbar { grid-template-columns: 1fr; }
   .bodyDirectoryHeader { display: grid; }
   .bodyCreate form { grid-template-columns: 1fr; }
+  .providerChoice, .providerAdvancedGrid { grid-template-columns: 1fr; }
   .graphViewport { min-height: 360px; }
   .graphSvg { height: 390px; }
   .graphCanvasControls { right: 7px; top: 7px; }

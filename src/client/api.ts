@@ -16,6 +16,8 @@ import {
   type MemoryGraphSnapshot,
   type MemoryListRequest,
   type MemoryListView,
+  type MemoryProviderId,
+  type OpenVikingBodyConnection,
   type MnemonPackExport,
   type MnemonPackImportResult,
   type MnemonPackPreview,
@@ -202,11 +204,11 @@ export class MnemonClient {
     return this.call(MNEMON_WRITE_CHANNEL, 'forget', this.scoped({ id, ...(memoryBodyId === undefined ? {} : { memoryBodyId }) }))
   }
 
-  createBody(request: { name: string; description: string; active?: boolean }): Promise<MemoryBody> {
+  createBody(request: { name: string; description: string; active?: boolean; providerId?: MemoryProviderId; openViking?: OpenVikingBodyConnection }): Promise<MemoryBody> {
     return this.call(MNEMON_WRITE_CHANNEL, 'body-create', this.scoped(request))
   }
 
-  updateBody(memoryBodyId: string, request: { name?: string; description?: string; active?: boolean }): Promise<MemoryBody> {
+  updateBody(memoryBodyId: string, request: { name?: string; description?: string; active?: boolean; openViking?: Partial<OpenVikingBodyConnection> & { clearApiKey?: boolean } }): Promise<MemoryBody> {
     return this.call(MNEMON_WRITE_CHANNEL, 'body-update', this.scoped({ memoryBodyId, ...request }))
   }
 

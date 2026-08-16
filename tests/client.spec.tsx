@@ -567,10 +567,39 @@ describe('MnemonView', () => {
     fireEvent.change(screen.getByRole('textbox', { name: '路由说明' }), { target: { value: '存放架构与交付决策。' } })
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
 
-    await waitFor(() => expect(screen.getByText('项目决策空间')).toBeTruthy())
+    await waitFor(() => expect(screen.getAllByText('项目决策空间').length).toBeGreaterThan(0))
     expect(screen.getByText('存放架构与交付决策。')).toBeTruthy()
     expect(screen.queryByRole('button', { name: '编辑项目决策空间' })).toBeTruthy()
     expect(call).toHaveBeenCalledWith(expect.anything(), 'body-update', { memoryBodyId: 'project', name: '项目决策空间', description: '存放架构与交付决策。', sessionId: 'session-1' })
+  })
+
+  it('adds OpenViking through the existing Memory Space creation flow', async () => {
+    const { connection, call } = createConnection({ withInactiveBody: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '创建记忆体' }))
+    const dialog = screen.getByRole('dialog', { name: '创建记忆体' })
+    expect(within(dialog).getByRole('radio', { name: /Mnemon Native/ }).getAttribute('value')).toBe('mnemon-native')
+    fireEvent.click(within(dialog).getByRole('radio', { name: /OpenViking/ }))
+    fireEvent.change(within(dialog).getByRole('textbox', { name: '新记忆体名称' }), { target: { value: '团队 OpenViking' } })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: '新记忆体描述' }), { target: { value: '跨项目共享的团队长期记忆。' } })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: '服务地址' }), { target: { value: 'https://memory.example.com' } })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: '记忆范围 URI' }), { target: { value: 'viking://user/team/memories' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: '创建' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '创建记忆体' })).toBeNull())
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-create', expect.objectContaining({
+      name: '团队 OpenViking',
+      description: '跨项目共享的团队长期记忆。',
+      providerId: 'openviking',
+      openViking: expect.objectContaining({
+        endpoint: 'https://memory.example.com',
+        targetUri: 'viking://user/team/memories',
+      }),
+      sessionId: 'session-1',
+    }))
   })
 
   it('shows the inspected workspace, warns on divergence, and offers one-click alignment', async () => {
