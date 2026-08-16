@@ -14,7 +14,7 @@ afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 
-async function bodyAndRegistry(fetchMock: typeof fetch) {
+async function bodyAndRegistry(fetchMock: typeof fetch, options: { settlementTimeoutMs?: number; pollIntervalMs?: number } = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), 'dsh-mnemon-openviking-'))
   temporaryDirectories.push(dataDir)
   const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
@@ -38,8 +38,8 @@ async function bodyAndRegistry(fetchMock: typeof fetch) {
     provider: new OpenVikingProvider(registry, {
       fetch: fetchMock,
       requestTimeoutMs: 1_000,
-      settlementTimeoutMs: 1_000,
-      pollIntervalMs: 1,
+      settlementTimeoutMs: options.settlementTimeoutMs ?? 1_000,
+      pollIntervalMs: options.pollIntervalMs ?? 1,
     }),
   }
 }
@@ -126,6 +126,26 @@ describe('OpenVikingProvider', () => {
       expect.stringMatching(/^\/api\/v1\/sessions\/dsh-mnemon-.*\/commit$/),
       '/api/v1/tasks/task-1',
     ])
+  })
+
+  it('returns a queued receipt when accepted extraction outlives the wait window', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (url) => {
+      const path = new URL(String(url)).pathname
+      if (path === '/api/v1/sessions') return ok({ session_id: 'created' })
+      if (path.endsWith('/messages')) return ok({ message_id: 'message-1' })
+      if (path.endsWith('/commit')) return ok({ status: 'accepted', task_id: 'task-slow', archive_uri: 'viking://user/team/sessions/session/history/archive_slow' })
+      if (path === '/api/v1/tasks/task-slow') return ok({ status: 'running' })
+      throw new Error(`unexpected path ${path}`)
+    })
+    const { body, provider } = await bodyAndRegistry(fetchMock, { settlementTimeoutMs: 5 })
+
+    await expect(provider.remember(body, { content: '异步提取不应被误报为失败。', category: 'decision' })).resolves.toMatchObject({
+      action: 'queued',
+      provider: 'openviking',
+      status: 'pending',
+      taskId: 'task-slow',
+      archiveUri: 'viking://user/team/sessions/session/history/archive_slow',
+    })
   })
 
   it('forgets only an exact non-generated memory file inside the configured root', async () => {

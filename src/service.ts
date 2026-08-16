@@ -241,7 +241,10 @@ export class MnemonService {
       link: (body, sourceId, targetId, type, weight, reason, signal) => this.nativeLink(body, sourceId, targetId, type, weight, reason, signal),
       forget: (body, id, signal) => this.nativeForget(body, id, signal),
     }
-    const openVikingProvider = new OpenVikingProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
+    const openVikingProvider = new OpenVikingProvider(this.memoryBodies, {
+      requestTimeoutMs: this.config.timeoutMs,
+      settlementTimeoutMs: this.config.timeoutMs,
+    })
     const mem0Provider = new Mem0Provider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
     const retainDbProvider = new RetainDbProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
     const supermemoryProvider = new SupermemoryProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })

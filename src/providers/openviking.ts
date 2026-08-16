@@ -184,6 +184,17 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     }
 
     const task = await this.settleTask(body, taskId, signal)
+    if (task === undefined) {
+      return {
+        action: 'queued',
+        provider: 'openviking',
+        summary: 'OpenViking accepted the session and is extracting durable memories asynchronously.',
+        status: 'pending',
+        taskId,
+        sessionId,
+        ...(archiveUri === undefined ? {} : { archiveUri }),
+      }
+    }
     const taskResult = object(task.result)
     const extracted = object(taskResult?.memories_extracted) ?? {}
     const total = Object.values(extracted).reduce<number>((sum, value) => sum + (number(value) ?? 0), 0)
@@ -221,7 +232,7 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     return this.memoryBodies.openVikingConnection(body.id)
   }
 
-  private async settleTask(body: MemoryBody, taskId: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
+  private async settleTask(body: MemoryBody, taskId: string, signal?: AbortSignal): Promise<Record<string, unknown> | undefined> {
     const deadline = Date.now() + this.settlementTimeoutMs
     while (Date.now() < deadline) {
       const task = object(await this.request(body, `/api/v1/tasks/${encodeURIComponent(taskId)}`, {}, { signal, timeoutMs: 10_000 })) ?? {}
@@ -230,7 +241,7 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
       if (status === 'failed' || status === 'cancelled') throw new Error(`OpenViking memory extraction ${status}: ${string(task.error) ?? taskId}`)
       await delay(this.pollIntervalMs, signal)
     }
-    throw new Error(`OpenViking memory extraction did not settle within ${this.settlementTimeoutMs}ms (task ${taskId})`)
+    return undefined
   }
 
   private async request(body: MemoryBody, path: string, init: RequestInit = {}, options: OpenVikingRequestOptions = {}): Promise<unknown> {
