@@ -10,6 +10,8 @@ import {
   type UpdateMemoryBodyRequest,
 } from './memory-bodies.ts'
 import type { MnemonRunner } from './runner.ts'
+import { OpenVikingProvider } from './providers/openviking.ts'
+import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './providers/provider.ts'
 import {
   CATEGORIES,
   EDGE_TYPES,
@@ -182,15 +184,35 @@ function commaList(values: string[] | undefined, label: string, limit: number): 
 
 export class MnemonService {
   readonly memoryBodies: MemoryBodyRegistry
+  private readonly providers: Map<MemoryBody['provider']['id'], MemoryProviderAdapter>
 
   constructor(readonly runner: MnemonRunner, readonly config: ResolvedConfig, memoryBodies?: MemoryBodyRegistry) {
     this.memoryBodies = memoryBodies ?? new MemoryBodyRegistry(runner)
+    const nativeProvider: MemoryProviderAdapter = {
+      id: 'mnemon-native',
+      status: (body, signal) => this.nativeBodyStatus(body, signal),
+      search: (body, request, signal) => this.nativeSearch(body, request, signal),
+      graph: (body, signal) => this.nativeGraph(body, signal),
+      list: (body, _request, signal) => this.allNativeInsights(body, signal, true),
+      remember: (body, request, signal) => this.nativeRemember(body, request, signal),
+      related: (body, id, depth, edge, signal) => this.nativeRelated(body, id, depth, edge, signal),
+      link: (body, sourceId, targetId, type, weight, reason, signal) => this.nativeLink(body, sourceId, targetId, type, weight, reason, signal),
+      forget: (body, id, signal) => this.nativeForget(body, id, signal),
+    }
+    const openVikingProvider = new OpenVikingProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
+    this.providers = new Map([
+      [nativeProvider.id, nativeProvider],
+      [openVikingProvider.id, openVikingProvider],
+    ])
   }
 
   async bodies(signal?: AbortSignal): Promise<MemoryBodyCatalog> {
     const items: MemoryBodyView[] = []
     const mnemonDefaultStore = this.runner.persistedStore()
-    for (const body of this.memoryBodies.list()) items.push(await this.bodyStatus(body, body.id === mnemonDefaultStore, signal))
+    for (const body of this.memoryBodies.list()) {
+      const status = await this.providerFor(body).status(body, signal)
+      items.push({ ...body, mnemonDefault: body.provider.id === 'mnemon-native' && body.id === mnemonDefaultStore, ...status })
+    }
     return {
       items,
       total: items.length,
@@ -218,7 +240,10 @@ export class MnemonService {
       memoryBodies: catalog.items,
     }
     try {
-      const rawVersion = await this.runner.runText(['--version'], signal === undefined ? { globalFlags: false } : { signal, globalFlags: false })
+      const hasNativeBody = catalog.items.some(body => body.provider.id === 'mnemon-native')
+      const rawVersion = hasNativeBody
+        ? await this.runner.runText(['--version'], signal === undefined ? { globalFlags: false } : { signal, globalFlags: false })
+        : undefined
       const healthyBodies = active.filter(body => body.healthy && body.stats !== undefined)
       const topEntities = new Map<string, number>()
       const byCategory: Record<string, number> = {}
@@ -240,7 +265,7 @@ export class MnemonService {
       return {
         healthy: failed.length === 0,
         ...base,
-        version: rawVersion.trim().replace(/^mnemon version\s+/i, ''),
+        ...(rawVersion === undefined ? {} : { version: rawVersion.trim().replace(/^mnemon version\s+/i, '') }),
         stats,
         ...(failed.length === 0 ? {} : { error: failed.map(body => `${body.name}: ${body.error ?? 'unavailable'}`).join('; ') }),
       }
@@ -257,27 +282,38 @@ export class MnemonService {
     const source = allowed(request.source, SOURCES, 'source')
     const intent = allowed(request.intent, INTENTS, 'intent')
     const bodies = this.readBodies(request.memoryBodyIds)
-    const results: Insight[] = []
-    const hints: string[] = []
-    for (const body of bodies) {
-      const args = mode === 'keyword'
-        ? ['search', query, '--limit', String(limit)]
-        : ['recall', query, '--limit', String(limit)]
-      if (mode === 'basic') args.push('--basic')
-      if (mode !== 'keyword') {
-        if (category !== undefined) args.push('--cat', category)
-        if (source !== undefined) args.push('--source', source)
-        if (intent !== undefined) args.push('--intent', intent)
-      }
-      const payload = await this.runner.runJson(args, { ...(signal === undefined ? {} : { signal }), store: body.id })
-      const wrapper = record(payload)
-      const values = Array.isArray(payload) ? payload : Array.isArray(wrapper?.results) ? wrapper.results : []
-      results.push(...values.map(normalizeInsight).filter((entry): entry is Insight => entry !== undefined).map(entry => this.annotate(entry, body)))
-      const hint = text(wrapper?.hint)
-      if (hint !== undefined) hints.push(`${body.name}: ${hint}`)
+    const normalizedRequest: SearchRequest = {
+      query,
+      mode,
+      limit,
+      ...(category === undefined ? {} : { category }),
+      ...(source === undefined ? {} : { source }),
+      ...(intent === undefined ? {} : { intent }),
     }
-    results.sort((left, right) => (right.score ?? 0) - (left.score ?? 0))
-    return { query, mode, results: results.slice(0, limit), ...(hints.length === 0 ? {} : { hint: hints.join('\n') }) }
+    const batches = await Promise.all(bodies.map(async body => {
+      try {
+        const result = await this.providerFor(body).search(body, normalizedRequest, signal)
+        return { body, result }
+      } catch (error) {
+        return { body, result: { results: [], hint: `unavailable: ${error instanceof Error ? error.message : String(error)}` } satisfies ProviderSearchResult }
+      }
+    }))
+    const results: Array<Insight & { providerRank: number }> = []
+    const hints: string[] = []
+    for (const { body, result } of batches) {
+      results.push(...result.results.map((entry, index) => ({ ...this.annotate(entry, body), providerRank: index + 1 })))
+      if (result.hint !== undefined) hints.push(`${body.name}: ${result.hint}`)
+    }
+    const heterogeneous = new Set(bodies.map(body => body.provider.id)).size > 1
+    results.sort((left, right) => heterogeneous
+      ? left.providerRank - right.providerRank || (right.score ?? 0) - (left.score ?? 0)
+      : (right.score ?? 0) - (left.score ?? 0))
+    return {
+      query,
+      mode,
+      results: results.slice(0, limit).map(({ providerRank: _providerRank, ...entry }) => entry),
+      ...(hints.length === 0 ? {} : { hint: hints.join('\n') }),
+    }
   }
 
   async graph(signal?: AbortSignal, memoryBodyIds?: string[]): Promise<MemoryGraphSnapshot> {
@@ -285,7 +321,8 @@ export class MnemonService {
     const nodes: MemoryGraphNode[] = []
     const edges: MemoryGraphEdge[] = []
     for (const body of bodies) {
-      const snapshot = await this.graphForBody(body, signal)
+      let snapshot: MemoryGraphSnapshot
+      try { snapshot = await this.providerFor(body).graph(body, signal) } catch { continue }
       const graphId = (id: string): string => `${body.id}:${id}`
       nodes.push(...snapshot.nodes.map(node => ({ ...this.annotate(node, body), color: node.color, graphId: graphId(node.id) })))
       edges.push(...snapshot.edges.map(edge => ({ ...edge, sourceId: graphId(edge.sourceId), targetId: graphId(edge.targetId) })))
@@ -328,24 +365,27 @@ export class MnemonService {
     const importance = boundedInteger(request.importance, 3, 1, 5)
     const category = allowed(request.category, CATEGORIES, 'category') ?? 'general'
     const source = allowed(request.source, SOURCES, 'source') ?? 'user'
-    const args = ['remember', content, '--cat', category, '--imp', String(importance), '--source', source]
-    const tags = commaList(request.tags, 'tags', 20)
-    const entities = commaList(request.entities, 'entities', 50)
-    if (tags !== undefined) args.push('--tags', tags)
-    if (entities !== undefined) args.push('--entities', entities)
-    const result = await this.runner.runJson(args, { ...(signal === undefined ? {} : { signal }), store: body.id })
+    const tags = commaList(request.tags, 'tags', 20)?.split(',')
+    const entities = commaList(request.entities, 'entities', 50)?.split(',')
+    const result = await this.providerFor(body).remember(body, {
+      content,
+      importance,
+      category,
+      source,
+      ...(tags === undefined ? {} : { tags }),
+      ...(entities === undefined ? {} : { entities }),
+    }, signal)
     this.activateAfterWrite(body)
     return this.annotateResult(result, body)
   }
 
   async related(id: string, depth = 2, edge?: EdgeType, signal?: AbortSignal, memoryBodyId?: string): Promise<Insight[]> {
     const body = this.readBody(memoryBodyId)
-    const args = ['related', required(id, 'id', 200), '--depth', String(boundedInteger(depth, 2, 1, 5))]
     const selectedEdge = allowed(edge, EDGE_TYPES, 'edge')
-    if (selectedEdge !== undefined) args.push('--edge', selectedEdge)
-    const payload = await this.runner.runJson(args, { ...(signal === undefined ? {} : { signal }), store: body.id })
-    if (!Array.isArray(payload)) return []
-    return payload.map(normalizeInsight).filter((entry): entry is Insight => entry !== undefined).map(entry => this.annotate(entry, body))
+    const provider = this.providerFor(body)
+    if (provider.related === undefined || !body.provider.capabilities.related) throw new Error(`${body.provider.label} does not support related-memory traversal`)
+    const results = await provider.related(body, required(id, 'id', 2000), boundedInteger(depth, 2, 1, 5), selectedEdge, signal)
+    return results.map(entry => this.annotate(entry, body))
   }
 
   async link(sourceId: string, targetId: string, type: EdgeType = 'semantic', weight = 0.5, reason?: string, signal?: AbortSignal, memoryBodyId?: string): Promise<JsonValue> {
@@ -353,9 +393,17 @@ export class MnemonService {
     const body = this.writeBody(memoryBodyId)
     if (!Number.isFinite(weight) || weight < 0 || weight > 1) throw new Error('weight must be within 0..1')
     const selectedType = allowed(type, EDGE_TYPES, 'type') ?? 'semantic'
-    const args = ['link', required(sourceId, 'sourceId', 200), required(targetId, 'targetId', 200), '--type', selectedType, '--weight', String(weight)]
-    if (reason !== undefined && reason.trim() !== '') args.push('--meta', JSON.stringify({ reason: required(reason, 'reason', 1000) }))
-    const result = await this.runner.runJson(args, { ...(signal === undefined ? {} : { signal }), store: body.id })
+    const provider = this.providerFor(body)
+    if (provider.link === undefined || !body.provider.capabilities.link) throw new Error(`${body.provider.label} does not support explicit memory links`)
+    const result = await provider.link(
+      body,
+      required(sourceId, 'sourceId', 2000),
+      required(targetId, 'targetId', 2000),
+      selectedType,
+      weight,
+      reason === undefined || reason.trim() === '' ? undefined : required(reason, 'reason', 1000),
+      signal,
+    )
     this.activateAfterWrite(body)
     return this.annotateResult(result, body)
   }
@@ -363,7 +411,9 @@ export class MnemonService {
   async forget(id: string, signal?: AbortSignal, memoryBodyId?: string): Promise<JsonValue> {
     this.assertWritable()
     const body = this.writeBody(memoryBodyId)
-    const result = await this.runner.runJson(['forget', required(id, 'id', 200)], { ...(signal === undefined ? {} : { signal }), store: body.id })
+    const provider = this.providerFor(body)
+    if (provider.forget === undefined || !body.provider.capabilities.forget) throw new Error(`${body.provider.label} does not expose safe forget semantics in this integration`)
+    const result = await provider.forget(body, required(id, 'id', 2000), signal)
     this.activateAfterWrite(body)
     return this.annotateResult(result, body)
   }
@@ -386,15 +436,17 @@ export class MnemonService {
   async mergeBodies(targetBodyId: string, sourceBodyIds: string[], deactivateSources = true, signal?: AbortSignal): Promise<JsonValue> {
     this.assertWritable()
     const target = this.memoryBodies.get(targetBodyId)
+    if (target.provider.id !== 'mnemon-native') throw new Error('memory-body merge currently requires a Mnemon Native target')
     const sourceIds = [...new Set(sourceBodyIds.map(id => id.trim()).filter(id => id !== ''))]
     if (sourceIds.length === 0) throw new Error('sourceMemoryBodyIds requires at least one memory body')
     if (sourceIds.includes(target.id)) throw new Error('target memory body cannot also be a merge source')
     const sources = sourceIds.map(id => this.memoryBodies.get(id))
+    if (sources.some(source => source.provider.id !== 'mnemon-native')) throw new Error('memory-body merge currently supports Mnemon Native sources only')
     const insights: Array<Record<string, JsonValue>> = []
     const edges: Array<Record<string, JsonValue>> = []
     for (const source of sources) {
       const offset = insights.length
-      const sourceInsights = await this.allInsights(source, signal)
+      const sourceInsights = await this.allNativeInsights(source, signal)
       const indexById = new Map(sourceInsights.map((insight, index) => [insight.id, offset + index]))
       for (const insight of sourceInsights) {
         insights.push({
@@ -407,7 +459,7 @@ export class MnemonService {
           ...(insight.createdAt === undefined ? {} : { created_at: insight.createdAt }),
         })
       }
-      const graph = await this.graphForBody(source, signal)
+      const graph = await this.nativeGraph(source, signal)
       for (const edge of graph.edges) {
         const sourceIndex = indexById.get(edge.sourceId)
         const targetIndex = indexById.get(edge.targetId)
@@ -433,14 +485,14 @@ export class MnemonService {
     }
   }
 
-  private async bodyStatus(body: MemoryBody, mnemonDefault: boolean, signal?: AbortSignal): Promise<MemoryBodyView> {
+  private async nativeBodyStatus(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus> {
     try {
       const raw = await this.runner.runJson(['status'], { ...(signal === undefined ? {} : { signal }), store: body.id })
       const status = record(raw)
       if (status === undefined) throw new Error('mnemon status returned an unexpected payload')
-      return { ...body, mnemonDefault, healthy: true, stats: this.parseStats(status) }
+      return { healthy: true, stats: this.parseStats(status) }
     } catch (error) {
-      return { ...body, mnemonDefault, healthy: false, error: error instanceof Error ? error.message : String(error) }
+      return { healthy: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
 
@@ -467,12 +519,12 @@ export class MnemonService {
     }
   }
 
-  private async graphForBody(body: MemoryBody, signal?: AbortSignal): Promise<MemoryGraphSnapshot> {
+  private async nativeGraph(body: MemoryBody, signal?: AbortSignal): Promise<MemoryGraphSnapshot> {
     const [html, insights] = await Promise.all([
       this.runner.runText(['viz', '--format', 'html', '--output', '-'], { ...(signal === undefined ? {} : { signal }), store: body.id }),
       // Mnemon's HTML visualization omits tags and entities. A readonly recall
       // supplies that metadata without incrementing access counters.
-      this.allInsights(body, signal, true),
+      this.allNativeInsights(body, signal, true),
     ])
     const snapshot = parseMemoryGraph(html)
     const metadata = new Map(insights.map(insight => [insight.id, insight]))
@@ -487,13 +539,66 @@ export class MnemonService {
     }
   }
 
-  private async allInsights(body: MemoryBody, signal?: AbortSignal, readonly = false): Promise<Insight[]> {
+  private async allNativeInsights(body: MemoryBody, signal?: AbortSignal, readonly = false): Promise<Insight[]> {
     const payload = await this.runner.runJson([
       ...(readonly ? ['--readonly'] : []),
       'recall', '', '--basic', '--limit', '100000',
     ], { ...(signal === undefined ? {} : { signal }), store: body.id })
     const values = Array.isArray(payload) ? payload : Array.isArray(record(payload)?.results) ? record(payload)!.results as JsonValue[] : []
     return values.map(normalizeInsight).filter((entry): entry is Insight => entry !== undefined)
+  }
+
+  private async nativeSearch(body: MemoryBody, request: SearchRequest, signal?: AbortSignal): Promise<ProviderSearchResult> {
+    const mode = request.mode ?? 'smart'
+    const args = mode === 'keyword'
+      ? ['search', request.query, '--limit', String(request.limit ?? this.config.defaultRecallLimit)]
+      : ['recall', request.query, '--limit', String(request.limit ?? this.config.defaultRecallLimit)]
+    if (mode === 'basic') args.push('--basic')
+    if (mode !== 'keyword') {
+      if (request.category !== undefined) args.push('--cat', request.category)
+      if (request.source !== undefined) args.push('--source', request.source)
+      if (request.intent !== undefined) args.push('--intent', request.intent)
+    }
+    const payload = await this.runner.runJson(args, { ...(signal === undefined ? {} : { signal }), store: body.id })
+    const wrapper = record(payload)
+    const values = Array.isArray(payload) ? payload : Array.isArray(wrapper?.results) ? wrapper.results : []
+    const hint = text(wrapper?.hint)
+    return {
+      results: values.map(normalizeInsight).filter((entry): entry is Insight => entry !== undefined),
+      ...(hint === undefined ? {} : { hint }),
+    }
+  }
+
+  private async nativeRemember(body: MemoryBody, request: RememberRequest, signal?: AbortSignal): Promise<JsonValue> {
+    const args = ['remember', request.content, '--cat', request.category ?? 'general', '--imp', String(request.importance ?? 3), '--source', request.source ?? 'user']
+    const tags = commaList(request.tags, 'tags', 20)
+    const entities = commaList(request.entities, 'entities', 50)
+    if (tags !== undefined) args.push('--tags', tags)
+    if (entities !== undefined) args.push('--entities', entities)
+    return this.runner.runJson(args, { ...(signal === undefined ? {} : { signal }), store: body.id })
+  }
+
+  private async nativeRelated(body: MemoryBody, id: string, depth: number, edge?: EdgeType, signal?: AbortSignal): Promise<Insight[]> {
+    const args = ['related', id, '--depth', String(depth)]
+    if (edge !== undefined) args.push('--edge', edge)
+    const payload = await this.runner.runJson(args, { ...(signal === undefined ? {} : { signal }), store: body.id })
+    return Array.isArray(payload) ? payload.map(normalizeInsight).filter((entry): entry is Insight => entry !== undefined) : []
+  }
+
+  private async nativeLink(body: MemoryBody, sourceId: string, targetId: string, type: EdgeType, weight: number, reason?: string, signal?: AbortSignal): Promise<JsonValue> {
+    const args = ['link', sourceId, targetId, '--type', type, '--weight', String(weight)]
+    if (reason !== undefined) args.push('--meta', JSON.stringify({ reason }))
+    return this.runner.runJson(args, { ...(signal === undefined ? {} : { signal }), store: body.id })
+  }
+
+  private nativeForget(body: MemoryBody, id: string, signal?: AbortSignal): Promise<JsonValue> {
+    return this.runner.runJson(['forget', id], { ...(signal === undefined ? {} : { signal }), store: body.id })
+  }
+
+  private providerFor(body: MemoryBody): MemoryProviderAdapter {
+    const provider = this.providers.get(body.provider.id)
+    if (provider === undefined) throw new Error(`unsupported memory provider: ${body.provider.id}`)
+    return provider
   }
 
   private readBodies(ids?: string[]): MemoryBody[] {
@@ -526,12 +631,12 @@ export class MnemonService {
   }
 
   private annotate<T extends Insight>(insight: T, body: MemoryBody): T {
-    return { ...insight, memoryBodyId: body.id, memoryBodyName: body.name }
+    return { ...insight, memoryBodyId: body.id, memoryBodyName: body.name, memoryProviderId: body.provider.id }
   }
 
   private annotateResult(result: JsonValue, body: MemoryBody): JsonValue {
     const value = record(result)
-    return value === undefined ? result : { ...value, memoryBodyId: body.id, memoryBodyName: body.name }
+    return value === undefined ? result : { ...value, memoryBodyId: body.id, memoryBodyName: body.name, memoryProviderId: body.provider.id }
   }
 
   private activateAfterWrite(body: MemoryBody): void {

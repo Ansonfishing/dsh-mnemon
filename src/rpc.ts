@@ -328,17 +328,45 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
             ? await service.forget(String(payload.id ?? ''), undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
             : await lifecycle.mutate(String(payload.sessionId ?? ''), 'forget', { id: String(payload.id ?? ''), ...(payload.memoryBodyId === undefined ? {} : { memoryBodyId: String(payload.memoryBodyId) }) }))
         case 'body-create':
-          return success(await service.createBody({
-            name: String(payload.name ?? ''),
-            description: String(payload.description ?? ''),
-            ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
-          }))
+          {
+            const openViking = payload.openViking === undefined ? undefined : object(payload.openViking)
+            return success(await service.createBody({
+              name: String(payload.name ?? ''),
+              description: String(payload.description ?? ''),
+              ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
+              ...(payload.providerId === undefined ? {} : { providerId: String(payload.providerId) as 'mnemon-native' | 'openviking' }),
+              ...(openViking === undefined ? {} : {
+                openViking: {
+                  endpoint: String(openViking.endpoint ?? ''),
+                  targetUri: String(openViking.targetUri ?? ''),
+                  ...(openViking.apiKey === undefined ? {} : { apiKey: String(openViking.apiKey) }),
+                  ...(openViking.account === undefined ? {} : { account: String(openViking.account) }),
+                  ...(openViking.user === undefined ? {} : { user: String(openViking.user) }),
+                  ...(openViking.actorPeerId === undefined ? {} : { actorPeerId: String(openViking.actorPeerId) }),
+                },
+              }),
+            }))
+          }
         case 'body-update':
-          return success(service.updateBody(String(payload.memoryBodyId ?? ''), {
-            ...(payload.name === undefined ? {} : { name: String(payload.name) }),
-            ...(payload.description === undefined ? {} : { description: String(payload.description) }),
-            ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
-          }))
+          {
+            const openViking = payload.openViking === undefined ? undefined : object(payload.openViking)
+            return success(service.updateBody(String(payload.memoryBodyId ?? ''), {
+              ...(payload.name === undefined ? {} : { name: String(payload.name) }),
+              ...(payload.description === undefined ? {} : { description: String(payload.description) }),
+              ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
+              ...(openViking === undefined ? {} : {
+                openViking: {
+                  ...(openViking.endpoint === undefined ? {} : { endpoint: String(openViking.endpoint) }),
+                  ...(openViking.targetUri === undefined ? {} : { targetUri: String(openViking.targetUri) }),
+                  ...(openViking.apiKey === undefined ? {} : { apiKey: String(openViking.apiKey) }),
+                  ...(openViking.account === undefined ? {} : { account: String(openViking.account) }),
+                  ...(openViking.user === undefined ? {} : { user: String(openViking.user) }),
+                  ...(openViking.actorPeerId === undefined ? {} : { actorPeerId: String(openViking.actorPeerId) }),
+                  ...(openViking.clearApiKey === undefined ? {} : { clearApiKey: Boolean(openViking.clearApiKey) }),
+                },
+              }),
+            }))
+          }
         case 'body-delete':
           return success(await service.deleteBody(String(payload.memoryBodyId ?? '')))
         default:
