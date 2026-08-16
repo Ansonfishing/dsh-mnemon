@@ -47,10 +47,11 @@ follow an exact cold reference when full text is required
 |   +-- .dsh-memory-bodies.json
 |   +-- <memory-space-id>/
 |       +-- mnemon.db
-+-- state/                         # reserved; no persistent reviewer yet
++-- state/
+    +-- memory-providers.json     # 第三方连接控制面，0600，不进入 Mnemon Pack
 ```
 
-`storageScope` 决定整个根，而不只是 Mnemon 数据库。`workspace` 范围会为每个已登记 DSH 工作区解析独立的 `<workspace>/.mnemon`；Web 查看目标与当前会话执行目标彼此独立，只有后者会驱动 Agent、工具和生命周期。`state/` 当前只会被状态盘点器识别；评分水位仍保存在运行中 Host 的内存中。
+`storageScope` 决定整个根，而不只是 Mnemon 数据库。`workspace` 范围会为每个已登记 DSH 工作区解析独立的 `<workspace>/.mnemon`；Web 查看目标与当前会话执行目标彼此独立，只有后者会驱动 Agent、工具和生命周期。`state/memory-providers.json` 保存第三方 endpoint、目标 URI、身份和可选 API Key；文件权限为 `0600`，Host 返回 WebUI 时只暴露“是否已配置”，不回传密钥。
 
 ## Runtime Memory
 
@@ -139,23 +140,24 @@ Documents 的物理共享范围由 `storageScope` 决定：
 
 ## Memory Spaces
 
-每个记忆体是一个 Mnemon 原生命名 Store，并在 `.dsh-memory-bodies.json` 中增加可维护元数据：
+记忆体是第三层统一语义与路由单位，具体数据面由 Provider 决定：
 
 ```text
-id            首个 Store 使用 default；后续由 Host 生成 UUID，或沿用已发现的兼容 Store 名
+id            Host 生成或沿用已发现的 Mnemon Store 名
 name          人类可读名称
 description   路由边界：什么属于这里、何时召回
 active        是否参与 DSH 读取与路由
-mnemon.db     独立数据面
+provider      mnemon-native 或 openviking
+location      本地 mnemon.db，或远程 endpoint + target URI
 ```
 
 ### 读写边界
 
 - Mnemon 原生层在初始化后至少保留一个 Store，并通过 `<storageRoot>/active` 选择一个默认 Store；普通 Mnemon Agent 仍按这套单 Store 语义工作。
-- dsh-mnemon 的激活状态是独立控制面：任意 0..N 个 Store 可以激活，全部未激活也不会改变 Mnemon 默认 Store 或影响其他 Agent。
-- 召回、图谱、内容和实体读取只使用已激活记忆体。
+- dsh-mnemon 的激活状态是独立控制面：任意 0..N 个记忆体可以激活，全部未激活也不会改变 Mnemon 默认 Store 或远程数据。
+- 召回与浏览只使用已激活记忆体；图谱、实体、关联、链接和删除由 Provider 能力决定。
 - 指定未激活记忆体进行读取会被拒绝。
-- 写入可以选择已登记的任意记忆体。
+- 写入可以选择任何支持 `remember` 的已登记记忆体；OpenViking 会等待异步提炼任务完成后才返回落定回执。
 - 对未激活目标写入成功后，插件自动激活它。
 - 没有显式目标且激活数量不是 1 时，确定性服务要求调用方先选择目标。
 
@@ -167,16 +169,18 @@ mnemon.db     独立数据面
 - 合并通过 Mnemon import 把来源内容导入目标；来源数据库保留，默认只将来源设为未激活。
 - Pack 替换不能把已初始化的 Store 集合清空；替换后若原默认 Store 已不存在，插件会选择一个现存 Store 修复原生默认指针。
 - `forget` 是按精确 ID 的软删除，不等于删除数据库文件。
+- OpenViking 连接由用户在既有“创建记忆体”弹窗选择 Provider 后建立；断开只删除本地连接登记，不删除远程内容。
+- 合并、关系与软删除当前仅适用于 Mnemon Native；Provider 能力不会被 UI 或 Agent 假装补齐。
 
 ### 跨 Agent 可见性
 
 `mnemon.db` 是 Mnemon 原生数据面，不是 dsh-mnemon 私有格式。其他 Mnemon-enabled Agent 在使用同一个 `storageRoot` 和 Store 时，可以访问同一份长期记忆。dsh-mnemon 也会发现磁盘上兼容的 Store；其 DSH 专有名称、说明和激活状态仍由 `.dsh-memory-bodies.json` 管理。
 
-共享不延伸到 `runtime/` 或 `documents/`。即使它们位于同一个根，其他 Agent 也必须自行实现相应协议才能理解这些 DSH 管理层；不能把“共享 Mnemon 长期记忆”表述为自动共享完整 DSH 上下文。
+OpenViking 的可见性由服务、目标 URI 与身份头共同决定。两类共享都不延伸到 `runtime/` 或 `documents/`；不能把“共享第三层记忆”表述为自动共享完整 DSH 上下文。
 
 ## 四类关系
 
-Mnemon 长期层保留 `temporal`、`semantic`、`causal` 和 `entity` 关系。插件不会要求每条记忆都手工创建关系；关系应在确实能改善未来召回时建立。记忆体页可以聚合多个已激活记忆体的记忆、实体、关系和空间归属。
+Mnemon Native 保留 `temporal`、`semantic`、`causal` 和 `entity` 关系。OpenViking 当前在图谱中投影为有界的无边节点，不伪造关系。记忆体页会按能力隐藏不适用的关联与忘记动作。
 
 ## 数据权威表
 
@@ -184,6 +188,7 @@ Mnemon 长期层保留 `temporal`、`semantic`、`causal` 和 `entity` 关系。
 |---|---|---|
 | 热记忆 | `runtime/memories.json` | `USER.md`、`MEMORY.md` |
 | Documents | `documents/index.json` + 托管 Markdown | excerpt、搜索排序、状态聚合 |
-| Memory Space 目录 | `data/.dsh-memory-bodies.json` + 磁盘 Store | Web 状态聚合 |
-| 长期记忆 | 各 Store 的 `mnemon.db` | HTML/DOT 图谱解析结果 |
+| Mnemon Native 目录 | `data/.dsh-memory-bodies.json` + 磁盘 Store | Web 状态聚合 |
+| 第三方 Provider 连接 | `state/memory-providers.json` | 脱敏的 Provider 能力与状态 |
+| 长期记忆 | Mnemon `mnemon.db` 或远程 Provider | 图谱投影、跨 Provider 排名融合 |
 | 审查水位 | Host 进程内存 | 状态页快照；尚未持久化 |

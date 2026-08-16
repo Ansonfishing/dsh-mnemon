@@ -10,10 +10,10 @@
 
 <p align="center"><strong>Local, layered, supervised memory for DeepSeek Harness—with cross-agent sharing through Mnemon.</strong></p>
 
-`dsh-mnemon` integrates [Mnemon](https://github.com/mnemon-dev/mnemon) with DeepSeek Harness (DSH). It brings hot memory needed every turn, full project Documents, and on-demand long-term Memory Spaces into one workbench. Other agents can share DSH's long-term memory when they also integrate Mnemon and use the same accessible local Mnemon storage.
+`dsh-mnemon` integrates [Mnemon](https://github.com/mnemon-dev/mnemon) with DeepSeek Harness (DSH). It brings hot memory needed every turn, full project Documents, and on-demand long-term Memory Spaces into one workbench. The third tier is provider-backed: Mnemon Native remains the official, prioritized engine, while the first experimental adapter can connect an existing OpenViking service without changing the Memory Space workflow.
 
-- **Local first**: memory stays in local SQLite, JSON, and Markdown; no remote memory service is required.
-- **Cross-agent sharing**: Mnemon-enabled agents can read and reuse DSH's Mnemon Memory Spaces.
+- **Local-first default**: Mnemon Native keeps memory in local SQLite, JSON, and Markdown; OpenViking is an explicit optional connection.
+- **Cross-agent sharing**: Mnemon Native spaces share local Stores with Mnemon-enabled agents; OpenViking spaces share through the connected remote service.
 - **Three cooperating tiers**: Runtime Memory, Project Documents, and Memory Spaces retain information at the right granularity.
 - **Supervised writes**: isolated memory subagents make semantic decisions; the Host enforces paths, permissions, capacity, locks, and revisions.
 - **Web and Headless**: a complete Sidebar workbench for interactive management, plus the same Agent tools, memory context, and cwd routing in one-shot Headless tasks.
@@ -163,9 +163,9 @@ Recommended lookup order: Runtime Memory → active Documents → active Memory 
 
 ## Data and security boundaries
 
-- The plugin reaches durable memory through the local `mnemon` CLI. The WebUI neither reads SQLite directly nor starts processes.
+- Mnemon Native uses the local `mnemon` CLI; OpenViking uses its HTTP API through the Host. The WebUI neither reads SQLite nor calls remote providers directly.
 - CLI calls use argument arrays with shell disabled, bounded output, timeouts, and cancellation.
-- The plugin stores no API keys. Subagent inference uses the provider already configured in DSH.
+- An optional OpenViking API key is stored mode `0600` in `<storageRoot>/state/memory-providers.json`, is never returned to the browser, and is excluded from Mnemon Pack exports. Subagent inference still uses the model provider configured in DSH.
 - There is no deterministic secret scanner yet. Never store keys, tokens, private keys, or raw sensitive logs in any tier.
 - Uninstalling the plugin does not remove data under `~/.mnemon`, workspace `.mnemon` roots, or custom directories.
 

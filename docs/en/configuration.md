@@ -97,7 +97,7 @@ mnemon:
 | Share one explicit data root | `custom` | Every participant configures the same absolute directory for isolation and backup |
 | Share only inside one project | `workspace` | Every participant aligns its Mnemon root to that project's `<workspace>/.mnemon` |
 
-Only the Mnemon durable tier under `data/<store>/mnemon.db` has native cross-agent interoperability. Runtime, Documents, DSH activation state, and UI metadata remain managed by dsh-mnemon.
+Mnemon Native interoperates with other Mnemon-enabled agents through `data/<store>/mnemon.db`; OpenViking interoperates through the configured remote service, target URI, and identity. Runtime, Documents, DSH activation state, and UI metadata remain managed by dsh-mnemon.
 
 ## CLI Discovery Precedence
 

@@ -37,9 +37,9 @@ Headless 会获得完整模型工具面。它把命令行任务作为普通用�
 | 工具 | 用途 | Root Agent 路径 |
 |---|---|---|
 | `mnemon_status` | CLI、配置、存储与目录聚合状态 | 直接服务 |
-| `mnemon_memory_bodies` | 读取记忆体目录与统计 | 直接服务 |
-| `mnemon_recall` | 从一个或多个 active 记忆体召回 | `spawn` recall worker |
-| `mnemon_related` | 从已知 ID 遍历关系 | `spawn` related worker；Root 默认两跳 |
+| `mnemon_memory_bodies` | 读取记忆体目录、Provider 能力、健康与可用统计 | 直接服务 |
+| `mnemon_recall` | 从一个或多个 active Provider 召回；异构结果排名融合 | `spawn` recall worker |
+| `mnemon_related` | 在 `capabilities.related=true` 的记忆体中遍历关系 | `spawn` related worker；Root 默认两跳 |
 | `mnemon_document_search` | 确定性搜索受管档案 | Documents 控制层 |
 
 “只读”表示不修改受管正文或长期语义内容。`mnemon_document_search` 命中后仍会更新 `lastAccessedAt`，用于 LRU 排序，因此功能只读不等于磁盘只读。
@@ -50,12 +50,12 @@ Headless 会获得完整模型工具面。它把命令行任务作为普通用�
 |---|---|---|
 | `mnemon_runtime_memory` | `add` / `replace` / `remove` 热记忆 | 确定性控制；add 溢出时可能启动 worker |
 | `mnemon_document_manage` | 创建、更新或归档档案 | 创建/更新确定性；归档使用 worker |
-| `mnemon_remember` | 沉淀一条长期洞察 | `spawn` write worker |
-| `mnemon_link` | 建立 typed relationship | `spawn` write worker |
-| `mnemon_forget` | 按精确 ID 软删除 | `spawn` write worker |
-| `mnemon_memory_body_create` | 创建独立记忆体 | `spawn` write worker |
+| `mnemon_remember` | 按 Provider 语义沉淀洞察，并等待落定回执 | `spawn` write worker |
+| `mnemon_link` | 在支持能力的 Provider 中建立 typed relationship | `spawn` write worker |
+| `mnemon_forget` | 在支持能力的 Provider 中按精确 ID 删除 | `spawn` write worker |
+| `mnemon_memory_body_create` | 由 Agent 创建独立 Mnemon Native 记忆体；第三方连接只由用户在 WebUI 管理 | `spawn` write worker |
 | `mnemon_memory_body_update` | 更新名称、说明或 active | `spawn` write worker |
-| `mnemon_memory_body_merge` | 非破坏性导入合并 | `spawn` write worker |
+| `mnemon_memory_body_merge` | 非破坏性合并 Mnemon Native 记忆体 | `spawn` write worker |
 
 worker 内调用同名工具时直接进入服务层，不再递归委派。
 
@@ -122,7 +122,7 @@ authority: trusted-host
 | `versions` | 检查 Mnemon 与 dsh-mnemon 当前 / 最新版本和安装来源 |
 | `runtime-memory` | 运行时快照 |
 | `documents` / `document` / `document-search` | 档案目录、正文与确定性搜索 |
-| `graph` / `bodies` | active 多空间图谱与记忆体目录 |
+| `graph` / `bodies` | active 多空间图谱投影与含 Provider 能力的记忆体目录 |
 | `list` / `entities` | 内容列表与实体聚合 |
 | `search` / `agent-search` / `related` | 直接检索、证据回答与关系遍历 |
 | `turn-activities` / `turn-activity` | 会话或单回合的记忆工具活动 |
@@ -141,7 +141,7 @@ authority: loopback
 | `supervise` | 把候选交给记忆 worker |
 | `document` | create / update / archive |
 | `remember` / `link` / `forget` | 长期语义写入、关系与软删除 |
-| `body-create` / `body-update` / `body-delete` | 记忆体创建、编辑与确认后的物理删除 |
+| `body-create` / `body-update` / `body-delete` | 记忆体创建/连接、编辑，以及确认后的 Native 删除或远程断开 |
 | `version-update` | 更新明确组件；Host 固定命令与参数 |
 
 `writeEnabled=false` 时通道仍稳定注册，但所有 mutation 在 Host 边界拒绝。

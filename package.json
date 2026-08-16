@@ -1,13 +1,15 @@
 {
   "name": "dsh-mnemon",
   "version": "0.1.6",
-  "description": "Cross-agent, local-first persistent memory plugin for DeepSeek Harness (DSH), powered by Mnemon. It supports Web and Headless profiles with runtime memory, searchable project documents, semantic recall, knowledge graph, and an optional Sidebar UI.",
+  "description": "Three-tier persistent memory plugin for DeepSeek Harness (DSH), with prioritized Mnemon Native support and pluggable long-term-memory providers such as OpenViking.",
   "keywords": [
     "deepseek-harness",
     "deepseek-harness-plugin",
     "dsh",
     "dsh-plugin",
     "mnemon",
+    "openviking",
+    "memory-provider",
     "memory-system",
     "memory-plugin",
     "agent-memory",

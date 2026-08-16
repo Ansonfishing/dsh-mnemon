@@ -69,9 +69,9 @@ A Runtime item should be compact, independent, and repeatedly useful. Put identi
 
 [![Memory Space catalog, activation, and multi-space relationship graph](../assets/screenshots/overview-memory-graph.png)](../assets/screenshots/overview-memory-graph.png)
 
-Each card leads with its name and routing description, pins read activation at the top right, and keeps statistics plus Edit / Delete in the footer. The **Mnemon default** badge identifies the native CLI's default Store. Activation controls only DSH reads and routing; it neither changes that default nor affects other agents. A write may target an inactive registered space and activates it after success.
+Each card leads with its name and routing description. Provider identity sits beside the ID and health state, while the familiar read-activation toggle stays at the top right. Creation adds no new top-level concept: it remains **Create Memory Space**, with **Mnemon Native** (default and official) or **OpenViking** (connect an existing service) selected inside the dialog. Native cards retain statistics, Edit, and Delete. OpenViking cards show the remote URI, asynchronous extraction semantics, and **Disconnect**, which never deletes remote data.
 
-The graph aggregates all active spaces. Layout, dragging, and reset affect browser presentation only and never mutate Mnemon data.
+The graph aggregates all active spaces. Mnemon Native supplies complete relationships; OpenViking currently contributes bounded disconnected content nodes and never fabricated edges. Layout, dragging, and reset affect browser presentation only.
 
 ### Remember
 
@@ -86,8 +86,8 @@ Normally, provide only a candidate. On confirmation, an isolated memory subagent
 - **Direct recall** returns raw evidence without an answer Agent.
 - **Agent query** retrieves the same evidence, then gives it to an evidence-only worker with no Mnemon tools.
 - Category and strategy narrow the search.
-- Results retain space, category, importance, score, and ID.
-- Related traverses the graph; Forget is a destructive semantic action.
+- Results retain Memory Space, provider, category, importance, engine-native score, and ID; cross-provider order uses rank fusion.
+- Related and Forget appear only when the provider supports them. OpenViking currently exposes neither action.
 
 Focused questions are more reliable than broad keywords.
 
@@ -149,7 +149,7 @@ You may inspect project B while staying in project A's conversation; the Agent s
 
 - Solid blue is the primary action; blue outline usually means Edit; red is Remove, Delete, Archive, or Forget; neutral actions are View, Copy, and Cancel.
 - A Memory Space toggle controls only whether dsh-mnemon includes it in read routing; it is not Mnemon CLI's default Store selection. Before deleting Mnemon's default Store, the plugin switches to another existing Memory Space. The last native Store may be inactive but cannot be deleted.
-- Physical destructive operations such as deleting a Memory Space require a dedicated confirmation. Forget is semantic soft deletion and should still be deliberate.
+- Physical deletion of a Mnemon Native space requires dedicated confirmation. OpenViking has an explicit Disconnect confirmation that leaves remote data untouched. Forget is currently Mnemon Native semantic soft deletion.
 - Saving settings clears stale page state and reloads automatically; no browser refresh is needed.
 - Sidebar primary headings remain stable; secondary headings within Memory Spaces scroll naturally.
 - Buildin preserves its established layout and visuals. Functional concepts still apply, though control positions differ.

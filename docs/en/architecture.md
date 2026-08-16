@@ -4,19 +4,33 @@
 
 ## Positioning
 
-`dsh-mnemon` is an integration and supervision layer between DSH and Mnemon, not a new database engine:
+`dsh-mnemon` is an integration and supervision layer between DSH and replaceable long-term-memory providers, not a new database engine:
 
 - DSH provides the root Agent, lifecycle events, subagent providers, tools, commands, settings, and Web extension points;
 - the plugin provides the control plane for three knowledge layers, routing policies, transactional barriers, and UI;
-- the local `mnemon` CLI provides named Stores, SQLite persistence, four graph types, recall, relationships, and soft deletion, and defines the durable-data boundary shared with other Mnemon-enabled agents.
+- Mnemon Native uses the local `mnemon` CLI for named Stores, SQLite, four graph types, relationships, and soft deletion and remains the official prioritized implementation; the OpenViking adapter uses a Host HTTP data plane for remote search, browse, and asynchronous semantic extraction.
 
 ## Component Diagram
 
 [![dsh-mnemon runtime architecture](../assets/diagrams/en/project-architecture.svg)](../assets/diagrams/en/project-architecture.svg)
 
-Solid lines show deterministic data or control paths; purple dashed lines show LLM-supervised paths. Runtime Memory and Documents use managed files directly. Only Memory Spaces call the local Mnemon CLI through `MnemonRunner`. Click the image to open the original SVG.
+Solid lines show deterministic data or control paths; purple dashed lines show LLM-supervised paths. Runtime Memory and Documents use managed files directly. Memory Spaces first pass through `MemoryProviderAdapter`, then enter the Mnemon Native or OpenViking data plane. The current diagram emphasizes the default Native path. Click the image to open the original SVG.
 
-Cross-agent interoperability therefore applies only to Memory Spaces in the diagram: agents share durable memories and relations inside Mnemon Stores, not DSH conversation context, Runtime projections, or the Documents control plane. The plugin never pushes data to another agent; participants share by aligning their local Mnemon root and Store.
+Cross-agent interoperability therefore applies only to the third tier: Mnemon Native shares by aligning a local root and Store, while OpenViking shares by aligning the remote service, target URI, and identity. Neither automatically shares DSH conversation context, Runtime projections, or Documents.
+
+### Third-tier provider contract
+
+`MemoryProviderAdapter` keeps catalog, lifecycle, and user operations in dsh-mnemon's control plane while delegating `status / search / graph projection / browse / remember / related / link / forget` to data-plane adapters. Capability declarations are a shared hard boundary for UI, agents, and Host: unsupported actions are hidden and rejected. The first implementation matrix is:
+
+| Capability | Mnemon Native | Initial OpenViking adapter |
+|---|---|---|
+| Search / browse | native recall and readonly list | `/api/v1/search/find` and `fs/ls` |
+| Write | exact synchronous `remember` | session commit + task polling; waits for asynchronous extraction |
+| Graph / related / entities | complete | not declared; bounded disconnected content projection only |
+| Link / forget | typed relationship / soft delete | not exposed |
+| Remove space | delete local Store | disconnect only; remote content is untouched |
+
+Cross-provider search runs concurrently, with one failure reduced to a Memory-Space-scoped hint. Heterogeneous raw scores are never compared directly; results use reciprocal-rank fusion over each provider's returned order. Future mem0 or GBrain adapters should reuse this contract without changing the upper-layer Memory Space semantics.
 
 ## Host Composition Root
 
@@ -57,9 +71,9 @@ root Agent calls mnemon_recall
   -> structured evidence returns to root Agent
 ```
 
-Long-term semantic writes, relationships, soft deletion, and Memory Space creation, updates, and merges use the same pattern. Ordinary Runtime Memory and Document mutations first pass through the coordinator but are usually committed directly by the deterministic control layer; only capacity maintenance or archiving requires an additional worker.
+Long-term semantic writes, relationships, deletion, and Memory Space creation or updates use the same supervision pattern, while the deterministic service first checks the target provider's capabilities. Mnemon Native supports complete relationships, soft deletion, and merge; OpenViking currently supports search, browse, and asynchronous extraction with a settled receipt. Ordinary Runtime Memory and Document mutations remain deterministic.
 
-Physical Memory Space deletion is a separate deterministic destructive action. The WebUI must show a second confirmation, then invoke native Mnemon `store remove` through the loopback write RPC; the directory registration is removed only after the CLI deletion succeeds.
+Memory Space removal is a separate dangerous action. Mnemon Native invokes `store remove` after confirmation and removes registration only after success. OpenViking uses **Disconnect** semantics: it removes local connection metadata and never deletes remote memory.
 
 ## Two Types of Subagent
 
@@ -128,6 +142,7 @@ Command output, tool-card titles, persisted compatibility-default Memory Space n
 | `src/runner.ts` | CLI discovery, arguments, serialization, and JSON parsing |
 | `src/service.ts` | Application facade for long-term memory |
 | `src/memory-bodies.ts` | Memory Space catalog metadata |
+| `src/providers/*` | Third-tier provider contract, Mnemon Native routing, and OpenViking adapter |
 | `src/runtime-memory.ts` | Hot-memory source of truth and projections |
 | `src/documents.ts` | Documents control plane |
 | `src/subagent.ts` | Worker orchestration and capacity transactions |

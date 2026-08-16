@@ -8,12 +8,12 @@
   </a>
 </p>
 
-<p align="center"><strong>让 DeepSeek Harness 拥有可跨 Agent 共享的本地、分层、可监督长期记忆。</strong></p>
+<p align="center"><strong>让 DeepSeek Harness 拥有可跨 Agent 共享、分层、可监督的长期记忆。</strong></p>
 
-`dsh-mnemon` 将 [Mnemon](https://github.com/mnemon-dev/mnemon) 接入 DeepSeek Harness（DSH），并把每轮需要的热记忆、需要完整阅读的项目档案和按需召回的长期记忆体组织在同一个工作台中。其他 Agent 只要同样接入 Mnemon，并使用同一套可访问的本地 Mnemon 存储，就可以与 DSH 共享长期记忆。
+`dsh-mnemon` 把长期记忆接入 DeepSeek Harness（DSH），并将每轮需要的热记忆、需要完整阅读的项目档案和按需召回的长期记忆体组织在同一个工作台中。第三层采用可替换 Provider：Mnemon Native 是官方优先、默认完整能力实现；首个实验性适配器可以连接已有 OpenViking 服务，而不改变记忆体工作流。
 
-- **本地优先**：记忆保存在本机 SQLite、JSON 与 Markdown 中，不依赖远程记忆服务。
-- **跨 Agent 共享**：DSH 的 Mnemon 记忆体可以被其他支持 Mnemon 的 Agent 读取和复用。
+- **默认本地优先**：Mnemon Native 将记忆保存在本机 SQLite、JSON 与 Markdown；OpenViking 是显式可选连接。
+- **跨 Agent 共享**：Mnemon Native 通过本地 Store 共享；OpenViking 通过连接的远程服务共享。
 - **三层协作**：运行时记忆、项目档案、记忆体各自保存适合自己的信息粒度。
 - **受监督写入**：语义判断交给隔离的记忆子 Agent，路径、权限、容量、锁与 revision 由 Host 控制。
 - **Web 与 Headless**：Web 提供完整 Sidebar 工作台；一次性 Headless 任务获得同一套 Agent 工具、记忆上下文和 cwd 路由。
@@ -103,7 +103,7 @@ Headless 没有工作台和对话按钮，但仍会挂载运行时上下文、�
 
 ### 与其他 Agent 共享长期记忆
 
-跨 Agent 共享发生在 Mnemon 提供的**记忆体**层。其他支持 Mnemon 的 Agent 指向相同的 `storageRoot` 和 Store 后，可以召回或继续沉淀同一批长期事实、实体与关系。DSH 专有的运行时记忆和项目档案不会因此自动暴露给其他 Agent。
+跨 Agent 共享发生在第三层**记忆体**：Mnemon Native 通过相同 `storageRoot` 和 Store 互操作，OpenViking 通过相同远程服务、目标 URI 与身份互操作。DSH 专有的运行时记忆和项目档案不会因此自动暴露给其他 Agent。
 
 默认 `global` 模式使用 `~/.mnemon`，最适合作为本机 Agent 之间的共享记忆根；`custom` 和 `workspace` 也可以共享，但所有参与方必须显式对齐目录。共享同一目录意味着共享同一份数据，请先确认信任边界，并避免并发执行不兼容的离线迁移或目录操作。
 
@@ -163,9 +163,9 @@ mnemon:
 
 ## 数据与安全边界
 
-- 插件通过本地 `mnemon` CLI 访问长期记忆；WebUI 不直接读取 SQLite，也不直接启动进程。
+- Mnemon Native 通过本地 `mnemon` CLI 访问；OpenViking 通过 Host HTTP API 访问。WebUI 不直接读取 SQLite、启动进程或调用远程 Provider。
 - CLI 使用参数数组且禁用 shell；输出、超时和取消均有边界。
-- 插件不保存 API key；子 Agent 推理复用 DSH 已配置的 Provider。
+- 可选 OpenViking API Key 以 `0600` 权限保存在 `<storageRoot>/state/memory-providers.json`，不会返回浏览器，也不会进入 Mnemon Pack；子 Agent 推理仍复用 DSH 已配置的模型 Provider。
 - 当前没有确定性的秘密扫描器。不要把密钥、token、私钥或原始敏感日志写入任何记忆层。
 - 卸载插件不会删除 `~/.mnemon`、工作区 `.mnemon` 或自定义目录中的数据。
 
