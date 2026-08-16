@@ -15,6 +15,8 @@ import { OpenVikingProvider } from './providers/openviking.ts'
 import { Mem0Provider } from './providers/mem0.ts'
 import { RetainDbProvider } from './providers/retaindb.ts'
 import { SupermemoryProvider } from './providers/supermemory.ts'
+import { HolographicProvider } from './providers/holographic.ts'
+import { ByteRoverProvider } from './providers/byterover.ts'
 import { MEMORY_PROVIDER_CATALOG } from './providers/catalog.ts'
 import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './providers/provider.ts'
 import {
@@ -209,12 +211,16 @@ export class MnemonService {
     const mem0Provider = new Mem0Provider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
     const retainDbProvider = new RetainDbProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
     const supermemoryProvider = new SupermemoryProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
+    const holographicProvider = new HolographicProvider(this.memoryBodies)
+    const byteRoverProvider = new ByteRoverProvider(this.memoryBodies, { queryTimeoutMs: this.config.timeoutMs })
     this.providers = new Map([
       [nativeProvider.id, nativeProvider],
       [openVikingProvider.id, openVikingProvider],
       [mem0Provider.id, mem0Provider],
       [retainDbProvider.id, retainDbProvider],
       [supermemoryProvider.id, supermemoryProvider],
+      [holographicProvider.id, holographicProvider],
+      [byteRoverProvider.id, byteRoverProvider],
     ])
   }
 

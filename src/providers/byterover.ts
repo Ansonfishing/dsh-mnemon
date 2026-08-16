@@ -1,0 +1,103 @@
+import { createHash } from 'node:crypto'
+import { mkdirSync } from 'node:fs'
+import { isAbsolute, join, resolve } from 'node:path'
+import type { JsonValue } from '../contracts.ts'
+import type { MemoryBodyRegistry } from '../memory-bodies.ts'
+import { runProcess, type ProcessRunner } from '../process.ts'
+import type { Insight, MemoryBody, MemoryGraphSnapshot, MemoryListRequest, RememberRequest, SearchRequest } from '../shared/contracts.ts'
+import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './provider.ts'
+
+interface ByteRoverProviderOptions {
+  process?: ProcessRunner
+  queryTimeoutMs?: number
+  curateTimeoutMs?: number
+}
+
+export class ByteRoverProvider implements MemoryProviderAdapter {
+  readonly id = 'byterover' as const
+  private readonly process: ProcessRunner
+  private readonly queryTimeoutMs: number
+  private readonly curateTimeoutMs: number
+
+  constructor(private readonly memoryBodies: MemoryBodyRegistry, options: ByteRoverProviderOptions = {}) {
+    this.process = options.process ?? runProcess
+    this.queryTimeoutMs = options.queryTimeoutMs ?? 10_000
+    this.curateTimeoutMs = options.curateTimeoutMs ?? 120_000
+  }
+
+  async status(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus> {
+    try {
+      await this.run(body, ['status'], 15_000, signal)
+      return { healthy: true }
+    } catch (error) {
+      return { healthy: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  async search(body: MemoryBody, request: SearchRequest, signal?: AbortSignal): Promise<ProviderSearchResult> {
+    const output = await this.run(body, ['query', '--', request.query.slice(0, 5_000)], this.queryTimeoutMs, signal)
+    if (output.length < 20) return { results: [], hint: 'ByteRover found no relevant memories.' }
+    const content = output.length > 8_000 ? `${output.slice(0, 8_000)}\n\n[... truncated]` : output
+    return {
+      results: [{
+        id: `byterover:${createHash('sha256').update(content).digest('hex').slice(0, 24)}`,
+        content,
+        category: 'context',
+        source: 'external',
+        score: 1,
+      }],
+    }
+  }
+
+  async graph(body: MemoryBody): Promise<MemoryGraphSnapshot> {
+    this.connection(body)
+    return { nodes: [], edges: [], generatedAt: new Date().toISOString() }
+  }
+
+  async list(body: MemoryBody, request: MemoryListRequest, signal?: AbortSignal): Promise<Insight[]> {
+    if (request.query === undefined || request.query.trim() === '') {
+      this.connection(body)
+      return []
+    }
+    return (await this.search(body, {
+      query: request.query,
+      ...(request.limit === undefined ? {} : { limit: request.limit }),
+    }, signal)).results
+  }
+
+  async remember(body: MemoryBody, request: RememberRequest, signal?: AbortSignal): Promise<JsonValue> {
+    await this.run(body, ['curate', '--', request.content], this.curateTimeoutMs, signal)
+    return { action: 'stored', provider: this.id, summary: 'ByteRover curated the memory into its knowledge tree.' }
+  }
+
+  private connection(body: MemoryBody): Record<string, string | number | boolean> {
+    if (body.provider.id !== this.id) throw new Error(`ByteRover cannot serve provider ${body.provider.id}`)
+    return this.memoryBodies.providerConnection(body.id, this.id)
+  }
+
+  private async run(body: MemoryBody, args: string[], timeoutMs: number, signal?: AbortSignal): Promise<string> {
+    const connection = this.connection(body)
+    const command = String(connection.cliPath ?? 'brv')
+    const configuredDirectory = String(connection.workingDirectory ?? '').trim()
+    const defaultDirectory = join(this.memoryBodies.runner.effectiveDataDir(), 'state', 'byterover', body.id)
+    const cwd = configuredDirectory === ''
+      ? defaultDirectory
+      : isAbsolute(configuredDirectory)
+        ? configuredDirectory
+        : resolve(this.memoryBodies.runner.effectiveDataDir(), configuredDirectory)
+    mkdirSync(cwd, { recursive: true, mode: 0o700 })
+    const apiKey = String(connection.apiKey ?? '').trim()
+    const result = await this.process(command, args, {
+      timeoutMs,
+      maxOutputBytes: 256 * 1024,
+      ...(signal === undefined ? {} : { signal }),
+      cwd,
+      label: 'ByteRover',
+      env: { ...process.env, ...(apiKey === '' ? {} : { BRV_API_KEY: apiKey }) },
+    })
+    const stdout = result.stdout.trim()
+    const stderr = result.stderr.trim()
+    if (result.exitCode !== 0) throw new Error(stderr || stdout || `ByteRover exited with code ${String(result.exitCode)}`)
+    return stdout
+  }
+}

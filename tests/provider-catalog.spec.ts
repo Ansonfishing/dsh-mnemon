@@ -62,6 +62,8 @@ describe('memory provider catalog', () => {
   it('rejects unsupported provider settings and invalid select values', () => {
     expect(() => normalizeProviderConnection('retaindb', { unexpected: 'value' })).toThrow(/unsupported RetainDB setting/u)
     expect(() => normalizeProviderConnection('mem0', { mode: 'mystery' })).toThrow(/unsupported value/u)
+    expect(() => normalizeProviderConnection('holographic', { defaultTrust: 2 })).toThrow(/within 0\.\.1/u)
+    expect(() => normalizeProviderConnection('supermemory', { apiKey: 'secret', containerTag: 'invalid tag' })).toThrow(/container tag/u)
     expect(memoryProviderDescriptor('holographic').kind).toBe('local')
   })
 })

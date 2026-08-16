@@ -272,6 +272,18 @@ export function normalizeProviderConnection(
     }
     output.targetUri = targetUri
   }
+  if (providerId === 'holographic') {
+    for (const key of ['defaultTrust', 'minTrust'] as const) {
+      const value = Number(output[key])
+      if (value < 0 || value > 1) throw new Error(`${key} must be within 0..1`)
+    }
+  }
+  if (providerId === 'supermemory') {
+    const containerTag = String(output.containerTag ?? '')
+    if (!/^[a-zA-Z0-9_:-]+$/u.test(containerTag) || containerTag.length > 100) {
+      throw new Error('Supermemory container tag may contain only letters, numbers, _, :, and - (max 100 characters)')
+    }
+  }
   return output
 }
 
