@@ -746,10 +746,12 @@ describe('MnemonView', () => {
     fireEvent.click(project)
     fireEvent.click(within(dialog).getByRole('button', { name: 'AI 生成（1）' }))
 
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'AI 维护记忆体元信息' })).toBeNull())
+    await waitFor(() => expect(within(dialog).getByText('产品决策')).toBeTruthy())
     expect(call).toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['project'], sessionId: 'session-1' })
-    expect((await screen.findAllByText('产品决策')).length).toBeGreaterThan(0)
-    expect(screen.getByText('已更新产品决策元信息。')).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: 'AI 维护记忆体元信息' })).toBe(dialog)
+    expect(within(dialog).getByText('记录稳定的产品范围、架构取舍与依据，在规划和复盘产品方向时召回。')).toBeTruthy()
+    expect(within(dialog).getByText('产品决策').closest('label')?.hasAttribute('data-refreshed')).toBe(true)
+    expect(screen.queryByText('已更新产品决策元信息。')).toBeNull()
   })
 
   it('adds OpenViking through the existing Memory Space creation flow', async () => {

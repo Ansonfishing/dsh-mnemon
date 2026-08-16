@@ -991,7 +991,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const [metadataOpen, setMetadataOpen] = useState(false)
   const [metadataSelection, setMetadataSelection] = useState<string[]>([])
   const [metadataRunning, setMetadataRunning] = useState(false)
-  const [metadataNotice, setMetadataNotice] = useState<string | null>(null)
+  const [metadataRefreshed, setMetadataRefreshed] = useState<string[]>([])
   const [metadataError, setMetadataError] = useState<string | null>(null)
   const loadRequest = useRef(0)
 
@@ -1189,13 +1189,20 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
 
   const maintainMetadata = async () => {
     if (metadataSelection.length === 0) return
-    setMetadataRunning(true); setError(null); setMetadataError(null); setMetadataNotice(null)
+    const selectedIds = [...metadataSelection]
+    setMetadataRunning(true); setError(null); setMetadataError(null); setMetadataRefreshed([])
     try {
-      const result = await props.client.maintainBodyMetadata(metadataSelection)
-      setMetadataNotice(result.summary || t('overview.metadataCompleted', { count: result.updates.length }))
-      setMetadataOpen(false)
+      const result = await props.client.maintainBodyMetadata(selectedIds)
+      const updates = new Map(result.updates.map(update => [update.memoryBodyId, update]))
+      setCatalog(current => current === null ? current : {
+        ...current,
+        items: current.items.map(body => {
+          const update = updates.get(body.id)
+          return update === undefined ? body : { ...body, name: update.title, description: update.description }
+        }),
+      })
       setMetadataSelection([])
-      await load(true)
+      setMetadataRefreshed(result.updates.map(update => update.memoryBodyId))
       props.onMutate()
     } catch (reason) { setMetadataError(message(reason)) } finally { setMetadataRunning(false) }
   }
@@ -1314,13 +1321,12 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
       <PageHeader title={appearance.surface === 'sidebar' ? t('nav.overview') : t('overview.title')} description={t(appearance.surface === 'sidebar' ? 'overview.pageDescription' : 'overview.description')} meta={t('overview.interval')} {...(loading ? { loadingLabel: catalogLoading ? t('overview.directoryLoading') : graphLoading ? t('overview.snapshotLoading') : t('overview.healthLoading') } : {})}
         action={<button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void load()}>{loading ? t('overview.syncing') : t('overview.syncNow')}</button>} />
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
-      {metadataNotice !== null && <div className={css.inlineNotice} role="status">{metadataNotice}</div>}
       <section className={css.bodyDirectory} aria-label={t('overview.directory')}>
         <div className={css.bodyDirectoryHeader}>
           <div><h3>{t('overview.directory')}</h3><p>{t('overview.directory.description')}</p><code className={css.bodyDirectoryPath}>{catalogUnavailable ? t('overview.directory.unsynced') : catalog?.directory || props.fallbackDirectory || t('overview.directory.waiting')}</code></div>
           <div className={appearance.surface === 'sidebar' ? appearanceClass(css.bodyDirectoryControls, appearance.classes.bodyDirectoryActions) : css.bodyDirectoryControls}>
             <strong>{catalogUnavailable ? t('overview.directory.unsyncedBadge') : `${catalog?.activeCount ?? '—'} / ${catalog?.total ?? '—'} ${t('common.active')}`}</strong>
-            {props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} disabled={!props.agentAvailable || metadataCandidates.length === 0} title={!props.agentAvailable ? t('overview.metadataUnavailable') : undefined} onClick={() => { setMetadataSelection([]); setMetadataError(null); setMetadataOpen(true) }}>{t('overview.metadataAction')}</button>}
+            {props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} disabled={!props.agentAvailable || metadataCandidates.length === 0} title={!props.agentAvailable ? t('overview.metadataUnavailable') : undefined} onClick={() => { setMetadataSelection([]); setMetadataRefreshed([]); setMetadataError(null); setMetadataOpen(true) }}>{t('overview.metadataAction')}</button>}
             {appearance.surface === 'sidebar' && props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} onClick={() => setCreatingBodyOpen(true)}>{t('overview.createTitle')}</button>}
           </div>
         </div>
@@ -1348,9 +1354,9 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
       {appearance.surface === 'sidebar' && creatingBodyOpen && <SidebarModal title={t('overview.createTitle')} description={t('overview.createDialogHint')} busy={creating} wide onClose={() => setCreatingBodyOpen(false)}>{bodyCreateForm}</SidebarModal>}
       {metadataOpen && <SidebarModal title={t('overview.metadataTitle')} description={t('overview.metadataDescription')} busy={metadataRunning} wide onClose={() => setMetadataOpen(false)}><div className={css.metadataDialog}>
         <div className={css.metadataToolbar}><span>{t('overview.metadataSelected', { count: metadataSelection.length })}</span><button type="button" className={css.ghostButton} disabled={metadataRunning} onClick={() => setMetadataSelection(metadataSelection.length === metadataCandidates.length ? [] : metadataCandidates.map(body => body.id))}>{metadataSelection.length === metadataCandidates.length ? t('overview.metadataClear') : t('overview.metadataSelectAll')}</button></div>
-        <div className={css.metadataList}>{metadataCandidates.map(body => {
+        <div className={css.metadataList} aria-live="polite">{metadataCandidates.map(body => {
           const selected = metadataSelection.includes(body.id)
-          return <label key={body.id} data-selected={selected || undefined}><input type="checkbox" checked={selected} disabled={metadataRunning} onChange={event => setMetadataSelection(current => event.target.checked ? [...new Set([...current, body.id])] : current.filter(id => id !== body.id))} /><i className={css.choiceControl} data-kind="check" aria-hidden="true" /><span><strong>{body.name}</strong><small>{body.description || t('overview.noDescription')}</small><span><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} /><code>{body.id}</code></span></span></label>
+          return <label key={body.id} data-provider={body.provider.id} data-selected={selected || undefined} data-refreshing={metadataRunning && selected || undefined} data-refreshed={metadataRefreshed.includes(body.id) || undefined}><input type="checkbox" checked={selected} disabled={metadataRunning} onChange={event => setMetadataSelection(current => event.target.checked ? [...new Set([...current, body.id])] : current.filter(id => id !== body.id))} /><i className={css.choiceControl} data-kind="check" aria-hidden="true" /><span><strong>{body.name}</strong><small>{body.description || t('overview.noDescription')}</small><span><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} /><code>{body.id}</code></span></span></label>
         })}</div>
         {metadataError !== null && <div className={css.inlineError} role="alert">{metadataError}</div>}
         <div className={css.metadataActions}><p>{t('overview.metadataSafety')}</p><div><button type="button" className={css.ghostButton} disabled={metadataRunning} onClick={() => setMetadataOpen(false)}>{t('common.cancel')}</button><button type="button" className={css.primaryButton} disabled={metadataRunning || metadataSelection.length === 0} onClick={() => void maintainMetadata()}>{metadataRunning ? t('overview.metadataGenerating') : t('overview.metadataGenerate', { count: metadataSelection.length })}</button></div></div>
