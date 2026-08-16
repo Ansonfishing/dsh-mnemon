@@ -215,21 +215,32 @@
 .placementCandidates > span::before { position: absolute; top: 12px; left: 10px; color: var(--mn-success); content: "●"; font-size: 8px; }
 .placementCandidates > label { cursor: pointer; }
 .placementCandidates > label[data-selected] { border-color: color-mix(in srgb, #6574d9 38%, var(--mn-line)); background: color-mix(in srgb, #6574d9 7%, transparent); }
+.placementCandidates > label[data-disabled] { cursor: not-allowed; opacity: .48; }
 .placementCandidates input { position: absolute; top: 10px; left: 9px; width: 14px; height: 14px; margin: 0; padding: 0; accent-color: #6574d9; }
 .placementCandidates strong { color: var(--mn-text); font-size: 10px; }
 .placementCandidates small { color: var(--mn-muted); font-size: 8.5px; line-height: 1.4; }
 .providerChoice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; border: 0; }
 .providerChoice legend { margin-bottom: 5px; color: var(--mn-muted); font-size: 10px; }
 .providerChoice label { position: relative; display: block; min-width: 0; padding: 10px 11px; border: 1px solid var(--mn-line); border-radius: 9px; cursor: pointer; background: color-mix(in srgb, var(--mn-layer-2) 72%, transparent); }
+.providerChoice label[data-native] { grid-column: 1 / -1; border-color: color-mix(in srgb, var(--mn-accent) 20%, var(--mn-line)); }
 .providerChoice label[data-selected] { border-color: color-mix(in srgb, var(--mn-accent) 48%, var(--mn-line)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mn-accent) 12%, transparent); }
 .providerChoice input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .providerChoice span { display: grid; gap: 3px; }
 .providerChoice strong { color: var(--mn-text); font-size: 11px; }
-.providerChoice small { color: var(--mn-muted); font-size: 9px; line-height: 1.45; }
+.providerChoice strong em { margin-left: 5px; padding: 2px 5px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 10%, transparent); font: 650 8px var(--mn-code); font-style: normal; }
+.providerChoice small { display: -webkit-box; overflow: hidden; color: var(--mn-muted); font-size: 9px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .providerFields { display: grid; gap: 8px; padding: 10px; border: 1px solid color-mix(in srgb, #6574d9 25%, var(--mn-line)); border-radius: 9px; background: color-mix(in srgb, #6574d9 5%, transparent); }
+.providerFieldHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.providerFieldHeading > div { display: grid; min-width: 0; gap: 2px; }
+.providerFieldHeading strong { color: var(--mn-text); font-size: 11px; }
+.providerFieldHeading small { color: var(--mn-muted); font-size: 9px; line-height: 1.45; }
+.providerFieldHeading > span { flex: 0 0 auto; padding: 3px 6px; border: 1px solid color-mix(in srgb, #6574d9 24%, var(--mn-line)); border-radius: 999px; color: color-mix(in srgb, #8793ef 80%, var(--mn-text)); font: 650 8px var(--mn-code); }
 .providerFields details { min-width: 0; }
 .providerFields summary { width: fit-content; color: var(--mn-accent); cursor: pointer; font-size: 9px; }
 .providerAdvancedGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.providerFieldControl { display: grid; min-width: 0; gap: 4px; }
+.providerFieldControl input[type="checkbox"] { width: 14px; height: 14px; margin: 2px 0; padding: 0; accent-color: var(--mn-accent); }
+.providerFieldControl .providerSecretClear { display: flex; align-items: center; gap: 5px; color: var(--mn-muted); cursor: pointer; font-size: 8.5px; }
 .providerWriteHint { display: block; margin-top: 4px; color: color-mix(in srgb, #8793ef 72%, var(--mn-muted)); font-size: 9px; line-height: 1.45; }
 .placementReceipt { display: flex; min-width: 0; align-items: flex-start; gap: 7px; margin: 7px 0; padding: 7px 8px; border: 1px solid color-mix(in srgb, var(--mn-accent) 20%, var(--mn-line)); border-radius: 8px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 4%, transparent); }
 .placementReceipt > span { flex: 0 0 auto; font-size: 10px; }

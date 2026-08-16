@@ -606,7 +606,7 @@ describe('MnemonView', () => {
       name: '团队 OpenViking',
       description: '跨项目共享的团队长期记忆。',
       providerId: 'openviking',
-      openViking: expect.objectContaining({
+      connection: expect.objectContaining({
         endpoint: 'https://memory.example.com',
         targetUri: 'viking://user/team/memories',
       }),
@@ -648,10 +648,52 @@ describe('MnemonView', () => {
           requiredCapabilities: ['exact-write'],
         },
       },
-      openViking: { endpoint: 'https://memory.example.com', targetUri: 'viking://user/team/memories' },
+      providerConnections: {
+        openviking: expect.objectContaining({ endpoint: 'https://memory.example.com', targetUri: 'viking://user/team/memories' }),
+      },
       sessionId: 'session-1',
     })
     expect(bodyCreateCall?.[2]).not.toHaveProperty('providerId')
+  })
+
+  it('shows every Hermes-inspired engine under the existing Memory Space flow', async () => {
+    const { connection, call } = createConnection({ withInactiveBody: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '创建记忆体' }))
+    const dialog = screen.getByRole('dialog', { name: '创建记忆体' })
+    for (const provider of ['Mnemon Native', 'OpenViking', 'Honcho', 'Mem0', 'Hindsight', 'Holographic', 'RetainDB', 'ByteRover', 'Supermemory']) {
+      expect(within(dialog).getByRole('radio', { name: new RegExp(provider) })).toBeTruthy()
+    }
+
+    fireEvent.click(within(dialog).getByRole('radio', { name: /Mem0/ }))
+    fireEvent.change(within(dialog).getByRole('textbox', { name: '新记忆体名称' }), { target: { value: '用户画像' } })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: '新记忆体描述' }), { target: { value: '跨会话用户偏好与事实。' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: '创建' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '创建记忆体' })).toBeNull())
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-create', expect.objectContaining({
+      providerId: 'mem0',
+      connection: expect.objectContaining({ endpoint: 'https://api.mem0.ai', mode: 'platform', userId: 'dsh-user', agentId: 'dsh' }),
+    }))
+  })
+
+  it('enforces the local-only rule while keeping local third-party engines eligible', async () => {
+    const { connection } = createConnection({ withInactiveBody: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '创建记忆体' }))
+    const dialog = screen.getByRole('dialog', { name: '创建记忆体' })
+    fireEvent.click(within(dialog).getByRole('radio', { name: /智能选择/ }))
+    fireEvent.change(within(dialog).getByRole('combobox', { name: '数据边界' }), { target: { value: 'local-only' } })
+
+    expect((within(dialog).getByRole('checkbox', { name: /Mem0/ }) as HTMLInputElement).disabled).toBe(true)
+    expect((within(dialog).getByRole('checkbox', { name: /Holographic/ }) as HTMLInputElement).disabled).toBe(false)
+    expect((within(dialog).getByRole('checkbox', { name: /ByteRover/ }) as HTMLInputElement).disabled).toBe(false)
   })
 
   it('shows the persisted provider decision on the Memory Space card', async () => {
