@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { MnemonService, createRunner, resolveConfig } from '../lib/index.js'
@@ -9,6 +10,8 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const stateRoot = join(root, 'provider-lab', '.state')
 mkdirSync(stateRoot, { recursive: true, mode: 0o700 })
 mkdirSync(join(stateRoot, 'byterover'), { recursive: true, mode: 0o700 })
+const byteroverDefaultPath = join(homedir(), '.brv-cli', 'bin', 'brv')
+const byteroverPath = process.env.BRV_PATH ?? (existsSync(byteroverDefaultPath) ? byteroverDefaultPath : 'brv')
 
 const supermemoryApiKey = process.env.SUPERMEMORY_API_KEY?.trim()
 if (!supermemoryApiKey) {
@@ -71,7 +74,7 @@ const providers = [
     id: 'byterover',
     name: 'Provider Lab · ByteRover',
     description: '官方 brv 本地 CLI 的层级知识树，用查询型而非全量列表心智呈现。',
-    connection: { cliPath: process.env.BRV_PATH ?? 'brv', workingDirectory: join(stateRoot, 'byterover'), apiKey: '' },
+    connection: { cliPath: byteroverPath, workingDirectory: join(stateRoot, 'byterover'), apiKey: '' },
   },
   {
     id: 'supermemory',
@@ -154,4 +157,3 @@ for (const item of report) {
 }
 
 if (report.some(item => item.failures.length > 0)) process.exitCode = 1
-
