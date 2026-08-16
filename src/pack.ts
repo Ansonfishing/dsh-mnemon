@@ -21,6 +21,9 @@ import type { ResolvedConfig } from './config.ts'
 import { DOCUMENTS_ACTIVE_LIMIT_BYTES, DOCUMENTS_VERSION, type DocumentRecord } from './documents.ts'
 import { RUNTIME_ENTRY_DELIMITER, RUNTIME_MEMORY_LIMITS, RUNTIME_MEMORY_VERSION, type RuntimeMemoryEntry, type RuntimeMemoryTarget } from './runtime-memory.ts'
 import type { MnemonRunner } from './runner.ts'
+import type { MnemonPackComponent, MnemonPackComponentSummary, MnemonPackExport, MnemonPackImportMode, MnemonPackImportResult, MnemonPackManifest, MnemonPackPreview, MnemonPackScope } from './shared/contracts.ts'
+
+export type { MnemonPackComponent, MnemonPackComponentSummary, MnemonPackExport, MnemonPackImportMode, MnemonPackImportResult, MnemonPackManifest, MnemonPackPreview, MnemonPackScope } from './shared/contracts.ts'
 
 export const MNEMON_PACK_FORMAT = 'mnemonpack'
 export const MNEMON_PACK_VERSION = 1
@@ -34,61 +37,13 @@ const LOCK_TIMEOUT_MS = 5_000
 const LOCK_STALE_MS = 30_000
 const LOCK_RETRY_MS = 20
 const COMPONENT_DIRECTORIES = { runtime: 'runtime', documents: 'documents', 'memory-spaces': 'data' } as const
-const COMPONENT_ORDER = ['runtime', 'documents', 'memory-spaces'] as const
+const COMPONENT_ORDER = ['runtime', 'documents', 'memory-spaces'] as const satisfies readonly MnemonPackComponent[]
 const BODY_ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/
 const SQLITE_HEADER = Buffer.from('SQLite format 3\0', 'binary')
-
-export type MnemonPackComponent = typeof COMPONENT_ORDER[number]
-export type MnemonPackScope = 'full' | MnemonPackComponent
-export type MnemonPackImportMode = 'merge' | 'replace'
-
-export interface MnemonPackComponentSummary {
-  component: MnemonPackComponent
-  files: number
-  bytes: number
-  items: number
-}
-
-export interface MnemonPackManifest {
-  format: typeof MNEMON_PACK_FORMAT
-  version: typeof MNEMON_PACK_VERSION
-  scope: MnemonPackScope
-  exportedAt: string
-  source: { plugin: 'dsh-mnemon'; pluginVersion: string }
-  components: MnemonPackComponent[]
-  summary: MnemonPackComponentSummary[]
-}
 
 interface ChecksumFile {
   algorithm: 'sha256'
   files: Record<string, string>
-}
-
-export interface MnemonPackExport {
-  fileName: string
-  mimeType: typeof MNEMON_PACK_MIME
-  bytes: number
-  base64: string
-  targetRoot: string
-  manifest: MnemonPackManifest
-}
-
-export interface MnemonPackPreview {
-  fileName?: string
-  archiveBytes: number
-  expandedBytes: number
-  targetRoot: string
-  targetScope: ResolvedConfig['storageScope']
-  manifest: MnemonPackManifest
-  occupied: Record<MnemonPackComponent, boolean>
-}
-
-export interface MnemonPackImportResult {
-  imported: true
-  mode: MnemonPackImportMode
-  targetRoot: string
-  components: MnemonPackComponent[]
-  summary: MnemonPackComponentSummary[]
 }
 
 interface ParsedPack {

@@ -15,23 +15,6 @@ export const QODERWORK_REVIEW_POLICY = Object.freeze({
   turnScore: 1,
 })
 
-export interface ReviewActivity {
-  totalUserTextLength: number
-  turnCount: number
-  toolCallCount: number
-  uniqueToolCount: number
-}
-
-export interface ReviewActivityScore extends ReviewActivity {
-  textLengthScore: number
-  turnScore: number
-  toolCallScore: number
-  toolDiversityScore: number
-  score: number
-  threshold: number
-  eligible: boolean
-}
-
 export function scoreReviewActivity(activity: ReviewActivity): ReviewActivityScore {
   const policy = QODERWORK_REVIEW_POLICY
   const textLengthScore = Math.min(
@@ -61,3 +44,6 @@ export function scoreReviewActivity(activity: ReviewActivity): ReviewActivitySco
     eligible: score >= policy.reviewThreshold,
   }
 }
+import type { ReviewActivity, ReviewActivityScore } from './shared/contracts.ts'
+
+export type { ReviewActivity, ReviewActivityScore } from './shared/contracts.ts'

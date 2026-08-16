@@ -9,60 +9,21 @@ import type {
 import type { Insight, RememberRequest, SearchRequest } from './service.ts'
 import type { RuntimeMemoryMutation } from './runtime-memory.ts'
 import type { DocumentMutation } from './documents.ts'
-import { MnemonSubagentCoordinator, type DelegatedWriteResult, type SubagentCounters } from './subagent.ts'
-import { scoreReviewActivity, type ReviewActivityScore } from './review-activity.ts'
+import { MnemonSubagentCoordinator, type DelegatedWriteResult } from './subagent.ts'
+import { scoreReviewActivity } from './review-activity.ts'
 import { TurnActivityProjection, type TurnMemoryActivity, type TurnMemoryActivitySnapshot } from './activity.ts'
 import type { RuntimeMemoryController } from './runtime-memory.ts'
 import { registerAgentRuntimeMemoryContext } from './guidance.ts'
+import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot, ReviewActivityScore } from './shared/contracts.ts'
 
 interface AgentRuntimeSource {
   forAgent(agent: HostAgent): { runtimeMemory: RuntimeMemoryController }
 }
 
 export type { TurnMemoryActivity, TurnMemoryActivitySnapshot } from './activity.ts'
+export type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot } from './shared/contracts.ts'
 
 export const MNEMON_PLUGIN_SOURCE = 'dsh-mnemon'
-
-export type LifecyclePhase = 'idle' | 'prime' | 'recall' | 'writeback' | 'review' | 'supervised' | 'error'
-
-export interface LifecycleCounters {
-  primes: number
-  recallCues: number
-  writebackCues: number
-  supervisedRequests: number
-  failures: number
-}
-
-export interface LifecycleAgentSnapshot {
-  sessionId: string
-  status: 'idle' | 'running'
-  startSource: 'startup' | 'resume' | 'clear' | 'compact' | 'adopted'
-  primePending: boolean
-  guidedTurns: number
-  memoryToolCalls: number
-  idleReviewPending: boolean
-  reviewRunning: boolean
-  reviewActivity: ReviewActivityScore
-  lastPhase: LifecyclePhase
-  lastReviewAt?: string
-  lastReviewAction?: string
-  lastReviewScore?: number
-  lastReviewDocumentIds?: string[]
-  lastAt?: string
-  lastError?: string
-}
-
-export interface LifecycleSnapshot {
-  enabled: boolean
-  recallMode: ResolvedConfig['recallMode']
-  writebackMode: ResolvedConfig['writebackMode']
-  idleReviewMs: number
-  activeAgents: number
-  sessionAvailable: boolean
-  counters: LifecycleCounters
-  subagents: SubagentCounters
-  current?: LifecycleAgentSnapshot
-}
 
 export interface SupervisedWritebackResult extends DelegatedWriteResult { sessionId: string }
 
@@ -128,12 +89,6 @@ function completedToolActivity(events: readonly HostSessionEvent[], turn: number
     .filter(event => event.type === 'tool/call' && eventTurn(event) === turn && typeof event.data.name === 'string')
     .map(event => String(event.data.name)))
   return { count, names }
-}
-
-/** Extracted plain text of one finalized assistant message, when present in the session log. */
-export interface AssistantMessageText {
-  messageId: string
-  text: string
 }
 
 /** Join the text content of an `assistant/message` event whose message id matches. */

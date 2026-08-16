@@ -118,11 +118,26 @@ export interface MemoryBody {
   updatedAt: string
 }
 
+export interface CreateMemoryBodyRequest {
+  name: string
+  description: string
+  active?: boolean
+}
+
+export interface UpdateMemoryBodyRequest {
+  name?: string
+  description?: string
+  active?: boolean
+}
+
 export type Category = 'preference' | 'decision' | 'fact' | 'insight' | 'context' | 'general'
 export const CATEGORIES = ['preference', 'decision', 'fact', 'insight', 'context', 'general'] as const satisfies readonly Category[]
 export type Source = 'user' | 'agent' | 'external'
+export const SOURCES = ['user', 'agent', 'external'] as const satisfies readonly Source[]
 export type EdgeType = 'temporal' | 'semantic' | 'causal' | 'entity'
+export const EDGE_TYPES = ['temporal', 'semantic', 'causal', 'entity'] as const satisfies readonly EdgeType[]
 export type Intent = 'WHY' | 'WHEN' | 'ENTITY' | 'GENERAL'
+export const INTENTS = ['WHY', 'WHEN', 'ENTITY', 'GENERAL'] as const satisfies readonly Intent[]
 
 export interface Insight {
   id: string
@@ -292,6 +307,7 @@ export interface DocumentMutationResult {
 
 export type RuntimeMemoryTarget = 'memory' | 'user'
 export type RuntimeMemoryImportance = 'critical' | 'normal' | 'low'
+export type RuntimeMemoryAction = 'add' | 'replace' | 'remove'
 
 export interface RuntimeMemoryEntry {
   content: string
@@ -319,6 +335,19 @@ export interface RuntimeMemorySnapshot {
   generatedAt: string
   entries: RuntimeMemoryEntry[]
   targets: Record<RuntimeMemoryTarget, RuntimeMemoryTargetView>
+}
+
+export interface RuntimeMemoryCompactedEntry {
+  content: string
+  importance: RuntimeMemoryImportance
+}
+
+export interface RuntimeMemoryMutation {
+  action: RuntimeMemoryAction
+  target: RuntimeMemoryTarget
+  content?: string
+  oldText?: string
+  importance?: RuntimeMemoryImportance
 }
 
 export type RuntimeMemoryMutationResult = {
@@ -391,11 +420,14 @@ export interface StorageScopeCatalog {
   generatedAt: string
 }
 
-export interface ReviewActivityScore {
+export interface ReviewActivity {
   totalUserTextLength: number
   turnCount: number
   toolCallCount: number
   uniqueToolCount: number
+}
+
+export interface ReviewActivityScore extends ReviewActivity {
   textLengthScore: number
   turnScore: number
   toolCallScore: number

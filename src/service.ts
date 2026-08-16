@@ -10,152 +10,50 @@ import {
   type UpdateMemoryBodyRequest,
 } from './memory-bodies.ts'
 import type { MnemonRunner } from './runner.ts'
-import type { LifecycleSnapshot } from './lifecycle.ts'
-import type { DocumentSnapshot } from './documents.ts'
-import type { StorageScopeCatalog } from './storage-scope.ts'
+import {
+  CATEGORIES,
+  EDGE_TYPES,
+  INTENTS,
+  SOURCES,
+  type Category,
+  type EdgeType,
+  type EntityView,
+  type Insight,
+  type Intent,
+  type MemoryBodyCatalog,
+  type MemoryBodyStats,
+  type MemoryBodyView,
+  type MemoryGraphEdge,
+  type MemoryGraphNode,
+  type MemoryGraphSnapshot,
+  type MemoryListRequest,
+  type MemoryListView,
+  type RememberRequest,
+  type SearchRequest,
+  type Source,
+  type StatusView,
+} from './shared/contracts.ts'
 
-export const CATEGORIES = ['preference', 'decision', 'fact', 'insight', 'context', 'general'] as const
-export type Category = typeof CATEGORIES[number]
-export const SOURCES = ['user', 'agent', 'external'] as const
-export type Source = typeof SOURCES[number]
-export const EDGE_TYPES = ['temporal', 'semantic', 'causal', 'entity'] as const
-export type EdgeType = typeof EDGE_TYPES[number]
-export const INTENTS = ['WHY', 'WHEN', 'ENTITY', 'GENERAL'] as const
-export type Intent = typeof INTENTS[number]
-
-export interface Insight {
-  id: string
-  content: string
-  category?: string
-  importance?: number
-  tags?: string[]
-  entities?: string[]
-  source?: string
-  score?: number
-  confidence?: string
-  intent?: string
-  matchedVia?: string
-  createdAt?: string
-  depth?: number
-  edgeType?: string
-  memoryBodyId?: string
-  memoryBodyName?: string
-}
-
-export interface SearchRequest {
-  query: string
-  mode?: 'smart' | 'keyword' | 'basic'
-  limit?: number
-  category?: Category
-  source?: Source
-  intent?: Intent
-  memoryBodyIds?: string[]
-}
-
-export interface RememberRequest {
-  content: string
-  category?: Category
-  importance?: number
-  tags?: string[]
-  entities?: string[]
-  source?: Source
-  memoryBodyId?: string
-}
-
-export interface MemoryBodyStats {
-  totalInsights: number
-  deletedInsights: number
-  edgeCount: number
-  oplogCount: number
-  dbSizeBytes: number
-  byCategory: Record<string, number>
-  topEntities: Array<{ entity: string; count: number }>
-}
-
-export interface MemoryBodyView extends MemoryBody {
-  healthy: boolean
-  error?: string
-  stats?: MemoryBodyStats
-}
-
-export interface MemoryBodyCatalog {
-  items: MemoryBodyView[]
-  total: number
-  activeCount: number
-  directory: string
-  generatedAt: string
-}
-
-export interface StatusView {
-  healthy: boolean
-  error?: string
-  version?: string
-  dshMnemonVersion?: string
-  cliPath: string
-  commandFound: boolean
-  dataDir: string
-  store: string
-  writeEnabled: boolean
-  timeoutMs: number
-  defaultRecallLimit: number
-  memoryBodyDirectory: string
-  memoryBodies: MemoryBodyView[]
-  lifecycle?: LifecycleSnapshot
-  documents?: DocumentSnapshot
-  storage?: StorageScopeCatalog
-  workspaceContext?: {
-    mode: 'global' | 'workspace' | 'custom'
-    selectedRoot: string
-    effectiveRoot: string
-    aligned: boolean
-    selectedWorkspace?: { id: string; title: string; path: string }
-    effectiveWorkspace?: { id: string; title: string; path: string }
-  }
-  stats?: MemoryBodyStats & { dbPath?: string }
-}
-
-export interface MemoryGraphNode extends Insight {
-  color: string
-  graphId?: string
-  kind?: 'memory' | 'entity' | 'space'
-  memoryBodyIds?: string[]
-  memoryBodyNames?: string[]
-  occurrenceCount?: number
-}
-
-export interface MemoryGraphEdge {
-  sourceId: string
-  targetId: string
-  label: string
-  color: string
-  type?: EdgeType | 'scope'
-}
-
-export interface MemoryGraphSnapshot {
-  nodes: MemoryGraphNode[]
-  edges: MemoryGraphEdge[]
-  generatedAt: string
-  memoryBodies?: Array<Pick<MemoryBody, 'id' | 'name' | 'active'>>
-}
-
-export interface MemoryListRequest {
-  query?: string
-  category?: Category
-  limit?: number
-  memoryBodyIds?: string[]
-}
-
-export interface MemoryListView {
-  items: MemoryGraphNode[]
-  total: number
-  generatedAt: string
-}
-
-export interface EntityView {
-  items: Array<{ entity: string; count: number }>
-  insights: Insight[]
-  selected?: string
-}
+export { CATEGORIES, EDGE_TYPES, INTENTS, SOURCES } from './shared/contracts.ts'
+export type {
+  Category,
+  EdgeType,
+  EntityView,
+  Insight,
+  Intent,
+  MemoryBodyCatalog,
+  MemoryBodyStats,
+  MemoryBodyView,
+  MemoryGraphEdge,
+  MemoryGraphNode,
+  MemoryGraphSnapshot,
+  MemoryListRequest,
+  MemoryListView,
+  RememberRequest,
+  SearchRequest,
+  Source,
+  StatusView,
+} from './shared/contracts.ts'
 
 function record(value: JsonValue | undefined): Record<string, JsonValue> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

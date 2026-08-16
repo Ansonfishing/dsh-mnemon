@@ -4,38 +4,9 @@ import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runProcess, type ProcessResult, type ProcessRunner } from './process.ts'
 import { findMnemonCommand } from './runner.ts'
+import type { VersionComponentId, VersionComponentStatus, VersionInstallMode, VersionStatus, VersionUpdateResult } from './shared/contracts.ts'
 
-export type VersionComponentId = 'mnemon' | 'dsh-mnemon'
-export type VersionInstallMode = 'homebrew' | 'go' | 'npm' | 'link' | 'manual' | 'missing'
-
-export interface VersionComponentStatus {
-  id: VersionComponentId
-  name: string
-  executablePath?: string
-  installPath?: string
-  installProfile?: string
-  current?: string
-  latest?: string
-  outdated: boolean
-  installMode: VersionInstallMode
-  updateSupported: boolean
-  updateHint: string
-  checkError?: string
-}
-
-export interface VersionStatus {
-  checkedAt: string
-  components: VersionComponentStatus[]
-}
-
-export interface VersionUpdateResult {
-  component: VersionComponentId
-  previousVersion?: string
-  currentVersion?: string
-  updated: boolean
-  restartRequired: boolean
-  output?: string
-}
+export type { VersionComponentId, VersionComponentStatus, VersionInstallMode, VersionStatus, VersionUpdateResult } from './shared/contracts.ts'
 
 interface PackageManifest {
   name?: string
