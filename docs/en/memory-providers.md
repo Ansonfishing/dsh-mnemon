@@ -2,7 +2,7 @@
 
 Memory Spaces are the replaceable third tier in dsh-mnemon. The Memory Space contract stays stable while its provider supplies the data plane. **Mnemon Native is the official, prioritized default**; external providers are opt-in integrations for teams that already use another memory engine or need a different sharing, extraction, or retrieval model.
 
-The first multi-provider implementation follows the provider set and lifecycle pattern proven by [Hermes Agent](https://github.com/NousResearch/hermes-agent), adapted to dsh-mnemon's Host-controlled registry, DSH tools, three-tier model, and WebUI. No external server or SDK is bundled.
+The first multi-provider implementation covers popular open-source and hosted memory systems, adapted to dsh-mnemon's Host-controlled registry, DSH tools, three-tier model, and WebUI. No external server or SDK is bundled.
 
 ## Provider matrix
 
@@ -52,7 +52,7 @@ Connection secrets never enter the selector prompt. `local-only` excludes every 
 
 - The WebUI never calls external services or local CLIs directly. Provider I/O stays in the Host with cancellation, timeouts, bounded process output, and shell-disabled argument arrays.
 - Disconnecting an external Memory Space removes only its local registry entry. It does not delete the provider's data. Per-memory Forget remains a separate capability-controlled action.
-- Holographic is a TypeScript adaptation of the local structured-fact semantics, using an atomic JSON store; it is not a byte-for-byte port of Hermes' Python/SQLite/HRR implementation.
+- Holographic is a TypeScript adaptation of local structured-fact semantics, using an atomic JSON store and an independent data format and lifecycle implementation.
 - Hindsight uses a lightweight liveness probe and reads real statistics, entities, and relationships from the provider's bank stats, entity catalog, and graph responses. Recall and graph remain usable against older deployments that lack the newer statistics surfaces.
 - ByteRover exposes focused `status`, `query`, and `curate` operations. Broad knowledge-tree browsing and deletion are intentionally not invented.
 - Supermemory browse results merge extracted memory entries with still-browseable ingested documents and deduplicate by provider ID, so documents do not disappear from Content while extraction is incomplete.

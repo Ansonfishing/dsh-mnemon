@@ -107,7 +107,7 @@ const LEGACY_PROVIDER_CATALOG: MemoryProviderDescriptor[] = [
     summary: 'Official local-first memory.', capabilities: LEGACY_NATIVE_CAPABILITIES, fields: [],
   },
   {
-    id: 'openviking', label: 'OpenViking', kind: 'remote', origin: 'hermes-inspired',
+    id: 'openviking', label: 'OpenViking', kind: 'remote', origin: 'third-party',
     summary: 'Filesystem-shaped shared memory.',
     capabilities: { ...LEGACY_NATIVE_CAPABILITIES, graph: false, entities: false, related: false, link: false, writeMode: 'async-extracting', deletionMode: 'hard' },
     fields: [

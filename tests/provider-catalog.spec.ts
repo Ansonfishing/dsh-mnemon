@@ -8,7 +8,7 @@ import {
 } from '../src/providers/catalog.ts'
 
 describe('memory provider catalog', () => {
-  it('exposes Mnemon Native plus every provider carried by Hermes Agent', () => {
+  it('exposes Mnemon Native plus every supported third-party provider', () => {
     expect(MEMORY_PROVIDER_IDS).toEqual([
       'mnemon-native',
       'openviking',
@@ -21,7 +21,7 @@ describe('memory provider catalog', () => {
       'supermemory',
     ])
     expect(MEMORY_PROVIDER_CATALOG).toHaveLength(9)
-    expect(MEMORY_PROVIDER_CATALOG.filter(provider => provider.origin === 'hermes-inspired')).toHaveLength(8)
+    expect(MEMORY_PROVIDER_CATALOG.filter(provider => provider.origin === 'third-party')).toHaveLength(8)
     expect(MEMORY_PROVIDER_CATALOG.filter(provider => provider.capabilities.entities).map(provider => provider.id)).toEqual([
       'mnemon-native',
       'hindsight',

@@ -713,7 +713,7 @@ describe('MnemonView', () => {
     expect(bodyCreateCall?.[2]).not.toHaveProperty('providerId')
   })
 
-  it('shows every Hermes-inspired engine under the existing Memory Space flow', async () => {
+  it('shows every third-party engine under the existing Memory Space flow', async () => {
     const { connection, call } = createConnection({ withInactiveBody: true })
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
 

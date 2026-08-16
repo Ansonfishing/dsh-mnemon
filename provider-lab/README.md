@@ -55,7 +55,7 @@ configured Ollama chat model.
 
 The seed creates one active `Provider Lab · …` Memory Space for each of the nine
 providers and writes five architecture, routing, UI-contract, privacy, and
-Hermes-compatibility facts. Extracting providers may expose more or fewer
+ecosystem-compatibility facts. Extracting providers may expose more or fewer
 provider-native units than the five source documents. In particular, Hindsight
 can emit observations and graph links, while Supermemory Content merges its
 extracted memories with still-browseable source documents.

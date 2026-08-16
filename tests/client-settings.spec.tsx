@@ -358,7 +358,7 @@ describe('MnemonSettingsCard', () => {
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
     const provider = {
       id: 'openviking' as const,
-      label: 'OpenViking', kind: 'remote' as const, origin: 'hermes-inspired' as const, summary: 'Shared memory',
+      label: 'OpenViking', kind: 'remote' as const, origin: 'third-party' as const, summary: 'Shared memory',
       capabilities: { search: true, browse: true, graph: false, entities: false, related: false, remember: true, link: false, forget: true, writeMode: 'async-extracting' as const, deletionMode: 'hard' as const },
       fields: [
         { key: 'endpoint', label: 'Endpoint', input: 'url' as const, required: true, defaultValue: 'http://127.0.0.1:1933' },

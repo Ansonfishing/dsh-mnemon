@@ -181,7 +181,7 @@ export interface MemoryProviderDescriptor {
   label: string
   kind: 'local' | 'remote'
   summary: string
-  origin: 'native' | 'hermes-inspired'
+  origin: 'native' | 'third-party'
   capabilities: MemoryProviderCapabilities
   fields: MemoryProviderConfigField[]
 }

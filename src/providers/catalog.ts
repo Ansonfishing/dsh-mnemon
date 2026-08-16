@@ -63,7 +63,7 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     label: 'OpenViking',
     kind: 'remote',
     summary: 'Filesystem-shaped shared memory with tiered reads and automatic semantic extraction.',
-    origin: 'hermes-inspired',
+    origin: 'third-party',
     capabilities: {
       ...REMOTE_EXACT_CAPABILITIES,
       writeMode: 'async-extracting',
@@ -82,7 +82,7 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     label: 'Honcho',
     kind: 'remote',
     summary: 'Cross-session user modelling, peer profiles, dialectic reasoning, and persistent conclusions.',
-    origin: 'hermes-inspired',
+    origin: 'third-party',
     capabilities: REMOTE_EXACT_CAPABILITIES,
     fields: [
       field({ key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'https://api.honcho.dev' }),
@@ -97,7 +97,7 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     label: 'Mem0',
     kind: 'remote',
     summary: 'Automatic fact extraction, semantic retrieval, reranking, and deduplication.',
-    origin: 'hermes-inspired',
+    origin: 'third-party',
     capabilities: { ...REMOTE_EXACT_CAPABILITIES, writeMode: 'async-extracting' },
     fields: [
       field({ key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'https://api.mem0.ai' }),
@@ -113,7 +113,7 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     label: 'Hindsight',
     kind: 'remote',
     summary: 'Knowledge-graph memory with entity resolution, observations, multi-strategy recall, and reflection.',
-    origin: 'hermes-inspired',
+    origin: 'third-party',
     capabilities: {
       ...REMOTE_EXACT_CAPABILITIES,
       graph: true,
@@ -134,7 +134,7 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     label: 'Holographic',
     kind: 'local',
     summary: 'Local structured fact memory with trust scoring, entity resolution, and compositional retrieval.',
-    origin: 'hermes-inspired',
+    origin: 'third-party',
     capabilities: {
       ...NATIVE_CAPABILITIES,
       link: false,
@@ -151,7 +151,7 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     label: 'RetainDB',
     kind: 'remote',
     summary: 'Cloud memory with hybrid vector/BM25 retrieval, profiles, and typed durable facts.',
-    origin: 'hermes-inspired',
+    origin: 'third-party',
     capabilities: REMOTE_EXACT_CAPABILITIES,
     fields: [
       field({ key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'https://api.retaindb.com' }),
@@ -165,7 +165,7 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     label: 'ByteRover',
     kind: 'local',
     summary: 'Local-first hierarchical knowledge tree accessed through the brv CLI.',
-    origin: 'hermes-inspired',
+    origin: 'third-party',
     capabilities: {
       ...REMOTE_EXACT_CAPABILITIES,
       browse: false,
@@ -184,7 +184,7 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     label: 'Supermemory',
     kind: 'remote',
     summary: 'Semantic memory, persistent profiles, conversation ingest, and multi-container recall.',
-    origin: 'hermes-inspired',
+    origin: 'third-party',
     capabilities: { ...REMOTE_EXACT_CAPABILITIES, writeMode: 'async-extracting', deletionMode: 'soft' },
     fields: [
       field({ key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'https://api.supermemory.ai' }),

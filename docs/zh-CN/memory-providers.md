@@ -2,7 +2,7 @@
 
 记忆体是 dsh-mnemon 可替换的第三层：记忆体契约保持稳定，Provider 负责具体数据面。**Mnemon Native 是官方优先、默认实现**；三方 Provider 是显式选择的集成，适合已经使用其他记忆引擎，或需要不同共享、提炼与召回模型的团队。
 
-首版多 Provider 集合参考了 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 已验证的 Provider 范围与生命周期模式，并适配到 dsh-mnemon 的 Host 控制目录、DSH 工具、三层记忆与 WebUI。插件不捆绑任何三方服务端或 SDK。
+首版多 Provider 集合覆盖主流开源与云端记忆实现，并适配到 dsh-mnemon 的 Host 控制目录、DSH 工具、三层记忆与 WebUI。插件不捆绑任何三方服务端或 SDK。
 
 ## Provider 能力矩阵
 
@@ -52,7 +52,7 @@ Host 只暴露适配器能够兑现的能力；UI 与 Agent 工具不会伪造�
 
 - WebUI 不直接调用远程服务或本地 CLI；Provider I/O 都留在 Host，统一具备取消、超时、进程输出上限和 shell-disabled 参数执行。
 - “断开”三方记忆体只删除本地目录登记，不删除底层数据。单条记忆的“遗忘”是另一项按能力开放的操作。
-- Holographic 是对本地结构化事实语义的 TypeScript 适配，使用原子 JSON 存储；它不是 Hermes Python/SQLite/HRR 实现的逐字节移植。
+- Holographic 是对本地结构化事实语义的 TypeScript 适配，使用原子 JSON 存储，并保持独立的数据格式与生命周期实现。
 - Hindsight 使用轻量存活检查，并从 Provider 的 bank stats、实体目录与图谱响应读取真实统计、实体和关系；旧版缺少统计接口时仍可使用召回与图谱表面。
 - ByteRover 只开放聚焦的 `status`、`query` 与 `curate`；不会虚构广域知识树浏览和删除能力。
 - Supermemory 的浏览结果合并已抽取 memory entries 与仍可浏览的 ingested documents，并按 Provider ID 去重；文档未完成抽取时也不会从“内容”页消失。

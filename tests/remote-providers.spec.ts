@@ -38,7 +38,7 @@ function response(payload: unknown, status = 200): Response {
   return new Response(payload === undefined ? null : JSON.stringify(payload), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-describe('Hermes-inspired remote memory providers', () => {
+describe('third-party remote memory providers', () => {
   it('uses Honcho v3 conclusion scope for recall, explicit writes, and deletion', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = []
     const fetchMock = vi.fn<typeof fetch>(async (url, init) => {

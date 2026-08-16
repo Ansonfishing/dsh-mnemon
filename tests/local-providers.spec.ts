@@ -20,7 +20,7 @@ function registryAt(dataDir: string): MemoryBodyRegistry {
   return new MemoryBodyRegistry(runner, true)
 }
 
-describe('Hermes-inspired local memory providers', () => {
+describe('third-party local memory providers', () => {
   it('stores Holographic facts locally with trust, entities, graph projection, related recall, and hard forget', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'dsh-mnemon-holographic-'))
     temporaryDirectories.push(dataDir)
