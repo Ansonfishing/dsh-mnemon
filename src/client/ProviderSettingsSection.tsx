@@ -166,7 +166,7 @@ function ProviderPanel(props: {
 }): JSX.Element {
   const [adding, setAdding] = useState(false)
   const configured = props.bodies.length
-  return <details className={css.providerPanel} open={configured > 0 || undefined}>
+  return <details className={css.providerPanel}>
     <summary>
       <span className={css.providerIdentity}><i className={css.providerMark} aria-hidden="true">{props.provider.label.slice(0, 1).toUpperCase()}</i><span><strong>{props.provider.label}</strong><small>{props.t(`overview.providerSummary.${props.provider.id}` as MnemonKey)}</small></span></span>
       <span className={css.providerState}>{configured === 0 ? props.t('config.providerNotConfigured') : props.t('config.providerConfiguredCount', { count: configured })}</span>

@@ -242,7 +242,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
             {...(connection === undefined ? {} : { connection })}
             {...(sessionId === undefined ? {} : { sessionId })}
             {...(workspaceId === undefined ? {} : { workspaceId })}
-            {...(workspaceLabel === undefined ? {} : { workspaceLabel })}
+            {...(draft.storageScope !== 'workspace' || workspaceLabel === undefined ? {} : { workspaceLabel })}
             refreshKey={targetRevision}
             disabled={coreDisabled}
             scopeChanging={scopeChanging}

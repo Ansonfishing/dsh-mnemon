@@ -376,6 +376,8 @@ describe('MnemonSettingsCard', () => {
     render(<MnemonSettingsCard scope={scope} connection={connection} sessionId="session-1" workspaceId="workspace-1" workspaceLabel="dsh-mnemon" />)
 
     await waitFor(() => expect(screen.getByText('OpenViking')).toBeTruthy())
+    expect((screen.getByText('OpenViking').closest('details') as HTMLDetailsElement).open).toBe(false)
+    expect(screen.getByText('工作区配置目标：dsh-mnemon')).toBeTruthy()
     fireEvent.click(screen.getByText('OpenViking'))
     expect((screen.getByLabelText('服务地址') as HTMLInputElement).value).toBe('http://127.0.0.1:1933')
     fireEvent.click(screen.getByRole('button', { name: '保存并启用' }))
