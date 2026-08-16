@@ -24,19 +24,39 @@ Homebrew Cask is recommended on macOS:
 brew install --cask mnemon-dev/tap/mnemon
 ```
 
-On macOS or Linux, Go is another option:
+Go works on macOS, Linux, and Windows:
 
 ```sh
 go install github.com/mnemon-dev/mnemon@latest
 ```
 
-Verify the binary:
+Verify the binary on macOS or Linux:
 
 ```sh
 mnemon --version
 ```
 
-If DSH cannot find it on `PATH`, set `MNEMON_CLI_PATH` or configure an absolute `mnemon.cliPath`. `mnemon status` opens the effective Store and may initialize data or run upstream migrations, so it is not a side-effect-free installation probe.
+On Windows PowerShell, resolve the exact directory selected by Go and verify the native executable:
+
+```powershell
+$mnemonBin = go env GOBIN
+if (-not $mnemonBin) {
+  $mnemonBin = Join-Path (((go env GOPATH) -split ';')[0]) 'bin'
+}
+$mnemon = Join-Path $mnemonBin 'mnemon.exe'
+& $mnemon --version
+```
+
+On Windows, dsh-mnemon discovers native `mnemon.exe` from `PATH`, an exported `GOBIN` or `GOPATH`, the default `%USERPROFILE%\go\bin`, and conventional per-user or Program Files locations. `.cmd` and `.bat` wrappers are not accepted because CLI calls deliberately run without a shell.
+
+If DSH still cannot find the binary, set `MNEMON_CLI_PATH` or add an absolute path to the user settings file instead of replacing the plugin's profile patch:
+
+```yaml
+mnemon:
+  cliPath: 'C:\Users\alice\go\bin\mnemon.exe'
+```
+
+`mnemon status` opens the effective Store and may initialize data or run upstream migrations, so it is not a side-effect-free installation probe.
 
 ## 3. Install dsh-mnemon
 
@@ -103,7 +123,7 @@ Confirm that:
 - the storage root matches your chosen scope;
 - Runtime, Memory Spaces, and Documents report no errors.
 
-If Mnemon is unavailable, run `command -v mnemon` and `mnemon --version`. See [Troubleshooting](./operations.md#troubleshooting) for other symptoms.
+If Mnemon is unavailable, run `command -v mnemon` and `mnemon --version` on macOS/Linux, or `Get-Command mnemon` and `Test-Path "$HOME\go\bin\mnemon.exe"` on Windows PowerShell. See [Troubleshooting](./operations.md#troubleshooting) for other symptoms.
 
 ## 6. Complete first verification
 

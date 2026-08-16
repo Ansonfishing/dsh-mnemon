@@ -103,13 +103,17 @@ mnemon:
 config.cliPath
   -> executable MNEMON_CLI_PATH
   -> each PATH directory
-  -> ~/.local/bin/mnemon
-  -> /opt/homebrew/bin/mnemon
-  -> /usr/local/bin/mnemon
-  -> /usr/bin/mnemon
+  -> Windows: GOBIN/mnemon.exe
+              first GOPATH/bin/mnemon.exe, or ~/go/bin/mnemon.exe
+              %LOCALAPPDATA%/Programs/mnemon/mnemon.exe
+              %ProgramFiles%/mnemon/mnemon.exe
+  -> Unix: ~/.local/bin/mnemon
+           /opt/homebrew/bin/mnemon
+           /usr/local/bin/mnemon
+           /usr/bin/mnemon
 ```
 
-显式 `cliPath` 会被采用；若它不可执行，实际调用会返回启动错误。
+显式 `cliPath` 会被采用；若它不可执行，实际调用会返回启动错误。Windows 自动发现只接受普通 `.exe` 文件；进程执行不使用 shell，因此有意排除 `.cmd` 与 `.bat` wrapper。
 
 ## 兼容 Store 提示优先级
 
@@ -188,7 +192,7 @@ routingGuidance=false
 
 ## Profile patch 覆盖
 
-包内 `cordis.patch.yml` 提供默认 config 行。DSH profile 的同 ID 配置可能整体覆盖这行；自定义 patch 时应保留仍需启用的键，而不是假设深合并。
+包内 `cordis.patch.yml` 提供默认 config 行。DSH profile 的同 ID 配置可能整体覆盖这行。不要在 profile 的最终 patch 中只增加 `cliPath`；请改用 `MNEMON_CLI_PATH` 或用户设置 `mnemon.cliPath`。确因其他原因需要自定义 profile patch 时，应保留仍需启用的全部键，而不是假设深合并。
 
 ## 常见配置
 
@@ -197,6 +201,13 @@ routingGuidance=false
 ```yaml
 mnemon:
   storageScope: workspace
+```
+
+显式指定 Windows CLI 路径：
+
+```yaml
+mnemon:
+  cliPath: 'C:\Users\alice\go\bin\mnemon.exe'
 ```
 
 自定义数据盘和较长 CLI 超时：

@@ -103,13 +103,17 @@ Only the Mnemon durable tier under `data/<store>/mnemon.db` has native cross-age
 config.cliPath
   -> executable MNEMON_CLI_PATH
   -> each PATH directory
-  -> ~/.local/bin/mnemon
-  -> /opt/homebrew/bin/mnemon
-  -> /usr/local/bin/mnemon
-  -> /usr/bin/mnemon
+  -> Windows: GOBIN/mnemon.exe
+              first GOPATH/bin/mnemon.exe, or ~/go/bin/mnemon.exe
+              %LOCALAPPDATA%/Programs/mnemon/mnemon.exe
+              %ProgramFiles%/mnemon/mnemon.exe
+  -> Unix: ~/.local/bin/mnemon
+           /opt/homebrew/bin/mnemon
+           /usr/local/bin/mnemon
+           /usr/bin/mnemon
 ```
 
-An explicit `cliPath` is accepted as configured; if it is not executable, actual calls return a launch error.
+An explicit `cliPath` is accepted as configured; if it is not executable, actual calls return a launch error. Automatically discovered Windows commands must be regular `.exe` files. `.cmd` and `.bat` wrappers are intentionally excluded because process execution does not use a shell.
 
 ## Compatibility Store Hint Precedence
 
@@ -188,7 +192,7 @@ routingGuidance=false
 
 ## Profile Patch Overrides
 
-The bundled `cordis.patch.yml` provides the default config row. A DSH profile configuration with the same ID may replace that row as a whole. When customizing a patch, retain every key that must remain enabled instead of assuming a deep merge.
+The bundled `cordis.patch.yml` provides the default config row. A DSH profile configuration with the same ID may replace that row as a whole. Do not add only `cliPath` to a final profile patch: use `MNEMON_CLI_PATH` or the `mnemon.cliPath` user setting instead. When a profile patch must be customized for another reason, retain every key that must remain enabled instead of assuming a deep merge.
 
 ## Common Configurations
 
@@ -197,6 +201,13 @@ Workspace isolation:
 ```yaml
 mnemon:
   storageScope: workspace
+```
+
+An explicit Windows CLI path:
+
+```yaml
+mnemon:
+  cliPath: 'C:\Users\alice\go\bin\mnemon.exe'
 ```
 
 A custom data volume and a longer CLI timeout:

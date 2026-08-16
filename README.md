@@ -34,10 +34,21 @@ See the [Sidebar and conversation UI guide](./docs/en/ui-guide.md) for the compl
 # macOS
 brew install --cask mnemon-dev/tap/mnemon
 
-# macOS / Linux via Go
+# macOS / Linux / Windows via Go
 go install github.com/mnemon-dev/mnemon@latest
 
+# macOS / Linux
 mnemon --version
+```
+
+On Windows PowerShell, verify the installed binary directly even when the Go bin directory is not on `PATH`:
+
+```powershell
+$mnemonBin = go env GOBIN
+if (-not $mnemonBin) {
+  $mnemonBin = Join-Path (((go env GOPATH) -split ';')[0]) 'bin'
+}
+& (Join-Path $mnemonBin 'mnemon.exe') --version
 ```
 
 ### 2. Install the plugin

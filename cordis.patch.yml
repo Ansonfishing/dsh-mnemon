@@ -1,5 +1,6 @@
-# Mount the Mnemon bridge into a DSH profile. The profile's own final patch
-# may replace this config row to select an explicit binary or data directory.
+# Mount the Mnemon bridge into a DSH profile. A profile's final patch may
+# replace this config row as a whole; use user settings or environment
+# variables for one-field overrides such as cliPath.
 - insert:
     - id: mnemon
       name: dsh-mnemon

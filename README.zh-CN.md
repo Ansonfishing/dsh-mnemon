@@ -34,10 +34,21 @@
 # macOS
 brew install --cask mnemon-dev/tap/mnemon
 
-# macOS / Linux，也可以通过 Go 安装
+# macOS / Linux / Windows，也可以通过 Go 安装
 go install github.com/mnemon-dev/mnemon@latest
 
+# macOS / Linux
 mnemon --version
+```
+
+Windows PowerShell 即使尚未把 Go bin 加入 `PATH`，也可直接验证安装结果：
+
+```powershell
+$mnemonBin = go env GOBIN
+if (-not $mnemonBin) {
+  $mnemonBin = Join-Path (((go env GOPATH) -split ';')[0]) 'bin'
+}
+& (Join-Path $mnemonBin 'mnemon.exe') --version
 ```
 
 ### 2. 安装插件

@@ -24,19 +24,39 @@ macOS 推荐 Homebrew Cask：
 brew install --cask mnemon-dev/tap/mnemon
 ```
 
-macOS 或 Linux 也可通过 Go 安装：
+macOS、Linux 和 Windows 都可通过 Go 安装：
 
 ```sh
 go install github.com/mnemon-dev/mnemon@latest
 ```
 
-验证二进制：
+在 macOS 或 Linux 上验证二进制：
 
 ```sh
 mnemon --version
 ```
 
-如果 DSH 无法从 `PATH` 找到它，可设置 `MNEMON_CLI_PATH`，或把绝对路径写入 `mnemon.cliPath`。`mnemon status` 会打开有效 Store，可能初始化数据或执行上游迁移，不要把它当作完全无副作用的安装探测。
+在 Windows PowerShell 中，先取得 Go 实际使用的安装目录，再验证原生可执行文件：
+
+```powershell
+$mnemonBin = go env GOBIN
+if (-not $mnemonBin) {
+  $mnemonBin = Join-Path (((go env GOPATH) -split ';')[0]) 'bin'
+}
+$mnemon = Join-Path $mnemonBin 'mnemon.exe'
+& $mnemon --version
+```
+
+Windows 上，dsh-mnemon 会从 `PATH`、导出的 `GOBIN` 或 `GOPATH`、默认 `%USERPROFILE%\go\bin`，以及常规用户安装目录和 Program Files 中发现原生 `mnemon.exe`。CLI 调用刻意禁用 shell，因此不接受 `.cmd` 与 `.bat` wrapper。
+
+如果 DSH 仍无法找到二进制，请设置 `MNEMON_CLI_PATH`，或在用户 settings 中写入绝对路径；不要为此整体替换插件的 profile patch：
+
+```yaml
+mnemon:
+  cliPath: 'C:\Users\alice\go\bin\mnemon.exe'
+```
+
+`mnemon status` 会打开有效 Store，可能初始化数据或执行上游迁移，不要把它当作完全无副作用的安装探测。
 
 ## 3. 安装 dsh-mnemon
 
@@ -103,7 +123,7 @@ dsh plugin --profile web remove dsh-mnemon
 - 存储根与刚才选择的范围一致；
 - Runtime、Memory Spaces 和 Documents 没有错误提示。
 
-如果 Mnemon 不可用，先运行 `command -v mnemon` 与 `mnemon --version`。更多症状见[故障排查](./operations.md#故障排查)。
+如果 Mnemon 不可用，macOS/Linux 先运行 `command -v mnemon` 与 `mnemon --version`；Windows PowerShell 运行 `Get-Command mnemon` 与 `Test-Path "$HOME\go\bin\mnemon.exe"`。更多症状见[故障排查](./operations.md#故障排查)。
 
 ## 6. 完成第一次验证
 
