@@ -712,6 +712,7 @@ describe('MnemonView', () => {
     expect(await screen.findByRole('heading', { name: '系统状态' })).toBeTruthy()
     expect(screen.getAllByRole('status', { name: '检查中…' })).toHaveLength(1)
     expect(screen.getByText('dsh-mnemon 0.1.2')).toBeTruthy()
+    expect(screen.queryByText('连接需要检查')).toBeNull()
   })
 
   it('edits an existing Memory Space name and description', async () => {

@@ -2112,8 +2112,9 @@ function NativeProviderHealth({ status }: { status: StatusView }): JSX.Element {
   const t = useT()
   const bodies = (status.memoryBodies ?? []).filter(body => body.provider?.id === undefined || body.provider.id === 'mnemon-native')
   const active = bodies.filter(body => body.active)
-  const failed = active.filter(body => !body.healthy)
-  const state: MemoryProviderRuntimeStatus['status'] = !status.commandFound || failed.length > 0 ? 'unhealthy' : active.length === 0 ? 'idle' : 'healthy'
+  const pending = active.filter(body => body.statusLoading === true)
+  const failed = active.filter(body => body.statusLoading !== true && !body.healthy)
+  const state: MemoryProviderRuntimeStatus['status'] = !status.commandFound || failed.length > 0 ? 'unhealthy' : active.length === 0 || pending.length > 0 ? 'idle' : 'healthy'
   const error = !status.commandFound
     ? t('status.nativeCliMissing')
     : failed.map(body => `${body.name}: ${body.error ?? t('status.engineUnavailable')}`).join('; ')
