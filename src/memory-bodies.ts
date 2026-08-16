@@ -96,6 +96,43 @@ function optionalText(value: string | undefined, label: string, max: number): st
   return normalized
 }
 
+const PROVIDER_METADATA_KEYS = [
+  'name', 'title', 'displayName', 'workspace', 'bankId', 'project', 'containerTag',
+  'userId', 'user', 'workingDirectory', 'targetUri',
+] as const
+
+function compactProviderMetadataValue(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const normalized = value.trim()
+  if (normalized === '' || normalized === '*') return undefined
+  const pathTail = normalized.split(/[/:\\]+/u).filter(Boolean).at(-1)
+  return (pathTail ?? normalized).trim() || undefined
+}
+
+/**
+ * Normalize uneven provider discovery metadata at the projection boundary.
+ * Adapters map the richest native fields they know; the registry then tries
+ * the nearest namespace setting before falling back to a stable provider
+ * identity. This keeps every discovered namespace usable without teaching the
+ * Web UI each provider's response shape.
+ */
+function providerProjectionMetadata(providerId: MemoryProviderId, candidate: ProviderMemorySpace): { name: string; description: string } {
+  const descriptor = memoryProviderDescriptor(providerId)
+  const externalId = requiredText(candidate.externalId, 'provider externalId', 2000)
+  const mappedName = String(candidate.name ?? '').trim()
+  const nearestName = PROVIDER_METADATA_KEYS
+    .map(key => compactProviderMetadataValue(candidate.connection[key]))
+    .find((value): value is string => value !== undefined)
+  const fallbackId = compactProviderMetadataValue(externalId) ?? externalId
+  const name = (mappedName || nearestName || `${descriptor.label} ${fallbackId}`).slice(0, 100)
+  const mappedDescription = String(candidate.description ?? '').trim()
+  const description = (mappedDescription || `${descriptor.label} memory namespace mapped from ${externalId}.`).slice(0, 1000)
+  return {
+    name: requiredText(name, 'name', 100),
+    description: optionalText(description, 'description', 1000),
+  }
+}
+
 function legacyOpenVikingConnection(connection: StoredOpenVikingConnection | OpenVikingBodyConnection): MemoryProviderConnection {
   return normalizeProviderConnection('openviking', connection as unknown as MemoryProviderConnection)
 }
@@ -273,16 +310,15 @@ export class MemoryBodyRegistry {
         suffix += 1
       }
       reservedIds.add(id)
-      const upstreamName = String(candidate.name ?? '').trim() || externalId
-      const upstreamDescription = String(candidate.description ?? '').trim()
+      const metadata = providerProjectionMetadata(providerId, candidate)
       return {
         id,
         externalId,
         // Provider metadata is not user-controlled by this form. Keep every
         // discovered namespace addressable even when an upstream title is
         // blank or exceeds DSH's presentation limits.
-        name: requiredText(upstreamName.slice(0, 100), 'name', 100),
-        description: optionalText(upstreamDescription.slice(0, 1000), 'description', 1000),
+        name: metadata.name,
+        description: metadata.description,
         active: previous?.active ?? true,
         providerId,
         connection,

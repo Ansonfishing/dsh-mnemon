@@ -321,7 +321,7 @@ describe('MemoryBodyRegistry', () => {
     })
   })
 
-  it('keeps provider namespaces when upstream presentation metadata is blank or oversized', () => {
+  it('fills missing provider metadata from the nearest namespace fields and bounded defaults', () => {
     const dataDir = temporaryDirectory()
     const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
     const registry = new MemoryBodyRegistry(runner, true)
@@ -334,7 +334,7 @@ describe('MemoryBodyRegistry', () => {
     ])
 
     expect(registry.list().map(body => ({ name: body.name, description: body.description }))).toEqual([
-      { name: 'blank-title', description: '' },
+      { name: 'blank-title', description: 'Hindsight memory namespace mapped from blank-title.' },
       { name: longTitle.slice(0, 100), description: longDescription.slice(0, 1000) },
     ])
   })

@@ -155,6 +155,32 @@ describe('MnemonService', () => {
     ]))
   })
 
+  it('keeps the previous provider projection untouched when reconnect discovery fails', async () => {
+    const { service } = fixture()
+    const provider = {
+      id: 'hindsight' as const,
+      discover: vi.fn()
+        .mockResolvedValueOnce([{ externalId: 'bank-1', name: 'Product bank', description: 'Mapped from Hindsight.', connection: { bankId: 'bank-1', budget: 'mid' } }])
+        .mockRejectedValueOnce(new Error('connection refused')),
+      status: vi.fn(async () => ({ healthy: true })),
+      search: vi.fn(async () => ({ results: [] })),
+      graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
+      list: vi.fn(async () => []),
+      remember: vi.fn(async () => ({ action: 'stored' })),
+    }
+    ;(service as unknown as { providers: Map<string, typeof provider> }).providers.set('hindsight', provider)
+
+    await service.updateProviderService('hindsight', { endpoint: 'http://127.0.0.1:18889', apiKey: 'old-secret' })
+    const before = service.memoryBodies.list()
+    await expect(service.updateProviderService('hindsight', { endpoint: 'http://127.0.0.1:19999', apiKey: 'new-secret' })).rejects.toThrow('connection refused')
+
+    expect(service.memoryBodies.list()).toEqual(before)
+    expect(service.memoryBodies.providerConnection(before.find(body => body.provider.id === 'hindsight')!.id)).toMatchObject({
+      endpoint: 'http://127.0.0.1:18889',
+      apiKey: 'old-secret',
+    })
+  })
+
   it('uses graph recall by default and normalizes compact results', async () => {
     const { service, process, dataDir } = fixture()
     const result = await service.search({ query: ' database choice ' })
