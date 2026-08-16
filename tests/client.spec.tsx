@@ -20,7 +20,7 @@ describe('MnemonView', () => {
     unsetPath: async () => {},
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { withInactiveBody?: boolean; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean } = {}) {
+  function createConnection(options: { withInactiveBody?: boolean; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -213,7 +213,9 @@ describe('MnemonView', () => {
         return { ok: true, value: { component: payload?.component, previousVersion: '0.1.2', currentVersion: '0.2.0', updated: true, restartRequired: false } }
       }
       if (endpoint === 'bodies') return { ok: true, value: { items: bodies, providers: MEMORY_PROVIDER_CATALOG, total: bodies.length, activeCount: bodies.filter(item => item.active).length, directory: '/tmp/mnemon/data', generatedAt: '2026-08-13T03:00:00.000Z' } }
-      if (endpoint === 'graph') return {
+      if (endpoint === 'graph') {
+        if (options.graphPending === true) return await new Promise<never>(() => {})
+        return {
         ok: true,
         value: {
           nodes: [memory, { id: 'memory-graph-2', content: 'Mnemon 使用四图持久记忆。', category: 'fact', color: '#3498db', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-graph-2` }, ...(secondaryActive ? [secondaryMemory] : [])],
@@ -224,6 +226,7 @@ describe('MnemonView', () => {
           generatedAt: '2026-08-13T03:00:00.000Z',
           ...(providerSources === undefined ? {} : { sources: providerSources.graph }),
         },
+      }
       }
       if (endpoint === 'list') {
         const items = options.listCount === undefined
@@ -661,6 +664,16 @@ describe('MnemonView', () => {
     const deleteButton = screen.getByRole('button', { name: '删除项目记忆体' })
     expect(deleteButton.hasAttribute('disabled')).toBe(true)
     expect(deleteButton.getAttribute('title')).toContain('至少一个原生 Store')
+  })
+
+  it('keeps the Memory Space directory interactive while the live graph is still pending', async () => {
+    const { connection } = createConnection({ graphPending: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    expect(await screen.findByText('项目记忆体')).toBeTruthy()
+    expect(screen.getByRole('switch', { name: '项目记忆体读取开关' }).hasAttribute('disabled')).toBe(false)
+    expect(screen.getByText('正在同步多记忆体实时快照…')).toBeTruthy()
   })
 
   it('edits an existing Memory Space name and description', async () => {

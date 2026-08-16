@@ -977,35 +977,45 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const [confirmingDeleteBody, setConfirmingDeleteBody] = useState<string | null>(null)
   const [deletingBody, setDeletingBody] = useState<string | null>(null)
   const [preview, setPreview] = useState<MemoryGraphNode | null>(null)
+  const graphPending = useRef(false)
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true)
     setError(null)
     try {
-      const [nextCatalog, next] = await Promise.all([
-        props.client.bodies().then(next => { setCatalogUnavailable(false); return next }).catch(() => {
-          setCatalogUnavailable(!props.catalogKnown)
-          return {
-            items: props.fallbackBodies,
-            providers: [],
-            total: props.fallbackBodies.length,
-            activeCount: props.fallbackBodies.filter(body => body.active).length,
-            directory: props.fallbackDirectory ?? '',
-            generatedAt: new Date().toISOString(),
-          }
-        }),
-        props.client.graph(),
-      ])
+      // The directory is the control plane for activation and must remain
+      // usable even when a provider's graph projection is slow. Resolve and
+      // render it before starting the best-effort live snapshot refresh.
+      const nextCatalog = await props.client.bodies().then(next => { setCatalogUnavailable(false); return next }).catch(() => {
+        setCatalogUnavailable(!props.catalogKnown)
+        return {
+          items: props.fallbackBodies,
+          providers: [],
+          total: props.fallbackBodies.length,
+          activeCount: props.fallbackBodies.filter(body => body.active).length,
+          directory: props.fallbackDirectory ?? '',
+          generatedAt: new Date().toISOString(),
+        }
+      })
       const normalizedProviders = Array.isArray(nextCatalog.providers) && nextCatalog.providers.length > 0 ? nextCatalog.providers : LEGACY_PROVIDER_CATALOG
       const normalizedCatalog = { ...nextCatalog, providers: normalizedProviders, items: nextCatalog.items.map(normalizeMemoryBody) }
       setProviderDrafts(current => mergeProviderDefaults(normalizedCatalog.providers, current))
-      const enriched = enrichMultiSpaceGraph(next, normalizedCatalog.items)
       setCatalog(normalizedCatalog)
-      setGraph(enriched)
-      setSelected(current => current === null ? null : enriched.nodes.find(node => graphNodeKey(node) === graphNodeKey(current)) ?? null)
+      if (!graphPending.current) {
+        graphPending.current = true
+        void props.client.graph().then(next => {
+          const enriched = enrichMultiSpaceGraph(next, normalizedCatalog.items)
+          setGraph(enriched)
+          setSelected(current => current === null ? null : enriched.nodes.find(node => graphNodeKey(node) === graphNodeKey(current)) ?? null)
+        }).catch(reason => {
+          setError(message(reason))
+        }).finally(() => {
+          graphPending.current = false
+          setLoading(false)
+        })
+      }
     } catch (reason) {
       setError(message(reason))
-    } finally {
       setLoading(false)
     }
   }, [props.catalogKnown, props.client, props.fallbackBodies, props.fallbackDirectory])
