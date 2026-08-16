@@ -176,8 +176,8 @@ const PAGE_NAV: NavGroup[] = [
     aria: 'nav.group.storage',
     entries: [
       { id: 'runtime', label: 'nav.runtime', detail: 'nav.runtime.detail', glyph: '◫' },
-      { id: 'overview', label: 'nav.bodies', detail: 'nav.bodies.detail', glyph: '◇' },
       { id: 'documents', label: 'nav.documents', detail: 'nav.documents.detail', glyph: '▤' },
+      { id: 'overview', label: 'nav.bodies', detail: 'nav.bodies.detail', glyph: '◇' },
     ],
   },
   {
@@ -194,8 +194,8 @@ const PAGE_NAV: NavGroup[] = [
 const SIDEBAR_PAGE_TABS: NavEntry[] = [
   { id: 'status', label: 'nav.status', detail: 'nav.status.detail', glyph: '⌘' },
   { id: 'runtime', label: 'nav.runtime', detail: 'nav.runtime.detail', glyph: '◫' },
-  { id: 'overview', label: 'nav.bodies', detail: 'nav.bodies.detail', glyph: '◇' },
   { id: 'documents', label: 'nav.documents', detail: 'nav.documents.detail', glyph: '▤' },
+  { id: 'overview', label: 'nav.bodies', detail: 'nav.bodies.detail', glyph: '◇' },
 ]
 
 const MEMORY_PAGE_TABS: Array<{ id: SidebarMemoryPage; label: MnemonKey }> = [

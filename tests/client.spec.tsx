@@ -472,6 +472,7 @@ describe('MnemonView', () => {
     const bodiesTab = within(tablist).getByRole('tab', { name: '记忆体' })
     const documentsTab = within(tablist).getByRole('tab', { name: '档案' })
     expect(tabs).toHaveLength(4)
+    expect(tabs.map(tab => tab.textContent)).toEqual(['状态', '运行时', '档案', '记忆体'])
     expect(statusTab.getAttribute('aria-selected')).toBe('true')
     expect(statusTab.hasAttribute('data-active')).toBe(true)
     expect(bodiesTab.getAttribute('aria-selected')).toBe('false')
