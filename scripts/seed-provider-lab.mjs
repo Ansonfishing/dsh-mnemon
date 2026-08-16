@@ -14,11 +14,8 @@ const byteroverDefaultPath = join(homedir(), '.brv-cli', 'bin', 'brv')
 const byteroverPath = process.env.BRV_PATH ?? (existsSync(byteroverDefaultPath) ? byteroverDefaultPath : 'brv')
 
 const supermemoryApiKey = process.env.SUPERMEMORY_API_KEY?.trim()
-if (!supermemoryApiKey) {
-  throw new Error('SUPERMEMORY_API_KEY is required; copy the sm_... key from `docker compose logs supermemory`.')
-}
 
-const config = resolveConfig({ storageScope: 'global', writeEnabled: true, timeoutMs: 120_000, defaultRecallLimit: 20 })
+const config = resolveConfig({ storageScope: 'global', writeEnabled: true, timeoutMs: 10_000, defaultRecallLimit: 20 })
 const service = new MnemonService(createRunner(config), config)
 
 const providers = [
@@ -80,9 +77,19 @@ const providers = [
     id: 'supermemory',
     name: 'Provider Lab · Supermemory',
     description: 'Docker 私有化的语义记忆与摄取文档，以独立 containerTag 隔离测试。',
-    connection: { endpoint: 'http://127.0.0.1:18787', apiKey: supermemoryApiKey, containerTag: 'dsh-lab', searchMode: 'hybrid' },
+    connection: { endpoint: 'http://127.0.0.1:18787', apiKey: supermemoryApiKey ?? '', containerTag: 'dsh-lab', searchMode: 'hybrid' },
   },
 ]
+
+const requestedProviders = new Set((process.env.PROVIDER_LAB_ONLY ?? '').split(',').map(value => value.trim()).filter(Boolean))
+const selectedProviders = requestedProviders.size === 0 ? providers : providers.filter(provider => requestedProviders.has(provider.id))
+if (selectedProviders.length !== requestedProviders.size && requestedProviders.size > 0) {
+  const known = new Set(providers.map(provider => provider.id))
+  throw new Error(`Unknown Provider Lab id: ${[...requestedProviders].filter(id => !known.has(id)).join(', ')}`)
+}
+if (selectedProviders.some(provider => provider.id === 'supermemory') && !supermemoryApiKey) {
+  throw new Error('SUPERMEMORY_API_KEY is required when seeding Supermemory; copy the sm_... key from `docker compose logs supermemory`.')
+}
 
 const memories = [
   { category: 'decision', importance: 5, tags: ['architecture', 'three-tier'], entities: ['DSH', 'Mnemon'], content: 'DSH 记忆系统采用三层结构：运行时热记忆、项目档案、可替换的长期记忆 Provider。第三层允许 Mnemon Native、OpenViking、Mem0 等实现并存。' },
@@ -127,12 +134,16 @@ async function ensureMem0Config() {
   })
 }
 
-try { await ensureHonchoScope() } catch (error) { console.warn(`WARN  Honcho scope: ${error instanceof Error ? error.message : String(error)}`) }
-try { await ensureMem0Config() } catch (error) { console.warn(`WARN  Mem0 config: ${error instanceof Error ? error.message : String(error)}`) }
+if (selectedProviders.some(provider => provider.id === 'honcho')) {
+  try { await ensureHonchoScope() } catch (error) { console.warn(`WARN  Honcho scope: ${error instanceof Error ? error.message : String(error)}`) }
+}
+if (selectedProviders.some(provider => provider.id === 'mem0')) {
+  try { await ensureMem0Config() } catch (error) { console.warn(`WARN  Mem0 config: ${error instanceof Error ? error.message : String(error)}`) }
+}
 
 const existing = service.memoryBodies.list()
 const report = []
-for (const provider of providers) {
+for (const provider of selectedProviders) {
   let body = existing.find(candidate => candidate.name === provider.name)
   try {
     if (body === undefined) {
@@ -154,7 +165,9 @@ for (const provider of providers) {
 
     let currentCount = 0
     try {
-      currentCount = (await service.list({ memoryBodyIds: [body.id], query: 'DSH Provider WebUI Docker', limit: 20 })).items.length
+      currentCount = body.provider.capabilities.browse
+        ? (await service.list({ memoryBodyIds: [body.id], limit: 20 })).items.length
+        : (await service.search({ memoryBodyIds: [body.id], query: '三层结构 Provider', limit: 20 })).results.length
     } catch {}
 
     let stored = 0

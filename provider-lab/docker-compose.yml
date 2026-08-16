@@ -26,7 +26,7 @@ services:
       context: ${PROVIDER_LAB_SOURCES:?Set PROVIDER_LAB_SOURCES}/honcho
       dockerfile: Dockerfile
     restart: unless-stopped
-    entrypoint: ["sh", "docker/entrypoint.sh"]
+    entrypoint: ["sh", "/app/provider-lab-entrypoint.sh"]
     ports:
       - "127.0.0.1:18000:8000"
     environment: &honcho-environment
@@ -39,7 +39,9 @@ services:
       LLM_OPENAI_API_KEY: ollama
       EMBEDDING_MODEL_CONFIG__TRANSPORT: openai
       EMBEDDING_MODEL_CONFIG__MODEL: nomic-embed-text
+      EMBEDDING_MODEL_CONFIG__DIMENSIONS_MODE: never
       EMBEDDING_MODEL_CONFIG__OVERRIDES__BASE_URL: http://host.docker.internal:11434/v1
+      EMBEDDING_VECTOR_DIMENSIONS: "768"
       DERIVER_MODEL_CONFIG__MODEL: ${HONCHO_LLM_MODEL:-qwen2.5:3b}
       DERIVER_MODEL_CONFIG__OVERRIDES__BASE_URL: http://host.docker.internal:11434/v1
       SUMMARY_MODEL_CONFIG__MODEL: ${HONCHO_LLM_MODEL:-qwen2.5:3b}
@@ -51,6 +53,8 @@ services:
         condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - ./honcho/entrypoint.sh:/app/provider-lab-entrypoint.sh:ro
     healthcheck:
       test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2).read()"]
       interval: 10s
