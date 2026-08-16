@@ -110,24 +110,79 @@ function ProviderServiceForm(props: {
     setFailed(null); setSaved(false)
   }
 
-  return <form className={css.memoryConfig} onSubmit={event => void submit(event)} data-provider={props.provider.id}>
-    <div className={css.memoryConfigHeader}><div><strong>{props.t('config.providerServiceTitle')}</strong><small>{props.t('config.providerServiceHint')}</small></div></div>
+  return <form className={css.providerServiceForm} onSubmit={event => void submit(event)} data-provider={props.provider.id}>
+    <p className={css.providerServicePrompt}>{props.t(props.service.configured ? 'config.providerServiceHint' : 'config.providerEnableHint')}</p>
     <div className={css.providerSettingsGrid}>{serviceFields(props.provider).map(field => <ServiceField key={field.key} field={field} value={draft.settings[field.key]} configuredSecrets={props.service.configuredSecrets} clearing={draft.clearSecrets.includes(field.key)} disabled={props.disabled || saving} t={props.t} onChange={value => update(field.key, value)} onClear={clear => setDraft(current => ({ ...current, clearSecrets: clear ? [...new Set([...current.clearSecrets, field.key])] : current.clearSecrets.filter(key => key !== field.key) }))} />)}</div>
     <div className={css.memoryConfigFooter}>
       <div className={css.configFeedback} aria-live="polite">{failed !== null && <span className={css.error}>{props.t('config.providerSaveFailed', { error: failed })}</span>}{saved && <span className={css.packSuccess}>{props.t('config.providerServiceSaved')}</span>}</div>
-      <button type="submit" className={css.primaryPill} disabled={props.disabled || saving || !configurationComplete(props.provider, draft, props.service)}>{saving ? props.t('config.saving') : props.t('config.saveProviderService')}</button>
+      <button type="submit" className={css.primaryPill} disabled={props.disabled || saving || !configurationComplete(props.provider, draft, props.service)}>{saving ? props.t('config.saving') : props.t(props.service.configured ? 'config.saveProviderService' : 'config.enableProvider')}</button>
     </div>
   </form>
 }
 
-function ProviderPanel(props: { provider: MemoryProviderDescriptor; service: MemoryProviderServiceView; disabled: boolean; t: MnemonTranslate; onSave: (provider: MemoryProviderDescriptor, draft: ServiceDraft) => Promise<void> }): JSX.Element {
-  return <details className={css.providerPanel}>
-    <summary>
-      <span className={css.providerIdentity}><i className={css.providerMark} aria-hidden="true">{props.provider.label.slice(0, 1).toUpperCase()}</i><span><strong>{props.provider.label}</strong><small>{props.t(`overview.workspaceBinding.${props.provider.workspaceBinding}`)} · {props.t(`overview.providerSummary.${props.provider.id}` as MnemonKey)}</small></span></span>
-      <span className={css.providerState}>{props.t(props.service.configured ? 'config.providerServiceConfigured' : 'config.providerServiceNotConfigured')}</span>
-    </summary>
-    <div className={css.providerPanelBody}><ProviderServiceForm {...props} /></div>
-  </details>
+function ProviderPanel(props: {
+  provider: MemoryProviderDescriptor
+  service: MemoryProviderServiceView
+  disabled: boolean
+  t: MnemonTranslate
+  onSave: (provider: MemoryProviderDescriptor, draft: ServiceDraft) => Promise<void>
+  onToggle: (provider: MemoryProviderDescriptor, enabled: boolean) => Promise<void>
+}): JSX.Element {
+  const [enabled, setEnabled] = useState(props.service.enabled)
+  const [expanded, setExpanded] = useState(props.service.enabled && !props.service.configured)
+  const [toggling, setToggling] = useState(false)
+  const [failed, setFailed] = useState<string | null>(null)
+
+  useEffect(() => {
+    setEnabled(props.service.enabled)
+    if (!props.service.enabled) setExpanded(false)
+  }, [props.service.enabled])
+
+  const toggle = async (next: boolean): Promise<void> => {
+    setFailed(null)
+    if (next && !props.service.configured) {
+      setEnabled(true)
+      setExpanded(true)
+      return
+    }
+    if (!next && !props.service.enabled) {
+      setEnabled(false)
+      setExpanded(false)
+      return
+    }
+    setToggling(true)
+    try {
+      await props.onToggle(props.provider, next)
+      setEnabled(next)
+      if (!next) setExpanded(false)
+    } catch (reason) {
+      setFailed(message(reason))
+    } finally {
+      setToggling(false)
+    }
+  }
+
+  const stateKey: MnemonKey = enabled
+    ? props.service.configured ? 'config.providerEnabled' : 'config.providerNeedsConfiguration'
+    : props.service.configured ? 'config.providerDisabledConfigured' : 'config.providerDisabled'
+  const controlDisabled = props.disabled || toggling
+  return <div className={css.providerRow} data-provider={props.provider.id} data-enabled={enabled || undefined}>
+    <div className={css.providerRowHeader}>
+      <button type="button" className={css.providerDisclosure} aria-expanded={expanded} disabled={!enabled || controlDisabled} onClick={() => setExpanded(value => !value)}>
+        <span className={css.providerIdentity}><i className={css.providerMark} aria-hidden="true">{props.provider.label.slice(0, 1).toUpperCase()}</i><span><strong>{props.provider.label}</strong><small>{props.t(`overview.workspaceBinding.${props.provider.workspaceBinding}`)} · {props.t(`overview.providerSummary.${props.provider.id}` as MnemonKey)}</small></span></span>
+        {enabled && <i className={css.providerChevron} aria-hidden="true">›</i>}
+      </button>
+      <div className={css.providerEnableControl}>
+        <span className={css.providerState} data-enabled={props.service.enabled || undefined}>{props.t(stateKey)}</span>
+        <label className={css.providerToggle}>
+          <input type="checkbox" aria-label={props.t('config.providerToggleAria', { provider: props.provider.label })} checked={enabled} disabled={controlDisabled} onChange={event => void toggle(event.target.checked)} />
+          <span aria-hidden="true"><i /></span>
+        </label>
+      </div>
+    </div>
+    {failed !== null && <p className={css.providerToggleError} role="alert">{props.t('config.providerToggleFailed', { error: failed })}</p>}
+    {enabled && expanded && <div className={css.providerInlineBody}><ProviderServiceForm provider={props.provider} service={props.service} disabled={controlDisabled} t={props.t} onSave={props.onSave} /></div>}
+  </div>
 }
 
 export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JSX.Element {
@@ -148,7 +203,13 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JS
   const save = async (provider: MemoryProviderDescriptor, draft: ServiceDraft): Promise<void> => {
     if (client === null) throw new Error(props.t('config.providerUnavailable'))
     const settings = Object.fromEntries(Object.entries(draft.settings).filter(([key, value]) => serviceFields(provider).find(field => field.key === key)?.input !== 'secret' || String(value).trim() !== ''))
-    await client.updateProviderService({ providerId: provider.id, settings, ...(draft.clearSecrets.length === 0 ? {} : { clearSecrets: draft.clearSecrets }) })
+    await client.updateProviderService({ providerId: provider.id, settings, enabled: true, ...(draft.clearSecrets.length === 0 ? {} : { clearSecrets: draft.clearSecrets }) })
+    await load(true)
+  }
+
+  const toggle = async (provider: MemoryProviderDescriptor, enabled: boolean): Promise<void> => {
+    if (client === null) throw new Error(props.t('config.providerUnavailable'))
+    await client.updateProviderService({ providerId: provider.id, settings: {}, enabled })
     await load(true)
   }
 
@@ -158,9 +219,9 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JS
     {props.workspaceLabel !== undefined && <p className={css.providerTarget}>{props.t('config.providerTargetWorkspace', { workspace: props.workspaceLabel })}</p>}
     {loading && <p className={css.providerLoading}>{props.t('config.loadingProviders')}</p>}
     {failed !== null && <div className={css.providerLoadError}><span className={css.error}>{props.t('config.providerLoadFailed', { error: failed })}</span><button type="button" className={css.textButton} onClick={() => void load()}>{props.t('config.retryProviders')}</button></div>}
-    {!loading && failed === null && catalog?.providers.map(provider => {
+    {!loading && failed === null && catalog !== null && <div className={css.providerList}>{catalog.providers.map(provider => {
       const service = catalog.items.find(item => item.providerId === provider.id) ?? { providerId: provider.id, enabled: false, configured: false, settings: {}, configuredSecrets: [] }
-      return <ProviderPanel key={provider.id} provider={provider} service={service} disabled={disabled} t={props.t} onSave={save} />
-    })}
+      return <ProviderPanel key={provider.id} provider={provider} service={service} disabled={disabled} t={props.t} onSave={save} onToggle={toggle} />
+    })}</div>}
   </>
 }

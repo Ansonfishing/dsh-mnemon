@@ -368,8 +368,8 @@ describe('MnemonSettingsCard', () => {
       ],
     }
     const call = vi.fn(async (channel: string, endpoint: string) => {
-      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'openviking', configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'] }], generatedAt: '2026-08-17T00:00:00.000Z' } }
-      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') return { ok: true as const, value: { providerId: 'openviking', configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'] } }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'openviking', enabled: true, configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'] }], generatedAt: '2026-08-17T00:00:00.000Z' } }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') return { ok: true as const, value: { providerId: 'openviking', enabled: true, configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'] } }
       if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/workspace/.mnemon', scope: 'workspace' } }
       throw new Error(`unexpected ${channel} ${endpoint}`)
     })
@@ -378,9 +378,12 @@ describe('MnemonSettingsCard', () => {
     render(<MnemonSettingsCard scope={scope} connection={connection} sessionId="session-1" workspaceId="workspace-1" workspaceLabel="dsh-mnemon" />)
 
     await waitFor(() => expect(screen.getByText('OpenViking')).toBeTruthy())
-    expect((screen.getByText('OpenViking').closest('details') as HTMLDetailsElement).open).toBe(false)
+    const disclosure = screen.getByText('OpenViking').closest('button') as HTMLButtonElement
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false')
+    expect((screen.getByRole('checkbox', { name: '启用 OpenViking' }) as HTMLInputElement).checked).toBe(true)
     expect(screen.getByText('当前 DSH 工作区：dsh-mnemon；只有标记“随工作区”的 Provider 会切换数据范围。')).toBeTruthy()
     fireEvent.click(screen.getByText('OpenViking'))
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true')
     expect((screen.getByLabelText('服务地址') as HTMLInputElement).value).toBe('http://127.0.0.1:1933')
     expect(screen.queryByLabelText('记忆范围 URI')).toBeNull()
     expect(screen.queryByLabelText('记忆体名称')).toBeNull()
@@ -389,12 +392,78 @@ describe('MnemonSettingsCard', () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', {
       providerId: 'openviking',
       settings: { endpoint: 'http://127.0.0.1:1933' },
+      enabled: true,
       sessionId: 'session-1',
       workspaceId: 'workspace-1',
     }))
     expect(await screen.findByText('服务配置已保存')).toBeTruthy()
-    expect((screen.getByText('OpenViking').closest('details') as HTMLDetailsElement).open).toBe(true)
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true')
     expect(call.mock.calls.some(([, endpoint]) => endpoint === 'body-create')).toBe(false)
+  })
+
+  it('keeps a new provider off until its required service configuration is saved', async () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+    const provider = {
+      id: 'supermemory' as const,
+      label: 'Supermemory', kind: 'remote' as const, origin: 'third-party' as const, summary: 'Semantic memory',
+      workspaceBinding: 'provider-global' as const,
+      capabilities: { search: true, browse: true, graph: false, entities: false, related: false, remember: true, link: false, forget: true, writeMode: 'async-extracting' as const, deletionMode: 'soft' as const },
+      fields: [
+        { key: 'endpoint', label: 'Endpoint', scope: 'service' as const, input: 'url' as const, required: true, defaultValue: 'https://api.supermemory.ai' },
+        { key: 'apiKey', label: 'API key', scope: 'service' as const, input: 'secret' as const, required: true },
+      ],
+    }
+    let service = { providerId: 'supermemory' as const, enabled: false, configured: false, settings: {}, configuredSecrets: [] as string[] }
+    const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [service], generatedAt: '2026-08-17T00:00:00.000Z' } }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') {
+        const request = payload as { enabled: boolean; settings: Record<string, unknown> }
+        service = {
+          providerId: 'supermemory', enabled: request.enabled, configured: service.configured || Object.keys(request.settings).length > 0,
+          settings: Object.hasOwn(request.settings, 'endpoint') ? { endpoint: request.settings.endpoint as string } : service.settings,
+          configuredSecrets: Object.hasOwn(request.settings, 'apiKey') ? ['apiKey'] : service.configuredSecrets,
+        }
+        return { ok: true as const, value: service }
+      }
+      if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/active/.mnemon', scope: 'global' } }
+      throw new Error(`unexpected ${channel} ${endpoint}`)
+    })
+
+    render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call } } as ClientConnectionHandle} />)
+
+    const providerToggle = await screen.findByRole('checkbox', { name: '启用 Supermemory' }) as HTMLInputElement
+    expect(providerToggle.checked).toBe(false)
+    expect(screen.queryByLabelText('服务地址')).toBeNull()
+
+    fireEvent.click(providerToggle)
+    expect(providerToggle.checked).toBe(true)
+    expect(screen.getByLabelText('服务地址')).toBeTruthy()
+    const enable = screen.getByRole('button', { name: '保存并启用' }) as HTMLButtonElement
+    expect(enable.disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText('API Key'), { target: { value: 'service-secret' } })
+    expect(enable.disabled).toBe(false)
+    fireEvent.click(enable)
+
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', expect.objectContaining({
+      providerId: 'supermemory', enabled: true, settings: { endpoint: 'https://api.supermemory.ai', apiKey: 'service-secret' },
+    })))
+    expect(await screen.findByText('服务配置已保存')).toBeTruthy()
+
+    fireEvent.click(providerToggle)
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', expect.objectContaining({
+      providerId: 'supermemory', enabled: false, settings: {},
+    })))
+    expect(screen.queryByLabelText('服务地址')).toBeNull()
   })
 
   it('previews and safely imports one complete directory ZIP', async () => {
