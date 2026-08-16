@@ -8,6 +8,7 @@ import type {
   MemoryProviderServiceView,
 } from '../shared/contracts.ts'
 import { MnemonClient } from './api.ts'
+import { GlobalLocationSetting } from './GlobalLocationSetting.tsx'
 import css from './MnemonSettingsCard.module.css'
 import type { MnemonKey, MnemonTranslate } from './locales.ts'
 import { ProviderIcon } from './ProviderIcon.tsx'
@@ -122,7 +123,7 @@ function serviceDefaults(provider: MemoryProviderDescriptor): MemoryProviderConn
 }
 
 function draftFor(provider: MemoryProviderDescriptor, service: MemoryProviderServiceView): ServiceDraft {
-  return { settings: { ...serviceDefaults(provider), ...service.settings } }
+  return { settings: { ...serviceDefaults(provider), ...service.settings, ...service.secretValues } }
 }
 
 function configurationComplete(provider: MemoryProviderDescriptor, draft: ServiceDraft, service: MemoryProviderServiceView): boolean {
@@ -165,19 +166,21 @@ function ServiceField(props: {
   const secret = props.field.input === 'secret'
   const fieldValue = String(props.value ?? '')
   const showingSavedMask = secret && savedSecret && fieldValue === ''
-  const displayValue = showingSavedMask ? SAVED_SECRET_MASK : fieldValue
+  const displayValue = showingSavedMask
+    ? secretVisible ? props.t('config.providerSecretStoredValue') : SAVED_SECRET_MASK
+    : fieldValue
   const input = props.field.input === 'boolean'
     ? <label className={css.providerBoolean}><input aria-label={label} type="checkbox" checked={Boolean(props.value)} disabled={props.disabled} onChange={event => props.onChange(event.target.checked)} /><span>{label}</span></label>
     : props.field.input === 'select'
       ? <label>{label}<select aria-label={label} value={String(props.value ?? '')} required={required} disabled={props.disabled} onChange={event => props.onChange(event.target.value)}>{props.field.options?.map(option => <option key={option.value} value={option.value}>{props.t(`overview.providerOption.${option.value}` as MnemonKey)}</option>)}</select></label>
-      : <label>{label}<div className={secret ? css.providerSecretInput : undefined}><input aria-label={label} type={secret ? secretVisible && !showingSavedMask ? 'text' : 'password' : props.field.input === 'number' ? 'number' : props.field.input === 'url' ? 'url' : 'text'} value={displayValue} required={required} disabled={props.disabled} autoComplete={secret ? 'new-password' : undefined} placeholder={props.field.placeholder ?? (secret ? props.t('overview.providerApiKeyOptional') : undefined)} maxLength={secret ? 8000 : 2000} step={props.field.input === 'number' ? 'any' : undefined} onFocus={event => {
+      : <label>{label}<div className={secret ? css.providerSecretInput : undefined}><input aria-label={label} type={secret ? secretVisible ? 'text' : 'password' : props.field.input === 'number' ? 'number' : props.field.input === 'url' ? 'url' : 'text'} value={displayValue} required={required} disabled={props.disabled} autoComplete={secret ? 'new-password' : undefined} placeholder={props.field.placeholder ?? (secret ? props.t('overview.providerApiKeyOptional') : undefined)} maxLength={secret ? 8000 : 2000} step={props.field.input === 'number' ? 'any' : undefined} onFocus={event => {
         if (showingSavedMask) event.currentTarget.select()
       }} onClick={event => {
         if (showingSavedMask) event.currentTarget.select()
       }} onChange={event => {
-        const value = showingSavedMask ? event.target.value.replace(SAVED_SECRET_MASK, '') : event.target.value
+        const value = showingSavedMask ? event.target.value.replace(SAVED_SECRET_MASK, '').replace(props.t('config.providerSecretStoredValue'), '') : event.target.value
         props.onChange(value)
-      }} />{secret && <button type="button" className={css.providerSecretVisibility} aria-label={props.t(secretVisible ? 'config.providerSecretHide' : 'config.providerSecretShow')} title={props.t(showingSavedMask ? 'config.providerSecretRevealReplacement' : secretVisible ? 'config.providerSecretHide' : 'config.providerSecretShow')} aria-pressed={secretVisible} disabled={props.disabled || showingSavedMask} onClick={() => setSecretVisible(value => !value)}><SecretVisibilityIcon visible={secretVisible} /></button>}</div></label>
+      }} />{secret && <button type="button" className={css.providerSecretVisibility} aria-label={props.t(secretVisible ? 'config.providerSecretHide' : 'config.providerSecretShow')} title={props.t(secretVisible ? 'config.providerSecretHide' : 'config.providerSecretShow')} aria-pressed={secretVisible} disabled={props.disabled} onClick={() => setSecretVisible(value => !value)}><SecretVisibilityIcon visible={secretVisible} /></button>}</div></label>
   return <div className={css.providerFieldControl} data-input={props.field.input}>
     {input}
   </div>
@@ -196,11 +199,19 @@ function ProviderServiceForm(props: {
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
+  const stabilizeAfterLocationLayout = useRef(false)
 
   useEffect(() => {
     setDraft(draftFor(props.provider, props.service))
     setCustomLocations(new Set(globalLocationFields(props.provider).filter(field => String(props.service.settings[field.key] ?? '').trim() !== '').map(field => field.key)))
   }, [props.provider, props.service])
+
+  useLayoutEffect(() => {
+    if (!stabilizeAfterLocationLayout.current || formRef.current === null) return
+    stabilizeAfterLocationLayout.current = false
+    stabilizeProviderCard(formRef.current.closest<HTMLElement>('[data-provider]') ?? formRef.current)
+  }, [customLocations])
 
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
@@ -220,14 +231,19 @@ function ProviderServiceForm(props: {
   }
 
   const useCustomLocation = (field: MemoryProviderConfigField, custom: boolean): void => {
+    stabilizeAfterLocationLayout.current = true
     setCustomLocations(current => {
       const next = new Set(current)
       if (custom) next.add(field.key)
       else next.delete(field.key)
       return next
     })
-    if (!custom) update(field.key, '')
-    else { setFailed(null); setSaved(false) }
+    setFailed(null); setSaved(false)
+  }
+
+  const stabilizeLocationCard = (): void => {
+    if (formRef.current === null) return
+    stabilizeProviderCard(formRef.current.closest<HTMLElement>('[data-provider]') ?? formRef.current)
   }
 
   const locations = globalLocationFields(props.provider)
@@ -235,17 +251,26 @@ function ProviderServiceForm(props: {
   const locationsComplete = props.activeScope === 'workspace' || locations.every(field => !customLocations.has(field.key) || String(draft.settings[field.key] ?? '').trim() !== '')
   const formComplete = configurationComplete(props.provider, draft, props.service) && locationsComplete
 
-  return <form className={css.providerServiceForm} onSubmit={event => void submit(event)} data-provider={props.provider.id}>
+  return <form ref={formRef} className={css.providerServiceForm} onSubmit={event => void submit(event)} data-provider={props.provider.id}>
     <p className={css.providerServicePrompt}>{props.t(props.service.configured ? 'config.providerServiceHint' : 'config.providerEnableHint')}</p>
-    {locations.map(field => <div key={field.key} className={`${css.nativeLocation} ${css.providerServiceLocation}`}>
-      <div className={css.settingCopy}><strong>{props.t('config.providerGlobalLocation')}</strong><small>{props.t(props.activeScope === 'workspace' ? 'config.providerGlobalLocationWorkspaceHint' : 'config.providerGlobalLocationHint', { provider: props.provider.label })}</small></div>
-      <div className={css.inlineChoices} role="radiogroup" aria-label={`${props.provider.label} ${props.t('config.providerGlobalLocation')}`}>
-        <label><input type="radio" name={`${props.provider.id}-${field.key}-location`} checked={props.activeScope === 'workspace' || !customLocations.has(field.key)} disabled={props.disabled || saving || props.activeScope === 'workspace'} onChange={() => useCustomLocation(field, false)} /><span>{props.t('config.providerDefaultLocation')}</span></label>
-        <label><input type="radio" name={`${props.provider.id}-${field.key}-location`} checked={props.activeScope !== 'workspace' && customLocations.has(field.key)} disabled={props.disabled || saving || props.activeScope === 'workspace'} onChange={() => useCustomLocation(field, true)} /><span>{props.t('config.custom')}</span></label>
-      </div>
-    </div>)}
+    {locations.map(field => <GlobalLocationSetting
+      key={field.key}
+      className={css.providerServiceLocation}
+      name={`${props.provider.id}-${field.key}-location`}
+      ariaLabel={`${props.provider.label} ${props.t('config.providerGlobalLocation')}`}
+      label={props.t('config.providerGlobalLocation')}
+      hint={props.t(props.activeScope === 'workspace' ? 'config.providerGlobalLocationWorkspaceHint' : 'config.providerGlobalLocationHint', { provider: props.provider.label })}
+      defaultLabel={props.t('config.providerDefaultLocation')}
+      customLabel={props.t('config.custom')}
+      custom={customLocations.has(field.key)}
+      workspace={props.activeScope === 'workspace'}
+      disabled={props.disabled || saving}
+      onInteract={stabilizeLocationCard}
+      onChange={custom => useCustomLocation(field, custom)}
+    >
+      <div className={css.providerLocationField}><ServiceField field={field} value={draft.settings[field.key]} configuredSecrets={props.service.configuredSecrets} disabled={props.disabled || saving} t={props.t} onChange={value => update(field.key, value)} /></div>
+    </GlobalLocationSetting>)}
     <div className={css.providerSettingsGrid}>
-      {locations.filter(field => props.activeScope !== 'workspace' && customLocations.has(field.key)).map(field => <ServiceField key={field.key} field={field} value={draft.settings[field.key]} configuredSecrets={props.service.configuredSecrets} disabled={props.disabled || saving} t={props.t} onChange={value => update(field.key, value)} />)}
       {regularFields.map(field => <ServiceField key={field.key} field={field} value={draft.settings[field.key]} configuredSecrets={props.service.configuredSecrets} disabled={props.disabled || saving} t={props.t} onChange={value => update(field.key, value)} />)}
     </div>
     <div className={`${css.memoryConfigFooter} ${css.providerServiceFooter}`}>

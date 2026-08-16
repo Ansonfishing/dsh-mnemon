@@ -517,7 +517,7 @@ describe('MnemonView', () => {
     expect(overviewTab.getAttribute('aria-selected')).toBe('true')
     expect(rememberAction.className).toContain('primaryButton')
     expect(screen.getByRole('heading', { name: '记忆体', level: 2 })).toBeTruthy()
-    expect(screen.getByText('管理全局记忆体的读取边界，并在一张实时四图快照中观察所有已激活记忆体。')).toBeTruthy()
+    expect(screen.getByText('创建并管理具体记忆体；每个记忆体使用一个已启用 Provider，并统一参与读取、路由与实时快照。')).toBeTruthy()
     expect(screen.getByRole('heading', { name: '概览', level: 2 })).toBeTruthy()
     await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
 
@@ -644,7 +644,7 @@ describe('MnemonView', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
     await waitFor(() => expect(screen.getByText('Mnemon 默认')).toBeTruthy())
-    expect(screen.getByText(/这里的“激活”只控制记忆体是否参与 DSH/)).toBeTruthy()
+    expect(screen.getByText(/每张卡片是一份可独立启停的记忆体配置/)).toBeTruthy()
     const toggle = screen.getByRole('switch', { name: '项目记忆体读取开关' })
     expect(toggle.hasAttribute('disabled')).toBe(false)
     fireEvent.click(toggle)

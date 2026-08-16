@@ -200,6 +200,8 @@ export interface MemoryProviderServiceView {
   configured: boolean
   settings: MemoryProviderConnection
   configuredSecrets: string[]
+  /** Present only on the settings RPC so its password inputs can use native reveal/hide behavior. */
+  secretValues?: MemoryProviderConnection
 }
 
 export interface MemoryProviderServiceCatalog {

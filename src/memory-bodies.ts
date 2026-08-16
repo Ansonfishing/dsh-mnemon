@@ -203,7 +203,7 @@ export class MemoryBodyRegistry {
       : this.providerServiceConfigured(providerId) && this.serviceEnabled[providerId] === true
   }
 
-  providerServices(): MemoryProviderServiceCatalog {
+  providerServices(options: { includeSecrets?: boolean } = {}): MemoryProviderServiceCatalog {
     const providers = MEMORY_PROVIDER_CATALOG.filter(provider => provider.id !== 'mnemon-native')
     const items: MemoryProviderServiceView[] = providers.map(provider => {
       const connection = this.services[provider.id]
@@ -213,6 +213,9 @@ export class MemoryBodyRegistry {
         enabled: this.providerServiceEnabled(provider.id),
         configured: connection !== undefined,
         ...publicConnection,
+        ...(options.includeSecrets === true && connection !== undefined
+          ? { secretValues: Object.fromEntries(publicConnection.configuredSecrets.map(key => [key, connection[key]!])) }
+          : {}),
       }
     })
     return { providers: [...providers], items, generatedAt: this.now().toISOString() }

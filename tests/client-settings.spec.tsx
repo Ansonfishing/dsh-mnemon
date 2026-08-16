@@ -395,7 +395,7 @@ describe('MnemonSettingsCard', () => {
       fields: [{ key: 'dataPath', label: 'Fact store path', scope: 'service' as const, role: 'global-location' as const, input: 'path' as const, required: false }],
     }
     const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
-      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'holographic', enabled: true, configured: true, settings: {}, configuredSecrets: [] }], generatedAt: '2026-08-17T00:00:00.000Z' } }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'holographic', enabled: true, configured: true, settings: { dataPath: '/srv/dsh/holographic.json' }, configuredSecrets: [] }], generatedAt: '2026-08-17T00:00:00.000Z' } }
       if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') {
         const request = payload as { settings: Record<string, string> }
         return { ok: true as const, value: { providerId: 'holographic', enabled: true, configured: true, settings: request.settings, configuredSecrets: [] } }
@@ -409,17 +409,34 @@ describe('MnemonSettingsCard', () => {
     const card = await screen.findByRole('group', { name: 'Holographic 服务配置' })
     fireEvent.click(within(card).getByText('Holographic'))
     const location = within(card).getByRole('radiogroup', { name: 'Holographic 全局数据位置' })
-    expect((within(location).getByRole('radio', { name: '默认（跟随范围）' }) as HTMLInputElement).checked).toBe(true)
-    fireEvent.click(within(location).getByRole('radio', { name: '自定义' }))
+    const defaultLocation = within(location).getByRole('radio', { name: '默认（跟随范围）' }) as HTMLInputElement
+    const customLocation = within(location).getByRole('radio', { name: '自定义' }) as HTMLInputElement
+    const scrollViewport = card.parentElement as HTMLElement
+    scrollViewport.style.overflowY = 'auto'
+    Object.defineProperties(scrollViewport, { clientHeight: { configurable: true, value: 100 }, scrollHeight: { configurable: true, value: 1000 } })
+    const hiddenViewport = scrollViewport.parentElement as HTMLElement
+    hiddenViewport.style.overflowY = 'hidden'
+
+    expect(customLocation.checked).toBe(true)
+    hiddenViewport.scrollTop = 240
+    fireEvent.click(customLocation)
+    expect(hiddenViewport.scrollTop).toBe(0)
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      hiddenViewport.scrollTop = 240
+      fireEvent.click(defaultLocation)
+      expect(within(card).queryByRole('textbox', { name: '事实存储路径' })).toBeNull()
+      expect(hiddenViewport.scrollTop).toBe(0)
+      fireEvent.click(customLocation)
+      expect((within(card).getByRole('textbox', { name: '事实存储路径' }) as HTMLInputElement).value).toBe('/srv/dsh/holographic.json')
+    }
     const path = within(card).getByRole('textbox', { name: '事实存储路径' })
     const save = within(card).getByRole('button', { name: '保存服务配置' }) as HTMLButtonElement
-    expect(save.disabled).toBe(true)
-    fireEvent.change(path, { target: { value: '/srv/dsh/holographic.json' } })
+    fireEvent.change(path, { target: { value: '/srv/dsh/holographic-v2.json' } })
     expect(save.disabled).toBe(false)
     fireEvent.click(save)
 
     await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', expect.objectContaining({
-      providerId: 'holographic', enabled: true, settings: { dataPath: '/srv/dsh/holographic.json' },
+      providerId: 'holographic', enabled: true, settings: { dataPath: '/srv/dsh/holographic-v2.json' },
     })))
   })
 
@@ -447,8 +464,8 @@ describe('MnemonSettingsCard', () => {
       ],
     }
     const call = vi.fn(async (channel: string, endpoint: string) => {
-      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'openviking', enabled: true, configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'] }], generatedAt: '2026-08-17T00:00:00.000Z' } }
-      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') return { ok: true as const, value: { providerId: 'openviking', enabled: true, configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'] } }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'openviking', enabled: true, configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'], secretValues: { apiKey: 'service-secret' } }], generatedAt: '2026-08-17T00:00:00.000Z' } }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') return { ok: true as const, value: { providerId: 'openviking', enabled: true, configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'], secretValues: { apiKey: 'service-secret' } } }
       if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/workspace/.mnemon', scope: 'workspace' } }
       throw new Error(`unexpected ${channel} ${endpoint}`)
     })
@@ -469,26 +486,24 @@ describe('MnemonSettingsCard', () => {
     expect(screen.queryByLabelText('记忆体名称')).toBeNull()
     expect(screen.queryByRole('checkbox', { name: '清除已保存的凭据' })).toBeNull()
     const apiKey = screen.getByLabelText('API Key') as HTMLInputElement
-    expect(apiKey.value).toBe('••••••••••••')
+    expect(apiKey.value).toBe('service-secret')
     expect(apiKey.type).toBe('password')
     expect(screen.queryByText(/已安全保存/)).toBeNull()
     expect(screen.queryByRole('button', { name: /移除已保存/ })).toBeNull()
     const showCredential = screen.getByRole('button', { name: '显示凭证' }) as HTMLButtonElement
-    expect(showCredential.disabled).toBe(true)
-    fireEvent.change(apiKey, { target: { value: 'replacement-secret' } })
     expect(showCredential.disabled).toBe(false)
     fireEvent.click(showCredential)
     expect(apiKey.type).toBe('text')
+    expect(apiKey.value).toBe('service-secret')
+    fireEvent.change(apiKey, { target: { value: 'replacement-secret' } })
     expect(apiKey.value).toBe('replacement-secret')
     fireEvent.click(screen.getByRole('button', { name: '隐藏凭证' }))
     expect(apiKey.type).toBe('password')
-    fireEvent.change(apiKey, { target: { value: '' } })
-    expect(apiKey.value).toBe('••••••••••••')
     fireEvent.click(screen.getByRole('button', { name: '保存服务配置' }))
 
     await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', {
       providerId: 'openviking',
-      settings: { endpoint: 'http://127.0.0.1:1933' },
+      settings: { endpoint: 'http://127.0.0.1:1933', apiKey: 'replacement-secret' },
       enabled: true,
       sessionId: 'session-1',
       workspaceId: 'workspace-1',

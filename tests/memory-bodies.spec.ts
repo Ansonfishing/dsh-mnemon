@@ -231,6 +231,7 @@ describe('MemoryBodyRegistry', () => {
 
     const service = registry.updateProviderService('openviking', { endpoint: 'http://127.0.0.1:1933', apiKey: 'service-secret', account: 'team' })
     expect(service).toEqual({ providerId: 'openviking', enabled: true, configured: true, settings: { endpoint: 'http://127.0.0.1:1933', account: 'team' }, configuredSecrets: ['apiKey'] })
+    expect(registry.providerServices({ includeSecrets: true }).items.find(item => item.providerId === 'openviking')).toMatchObject({ secretValues: { apiKey: 'service-secret' } })
 
     const created = await registry.create({
       name: '团队记忆', description: '团队共享内容。', providerId: 'openviking',

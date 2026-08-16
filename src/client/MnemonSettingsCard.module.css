@@ -147,7 +147,10 @@
 .providerToggleError { margin: 0; padding: 0 14px 12px; color: var(--dsw-alias-state-error-primary); font-size: 10px; line-height: 16px; }
 .providerServiceForm { display: flex; min-width: 0; flex-direction: column; gap: 12px; padding-top: 13px; }
 .providerServicePrompt { margin: 0; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 17px; }
-.providerServiceLocation { min-height: 0; border-bottom: 1px solid var(--dsw-alias-border-l2); padding: 0 0 12px; }
+.globalLocationSetting { display: flex; min-width: 0; flex-direction: column; }
+.providerServiceLocation { border-bottom: 1px solid var(--dsw-alias-border-l2); padding-bottom: 12px; }
+.providerServiceLocation > .nativeLocation { min-height: 0; padding: 0 0 12px; }
+.providerLocationField { border-top: 1px solid var(--dsw-alias-border-l2); padding-top: 11px; }
 
 .nativeLocation {
   display: flex;
@@ -159,10 +162,11 @@
 }
 
 .inlineChoices { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
-.inlineChoices label { cursor: pointer; }
-.inlineChoices input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); }
+.inlineChoices label { position: relative; cursor: pointer; }
+.inlineChoices input { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit; }
 .inlineChoices span { display: inline-flex; height: 32px; align-items: center; border: 1px solid var(--dsw-alias-border-l2); border-radius: 16px; padding: 0 11px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .inlineChoices input:checked + span { border-color: var(--dsw-alias-border-l1); color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+.inlineChoices input:focus-visible + span { box-shadow: 0 0 0 2px var(--dsw-alias-border-l3); }
 .inlineChoices input:disabled + span { cursor: default; opacity: .42; }
 
 .embeddedSection { display: flex; min-width: 0; flex-direction: column; gap: 10px; border-top: 1px solid var(--dsw-alias-border-l2); padding-top: 13px; }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type JSX } from 'react'
 import type { ClientConnectionHandle, ClientSettingsScope, ClientSettingsSnapshot, Config, InteractionConfig, SettingsOperation } from '../shared/contracts.ts'
 import css from './MnemonSettingsCard.module.css'
+import { GlobalLocationSetting } from './GlobalLocationSetting.tsx'
 import { translateZh, type MnemonTranslate } from './locales.ts'
 import { MnemonPackSection } from './MnemonPackSection.tsx'
 import { ProviderIcon } from './ProviderIcon.tsx'
@@ -209,34 +210,40 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
               <span className={css.providerHeaderMeta}><span className={css.providerScopeTag} data-scope={activeScope}>{t(`config.${activeScope}`)}</span><span className={css.providerState}>{t('config.officialNative')}</span></span>
             </summary>
             <div className={css.providerPanelBody}>
-              <div className={css.nativeLocation}>
-                <div className={css.settingCopy}><strong>{t('config.nativeGlobalLocation')}</strong><small>{draft.storageScope === 'workspace' ? t('config.nativeGlobalLocationWorkspaceHint') : t('config.nativeGlobalLocationHint')}</small></div>
-                <div className={css.inlineChoices} role="radiogroup" aria-label={t('config.nativeGlobalLocation')}>
-                  <label><input type="radio" name="mnemon-native-location" checked={draft.storageScope === 'global'} disabled={coreDisabled || draft.storageScope === 'workspace'} onChange={() => editMany({ storageScope: 'global', dataDir: '' })} /><span>{t('config.nativeDefaultLocation')}</span></label>
-                  <label><input type="radio" name="mnemon-native-location" checked={draft.storageScope === 'custom'} disabled={coreDisabled || draft.storageScope === 'workspace'} onChange={() => edit('storageScope', 'custom')} /><span>{t('config.custom')}</span></label>
+              <GlobalLocationSetting
+                name="mnemon-native-location"
+                ariaLabel={t('config.nativeGlobalLocation')}
+                label={t('config.nativeGlobalLocation')}
+                hint={draft.storageScope === 'workspace' ? t('config.nativeGlobalLocationWorkspaceHint') : t('config.nativeGlobalLocationHint')}
+                defaultLabel={t('config.nativeDefaultLocation')}
+                customLabel={t('config.custom')}
+                custom={draft.storageScope === 'custom'}
+                workspace={draft.storageScope === 'workspace'}
+                disabled={coreDisabled}
+                onChange={custom => custom ? edit('storageScope', 'custom') : editMany({ storageScope: 'global', dataDir: '' })}
+              >
+                <div className={css.settingRow}>
+                  <div className={css.settingCopy}><strong>{t('config.customDirectory')}</strong><small>{t('config.customDirectoryHint')}</small></div>
+                  <div className={css.directoryControl}>
+                    <input
+                      id="mnemon-custom-directory"
+                      name="mnemon-custom-directory"
+                      type="text"
+                      className={css.directoryInput}
+                      aria-label={t('config.customAria')}
+                      aria-invalid={error !== null}
+                      placeholder={t('config.customPlaceholder')}
+                      value={draft.dataDir}
+                      disabled={coreDisabled}
+                      autoComplete="off"
+                      spellCheck={false}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      onChange={event => edit('dataDir', event.target.value)}
+                    />
+                  </div>
                 </div>
-              </div>
-              {draft.storageScope === 'custom' && <div className={css.settingRow}>
-                <div className={css.settingCopy}><strong>{t('config.customDirectory')}</strong><small>{t('config.customDirectoryHint')}</small></div>
-                <div className={css.directoryControl}>
-                  <input
-                    id="mnemon-custom-directory"
-                    name="mnemon-custom-directory"
-                    type="text"
-                    className={css.directoryInput}
-                    aria-label={t('config.customAria')}
-                    aria-invalid={error !== null}
-                    placeholder={t('config.customPlaceholder')}
-                    value={draft.dataDir}
-                    disabled={coreDisabled}
-                    autoComplete="off"
-                    spellCheck={false}
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    onChange={event => edit('dataDir', event.target.value)}
-                  />
-                </div>
-              </div>}
+              </GlobalLocationSetting>
               <MnemonPackSection {...(connection === undefined ? {} : { connection })} {...(sessionId === undefined ? {} : { sessionId })} {...(workspaceId === undefined ? {} : { workspaceId })} refreshKey={targetRevision} t={t} embedded />
             </div>
           </details>

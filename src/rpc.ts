@@ -187,7 +187,7 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
         case 'bodies':
           return success(await service.bodies())
         case 'provider-services':
-          return success(service.memoryBodies.providerServices())
+          return success(service.memoryBodies.providerServices({ includeSecrets: true }))
         case 'list':
           return success(await service.list({
             ...(payload.query === undefined ? {} : { query: String(payload.query) }),
@@ -285,7 +285,8 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
                 ? payload.clearSecrets.map(String)
                 : (() => { throw new Error('clearSecrets must be an array') })()
             const enabled = payload.enabled === undefined ? true : payload.enabled === true
-            return success(service.memoryBodies.updateProviderService(providerId, settings, clearSecrets, enabled))
+            const updated = service.memoryBodies.updateProviderService(providerId, settings, clearSecrets, enabled)
+            return success(service.memoryBodies.providerServices({ includeSecrets: true }).items.find(item => item.providerId === providerId) ?? updated)
           }
         case 'runtime-memory':
           if (resolved.graph.runtimeMemory === undefined) throw new Error('runtime memory is unavailable')
