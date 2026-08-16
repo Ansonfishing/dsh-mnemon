@@ -81,6 +81,33 @@ export interface InteractionConfig {
   saveAction?: boolean
 }
 
+export interface ResolvedConfig {
+  storageScope: StorageScopeKind
+  cliPath?: string
+  dataDir?: string
+  store?: string
+  timeoutMs: number
+  defaultRecallLimit: number
+  routingGuidance: boolean
+  displayMode: 'sidebar' | 'buildin'
+  tabEnabled: boolean
+  writeEnabled: boolean
+  lifecycleEnabled: boolean
+  recallMode: 'guided' | 'off'
+  writebackMode: 'guided' | 'off'
+  idleReviewMs: number
+  conversationInteraction: {
+    toolviews: boolean
+    turnBar: boolean
+    saveAction: boolean
+  }
+}
+
+export interface ResolvedInteractionConfig {
+  turnBar: boolean
+  saveAction: boolean
+}
+
 export interface MemoryBody {
   id: string
   name: string
