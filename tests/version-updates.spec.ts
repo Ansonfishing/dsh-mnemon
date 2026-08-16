@@ -46,7 +46,7 @@ describe('VersionUpdateManager', () => {
 
     const status = await manager.check()
     expect(status.components.find(component => component.id === 'dsh-mnemon')).toMatchObject({
-      current: '0.1.2', latest: '0.1.3', outdated: true, installMode: 'link', updateSupported: false, updateHint: 'link',
+      current: '0.1.2', latest: '0.1.3', outdated: true, installMode: 'link', installProfile: 'web', installPath: root, updateSupported: false, updateHint: 'link',
     })
   })
 
@@ -70,6 +70,10 @@ describe('VersionUpdateManager', () => {
       current: '0.2.3',
       latest: '0.2.3',
     })
+    expect(status.components.find(component => component.id === 'dsh-mnemon')).toMatchObject({
+      installMode: 'manual',
+      installPath: root,
+    })
   })
 
   it('updates an npm-managed plugin only inside its owning DSH profile', async () => {
@@ -88,6 +92,12 @@ describe('VersionUpdateManager', () => {
       fetchMnemonLatest: async () => '0.2.0',
     })
 
+    const status = await manager.check()
+    expect(status.components.find(component => component.id === 'dsh-mnemon')).toMatchObject({
+      installMode: 'npm',
+      installProfile: 'web',
+      installPath: profile,
+    })
     await expect(manager.update('dsh-mnemon')).resolves.toMatchObject({ updated: true, currentVersion: '0.1.3', restartRequired: true })
     expect(manager.currentDshMnemonVersion).toBe('0.1.3')
     expect(run).toHaveBeenCalledWith(expect.stringMatching(/pnpm$/), ['update', 'dsh-mnemon'], expect.objectContaining({ timeoutMs: 600_000, maxOutputBytes: 16 * 1024 }))

@@ -12,6 +12,8 @@ export interface VersionComponentStatus {
   id: VersionComponentId
   name: string
   executablePath?: string
+  installPath?: string
+  installProfile?: string
   current?: string
   latest?: string
   outdated: boolean
@@ -44,6 +46,7 @@ interface PackageManifest {
 
 interface DshInstall {
   mode: Extract<VersionInstallMode, 'npm' | 'link' | 'manual'>
+  locationDir: string
   profileName?: string
   profileDir?: string
 }
@@ -220,8 +223,10 @@ function profileFromAncestor(packageManifestPath: string): DshInstall | undefine
     const profile = manifest(join(directory, 'package.json'))
     if (profile?.name?.startsWith('dsh-profile-') === true) {
       const spec = dependencySpec(profile)
+      const linked = isLinkSpec(spec)
       return {
-        mode: isLinkSpec(spec) ? 'link' : 'npm',
+        mode: linked ? 'link' : 'npm',
+        locationDir: linked && spec !== undefined ? linkedTarget(directory, spec) ?? resolve(dirname(packageManifestPath)) : directory,
         profileName: profile.name.slice('dsh-profile-'.length),
         profileDir: directory,
       }
@@ -237,7 +242,7 @@ function linkedProfile(packageManifestPath: string, dshHome: string): DshInstall
   const profilesDir = join(dshHome, 'profiles')
   if (!existsSync(profilesDir)) return undefined
   const packageRoot = realpathSync(dirname(packageManifestPath))
-  const matches: Array<{ name: string; dir: string }> = []
+  const matches: Array<{ name: string; dir: string; locationDir: string }> = []
   for (const entry of readdirSync(profilesDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
     const profileDir = join(profilesDir, entry.name)
@@ -246,17 +251,17 @@ function linkedProfile(packageManifestPath: string, dshHome: string): DshInstall
     const target = spec === undefined ? undefined : linkedTarget(profileDir, spec)
     if (target === undefined || !existsSync(target)) continue
     try {
-      if (realpathSync(target) === packageRoot) matches.push({ name: entry.name, dir: profileDir })
+      if (realpathSync(target) === packageRoot) matches.push({ name: entry.name, dir: profileDir, locationDir: target })
     } catch {
       // A stale link belongs to neither the running package nor an update target.
     }
   }
   const match = matches[0]
-  return match === undefined ? undefined : { mode: 'link', profileName: match.name, profileDir: match.dir }
+  return match === undefined ? undefined : { mode: 'link', locationDir: match.locationDir, profileName: match.name, profileDir: match.dir }
 }
 
 function inspectDshInstall(packageManifestPath: string, dshHome: string): DshInstall {
-  return profileFromAncestor(packageManifestPath) ?? linkedProfile(packageManifestPath, dshHome) ?? { mode: 'manual' }
+  return profileFromAncestor(packageManifestPath) ?? linkedProfile(packageManifestPath, dshHome) ?? { mode: 'manual', locationDir: resolve(dirname(packageManifestPath)) }
 }
 
 async function resultOrThrow(runner: ProcessRunner, command: string, args: readonly string[], timeoutMs: number): Promise<ProcessResult> {
@@ -366,6 +371,8 @@ export class VersionUpdateManager {
         {
           id: 'dsh-mnemon',
           name: 'dsh-mnemon',
+          ...(dshInstall.profileName === undefined ? {} : { installProfile: dshInstall.profileName }),
+          installPath: dshInstall.locationDir,
           current: this.currentDshMnemonVersion,
           ...(dshLatest === undefined ? {} : { latest: dshLatest }),
           outdated: dshOutdated,

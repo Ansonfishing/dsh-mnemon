@@ -5,6 +5,8 @@ export interface VersionComponentStatus {
     id: VersionComponentId;
     name: string;
     executablePath?: string;
+    installPath?: string;
+    installProfile?: string;
     current?: string;
     latest?: string;
     outdated: boolean;

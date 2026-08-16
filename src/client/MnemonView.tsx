@@ -1589,6 +1589,14 @@ function versionHint(t: MnemonTranslate, component: VersionComponentStatus): str
   return t('versions.hintManual')
 }
 
+function dshInstallLabel(t: MnemonTranslate, component: VersionComponentStatus): string {
+  if (component.installMode === 'npm') return t('versions.profileLocation', { name: component.installProfile ?? '—' })
+  if (component.installMode === 'link') return component.installProfile === undefined
+    ? t('versions.sourceLocation')
+    : t('versions.linkSourceLocation', { name: component.installProfile })
+  return t('versions.packageLocation')
+}
+
 function VersionDialog(props: { client: MnemonClient; onClose: () => void; onRefreshStatus: () => void }): JSX.Element {
   const t = useT()
   const [snapshot, setSnapshot] = useState<VersionStatus | null>(null)
@@ -1635,7 +1643,8 @@ function VersionDialog(props: { client: MnemonClient; onClose: () => void; onRef
         return <article key={component.id} data-outdated={component.outdated || undefined}>
           <header><div><strong>{component.name}</strong><span>{versionModeLabel(t, component.installMode)}</span></div><em>{state}</em></header>
           <div className={css.versionNumbers}><div><small>{t('versions.installed')}</small><code>{component.current ?? '—'}</code></div><span>→</span><div><small>{t('versions.latest')}</small><code>{component.latest ?? '—'}</code></div></div>
-          {component.id === 'mnemon' && component.executablePath !== undefined && <small className={css.versionExecutable} title={component.executablePath}><span>{t('versions.executable')}</span><code>{component.executablePath}</code></small>}
+          {component.id === 'mnemon' && component.executablePath !== undefined && <small className={css.versionLocation} title={component.executablePath}><span>{t('versions.executable')}</span><code>{component.executablePath}</code></small>}
+          {component.id === 'dsh-mnemon' && component.installPath !== undefined && <small className={css.versionLocation} title={component.installPath}><span>{dshInstallLabel(t, component)}</span><code>{component.installPath}</code></small>}
           <footer><p>{versionHint(t, component)}</p>{canUpdate && <button type="button" className={css.primaryButton} disabled={busy} onClick={() => void update(component)}>{updating === component.id ? t('versions.updating') : t('versions.update')}</button>}</footer>
         </article>
       })}</div>}
