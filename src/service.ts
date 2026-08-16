@@ -797,7 +797,13 @@ export class MnemonService {
   }
 
   private annotate<T extends Insight>(insight: T, body: MemoryBody): T {
-    return { ...insight, memoryBodyId: body.id, memoryBodyName: body.name, memoryProviderId: body.provider.id }
+    return {
+      ...insight,
+      memoryBodyId: body.id,
+      memoryBodyName: body.name,
+      memoryProviderId: body.provider.id,
+      memoryCapabilities: body.provider.capabilities,
+    }
   }
 
   private annotateResult(result: JsonValue, body: MemoryBody): JsonValue {

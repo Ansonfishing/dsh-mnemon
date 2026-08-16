@@ -272,6 +272,8 @@ export interface Insight {
   memoryBodyId?: string
   memoryBodyName?: string
   memoryProviderId?: MemoryProviderId
+  /** Owning Provider capabilities at read time; safe to expose to clients. */
+  memoryCapabilities?: MemoryProviderCapabilities
   externalUri?: string
 }
 

@@ -20,7 +20,7 @@ describe('MnemonView', () => {
     unsetPath: async () => {},
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { withInactiveBody?: boolean; withPlacement?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean } = {}) {
+  function createConnection(options: { withInactiveBody?: boolean; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -120,6 +120,26 @@ describe('MnemonView', () => {
     }
     const memory = { id: 'memory-12345678', content: options.longContent === true ? '这是一段非常长的记忆内容，用于验证图谱检查器对超长文本的截断展示，以及全文预览窗口的打开与关闭。'.repeat(6) : '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], entities: ['SQLite'], color: '#e74c3c', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-12345678` }
     const secondaryMemory = { id: 'preference-1', content: '用户偏好简洁中文回答。', category: 'preference', importance: 4, tags: ['style'], entities: ['DSH'], color: '#9b59b6', memoryBodyId: secondaryBody.id, memoryBodyName: secondaryBody.name, graphId: `${secondaryBody.id}:preference-1` }
+    const providerSources = options.withProviderSources === true ? {
+      graph: [
+        { memoryBodyId: body.id, memoryBodyName: body.name, providerId: 'mnemon-native', providerLabel: 'Mnemon Native', mode: 'graph', status: 'ready', itemCount: 2, edgeCount: 2 },
+        { memoryBodyId: 'viking-lab', memoryBodyName: 'OpenViking 团队知识', providerId: 'openviking', providerLabel: 'OpenViking', mode: 'projection', status: 'ready', itemCount: 3, edgeCount: 0, hint: '该 Provider 返回内容投影，不承诺原生关系边。' },
+        { memoryBodyId: 'retain-lab', memoryBodyName: 'RetainDB 协作记录', providerId: 'retaindb', providerLabel: 'RetainDB', mode: 'query-only', status: 'query-required', itemCount: 0, edgeCount: 0 },
+      ],
+      list: [
+        { memoryBodyId: body.id, memoryBodyName: body.name, providerId: 'mnemon-native', providerLabel: 'Mnemon Native', mode: 'enumerable', status: 'ready', itemCount: 1 },
+        { memoryBodyId: 'viking-lab', memoryBodyName: 'OpenViking 团队知识', providerId: 'openviking', providerLabel: 'OpenViking', mode: 'query-only', status: 'query-required', itemCount: 0 },
+        { memoryBodyId: 'supermemory-lab', memoryBodyName: 'Supermemory 研究素材', providerId: 'supermemory', providerLabel: 'Supermemory', mode: 'unsupported', status: 'unsupported', itemCount: 0 },
+      ],
+      entities: [
+        { memoryBodyId: body.id, memoryBodyName: body.name, providerId: 'mnemon-native', providerLabel: 'Mnemon Native', mode: 'entities', status: 'ready', itemCount: 1 },
+        { memoryBodyId: 'mem0-lab', memoryBodyName: 'Mem0 用户画像', providerId: 'mem0', providerLabel: 'Mem0', mode: 'unsupported', status: 'unsupported', itemCount: 0 },
+      ],
+      search: [
+        { memoryBodyId: body.id, memoryBodyName: body.name, providerId: 'mnemon-native', providerLabel: 'Mnemon Native', mode: 'search', status: 'ready', itemCount: 1 },
+        { memoryBodyId: 'mem0-lab', memoryBodyName: 'Mem0 用户画像', providerId: 'mem0', providerLabel: 'Mem0', mode: 'search', status: 'empty', itemCount: 0 },
+      ],
+    } : undefined
     let runtimeEntries = options.runtimeCount === undefined
       ? [{ content: '用户偏好简洁中文回答。', created_at: '2026-08-13T02:00:00.000Z', updated_at: '2026-08-13T02:00:00.000Z', target: 'user', importance: 'critical' }]
       : Array.from({ length: options.runtimeCount }, (_, index) => ({ content: `运行时条目 ${index + 1}`, created_at: `2026-08-13T02:${String(index).padStart(2, '0')}:00.000Z`, updated_at: `2026-08-13T02:${String(index).padStart(2, '0')}:00.000Z`, target: index % 2 === 0 ? 'user' : 'memory', importance: index % 3 === 0 ? 'critical' : 'normal' }))
@@ -196,19 +216,20 @@ describe('MnemonView', () => {
             { sourceId: `${body.id}:${memory.id}`, targetId: `${body.id}:memory-graph-2`, label: 'SQLite', color: '#2ecc71', type: 'entity' },
           ],
           generatedAt: '2026-08-13T03:00:00.000Z',
+          ...(providerSources === undefined ? {} : { sources: providerSources.graph }),
         },
       }
       if (endpoint === 'list') {
         const items = options.listCount === undefined
           ? [memory]
           : Array.from({ length: options.listCount }, (_, index) => ({ ...memory, id: `memory-${index + 1}`, graphId: `${body.id}:memory-${index + 1}`, content: `记忆条目 ${index + 1}` }))
-        return { ok: true, value: { items, total: items.length, generatedAt: '2026-08-13T03:00:00.000Z' } }
+        return { ok: true, value: { items, total: items.length, generatedAt: '2026-08-13T03:00:00.000Z', ...(providerSources === undefined ? {} : { sources: providerSources.list }) } }
       }
       if (endpoint === 'entities') {
         const items = options.entityCount === undefined ? [{ entity: 'SQLite', count: 2 }] : Array.from({ length: options.entityCount }, (_, index) => ({ entity: `实体 ${index + 1}`, count: options.entityCount! - index }))
         const selected = payload?.entity === undefined ? undefined : String(payload.entity)
         const insights = selected === undefined ? [] : Array.from({ length: options.entityInsightCount ?? 1 }, (_, index) => ({ ...memory, id: `entity-memory-${index + 1}`, graphId: `${body.id}:entity-memory-${index + 1}`, content: `${selected} 关联记忆 ${index + 1}` }))
-        return { ok: true, value: { items, ...(selected === undefined ? {} : { selected }), insights } }
+        return { ok: true, value: { items, ...(selected === undefined ? {} : { selected }), insights, ...(providerSources === undefined ? {} : { sources: providerSources.entities }) } }
       }
       if (endpoint === 'search') return {
         ok: true,
@@ -216,6 +237,7 @@ describe('MnemonView', () => {
           query: 'SQLite',
           mode: 'smart',
           results: options.searchCount === undefined ? [memory] : Array.from({ length: options.searchCount }, (_, index) => ({ ...memory, id: `search-memory-${index + 1}`, graphId: `${body.id}:search-memory-${index + 1}`, content: `检索记忆 ${index + 1}` })),
+          ...(providerSources === undefined ? {} : { sources: providerSources.search }),
         },
       }
       if (endpoint === 'agent-search') return {
@@ -349,6 +371,40 @@ describe('MnemonView', () => {
     expect(screen.getByRole('img', { name: /Mnemon 实时记忆图谱，7 个元素/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: '记忆体: 偏好记忆体' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '实体: DSH' })).toBeTruthy()
+  })
+
+  it('keeps overview, recall, content, and entities aligned with each provider read contract', async () => {
+    const { connection } = createConnection({ withProviderSources: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    const snapshot = await screen.findByRole('region', { name: '快照可观察范围' })
+    expect(within(snapshot).getByText('真实关系图')).toBeTruthy()
+    expect(within(snapshot).getByText('内容投影')).toBeTruthy()
+    expect(within(snapshot).getByText('仅查询')).toBeTruthy()
+    expect(within(snapshot).getByText(/2 条真实关系/)).toBeTruthy()
+
+    const memoryTabs = screen.getByRole('tablist', { name: '记忆体页面' })
+    fireEvent.click(within(memoryTabs).getByRole('tab', { name: '检索' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '记忆查询' }), { target: { value: 'SQLite' } })
+    fireEvent.click(screen.getByRole('button', { name: '直接检索' }))
+    const recallSources = await screen.findByRole('region', { name: '本次检索范围' })
+    expect(within(recallSources).getByText('项目记忆体')).toBeTruthy()
+    expect(within(recallSources).getByText('Mem0 用户画像')).toBeTruthy()
+    expect(within(recallSources).getByText('已连接 · 暂无内容')).toBeTruthy()
+
+    fireEvent.click(within(memoryTabs).getByRole('tab', { name: '内容' }))
+    const contentSources = await screen.findByRole('region', { name: 'Provider 内容模型' })
+    fireEvent.click(within(contentSources).getByRole('button', { name: /OpenViking 团队知识/ }))
+    expect(await screen.findByRole('heading', { name: '查询型记忆体等待问题' })).toBeTruthy()
+    expect(within(contentSources).getByText('当前表面不可用')).toBeTruthy()
+
+    fireEvent.click(within(memoryTabs).getByRole('tab', { name: '实体' }))
+    const entitySources = await screen.findByRole('region', { name: '实体能力范围' })
+    expect(within(entitySources).getByText('实体索引')).toBeTruthy()
+    expect(within(entitySources).getByText('Mem0 用户画像')).toBeTruthy()
+    expect(within(entitySources).getByText('不支持')).toBeTruthy()
   })
 
   it('checks both product versions and only offers a safe supported update', async () => {
