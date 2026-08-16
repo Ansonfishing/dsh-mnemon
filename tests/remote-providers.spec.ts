@@ -183,6 +183,7 @@ describe('Hermes-inspired remote memory providers', () => {
       const path = new URL(String(url)).pathname
       if (path === '/v4/search') return response({ results: [{ id: 'sm-1', memory: 'Alice uses dark mode.', similarity: 0.88, metadata: { category: 'preference' } }] })
       if (path === '/v4/memories/list') return response({ memoryEntries: [{ id: 'sm-1', memory: 'Alice uses dark mode.', createdAt: '2026-08-16T00:00:00Z' }] })
+      if (path === '/v3/documents/documents') return response({ documents: [] })
       if (path === '/v3/documents') return response({ id: 'doc-1', status: 'queued' })
       if (path === '/v4/memories' && init?.method === 'DELETE') return response({ id: 'sm-1', forgotten: true })
       throw new Error(`unexpected ${init?.method ?? 'GET'} ${path}`)
@@ -205,12 +206,12 @@ describe('Hermes-inspired remote memory providers', () => {
     expect(JSON.parse(String(requests.at(-1)?.init?.body))).toEqual({ id: 'sm-1', containerTag: 'alice', reason: 'Deleted from dsh-mnemon' })
   })
 
-  it('falls back to Supermemory documents when extraction produced no memory entries', async () => {
+  it('merges Supermemory documents with extracted entries and falls back for document deletion', async () => {
     const requests: string[] = []
     const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
       const path = new URL(String(url)).pathname
       requests.push(`${init?.method ?? 'GET'} ${path}`)
-      if (path === '/v4/memories/list') return response({ memoryEntries: [] })
+      if (path === '/v4/memories/list') return response({ memoryEntries: [{ id: 'memory-1', memory: 'An extracted memory is browseable.' }] })
       if (path === '/v3/documents/documents') {
         return response({ documents: [{
           id: 'doc-1',
@@ -229,6 +230,7 @@ describe('Hermes-inspired remote memory providers', () => {
     const provider = new SupermemoryProvider(registry, { fetch: fetchMock })
 
     await expect(provider.list(body, { limit: 10 })).resolves.toEqual([
+      expect.objectContaining({ id: 'memory-1', content: 'An extracted memory is browseable.' }),
       expect.objectContaining({ id: 'doc-1', content: 'A retained document is still browseable.', category: 'context' }),
     ])
     await expect(provider.forget(body, 'doc-1')).resolves.toMatchObject({ action: 'deleted', document: true })

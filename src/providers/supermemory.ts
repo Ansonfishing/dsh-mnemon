@@ -55,11 +55,12 @@ export class SupermemoryProvider extends HttpMemoryProvider implements MemoryPro
 
   async list(body: MemoryBody, request: MemoryListRequest, signal?: AbortSignal): Promise<Insight[]> {
     const connection = this.connection(body)
+    const limit = Math.min(Math.max(request.limit ?? 200, 1), 200)
     const payload = await this.request(body, '/v4/memories/list', {
       headers: this.headers(connection),
       json: {
         containerTags: [String(connection.containerTag)],
-        limit: Math.min(Math.max(request.limit ?? 200, 1), 200),
+        limit,
         page: 1,
         sort: 'createdAt',
         order: 'desc',
@@ -67,24 +68,25 @@ export class SupermemoryProvider extends HttpMemoryProvider implements MemoryPro
       signal,
     })
     const memories = firstArray(payload, 'memoryEntries', 'results').map(insight).filter((item): item is Insight => item !== undefined)
-    if (memories.length > 0) return memories.filter(item => request.category === undefined || item.category === request.category)
 
-    // Supermemory Lite may retain ingested documents without extracting a
-    // separate memory entry. Those documents are still valid browseable
-    // content, so fall back to the same document projection used by its MCP.
+    // Supermemory exposes extracted memories and their source documents as
+    // separate read surfaces. Lite may extract only some documents, so merge
+    // both surfaces instead of hiding documents as soon as one memory exists.
     const documents = await this.request(body, '/v3/documents/documents', {
       headers: this.headers(connection),
       json: {
         containerTags: [String(connection.containerTag)],
-        limit: Math.min(Math.max(request.limit ?? 200, 1), 200),
+        limit,
         page: 1,
         sort: 'createdAt',
         order: 'desc',
       },
       signal,
     })
-    return firstArray(documents, 'documents', 'memories', 'results').map(insight).filter((item): item is Insight => item !== undefined)
+    const projectedDocuments = firstArray(documents, 'documents', 'memories', 'results').map(insight).filter((item): item is Insight => item !== undefined)
+    return [...new Map([...memories, ...projectedDocuments].map(item => [item.id, item])).values()]
       .filter(item => request.category === undefined || item.category === request.category)
+      .slice(0, limit)
   }
 
   async remember(body: MemoryBody, request: RememberRequest, signal?: AbortSignal): Promise<JsonValue> {
