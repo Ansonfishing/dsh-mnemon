@@ -118,6 +118,32 @@ function normalizeOpenViking(connection: OpenVikingBodyConnection): StoredOpenVi
   }
 }
 
+function normalizePlacementDecision(value: unknown, providerId: MemoryProviderId): MemoryPlacementDecision | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  const placement = value as Partial<MemoryPlacementDecision>
+  if (placement.mode !== 'automatic' || placement.providerId !== providerId) return undefined
+  if (placement.decidedBy !== 'rules' && placement.decidedBy !== 'llm') return undefined
+  if (placement.confidence !== 'high' && placement.confidence !== 'medium' && placement.confidence !== 'low') return undefined
+  if (typeof placement.reason !== 'string' || placement.reason.trim() === '' || placement.reason.length > 1000) return undefined
+  if (!Array.isArray(placement.candidateProviderIds) || !placement.candidateProviderIds.every(id => id === 'mnemon-native' || id === 'openviking') || !placement.candidateProviderIds.includes(providerId)) return undefined
+  if (!Array.isArray(placement.appliedRules) || !placement.appliedRules.every(rule => typeof rule === 'string' && rule.length <= 500)) return undefined
+  if (typeof placement.decidedAt !== 'string' || placement.decidedAt.trim() === '') return undefined
+  if (placement.runId !== undefined && typeof placement.runId !== 'string') return undefined
+  if (placement.subagentProvider !== undefined && typeof placement.subagentProvider !== 'string') return undefined
+  return {
+    mode: 'automatic',
+    providerId,
+    decidedBy: placement.decidedBy,
+    reason: placement.reason.trim(),
+    confidence: placement.confidence,
+    candidateProviderIds: [...new Set(placement.candidateProviderIds)],
+    appliedRules: [...placement.appliedRules],
+    decidedAt: placement.decidedAt,
+    ...(placement.runId === undefined ? {} : { runId: placement.runId }),
+    ...(placement.subagentProvider === undefined ? {} : { subagentProvider: placement.subagentProvider }),
+  }
+}
+
 export function validateMemoryBodyId(value: string): string {
   const normalized = value.trim()
   if (!ID_PATTERN.test(normalized)) throw new Error('memoryBodyId must match [a-zA-Z0-9][a-zA-Z0-9_-]*')
@@ -201,6 +227,8 @@ export class MemoryBodyRegistry {
     if (placement !== undefined && request.providerId !== undefined && request.providerId !== placement.providerId) throw new Error('resolved provider placement conflicts with providerId')
     const providerId = placement?.providerId ?? request.providerId ?? 'mnemon-native'
     if (providerId !== 'mnemon-native' && providerId !== 'openviking') throw new Error(`unsupported memory provider: ${String(providerId)}`)
+    const normalizedPlacement = placement === undefined ? undefined : normalizePlacementDecision(placement, providerId)
+    if (placement !== undefined && normalizedPlacement === undefined) throw new Error('resolved provider placement is invalid')
     const reservedIds = new Set(this.list().map(body => body.id))
     const nativeStoreIds = this.nativeStoreIds()
     let id = providerId === 'mnemon-native' && nativeStoreIds.length === 0 && !reservedIds.has('default')
@@ -218,7 +246,7 @@ export class MemoryBodyRegistry {
       description,
       active: request.active ?? false,
       providerId,
-      ...(placement === undefined ? {} : { placement }),
+      ...(normalizedPlacement === undefined ? {} : { placement: normalizedPlacement }),
       ...(openViking === undefined ? {} : { openViking }),
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -324,13 +352,15 @@ export class MemoryBodyRegistry {
               && body.name === '默认记忆体'
               && body.description === '从现有 Mnemon Store 自动接入。'
             migratedSyntheticDefault ||= syntheticDefault
+            const providerId: MemoryProviderId = 'providerId' in body && body.providerId === 'openviking' ? 'openviking' : 'mnemon-native'
+            const placement = 'placement' in body ? normalizePlacementDecision(body.placement, providerId) : undefined
             return {
               id: body.id,
               name: requiredText(syntheticDefault ? body.id : body.name || body.id, 'name', 100),
               description: optionalText(syntheticDefault ? 'Existing Mnemon Store discovered on disk.' : body.description, 'description', 1000),
               active: body.active === true,
-              providerId: 'providerId' in body && body.providerId === 'openviking' ? 'openviking' : 'mnemon-native',
-              ...('placement' in body && body.placement !== undefined ? { placement: body.placement } : {}),
+              providerId,
+              ...(placement === undefined ? {} : { placement }),
               ...('openViking' in body && body.openViking != null ? { openViking: normalizeOpenViking(body.openViking as OpenVikingBodyConnection) } : {}),
               createdAt: body.createdAt,
               updatedAt: body.updatedAt,
@@ -349,17 +379,20 @@ export class MemoryBodyRegistry {
           const existingIds = new Set(this.bodies.map(body => body.id))
           this.bodies.push(...parsed.bodies
             .filter(body => body.providerId === 'openviking' && ID_PATTERN.test(body.id) && !existingIds.has(body.id))
-            .map(body => ({
-              id: body.id,
-              name: requiredText(body.name || body.id, 'name', 100),
-              description: optionalText(body.description, 'description', 1000),
-              active: body.active === true,
-              providerId: 'openviking' as const,
-              ...(body.placement === undefined ? {} : { placement: body.placement }),
-              openViking: normalizeOpenViking(body.openViking ?? { endpoint: '', targetUri: '' }),
-              createdAt: body.createdAt,
-              updatedAt: body.updatedAt,
-            })))
+            .map(body => {
+              const placement = normalizePlacementDecision(body.placement, 'openviking')
+              return {
+                id: body.id,
+                name: requiredText(body.name || body.id, 'name', 100),
+                description: optionalText(body.description, 'description', 1000),
+                active: body.active === true,
+                providerId: 'openviking' as const,
+                ...(placement === undefined ? {} : { placement }),
+                openViking: normalizeOpenViking(body.openViking ?? { endpoint: '', targetUri: '' }),
+                createdAt: body.createdAt,
+                updatedAt: body.updatedAt,
+              }
+            }))
         }
       } catch {
         // Ignore an invalid optional provider registry; native Stores remain usable.

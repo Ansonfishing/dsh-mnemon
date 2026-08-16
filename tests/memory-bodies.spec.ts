@@ -251,6 +251,25 @@ describe('MemoryBodyRegistry', () => {
     })
   })
 
+  it('ignores malformed placement metadata without losing the Memory Space', () => {
+    const dataDir = temporaryDirectory()
+    mkdirSync(join(dataDir, 'data', 'default'), { recursive: true })
+    writeFileSync(join(dataDir, 'data', 'default', 'mnemon.db'), 'existing database')
+    writeFileSync(join(dataDir, 'data', '.dsh-memory-bodies.json'), JSON.stringify({
+      version: 1,
+      bodies: [{
+        id: 'default', name: 'Local', description: 'Local decisions.', active: true,
+        placement: { mode: 'automatic', providerId: 'openviking', decidedBy: 'llm', confidence: 'certain', reason: 'wrong provider' },
+        createdAt: '2026-08-16T00:00:00.000Z', updatedAt: '2026-08-16T00:00:00.000Z',
+      }],
+    }))
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
+
+    const body = new MemoryBodyRegistry(runner, true).get('default')
+    expect(body).toMatchObject({ id: 'default', name: 'Local', provider: { id: 'mnemon-native' } })
+    expect(body.placement).toBeUndefined()
+  })
+
   it('migrates a version 2 mixed registry into native data and provider state without losing credentials', () => {
     const dataDir = temporaryDirectory()
     mkdirSync(join(dataDir, 'data', 'default'), { recursive: true })

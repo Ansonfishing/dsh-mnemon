@@ -5,6 +5,7 @@ import {
   rulesOnlyPlacement,
   type MemoryPlacementCandidate,
 } from '../src/provider-placement.ts'
+import type { MemoryPlacementCapability } from '../src/shared/contracts.ts'
 
 const candidates: MemoryPlacementCandidate[] = [
   {
@@ -98,5 +99,16 @@ describe('memory provider placement', () => {
       mode: 'automatic',
       rules: { allowedProviderIds: [] },
     }, candidates)).toThrow('at least one allowed provider')
+  })
+
+  it('rejects unknown runtime rule values instead of weakening a hard boundary', () => {
+    expect(() => prepareMemoryPlacement({
+      mode: 'automatic',
+      rules: { dataBoundary: 'sometimes-local' as 'local-only' },
+    }, candidates)).toThrow('unsupported data boundary')
+    expect(() => prepareMemoryPlacement({
+      mode: 'automatic',
+      rules: { requiredCapabilities: ['telepathy' as MemoryPlacementCapability] },
+    }, candidates)).toThrow('unsupported required memory capability')
   })
 })
