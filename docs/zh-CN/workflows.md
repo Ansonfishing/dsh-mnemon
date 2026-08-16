@@ -96,7 +96,7 @@ spawn write worker
 structured receipt
 ```
 
-新建 Memory Space 的 ID 由 Host 生成。向 inactive 目标写入成功后会激活它。来源数据库的合并是非破坏性的。
+空存储根首次创建 Memory Space 时使用 Mnemon 原生 `default` ID，后续 ID 由 Host 生成。向 inactive 目标写入成功后会激活它。这里的激活只影响 DSH 路由；来源数据库的合并是非破坏性的。
 
 运行时 `add` / `replace` / `remove` 和 Document `create` / `update` 不需要模型做存储 I/O；它们通过 coordinator 进入确定性控制层。容量维护和归档才启动专用 worker。
 

@@ -142,15 +142,17 @@ Documents 的物理共享范围由 `storageScope` 决定：
 每个记忆体是一个 Mnemon 原生命名 Store，并在 `.dsh-memory-bodies.json` 中增加可维护元数据：
 
 ```text
-id            Host 生成的稳定 UUID 或已发现的兼容 Store 名
+id            首个 Store 使用 default；后续由 Host 生成 UUID，或沿用已发现的兼容 Store 名
 name          人类可读名称
 description   路由边界：什么属于这里、何时召回
-active        是否参与读取
+active        是否参与 DSH 读取与路由
 mnemon.db     独立数据面
 ```
 
 ### 读写边界
 
+- Mnemon 原生层在初始化后至少保留一个 Store，并通过 `<storageRoot>/active` 选择一个默认 Store；普通 Mnemon Agent 仍按这套单 Store 语义工作。
+- dsh-mnemon 的激活状态是独立控制面：任意 0..N 个 Store 可以激活，全部未激活也不会改变 Mnemon 默认 Store 或影响其他 Agent。
 - 召回、图谱、内容和实体读取只使用已激活记忆体。
 - 指定未激活记忆体进行读取会被拒绝。
 - 写入可以选择已登记的任意记忆体。
@@ -159,9 +161,11 @@ mnemon.db     独立数据面
 
 ### 创建、发现和合并
 
-- 创建时模型提供 name 和 description，Host 生成 ID。
+- 未初始化的空根可以保持零 Store；第一次显式创建记忆体时使用 Mnemon 原生 `default` ID，名称与路由说明仍由用户决定，后续创建使用 Host 生成的 UUID。
+- 初始化后不能删除最后一个原生 Store，但可以将最后一个记忆体设为未激活。删除 Mnemon 默认 Store 时，插件会先切换到另一个现存 Store。
 - 既有 `<storageRoot>/data/<store>/mnemon.db` 会被发现并登记，不移动数据库。
 - 合并通过 Mnemon import 把来源内容导入目标；来源数据库保留，默认只将来源设为未激活。
+- Pack 替换不能把已初始化的 Store 集合清空；替换后若原默认 Store 已不存在，插件会选择一个现存 Store 修复原生默认指针。
 - `forget` 是按精确 ID 的软删除，不等于删除数据库文件。
 
 ### 跨 Agent 可见性

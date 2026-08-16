@@ -142,15 +142,17 @@ Default search covers only active Documents. Search updates `lastAccessedAt` for
 Each Memory Space is a native named Mnemon Store with maintainable metadata added in `.dsh-memory-bodies.json`:
 
 ```text
-id            Host-generated stable UUID or discovered compatible Store name
+id            default for the first Store; then a Host UUID or a discovered compatible Store name
 name          human-readable name
 description   routing boundary: what belongs here and when to recall it
-active        whether it participates in reads
+active        whether it participates in DSH reads and routing
 mnemon.db     independent data plane
 ```
 
 ### Read and Write Boundaries
 
+- After initialization, Mnemon's native layer retains at least one Store and selects one default through `<storageRoot>/active`; ordinary Mnemon agents continue to use this single-Store model.
+- dsh-mnemon activation is an independent control plane: any 0..N Stores may be active, and making all of them inactive neither changes Mnemon's default Store nor affects other agents.
 - Recall, graph, content, and entity reads use only active Memory Spaces.
 - Reads explicitly targeting an inactive Memory Space are rejected.
 - Writes may target any registered Memory Space.
@@ -159,9 +161,11 @@ mnemon.db     independent data plane
 
 ### Creation, Discovery, and Merge
 
-- On creation, the model supplies a name and description; the Host generates the ID.
+- An uninitialized root may remain at zero Stores. The first explicit Memory Space creation uses Mnemon's native `default` ID while retaining the user-supplied name and routing description; later creations use Host-generated UUIDs.
+- The last native Store cannot be deleted after initialization, but its Memory Space may remain inactive. Before deleting Mnemon's default Store, the plugin switches to another existing Store.
 - An existing `<storageRoot>/data/<store>/mnemon.db` is discovered and registered without moving the database.
 - Merge imports source content into the target through Mnemon; the source database remains in place, and by default only the source is marked inactive.
+- Pack replacement cannot empty an initialized Store set. If replacement removes the former default Store, the plugin repairs the native default pointer to an existing Store.
 - `forget` is a soft delete by exact ID, not deletion of a database file.
 
 ### Cross-Agent Visibility
