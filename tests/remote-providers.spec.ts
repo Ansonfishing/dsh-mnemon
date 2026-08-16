@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveConfig } from '../src/config.ts'
 import { MemoryBodyRegistry } from '../src/memory-bodies.ts'
 import type { ProcessRunner } from '../src/process.ts'
+import { HindsightProvider } from '../src/providers/hindsight.ts'
+import { HonchoProvider } from '../src/providers/honcho.ts'
 import { Mem0Provider } from '../src/providers/mem0.ts'
 import { RetainDbProvider } from '../src/providers/retaindb.ts'
 import { SupermemoryProvider } from '../src/providers/supermemory.ts'
@@ -37,6 +39,79 @@ function response(payload: unknown, status = 200): Response {
 }
 
 describe('Hermes-inspired remote memory providers', () => {
+  it('uses Honcho v3 conclusion scope for recall, explicit writes, and deletion', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = []
+    const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
+      requests.push({ url: String(url), ...(init === undefined ? {} : { init }) })
+      const path = new URL(String(url)).pathname
+      if (path.endsWith('/conclusions/query')) return response([{ id: 'hon-1', content: 'Alice prefers short answers.', level: 'peer', observer_id: 'dsh', observed_id: 'alice' }])
+      if (path.endsWith('/conclusions/list')) return response({ items: [{ id: 'hon-1', content: 'Alice prefers short answers.', created_at: '2026-08-16T00:00:00Z' }] })
+      if (path.endsWith('/conclusions') && init?.method === 'POST') return response({ conclusions: [{ id: 'hon-2', content: 'Alice is testing memory.' }] })
+      if (path.endsWith('/conclusions/hon-1') && init?.method === 'DELETE') return response(undefined, 204)
+      throw new Error(`unexpected ${init?.method ?? 'GET'} ${path}`)
+    })
+    const { registry, body } = await providerBody('honcho', {
+      endpoint: 'https://api.honcho.dev', apiKey: 'honcho-secret', workspace: 'product team', userId: 'alice', agentId: 'dsh',
+    })
+    const provider = new HonchoProvider(registry, { fetch: fetchMock })
+
+    await expect(provider.search(body, { query: 'answer style', limit: 7 })).resolves.toEqual({
+      results: [expect.objectContaining({ id: 'hon-1', content: 'Alice prefers short answers.', entities: ['dsh', 'alice'] })],
+    })
+    await expect(provider.list(body, { limit: 20 })).resolves.toEqual([expect.objectContaining({ id: 'hon-1' })])
+    await expect(provider.remember(body, { content: 'Alice is testing memory.' })).resolves.toMatchObject({ action: 'stored', provider: 'honcho' })
+    await expect(provider.forget(body, 'hon-1')).resolves.toMatchObject({ action: 'deleted', id: 'hon-1' })
+
+    expect(new URL(requests[0]!.url).pathname).toBe('/v3/workspaces/product%20team/conclusions/query')
+    expect(new Headers(requests[0]?.init?.headers).get('Authorization')).toBe('Bearer honcho-secret')
+    expect(JSON.parse(String(requests[0]?.init?.body))).toEqual({
+      query: 'answer style', top_k: 7, filters: { observer_id: 'dsh', observed_id: 'alice' },
+    })
+    expect(JSON.parse(String(requests[2]?.init?.body))).toEqual({
+      conclusions: [{ content: 'Alice is testing memory.', observer_id: 'dsh', observed_id: 'alice', session_id: null }],
+    })
+  })
+
+  it('maps Hindsight recall, graph traversal, asynchronous retain, and soft forget', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = []
+    const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
+      requests.push({ url: String(url), ...(init === undefined ? {} : { init }) })
+      const path = new URL(String(url)).pathname
+      if (path.endsWith('/memories/recall')) return response({ results: [{ id: 'hs-1', text: 'Alice uses TypeScript.', type: 'world', entities: ['Alice'], scores: { final: 0.93 } }] })
+      if (path.endsWith('/memories/list')) return response({ items: [{ id: 'hs-1', text: 'Alice uses TypeScript.', type: 'world' }], total: 1 })
+      if (path.endsWith('/graph')) return response({
+        nodes: [{ id: 'hs-1', label: 'Alice' }, { id: 'hs-2', label: 'TypeScript' }, { id: 'hs-3', label: 'Node.js' }],
+        edges: [{ from: 'hs-1', to: 'hs-2', type: 'entity' }, { from: 'hs-2', to: 'hs-3', type: 'semantic' }],
+      })
+      if (path.endsWith('/memories') && init?.method === 'POST') return response({ operation_id: 'op-1', items_count: 1 })
+      if (path.endsWith('/memories/hs-1') && init?.method === 'PATCH') return response({ state: 'invalidated' })
+      throw new Error(`unexpected ${init?.method ?? 'GET'} ${path}`)
+    })
+    const { registry, body } = await providerBody('hindsight', {
+      endpoint: 'https://api.hindsight.vectorize.io', apiKey: 'hs-secret', bankId: 'alice/profile', budget: 'high',
+    })
+    const provider = new HindsightProvider(registry, { fetch: fetchMock })
+
+    await expect(provider.search(body, { query: 'language', limit: 3 })).resolves.toEqual({
+      results: [expect.objectContaining({ id: 'hs-1', category: 'world', score: 0.93, entities: ['Alice'] })],
+    })
+    await expect(provider.list(body, { limit: 25 })).resolves.toEqual([expect.objectContaining({ id: 'hs-1' })])
+    await expect(provider.related(body, 'hs-1', 2)).resolves.toEqual([
+      expect.objectContaining({ id: 'hs-2' }), expect.objectContaining({ id: 'hs-3' }),
+    ])
+    await expect(provider.remember(body, { content: 'Alice ships TypeScript.', category: 'decision', tags: ['dsh'], entities: ['Alice'] })).resolves.toMatchObject({ operationId: 'op-1', itemsCount: 1 })
+    await expect(provider.forget(body, 'hs-1')).resolves.toMatchObject({ action: 'invalidated', id: 'hs-1' })
+
+    expect(new URL(requests[0]!.url).pathname).toBe('/v1/default/banks/alice%2Fprofile/memories/recall')
+    expect(new Headers(requests[0]?.init?.headers).get('Authorization')).toBe('Bearer hs-secret')
+    expect(JSON.parse(String(requests[0]?.init?.body))).toMatchObject({ query: 'language', budget: 'high', types: ['world', 'experience', 'observation'] })
+    expect(JSON.parse(String(requests[3]?.init?.body))).toMatchObject({
+      items: [{ content: 'Alice ships TypeScript.', context: 'decision', tags: ['dsh'], entities: [{ text: 'Alice' }] }],
+      async: true,
+    })
+    expect(JSON.parse(String(requests[4]?.init?.body))).toEqual({ state: 'invalidated', reason: 'Forgotten from dsh-mnemon' })
+  })
+
   it('uses Mem0 Platform v3 scoping and keeps the token out of result projections', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = []
     const fetchMock = vi.fn<typeof fetch>(async (url, init) => {

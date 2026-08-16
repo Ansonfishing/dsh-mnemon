@@ -17,6 +17,8 @@ import { RetainDbProvider } from './providers/retaindb.ts'
 import { SupermemoryProvider } from './providers/supermemory.ts'
 import { HolographicProvider } from './providers/holographic.ts'
 import { ByteRoverProvider } from './providers/byterover.ts'
+import { HonchoProvider } from './providers/honcho.ts'
+import { HindsightProvider } from './providers/hindsight.ts'
 import { MEMORY_PROVIDER_CATALOG } from './providers/catalog.ts'
 import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './providers/provider.ts'
 import {
@@ -213,6 +215,8 @@ export class MnemonService {
     const supermemoryProvider = new SupermemoryProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
     const holographicProvider = new HolographicProvider(this.memoryBodies)
     const byteRoverProvider = new ByteRoverProvider(this.memoryBodies, { queryTimeoutMs: this.config.timeoutMs })
+    const honchoProvider = new HonchoProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
+    const hindsightProvider = new HindsightProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
     this.providers = new Map([
       [nativeProvider.id, nativeProvider],
       [openVikingProvider.id, openVikingProvider],
@@ -221,6 +225,8 @@ export class MnemonService {
       [supermemoryProvider.id, supermemoryProvider],
       [holographicProvider.id, holographicProvider],
       [byteRoverProvider.id, byteRoverProvider],
+      [honchoProvider.id, honchoProvider],
+      [hindsightProvider.id, hindsightProvider],
     ])
   }
 

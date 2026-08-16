@@ -116,7 +116,9 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     origin: 'hermes-inspired',
     capabilities: {
       ...REMOTE_EXACT_CAPABILITIES,
+      graph: true,
       entities: true,
+      related: true,
       writeMode: 'async-extracting',
       deletionMode: 'soft',
     },
