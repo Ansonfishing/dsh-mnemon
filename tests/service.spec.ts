@@ -103,6 +103,37 @@ describe('MnemonService', () => {
     expect(status.memoryBodies).toEqual([expect.objectContaining({ id: 'work', active: false, mnemonDefault: true })])
   })
 
+  it('reports enabled provider health and gates its Memory Spaces when disabled', async () => {
+    const { service } = fixture()
+    const provider = {
+      id: 'openviking' as const,
+      status: vi.fn(async () => ({ healthy: true })),
+      search: vi.fn(async () => ({ results: [] })),
+      graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
+      list: vi.fn(async () => []),
+      remember: vi.fn(async () => ({ action: 'stored' })),
+    }
+    ;(service as unknown as { providers: Map<string, typeof provider> }).providers.set('openviking', provider)
+    const body = await service.createBody({
+      name: 'Team memory', description: 'Shared provider memory.', active: true, providerId: 'openviking',
+      connection: { endpoint: 'http://127.0.0.1:1933', targetUri: 'viking://user/team/memories' },
+    })
+
+    await expect(service.status()).resolves.toMatchObject({
+      providerServices: expect.arrayContaining([expect.objectContaining({
+        providerId: 'openviking', enabled: true, configured: true, status: 'healthy', memoryBodyCount: 1, activeMemoryBodyCount: 1,
+      })]),
+    })
+
+    service.memoryBodies.updateProviderService('openviking', {}, [], false)
+    await expect(service.status()).resolves.toMatchObject({
+      providerServices: expect.arrayContaining([expect.objectContaining({
+        providerId: 'openviking', enabled: false, configured: true, status: 'disabled', memoryBodyCount: 1, activeMemoryBodyCount: 0,
+      })]),
+    })
+    await expect(service.search({ query: 'anything', memoryBodyIds: [body.id] })).rejects.toThrow('disabled in Settings')
+  })
+
   it('uses graph recall by default and normalizes compact results', async () => {
     const { service, process, dataDir } = fixture()
     const result = await service.search({ query: ' database choice ' })

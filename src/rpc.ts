@@ -284,7 +284,8 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
               : Array.isArray(payload.clearSecrets)
                 ? payload.clearSecrets.map(String)
                 : (() => { throw new Error('clearSecrets must be an array') })()
-            return success(service.memoryBodies.updateProviderService(providerId, settings, clearSecrets))
+            const enabled = payload.enabled === undefined ? true : payload.enabled === true
+            return success(service.memoryBodies.updateProviderService(providerId, settings, clearSecrets, enabled))
           }
         case 'runtime-memory':
           if (resolved.graph.runtimeMemory === undefined) throw new Error('runtime memory is unavailable')

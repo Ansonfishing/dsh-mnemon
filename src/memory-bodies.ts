@@ -69,6 +69,7 @@ interface LegacyProviderRegistryFileOnDisk {
 interface ProviderRegistryFile {
   version: 3
   services: Partial<Record<MemoryProviderId, MemoryProviderConnection>>
+  enabled?: Partial<Record<MemoryProviderId, boolean>>
   bodies: StoredMemoryBody[]
 }
 
@@ -134,6 +135,7 @@ export class MemoryBodyRegistry {
   readonly providerRegistryPath: string
   private bodies: StoredMemoryBody[] = []
   private services: Partial<Record<MemoryProviderId, MemoryProviderConnection>> = {}
+  private serviceEnabled: Partial<Record<MemoryProviderId, boolean>> = {}
 
   constructor(
     readonly runner: MnemonRunner,
@@ -152,7 +154,7 @@ export class MemoryBodyRegistry {
   }
 
   active(): MemoryBody[] {
-    return this.list().filter(body => body.active)
+    return this.list().filter(body => body.active && (body.provider.id === 'mnemon-native' || this.providerServiceEnabled(body.provider.id)))
   }
 
   get(id: string): MemoryBody {
@@ -195,6 +197,12 @@ export class MemoryBodyRegistry {
     return providerId === 'mnemon-native' ? this.runner.commandFound : Object.hasOwn(this.services, providerId)
   }
 
+  providerServiceEnabled(providerId: MemoryProviderId): boolean {
+    return providerId === 'mnemon-native'
+      ? this.runner.commandFound
+      : this.providerServiceConfigured(providerId) && this.serviceEnabled[providerId] === true
+  }
+
   providerServices(): MemoryProviderServiceCatalog {
     const providers = MEMORY_PROVIDER_CATALOG.filter(provider => provider.id !== 'mnemon-native')
     const items: MemoryProviderServiceView[] = providers.map(provider => {
@@ -202,6 +210,7 @@ export class MemoryBodyRegistry {
       const publicConnection = publicScopedProviderConnection(provider.id, 'service', connection ?? {})
       return {
         providerId: provider.id,
+        enabled: this.providerServiceEnabled(provider.id),
         configured: connection !== undefined,
         ...publicConnection,
       }
@@ -209,10 +218,11 @@ export class MemoryBodyRegistry {
     return { providers: [...providers], items, generatedAt: this.now().toISOString() }
   }
 
-  updateProviderService(providerId: MemoryProviderId, settings: MemoryProviderConnection, clearSecrets: readonly string[] = []): MemoryProviderServiceView {
+  updateProviderService(providerId: MemoryProviderId, settings: MemoryProviderConnection, clearSecrets: readonly string[] = [], enabled = true): MemoryProviderServiceView {
     if (providerId === 'mnemon-native') throw new Error('Mnemon Native service settings are managed by the native configuration')
     const previous = this.services[providerId] ?? {}
     this.services[providerId] = normalizeProviderServiceConnection(providerId, settings, previous, clearSecrets)
+    this.serviceEnabled[providerId] = enabled
     this.save()
     return this.providerServices().items.find(item => item.providerId === providerId)!
   }
@@ -228,7 +238,7 @@ export class MemoryBodyRegistry {
         try {
           const split = splitProviderConnection(descriptor.id, requestConnection)
           normalizeProviderConnection(descriptor.id, { ...(this.services[descriptor.id] ?? {}), ...split.service, ...split.memory })
-          configured = true
+          configured = Object.keys(split.service).length > 0 || this.providerServiceEnabled(descriptor.id)
         } catch { configured = false }
       }
       return {
@@ -266,8 +276,9 @@ export class MemoryBodyRegistry {
       const split = splitProviderConnection(providerId, connectionInput)
       if (Object.keys(split.service).length > 0) {
         this.services[providerId] = normalizeProviderServiceConnection(providerId, split.service, this.services[providerId] ?? {})
+        this.serviceEnabled[providerId] = true
       }
-      if (!this.providerServiceConfigured(providerId)) throw new Error(`${memoryProviderDescriptor(providerId).label} service is not configured; configure it in Settings first`)
+      if (!this.providerServiceEnabled(providerId)) throw new Error(`${memoryProviderDescriptor(providerId).label} service is not enabled; enable it in Settings first`)
       connection = normalizeProviderMemoryConnection(providerId, split.memory)
       normalizeProviderConnection(providerId, { ...this.services[providerId], ...connection })
     }
@@ -310,8 +321,9 @@ export class MemoryBodyRegistry {
       const clearSecrets = [...(request.clearSecrets ?? []), ...(request.openViking?.clearApiKey === true ? ['apiKey'] : [])]
       if (Object.keys(split.service).length > 0 || clearSecrets.length > 0) {
         this.services[current.providerId] = normalizeProviderServiceConnection(current.providerId, split.service, this.services[current.providerId] ?? {}, clearSecrets)
+        this.serviceEnabled[current.providerId] = true
       }
-      if (!this.providerServiceConfigured(current.providerId)) throw new Error(`${memoryProviderDescriptor(current.providerId).label} service is not configured; configure it in Settings first`)
+      if (!this.providerServiceEnabled(current.providerId)) throw new Error(`${memoryProviderDescriptor(current.providerId).label} service is not enabled; enable it in Settings first`)
       connection = normalizeProviderMemoryConnection(current.providerId, split.memory, previousConnection)
       normalizeProviderConnection(current.providerId, { ...this.services[current.providerId], ...connection })
     }
@@ -376,6 +388,7 @@ export class MemoryBodyRegistry {
   reload(): void {
     this.bodies = []
     this.services = {}
+    this.serviceEnabled = {}
     this.loadAndReconcile()
   }
 
@@ -407,6 +420,7 @@ export class MemoryBodyRegistry {
             const split = providerId === 'mnemon-native' ? undefined : splitProviderConnection(providerId, rawConnection)
             if (split !== undefined && this.services[providerId] === undefined) {
               this.services[providerId] = normalizeProviderServiceConnection(providerId, split.service)
+              this.serviceEnabled[providerId] = true
             }
             const connection = split === undefined ? undefined : normalizeProviderMemoryConnection(providerId, split.memory)
             if (connection !== undefined) normalizeProviderConnection(providerId, { ...this.services[providerId], ...connection })
@@ -435,6 +449,7 @@ export class MemoryBodyRegistry {
           for (const [providerId, settings] of Object.entries(parsed.services)) {
             if (!isMemoryProviderId(providerId) || providerId === 'mnemon-native' || typeof settings !== 'object' || settings === null) continue
             this.services[providerId] = normalizeProviderServiceConnection(providerId, settings)
+            this.serviceEnabled[providerId] = parsed.enabled === undefined ? true : parsed.enabled[providerId] === true
           }
         }
         if ((parsed.version === 1 || parsed.version === 2 || parsed.version === PROVIDER_REGISTRY_VERSION) && Array.isArray(parsed.bodies)) {
@@ -453,6 +468,7 @@ export class MemoryBodyRegistry {
                 : splitProviderConnection(providerId, rawConnection)
               if (parsed.version !== PROVIDER_REGISTRY_VERSION && this.services[providerId] === undefined) {
                 this.services[providerId] = normalizeProviderServiceConnection(providerId, split.service)
+                this.serviceEnabled[providerId] = true
               }
               const connection = normalizeProviderMemoryConnection(providerId, split.memory)
               normalizeProviderConnection(providerId, { ...this.services[providerId], ...connection })
@@ -548,7 +564,7 @@ export class MemoryBodyRegistry {
       return
     }
     mkdirSync(join(this.runner.effectiveDataDir(), 'state'), { recursive: true, mode: 0o700 })
-    this.writeRegistry(this.providerRegistryPath, { version: PROVIDER_REGISTRY_VERSION, services: this.services, bodies: providerBodies })
+    this.writeRegistry(this.providerRegistryPath, { version: PROVIDER_REGISTRY_VERSION, services: this.services, enabled: this.serviceEnabled, bodies: providerBodies })
   }
 
   private writeRegistry(path: string, file: NativeRegistryFile | ProviderRegistryFile): void {

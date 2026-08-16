@@ -159,7 +159,7 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JS
     {loading && <p className={css.providerLoading}>{props.t('config.loadingProviders')}</p>}
     {failed !== null && <div className={css.providerLoadError}><span className={css.error}>{props.t('config.providerLoadFailed', { error: failed })}</span><button type="button" className={css.textButton} onClick={() => void load()}>{props.t('config.retryProviders')}</button></div>}
     {!loading && failed === null && catalog?.providers.map(provider => {
-      const service = catalog.items.find(item => item.providerId === provider.id) ?? { providerId: provider.id, configured: false, settings: {}, configuredSecrets: [] }
+      const service = catalog.items.find(item => item.providerId === provider.id) ?? { providerId: provider.id, enabled: false, configured: false, settings: {}, configuredSecrets: [] }
       return <ProviderPanel key={provider.id} provider={provider} service={service} disabled={disabled} t={props.t} onSave={save} />
     })}
   </>

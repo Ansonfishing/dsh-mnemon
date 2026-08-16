@@ -205,6 +205,7 @@ describe('MemoryBodyRegistry', () => {
     expect(JSON.parse(readFileSync(registry.providerRegistryPath, 'utf8'))).toMatchObject({
       version: 3,
       services: { openviking: expect.objectContaining({ endpoint: 'https://memory.example.com', apiKey: 'secret-token', account: 'acme' }) },
+      enabled: { openviking: true },
       bodies: [expect.objectContaining({ id: created.id, providerId: 'openviking', connection: expect.objectContaining({ targetUri: 'viking://user/team/memories', user: 'grivn' }) })],
     })
     expect(statSync(registry.providerRegistryPath).mode & 0o777).toBe(0o600)
@@ -226,10 +227,10 @@ describe('MemoryBodyRegistry', () => {
     await expect(registry.create({
       name: '团队记忆', description: '团队共享内容。', providerId: 'openviking',
       connection: { targetUri: 'viking://user/team/memories', user: 'alice' },
-    })).rejects.toThrow('configure it in Settings first')
+    })).rejects.toThrow('enable it in Settings first')
 
     const service = registry.updateProviderService('openviking', { endpoint: 'http://127.0.0.1:1933', apiKey: 'service-secret', account: 'team' })
-    expect(service).toEqual({ providerId: 'openviking', configured: true, settings: { endpoint: 'http://127.0.0.1:1933', account: 'team' }, configuredSecrets: ['apiKey'] })
+    expect(service).toEqual({ providerId: 'openviking', enabled: true, configured: true, settings: { endpoint: 'http://127.0.0.1:1933', account: 'team' }, configuredSecrets: ['apiKey'] })
 
     const created = await registry.create({
       name: '团队记忆', description: '团队共享内容。', providerId: 'openviking',
@@ -240,7 +241,32 @@ describe('MemoryBodyRegistry', () => {
 
     const stored = JSON.parse(readFileSync(registry.providerRegistryPath, 'utf8'))
     expect(stored.services.openviking).toMatchObject({ endpoint: 'http://127.0.0.1:1933', apiKey: 'service-secret' })
+    expect(stored.enabled.openviking).toBe(true)
     expect(stored.bodies[0].connection).toEqual({ targetUri: 'viking://user/team/memories', user: 'alice', actorPeerId: 'dsh' })
+  })
+
+  it('keeps third-party providers off by default and preserves configuration while disabled', async () => {
+    const dataDir = temporaryDirectory()
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
+    const registry = new MemoryBodyRegistry(runner, true)
+
+    expect(registry.providerServices().items.every(service => !service.enabled && !service.configured)).toBe(true)
+
+    registry.updateProviderService('openviking', { endpoint: 'http://127.0.0.1:1933', apiKey: 'secret' })
+    const body = await registry.create({
+      name: '团队记忆', description: '团队共享内容。', active: true, providerId: 'openviking',
+      connection: { targetUri: 'viking://user/team/memories' },
+    })
+    expect(registry.active().map(item => item.id)).toContain(body.id)
+
+    const disabled = registry.updateProviderService('openviking', {}, [], false)
+    expect(disabled).toMatchObject({ enabled: false, configured: true, configuredSecrets: ['apiKey'] })
+    expect(registry.active().map(item => item.id)).not.toContain(body.id)
+    expect(registry.placementCandidates({}).find(candidate => candidate.id === 'openviking')).toMatchObject({ configured: false })
+
+    const reloaded = new MemoryBodyRegistry(runner, true)
+    expect(reloaded.providerServices().items.find(service => service.providerId === 'openviking')).toMatchObject({ enabled: false, configured: true, configuredSecrets: ['apiKey'] })
+    expect(JSON.parse(readFileSync(registry.providerRegistryPath, 'utf8'))).toMatchObject({ enabled: { openviking: false } })
   })
 
   it('persists an audited automatic placement and refuses to create before placement resolves', async () => {

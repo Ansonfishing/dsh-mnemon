@@ -194,6 +194,7 @@ export interface MemoryProviderDescriptor {
 
 export interface MemoryProviderServiceView {
   providerId: MemoryProviderId
+  enabled: boolean
   configured: boolean
   settings: MemoryProviderConnection
   configuredSecrets: string[]
@@ -208,7 +209,19 @@ export interface MemoryProviderServiceCatalog {
 export interface UpdateMemoryProviderServiceRequest {
   providerId: MemoryProviderId
   settings: MemoryProviderConnection
+  enabled?: boolean
   clearSecrets?: string[]
+}
+
+export interface MemoryProviderRuntimeStatus {
+  providerId: MemoryProviderId
+  label: string
+  enabled: boolean
+  configured: boolean
+  status: 'disabled' | 'idle' | 'healthy' | 'unhealthy'
+  memoryBodyCount: number
+  activeMemoryBodyCount: number
+  error?: string
 }
 
 export interface MemoryBodyProvider {
@@ -335,6 +348,8 @@ export interface MemoryBodyStats {
 export interface MemoryBodyView extends MemoryBody {
   /** True when Mnemon's persisted active-file selection points to this Store. */
   mnemonDefault: boolean
+  /** False when an external provider is disabled while its Memory Space registration remains preserved. */
+  providerEnabled?: boolean
   healthy: boolean
   error?: string
   stats?: MemoryBodyStats
@@ -686,6 +701,7 @@ export interface StatusView {
   defaultRecallLimit: number
   memoryBodyDirectory: string
   memoryBodies: MemoryBodyView[]
+  providerServices?: MemoryProviderRuntimeStatus[]
   lifecycle?: LifecycleSnapshot
   documents?: DocumentSnapshot
   storage?: StorageScopeCatalog

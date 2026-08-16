@@ -19,7 +19,7 @@ import { HolographicProvider } from './providers/holographic.ts'
 import { ByteRoverProvider } from './providers/byterover.ts'
 import { HonchoProvider } from './providers/honcho.ts'
 import { HindsightProvider } from './providers/hindsight.ts'
-import { MEMORY_PROVIDER_CATALOG } from './providers/catalog.ts'
+import { MEMORY_PROVIDER_CATALOG, memoryProviderDescriptor } from './providers/catalog.ts'
 import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './providers/provider.ts'
 import {
   CATEGORIES,
@@ -269,19 +269,21 @@ export class MnemonService {
     const mnemonDefaultStore = this.runner.persistedStore()
     const items: MemoryBodyView[] = await Promise.all(this.memoryBodies.list().map(async body => {
       let status: ProviderBodyStatus
-      try { status = await this.providerFor(body).status(body, signal) } catch (error) {
-        status = { healthy: false, error: error instanceof Error ? error.message : String(error) }
+      const providerEnabled = body.provider.id === 'mnemon-native' || this.memoryBodies.providerServiceEnabled(body.provider.id)
+      if (!providerEnabled) status = { healthy: false, error: `${body.provider.label} is disabled in Settings` }
+      else try { status = await this.providerFor(body).status(body, signal) } catch (error) {
+          status = { healthy: false, error: error instanceof Error ? error.message : String(error) }
       }
-      return { ...body, mnemonDefault: body.provider.id === 'mnemon-native' && body.id === mnemonDefaultStore, ...status }
+      return { ...body, providerEnabled, mnemonDefault: body.provider.id === 'mnemon-native' && body.id === mnemonDefaultStore, ...status }
     }))
     return {
       items,
       providers: MEMORY_PROVIDER_CATALOG.map(provider => ({
         ...provider,
-        serviceConfigured: provider.id === 'mnemon-native' || this.memoryBodies.providerServiceConfigured(provider.id),
+        serviceConfigured: provider.id === 'mnemon-native' || this.memoryBodies.providerServiceEnabled(provider.id),
       })),
       total: items.length,
-      activeCount: items.filter(body => body.active).length,
+      activeCount: items.filter(body => body.active && body.providerEnabled !== false).length,
       directory: this.memoryBodies.directory,
       generatedAt: new Date().toISOString(),
     }
@@ -289,8 +291,31 @@ export class MnemonService {
 
   async status(signal?: AbortSignal): Promise<StatusView> {
     const catalog = await this.bodies(signal)
-    const active = catalog.items.filter(body => body.active)
+    const active = catalog.items.filter(body => body.active && body.providerEnabled !== false)
     const dshActiveStores = active.map(body => body.id)
+    const providerServices = this.memoryBodies.providerServices().items.map(service => {
+      const descriptor = memoryProviderDescriptor(service.providerId)
+      const bodies = catalog.items.filter(body => body.provider.id === service.providerId)
+      const activeBodies = bodies.filter(body => body.active && body.providerEnabled !== false)
+      const failed = activeBodies.filter(body => !body.healthy)
+      const status = !service.enabled
+        ? 'disabled' as const
+        : activeBodies.length === 0
+          ? 'idle' as const
+          : failed.length === 0
+            ? 'healthy' as const
+            : 'unhealthy' as const
+      return {
+        providerId: service.providerId,
+        label: descriptor.label,
+        enabled: service.enabled,
+        configured: service.configured,
+        status,
+        memoryBodyCount: bodies.length,
+        activeMemoryBodyCount: activeBodies.length,
+        ...(failed.length === 0 ? {} : { error: failed.map(body => `${body.name}: ${body.error ?? 'unavailable'}`).join('; ') }),
+      }
+    })
     const base = {
       cliPath: this.runner.command,
       commandFound: this.runner.commandFound,
@@ -303,6 +328,7 @@ export class MnemonService {
       defaultRecallLimit: this.config.defaultRecallLimit,
       memoryBodyDirectory: catalog.directory,
       memoryBodies: catalog.items,
+      providerServices,
     }
     try {
       const hasNativeBody = catalog.items.some(body => body.provider.id === 'mnemon-native')
@@ -780,6 +806,7 @@ export class MnemonService {
     return requested.map(id => {
       const body = this.memoryBodies.get(id)
       if (!body.active) throw new Error(`memory body is not active for reading: ${id}`)
+      if (body.provider.id !== 'mnemon-native' && !this.memoryBodies.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled in Settings`)
       return body
     })
   }
@@ -788,6 +815,7 @@ export class MnemonService {
     if (id !== undefined && id.trim() !== '') {
       const body = this.memoryBodies.get(id)
       if (!body.active) throw new Error(`memory body is not active for reading: ${body.id}`)
+      if (body.provider.id !== 'mnemon-native' && !this.memoryBodies.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled in Settings`)
       return body
     }
     const active = this.memoryBodies.active()
@@ -796,7 +824,11 @@ export class MnemonService {
   }
 
   private writeBody(id?: string): MemoryBody {
-    if (id !== undefined && id.trim() !== '') return this.memoryBodies.get(id)
+    if (id !== undefined && id.trim() !== '') {
+      const body = this.memoryBodies.get(id)
+      if (body.provider.id !== 'mnemon-native' && !this.memoryBodies.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled in Settings`)
+      return body
+    }
     const active = this.memoryBodies.active()
     if (active.length !== 1) throw new Error('memoryBodyId is required when the number of active memory bodies is not exactly one')
     return active[0]!

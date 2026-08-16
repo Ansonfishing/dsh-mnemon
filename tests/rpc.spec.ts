@@ -122,9 +122,9 @@ describe('Mnemon RPC', () => {
   it('updates provider service settings without creating a Memory Space', async () => {
     const service = fakeService()
     await expect(createWriteHandler(service)('provider-service-update', {
-      providerId: 'openviking', settings: { endpoint: 'http://127.0.0.1:1933' }, clearSecrets: ['apiKey'],
+      providerId: 'openviking', settings: { endpoint: 'http://127.0.0.1:1933' }, clearSecrets: ['apiKey'], enabled: false,
     })).resolves.toMatchObject({ ok: true, value: { providerId: 'openviking', configured: true } })
-    expect(service.memoryBodies.updateProviderService).toHaveBeenCalledWith('openviking', { endpoint: 'http://127.0.0.1:1933' }, ['apiKey'])
+    expect(service.memoryBodies.updateProviderService).toHaveBeenCalledWith('openviking', { endpoint: 'http://127.0.0.1:1933' }, ['apiKey'], false)
     expect(service.createBody).not.toHaveBeenCalled()
   })
 
