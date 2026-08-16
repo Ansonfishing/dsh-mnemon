@@ -55,7 +55,8 @@ export class HindsightProvider extends HttpMemoryProvider implements MemoryProvi
 
   async status(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus> {
     try {
-      await this.list(body, { limit: 1 }, signal)
+      const connection = this.connection(body)
+      await this.request(body, '/health/live', { headers: this.headers(connection), signal })
       return { healthy: true }
     } catch (error) {
       return { healthy: false, error: error instanceof Error ? error.message : String(error) }
@@ -92,19 +93,22 @@ export class HindsightProvider extends HttpMemoryProvider implements MemoryProvi
     const payload = jsonObject(await this.request(body, `${this.bankPath(connection)}/graph?limit=1000`, { headers: this.headers(connection), signal })) ?? {}
     const nodes: MemoryGraphNode[] = jsonArray(payload.nodes).flatMap(value => {
       const item = jsonObject(value)
-      const projected = insight(item)
-      return projected === undefined ? [] : [{ ...projected, color: '#6574d9' }]
+      const data = jsonObject(item?.data) ?? item
+      const projected = insight(data)
+      return projected === undefined ? [] : [{ ...projected, color: jsonString(data?.color) ?? '#6574d9' }]
     })
     const edges: MemoryGraphEdge[] = jsonArray(payload.edges).flatMap(value => {
       const item = jsonObject(value)
-      const sourceId = jsonString(item?.from) ?? jsonString(item?.source)
-      const targetId = jsonString(item?.to) ?? jsonString(item?.target)
+      const data = jsonObject(item?.data) ?? item
+      const sourceId = jsonString(data?.from) ?? jsonString(data?.source)
+      const targetId = jsonString(data?.to) ?? jsonString(data?.target)
       if (sourceId === undefined || targetId === undefined) return []
-      const type = edgeType(item?.type)
+      const rawType = jsonString(data?.type) ?? jsonString(data?.linkType)
+      const type = edgeType(rawType)
       return [{
         sourceId,
         targetId,
-        label: jsonString(item?.type) ?? 'related',
+        label: rawType ?? 'related',
         color: type === 'causal' ? '#e74c3c' : type === 'entity' ? '#2ecc71' : type === 'temporal' ? '#aaaaaa' : '#3498db',
         ...(type === undefined ? {} : { type }),
       }]

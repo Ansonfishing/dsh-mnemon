@@ -77,11 +77,19 @@ describe('Hermes-inspired remote memory providers', () => {
     const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
       requests.push({ url: String(url), ...(init === undefined ? {} : { init }) })
       const path = new URL(String(url)).pathname
+      if (path === '/health/live') return response({ status: 'alive', version: '0.9.1' })
       if (path.endsWith('/memories/recall')) return response({ results: [{ id: 'hs-1', text: 'Alice uses TypeScript.', type: 'world', entities: ['Alice'], scores: { final: 0.93 } }] })
       if (path.endsWith('/memories/list')) return response({ items: [{ id: 'hs-1', text: 'Alice uses TypeScript.', type: 'world' }], total: 1 })
       if (path.endsWith('/graph')) return response({
-        nodes: [{ id: 'hs-1', label: 'Alice' }, { id: 'hs-2', label: 'TypeScript' }, { id: 'hs-3', label: 'Node.js' }],
-        edges: [{ from: 'hs-1', to: 'hs-2', type: 'entity' }, { from: 'hs-2', to: 'hs-3', type: 'semantic' }],
+        nodes: [
+          { data: { id: 'hs-1', text: 'Alice', entities: 'Alice' } },
+          { data: { id: 'hs-2', text: 'TypeScript', color: '#42a5f5' } },
+          { data: { id: 'hs-3', text: 'Node.js' } },
+        ],
+        edges: [
+          { data: { source: 'hs-1', target: 'hs-2', linkType: 'entity' } },
+          { data: { source: 'hs-2', target: 'hs-3', linkType: 'semantic' } },
+        ],
       })
       if (path.endsWith('/memories') && init?.method === 'POST') return response({ operation_id: 'op-1', items_count: 1 })
       if (path.endsWith('/memories/hs-1') && init?.method === 'PATCH') return response({ state: 'invalidated' })
@@ -99,17 +107,18 @@ describe('Hermes-inspired remote memory providers', () => {
     await expect(provider.related(body, 'hs-1', 2)).resolves.toEqual([
       expect.objectContaining({ id: 'hs-2' }), expect.objectContaining({ id: 'hs-3' }),
     ])
+    await expect(provider.status(body)).resolves.toEqual({ healthy: true })
     await expect(provider.remember(body, { content: 'Alice ships TypeScript.', category: 'decision', tags: ['dsh'], entities: ['Alice'] })).resolves.toMatchObject({ operationId: 'op-1', itemsCount: 1 })
     await expect(provider.forget(body, 'hs-1')).resolves.toMatchObject({ action: 'invalidated', id: 'hs-1' })
 
     expect(new URL(requests[0]!.url).pathname).toBe('/v1/default/banks/alice%2Fprofile/memories/recall')
     expect(new Headers(requests[0]?.init?.headers).get('Authorization')).toBe('Bearer hs-secret')
     expect(JSON.parse(String(requests[0]?.init?.body))).toMatchObject({ query: 'language', budget: 'high', types: ['world', 'experience', 'observation'] })
-    expect(JSON.parse(String(requests[3]?.init?.body))).toMatchObject({
+    expect(JSON.parse(String(requests[4]?.init?.body))).toMatchObject({
       items: [{ content: 'Alice ships TypeScript.', context: 'decision', tags: ['dsh'], entities: [{ text: 'Alice' }] }],
       async: true,
     })
-    expect(JSON.parse(String(requests[4]?.init?.body))).toEqual({ state: 'invalidated', reason: 'Forgotten from dsh-mnemon' })
+    expect(JSON.parse(String(requests[5]?.init?.body))).toEqual({ state: 'invalidated', reason: 'Forgotten from dsh-mnemon' })
   })
 
   it('uses Mem0 Platform v3 scoping and keeps the token out of result projections', async () => {
