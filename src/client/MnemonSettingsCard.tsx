@@ -126,6 +126,13 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
     setApplied(false)
   }
 
+  const editMany = (values: Partial<Draft>): void => {
+    setDraft(current => ({ ...current, ...values }))
+    setDirty(current => new Set([...current, ...Object.keys(values) as Field[]]))
+    setFailed(null)
+    setApplied(false)
+  }
+
   const discard = (): void => {
     setDraft(draftOf(coreSnapshot.value, interactionSnapshot.value))
     setDirty(new Set()); setFailed(null); setApplied(false)
@@ -180,31 +187,52 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
             <div><h2 id="mnemon-storage-heading">{t('config.storageTitle')}</h2><p>{t('config.storageDescription')}</p></div>
           </div>
           <div className={css.choiceGrid} role="radiogroup" aria-label={t('config.scopeAria')}>
-            <ChoiceCard id="mnemon-storage-global" name="mnemon-storage" label={t('config.global')} detail="~/.mnemon" checked={draft.storageScope === 'global'} disabled={coreDisabled} onChange={() => edit('storageScope', 'global')} />
+            <ChoiceCard id="mnemon-storage-global" name="mnemon-storage" label={t('config.global')} detail={t('config.globalScopeHint')} checked={draft.storageScope !== 'workspace'} disabled={coreDisabled} onChange={() => edit('storageScope', draft.dataDir.trim() === '' ? 'global' : 'custom')} />
             <ChoiceCard id="mnemon-storage-workspace" name="mnemon-storage" label={t('config.workspace')} detail="<workspace>/.mnemon" checked={draft.storageScope === 'workspace'} disabled={coreDisabled} onChange={() => edit('storageScope', 'workspace')} />
-            <ChoiceCard id="mnemon-storage-custom" name="mnemon-storage" label={t('config.custom')} detail={draft.dataDir === '' ? t('config.customHintShort') : t('config.customSelected')} checked={draft.storageScope === 'custom'} disabled={coreDisabled} onChange={() => edit('storageScope', 'custom')} />
           </div>
-          {draft.storageScope === 'custom' && <div className={css.settingRow}>
-            <div className={css.settingCopy}><strong>{t('config.customDirectory')}</strong><small>{t('config.customDirectoryHint')}</small></div>
-            <div className={css.directoryControl}>
-              <input
-                id="mnemon-custom-directory"
-                name="mnemon-custom-directory"
-                type="text"
-                className={css.directoryInput}
-                aria-label={t('config.customAria')}
-                aria-invalid={error !== null}
-                placeholder={t('config.customPlaceholder')}
-                value={draft.dataDir}
-                disabled={coreDisabled}
-                autoComplete="off"
-                spellCheck={false}
-                autoCapitalize="none"
-                autoCorrect="off"
-                onChange={event => edit('dataDir', event.target.value)}
-              />
+        </section>
+
+        <section className={css.section} aria-labelledby="mnemon-providers-heading">
+          <div className={css.sectionHeading}>
+            <div><h2 id="mnemon-providers-heading">{t('config.providersTitle')}</h2><p>{t('config.providersDescription')}</p></div>
+          </div>
+          <details className={css.providerPanel} open>
+            <summary>
+              <span className={css.providerIdentity}><i className={css.nativeMark} aria-hidden="true">M</i><span><strong>Mnemon Native</strong><small>{t('config.nativeSummary')}</small></span></span>
+              <span className={css.providerState}>{t('config.officialNative')}</span>
+            </summary>
+            <div className={css.providerPanelBody}>
+              <div className={css.nativeLocation}>
+                <div className={css.settingCopy}><strong>{t('config.nativeGlobalLocation')}</strong><small>{draft.storageScope === 'workspace' ? t('config.nativeGlobalLocationWorkspaceHint') : t('config.nativeGlobalLocationHint')}</small></div>
+                <div className={css.inlineChoices} role="radiogroup" aria-label={t('config.nativeGlobalLocation')}>
+                  <label><input type="radio" name="mnemon-native-location" checked={draft.storageScope === 'global'} disabled={coreDisabled || draft.storageScope === 'workspace'} onChange={() => editMany({ storageScope: 'global', dataDir: '' })} /><span>{t('config.nativeDefaultLocation')}</span></label>
+                  <label><input type="radio" name="mnemon-native-location" checked={draft.storageScope === 'custom'} disabled={coreDisabled || draft.storageScope === 'workspace'} onChange={() => edit('storageScope', 'custom')} /><span>{t('config.custom')}</span></label>
+                </div>
+              </div>
+              {draft.storageScope === 'custom' && <div className={css.settingRow}>
+                <div className={css.settingCopy}><strong>{t('config.customDirectory')}</strong><small>{t('config.customDirectoryHint')}</small></div>
+                <div className={css.directoryControl}>
+                  <input
+                    id="mnemon-custom-directory"
+                    name="mnemon-custom-directory"
+                    type="text"
+                    className={css.directoryInput}
+                    aria-label={t('config.customAria')}
+                    aria-invalid={error !== null}
+                    placeholder={t('config.customPlaceholder')}
+                    value={draft.dataDir}
+                    disabled={coreDisabled}
+                    autoComplete="off"
+                    spellCheck={false}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    onChange={event => edit('dataDir', event.target.value)}
+                  />
+                </div>
+              </div>}
+              <MnemonPackSection {...(connection === undefined ? {} : { connection })} refreshKey={targetRevision} t={t} embedded />
             </div>
-          </div>}
+          </details>
         </section>
 
         <section className={css.section} aria-labelledby="mnemon-interaction-heading">
@@ -216,8 +244,6 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
             <ToggleRow id="mnemon-interaction-save-action" label={t('config.interactionSaveAction')} hint={t('config.interactionSaveActionHint')} checked={draft.saveAction} disabled={interactionDisabled} onChange={value => edit('saveAction', value)} />
           </div>
         </section>
-
-        <MnemonPackSection {...(connection === undefined ? {} : { connection })} refreshKey={targetRevision} t={t} />
 
         <div className={css.feedback} aria-live="polite">
           {error !== null && <p className={css.error} role="alert">{error}</p>}
