@@ -12,6 +12,9 @@ import {
 import type { MnemonRunner } from './runner.ts'
 import { prepareMemoryPlacement, type PreparedMemoryPlacement } from './provider-placement.ts'
 import { OpenVikingProvider } from './providers/openviking.ts'
+import { Mem0Provider } from './providers/mem0.ts'
+import { RetainDbProvider } from './providers/retaindb.ts'
+import { SupermemoryProvider } from './providers/supermemory.ts'
 import { MEMORY_PROVIDER_CATALOG } from './providers/catalog.ts'
 import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './providers/provider.ts'
 import {
@@ -203,9 +206,15 @@ export class MnemonService {
       forget: (body, id, signal) => this.nativeForget(body, id, signal),
     }
     const openVikingProvider = new OpenVikingProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
+    const mem0Provider = new Mem0Provider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
+    const retainDbProvider = new RetainDbProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
+    const supermemoryProvider = new SupermemoryProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
     this.providers = new Map([
       [nativeProvider.id, nativeProvider],
       [openVikingProvider.id, openVikingProvider],
+      [mem0Provider.id, mem0Provider],
+      [retainDbProvider.id, retainDbProvider],
+      [supermemoryProvider.id, supermemoryProvider],
     ])
   }
 

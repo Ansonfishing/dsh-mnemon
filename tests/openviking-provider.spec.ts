@@ -127,4 +127,19 @@ describe('OpenVikingProvider', () => {
       '/api/v1/tasks/task-1',
     ])
   })
+
+  it('forgets only an exact non-generated memory file inside the configured root', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => ok({ uri: 'viking://user/team/memories/preferences/style.md', estimated_deleted_count: 1 }))
+    const { body, provider } = await bodyAndRegistry(fetchMock)
+
+    await expect(provider.forget(body, 'viking://user/team/memories/preferences/style.md')).resolves.toMatchObject({
+      action: 'deleted',
+      provider: 'openviking',
+      estimatedDeletedCount: 1,
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/api/v1/fs?')
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('DELETE')
+    await expect(provider.forget(body, 'viking://user/team/memories/.overview.md')).rejects.toThrow(/exact non-generated/u)
+    await expect(provider.forget(body, 'viking://user/other/memories/fact.md')).rejects.toThrow(/inside this Memory Space/u)
+  })
 })

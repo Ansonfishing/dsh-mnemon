@@ -98,7 +98,7 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     kind: 'remote',
     summary: 'Automatic fact extraction, semantic retrieval, reranking, and deduplication.',
     origin: 'hermes-inspired',
-    capabilities: REMOTE_EXACT_CAPABILITIES,
+    capabilities: { ...REMOTE_EXACT_CAPABILITIES, writeMode: 'async-extracting' },
     fields: [
       field({ key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'https://api.mem0.ai' }),
       field({ key: 'apiKey', label: 'API key', input: 'secret', required: false }),
@@ -183,7 +183,7 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     kind: 'remote',
     summary: 'Semantic memory, persistent profiles, conversation ingest, and multi-container recall.',
     origin: 'hermes-inspired',
-    capabilities: { ...REMOTE_EXACT_CAPABILITIES, entities: true },
+    capabilities: { ...REMOTE_EXACT_CAPABILITIES, entities: true, writeMode: 'async-extracting', deletionMode: 'soft' },
     fields: [
       field({ key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'https://api.supermemory.ai' }),
       field({ key: 'apiKey', label: 'API key', input: 'secret', required: true }),

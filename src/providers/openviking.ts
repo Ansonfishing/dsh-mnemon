@@ -198,6 +198,24 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     }
   }
 
+  async forget(body: MemoryBody, id: string, signal?: AbortSignal): Promise<JsonValue> {
+    const connection = this.connection(body)
+    const uri = id.trim()
+    const root = connection.targetUri.replace(/\/+$/u, '')
+    const filename = uri.slice(uri.lastIndexOf('/') + 1)
+    if (!uri.startsWith(`${root}/`) || !uri.endsWith('.md') || filename.startsWith('.')) {
+      throw new Error('OpenViking forget requires an exact non-generated .md memory URI inside this Memory Space')
+    }
+    const query = new URLSearchParams({ uri, recursive: 'false' })
+    const result = object(await this.request(body, `/api/v1/fs?${query}`, { method: 'DELETE' }, { signal })) ?? {}
+    return {
+      action: 'deleted',
+      provider: this.id,
+      uri: string(result.uri) ?? uri,
+      ...(number(result.estimated_deleted_count) === undefined ? {} : { estimatedDeletedCount: number(result.estimated_deleted_count)! }),
+    }
+  }
+
   private connection(body: MemoryBody): OpenVikingBodyConnection {
     if (body.provider.id !== this.id) throw new Error(`OpenViking cannot serve provider ${body.provider.id}`)
     return this.memoryBodies.openVikingConnection(body.id)
