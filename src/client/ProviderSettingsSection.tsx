@@ -77,10 +77,17 @@ function ServiceField(props: {
     ? <label className={css.providerBoolean}><input aria-label={label} type="checkbox" checked={Boolean(props.value)} disabled={props.disabled} onChange={event => props.onChange(event.target.checked)} /><span>{label}</span></label>
     : props.field.input === 'select'
       ? <label>{label}<select aria-label={label} value={String(props.value ?? '')} required={required} disabled={props.disabled} onChange={event => props.onChange(event.target.value)}>{props.field.options?.map(option => <option key={option.value} value={option.value}>{props.t(`overview.providerOption.${option.value}` as MnemonKey)}</option>)}</select></label>
-      : <label>{label}<input aria-label={label} type={props.field.input === 'secret' ? 'password' : props.field.input === 'number' ? 'number' : props.field.input === 'url' ? 'url' : 'text'} value={String(props.value ?? '')} required={required} disabled={props.disabled} autoComplete={props.field.input === 'secret' ? 'new-password' : undefined} placeholder={savedSecret && !props.clearing ? props.t('overview.providerApiKeyKeep') : props.field.placeholder ?? (props.field.input === 'secret' ? props.t('overview.providerApiKeyOptional') : undefined)} maxLength={props.field.input === 'secret' ? 8000 : 2000} step={props.field.input === 'number' ? 'any' : undefined} onChange={event => props.onChange(event.target.value)} /></label>
+      : <label>{label}<input aria-label={label} type={props.field.input === 'secret' ? 'password' : props.field.input === 'number' ? 'number' : props.field.input === 'url' ? 'url' : 'text'} value={String(props.value ?? '')} required={required} disabled={props.disabled} autoComplete={props.field.input === 'secret' ? 'new-password' : undefined} placeholder={savedSecret ? props.t(props.clearing ? 'config.providerSecretRemovalPlaceholder' : 'overview.providerApiKeyKeep') : props.field.placeholder ?? (props.field.input === 'secret' ? props.t('overview.providerApiKeyOptional') : undefined)} maxLength={props.field.input === 'secret' ? 8000 : 2000} step={props.field.input === 'number' ? 'any' : undefined} onChange={event => {
+        const value = event.target.value
+        props.onChange(value)
+        if (props.field.input === 'secret' && value.trim() !== '' && props.clearing) props.onClear(false)
+      }} /></label>
   return <div className={css.providerFieldControl} data-input={props.field.input}>
     {input}
-    {props.field.input === 'secret' && savedSecret && <label className={css.providerSecretClear}><input type="checkbox" checked={props.clearing} disabled={props.disabled} onChange={event => props.onClear(event.target.checked)} />{props.t('overview.providerSecretClear')}</label>}
+    {props.field.input === 'secret' && savedSecret && <div className={css.providerSecretMeta} data-clearing={props.clearing || undefined}>
+      <span>{props.t(props.clearing ? 'config.providerSecretRemovalPending' : 'config.providerSecretStored')}</span>
+      <button type="button" disabled={props.disabled} onClick={() => props.onClear(!props.clearing)}>{props.t(props.clearing ? 'config.providerSecretUndo' : 'config.providerSecretRemove')}</button>
+    </div>}
   </div>
 }
 
@@ -110,9 +117,14 @@ function ProviderServiceForm(props: {
     setFailed(null); setSaved(false)
   }
 
+  const setClearing = (key: string, clear: boolean): void => {
+    setDraft(current => ({ ...current, clearSecrets: clear ? [...new Set([...current.clearSecrets, key])] : current.clearSecrets.filter(candidate => candidate !== key) }))
+    setFailed(null); setSaved(false)
+  }
+
   return <form className={css.providerServiceForm} onSubmit={event => void submit(event)} data-provider={props.provider.id}>
     <p className={css.providerServicePrompt}>{props.t(props.service.configured ? 'config.providerServiceHint' : 'config.providerEnableHint')}</p>
-    <div className={css.providerSettingsGrid}>{serviceFields(props.provider).map(field => <ServiceField key={field.key} field={field} value={draft.settings[field.key]} configuredSecrets={props.service.configuredSecrets} clearing={draft.clearSecrets.includes(field.key)} disabled={props.disabled || saving} t={props.t} onChange={value => update(field.key, value)} onClear={clear => setDraft(current => ({ ...current, clearSecrets: clear ? [...new Set([...current.clearSecrets, field.key])] : current.clearSecrets.filter(key => key !== field.key) }))} />)}</div>
+    <div className={css.providerSettingsGrid}>{serviceFields(props.provider).map(field => <ServiceField key={field.key} field={field} value={draft.settings[field.key]} configuredSecrets={props.service.configuredSecrets} clearing={draft.clearSecrets.includes(field.key)} disabled={props.disabled || saving} t={props.t} onChange={value => update(field.key, value)} onClear={clear => setClearing(field.key, clear)} />)}</div>
     <div className={css.memoryConfigFooter}>
       <div className={css.configFeedback} aria-live="polite">{failed !== null && <span className={css.error}>{props.t('config.providerSaveFailed', { error: failed })}</span>}{saved && <span className={css.packSuccess}>{props.t('config.providerServiceSaved')}</span>}</div>
       <button type="submit" className={css.primaryPill} disabled={props.disabled || saving || !configurationComplete(props.provider, draft, props.service)}>{saving ? props.t('config.saving') : props.t(props.service.configured ? 'config.saveProviderService' : 'config.enableProvider')}</button>

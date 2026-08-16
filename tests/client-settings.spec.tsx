@@ -387,6 +387,13 @@ describe('MnemonSettingsCard', () => {
     expect((screen.getByLabelText('服务地址') as HTMLInputElement).value).toBe('http://127.0.0.1:1933')
     expect(screen.queryByLabelText('记忆范围 URI')).toBeNull()
     expect(screen.queryByLabelText('记忆体名称')).toBeNull()
+    expect(screen.queryByRole('checkbox', { name: '清除已保存的凭据' })).toBeNull()
+    expect(screen.getByText('已安全保存，留空不会更改')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '移除' }))
+    expect(screen.getByText('将在保存后移除')).toBeTruthy()
+    expect((screen.getByLabelText('API Key') as HTMLInputElement).placeholder).toBe('保存后将移除；输入新凭证可替换')
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }))
+    expect(screen.getByText('已安全保存，留空不会更改')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '保存服务配置' }))
 
     await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', {

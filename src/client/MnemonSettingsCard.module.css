@@ -176,7 +176,7 @@
 .providerIdentityFields,
 .providerSettingsGrid { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .providerIdentityFields > label,
-.providerFieldControl > label:not(.providerBoolean):not(.providerSecretClear) { display: flex; min-width: 0; flex-direction: column; gap: 4px; color: var(--dsw-alias-label-secondary); font-size: 10px; line-height: 16px; }
+.providerFieldControl > label:not(.providerBoolean) { display: flex; min-width: 0; flex-direction: column; gap: 4px; color: var(--dsw-alias-label-secondary); font-size: 10px; line-height: 16px; }
 .providerIdentityFields input,
 .providerFieldControl input:not([type='checkbox']),
 .providerFieldControl select {
@@ -202,8 +202,13 @@
 .providerFieldControl { display: flex; min-width: 0; flex-direction: column; justify-content: flex-end; gap: 3px; }
 .providerBoolean { display: flex; min-height: 36px; align-items: center; gap: 7px; color: var(--dsw-alias-label-secondary); font-size: 11px; }
 .providerBoolean input { accent-color: var(--dsw-alias-label-primary); }
-.providerSecretClear { display: inline-flex; align-items: center; gap: 5px; color: var(--dsw-alias-label-tertiary); font-size: 9px; line-height: 14px; }
-.providerSecretClear input { accent-color: var(--dsw-alias-state-error-primary); }
+.providerSecretMeta { display: flex; min-width: 0; min-height: 22px; align-items: center; justify-content: space-between; gap: 8px; color: var(--dsw-alias-label-tertiary); font-size: 9px; line-height: 14px; }
+.providerSecretMeta > span { overflow: hidden; min-width: 0; text-overflow: ellipsis; white-space: nowrap; }
+.providerSecretMeta > button { appearance: none; flex: 0 0 auto; border: 0; border-radius: 10px; padding: 2px 7px; color: var(--dsw-alias-label-secondary); background: transparent; cursor: pointer; font: inherit; }
+.providerSecretMeta > button:hover:not(:disabled) { color: var(--dsw-alias-state-error-primary); background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent); }
+.providerSecretMeta[data-clearing] { color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-label-secondary)); }
+.providerSecretMeta[data-clearing] > button { color: var(--dsw-alias-label-primary); }
+.providerSecretMeta > button:disabled { cursor: default; opacity: .4; }
 
 .memoryConfigFooter { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--dsw-alias-border-l2); padding-top: 10px; }
 .memoryConfigFooter > div { display: flex; align-items: center; gap: 6px; }
