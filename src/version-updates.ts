@@ -315,11 +315,12 @@ export class VersionUpdateManager {
     }
     let realCommand = command
     try { realCommand = realpathSync(command) } catch {}
-    if (realCommand.includes('/Caskroom/mnemon/')) {
+    const normalizedCommand = realCommand.replaceAll('\\', '/')
+    if (normalizedCommand.includes('/Caskroom/mnemon/')) {
       const brew = this.executable('brew')
       return { ...(current === undefined ? {} : { current }), install: { mode: 'homebrew', command, ...(brew === undefined ? {} : { updateCommand: brew, updateArgs: ['upgrade', '--cask', 'mnemon'] }) } }
     }
-    if (realCommand.includes('/Cellar/mnemon/')) {
+    if (normalizedCommand.includes('/Cellar/mnemon/')) {
       const brew = this.executable('brew')
       return { ...(current === undefined ? {} : { current }), install: { mode: 'homebrew', command, ...(brew === undefined ? {} : { updateCommand: brew, updateArgs: ['upgrade', 'mnemon-dev/tap/mnemon'] }) } }
     }
