@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -46,9 +47,13 @@ jobs:
         if: runner.os == 'Windows'
         run: pnpm exec vitest run tests/config.spec.ts tests/runner.spec.ts tests/version-updates.spec.ts
 
-      - name: Build package on Windows
+      - name: Verify deterministic build on Windows
         if: runner.os == 'Windows'
-        run: pnpm run build
+        run: pnpm run verify:build
+
+      - name: Verify published package on Windows
+        if: runner.os == 'Windows'
+        run: pnpm run verify:package
 
       - name: Download and verify Mnemon Windows release
         if: runner.os == 'Windows'

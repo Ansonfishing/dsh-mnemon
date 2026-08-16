@@ -48,7 +48,10 @@ jobs:
       - name: Verify package
         run: pnpm run verify
 
-      - name: Publish package
-        run: npm publish --access public --ignore-scripts
+      - name: Pack release
+        run: npm pack --ignore-scripts
+
+      - name: Publish packed release
+        run: npm publish "dsh-mnemon-$(node --print "require('./package.json').version").tgz" --access public --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
