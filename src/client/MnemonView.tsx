@@ -25,6 +25,7 @@ import {
   type MemoryProviderConnection,
   type MemoryProviderDescriptor,
   type MemoryProviderId,
+  type MemoryProviderRuntimeStatus,
   type MemoryReadSource,
   type RuntimeMemoryEntry,
   type RuntimeMemoryImportance,
@@ -1935,10 +1936,34 @@ function StatusPage(props: { client: MnemonClient; status: StatusView | null; lo
         <article><span className={`${css.healthIndicator} ${documents === undefined ? css.healthMuted : css.healthGood}`} /><div><small>{t('status.documents')}</small><strong>{documents === undefined ? t('status.documentsWaiting') : t('status.documentRatio', { active: documents.activeCount, archived: documents.archivedCount })}</strong><p>{documents === undefined ? t('status.documentsSession') : t('status.documentUsage', { used: humanBytes(documents.activeBytes), limit: humanBytes(documents.limitBytes) })}</p></div></article>
       </section>
 
+      {status?.providerServices !== undefined && <ProviderHealth services={status.providerServices} />}
       <StorageDomains catalog={storage} selected={selectedScope} selectedKind={selectedScopeKind} />
       {versionsOpen && <VersionDialog client={props.client} onClose={() => setVersionsOpen(false)} onRefreshStatus={props.onRefresh} />}
     </div>
   )
+}
+
+function ProviderHealth({ services }: { services: MemoryProviderRuntimeStatus[] }): JSX.Element {
+  const t = useT()
+  const enabled = services.filter(service => service.enabled).length
+  return <section className={css.providerHealth} aria-label={t('status.providersAria')}>
+    <div className={css.statusSectionHeader}>
+      <div><h3>{t('status.providersTitle')}</h3><p>{t('status.providersDescription')}</p></div>
+      <span className={css.phaseBadge}>{t('status.providersEnabled', { enabled, total: services.length })}</span>
+    </div>
+    <div className={css.providerHealthList}>{services.map(service => <article key={service.providerId} data-status={service.status}>
+      <span className={css.providerHealthMark} aria-hidden="true">{service.label.slice(0, 1).toUpperCase()}</span>
+      <div className={css.providerHealthCopy}>
+        <strong>{service.label}</strong>
+        <small>{t(`status.providerState.${service.status}` as MnemonKey)}</small>
+        {service.error !== undefined && <p title={service.error}>{service.error}</p>}
+      </div>
+      <div className={css.providerHealthMeta}>
+        <span className={css.providerHealthSignal} aria-hidden="true" />
+        <small>{t('status.providerSpaces', { active: service.activeMemoryBodyCount, total: service.memoryBodyCount })}</small>
+      </div>
+    </article>)}</div>
+  </section>
 }
 
 function storageScopeLabel(t: MnemonTranslate, kind: StorageScopeKind): string {

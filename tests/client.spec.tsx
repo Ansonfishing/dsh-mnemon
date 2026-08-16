@@ -70,6 +70,10 @@ describe('MnemonView', () => {
       defaultRecallLimit: 10,
       memoryBodyDirectory: '/tmp/mnemon/data',
       memoryBodies: options.withInactiveBody ? [body, secondaryBody] : [body],
+      providerServices: [
+        { providerId: 'openviking' as const, label: 'OpenViking', enabled: true, configured: true, status: 'healthy' as const, memoryBodyCount: 1, activeMemoryBodyCount: 1 },
+        { providerId: 'mem0' as const, label: 'Mem0', enabled: false, configured: true, status: 'disabled' as const, memoryBodyCount: 1, activeMemoryBodyCount: 0 },
+      ],
       stats: { totalInsights: 12, deletedInsights: 0, edgeCount: 9, oplogCount: 20, dbSizeBytes: 4096, byCategory: {}, topEntities: [] },
       storage: {
         activeKind: 'custom', activeRoot: '/tmp/mnemon', generatedAt: '2026-08-13T03:00:00.000Z',
@@ -350,6 +354,12 @@ describe('MnemonView', () => {
     expect(screen.queryByText('记忆子 Agent 可用')).toBeNull()
     expect(screen.queryByRole('heading', { name: '子 Agent 生命周期' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '记忆系统流转' })).toBeNull()
+    expect(screen.getByRole('heading', { name: '三方 Provider' })).toBeTruthy()
+    const providerStatus = screen.getByRole('region', { name: '三方 Provider 状态' })
+    expect(within(providerStatus).getByText('OpenViking')).toBeTruthy()
+    expect(within(providerStatus).getByText('连接正常')).toBeTruthy()
+    expect(within(providerStatus).getByText('Mem0')).toBeTruthy()
+    expect(within(providerStatus).getByText('已关闭')).toBeTruthy()
     expect(screen.getByRole('heading', { name: '存储域' })).toBeTruthy()
     expect(within(screen.getByRole('region', { name: '存储域' })).getAllByRole('article')).toHaveLength(3)
     expect(screen.queryByText('后台状态')).toBeNull()
