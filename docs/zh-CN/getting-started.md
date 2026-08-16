@@ -24,7 +24,7 @@ macOS 推荐 Homebrew Cask：
 brew install --cask mnemon-dev/tap/mnemon
 ```
 
-macOS 或 Linux 也可通过 Go 安装：
+macOS 和 Linux 可通过 Go 安装：
 
 ```sh
 go install github.com/mnemon-dev/mnemon@latest
@@ -36,7 +36,51 @@ go install github.com/mnemon-dev/mnemon@latest
 mnemon --version
 ```
 
-如果 DSH 无法从 `PATH` 找到它，可设置 `MNEMON_CLI_PATH`，或把绝对路径写入 `mnemon.cliPath`。`mnemon status` 会打开有效 Store，可能初始化数据或执行上游迁移，不要把它当作完全无副作用的安装探测。
+Windows 官方发行包同时提供 AMD64 与 ARM64 ZIP。下面的 PowerShell 会把 v0.2.3 安装到可自动发现的用户 Programs 目录，并使用官方 checksum 校验下载内容：
+
+```powershell
+$version = '0.2.3'
+$arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
+$archiveName = "mnemon_${version}_windows_${arch}.zip"
+$releaseBase = "https://github.com/mnemon-dev/mnemon/releases/download/v${version}"
+$archive = Join-Path $env:TEMP $archiveName
+$checksumFile = Join-Path $env:TEMP "mnemon_${version}_checksums.txt"
+Invoke-WebRequest "${releaseBase}/${archiveName}" -OutFile $archive
+Invoke-WebRequest "${releaseBase}/checksums.txt" -OutFile $checksumFile
+$line = Get-Content $checksumFile | Where-Object { $_.EndsWith("  $archiveName") } | Select-Object -First 1
+if (-not $line) { throw "Checksum entry not found for $archiveName" }
+$expected = (($line -split '\s+')[0]).ToLowerInvariant()
+$actual = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -ne $expected) { throw "Checksum mismatch for $archiveName" }
+$installDir = Join-Path $env:LOCALAPPDATA 'Programs\mnemon'
+New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+Expand-Archive -Path $archive -DestinationPath $installDir -Force
+$mnemon = Join-Path $installDir 'mnemon.exe'
+& $mnemon --version
+```
+
+如果已经安装 Go 工具链，也可以继续使用 Go：
+
+```powershell
+go install github.com/mnemon-dev/mnemon@latest
+$mnemonBin = go env GOBIN
+if (-not $mnemonBin) {
+  $mnemonBin = Join-Path (((go env GOPATH) -split ';')[0]) 'bin'
+}
+$mnemon = Join-Path $mnemonBin 'mnemon.exe'
+& $mnemon --version
+```
+
+Windows 上，dsh-mnemon 会从 `PATH`、导出的 `GOBIN` 或 `GOPATH`、默认 `%USERPROFILE%\go\bin`、`%LOCALAPPDATA%\Programs\mnemon` 和 Program Files 中发现原生 `mnemon.exe`。CLI 调用刻意禁用 shell，因此不接受 `.cmd` 与 `.bat` wrapper。
+
+如果 DSH 仍无法找到二进制，请设置 `MNEMON_CLI_PATH`，或在用户 settings 中写入绝对路径；不要为此整体替换插件的 profile patch：
+
+```yaml
+mnemon:
+  cliPath: 'C:\Users\alice\AppData\Local\Programs\mnemon\mnemon.exe'
+```
+
+`mnemon status` 会打开有效 Store，可能初始化数据或执行上游迁移，不要把它当作完全无副作用的安装探测。
 
 ## 3. 安装 dsh-mnemon
 
@@ -103,7 +147,7 @@ dsh plugin --profile web remove dsh-mnemon
 - 存储根与刚才选择的范围一致；
 - Runtime、Memory Spaces 和 Documents 没有错误提示。
 
-如果 Mnemon 不可用，先运行 `command -v mnemon` 与 `mnemon --version`。更多症状见[故障排查](./operations.md#故障排查)。
+如果 Mnemon 不可用，macOS/Linux 先运行 `command -v mnemon` 与 `mnemon --version`；Windows PowerShell 运行 `Get-Command mnemon` 与 `Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"`。更多症状见[故障排查](./operations.md#故障排查)。
 
 ## 6. 完成第一次验证
 

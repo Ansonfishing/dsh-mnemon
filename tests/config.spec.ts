@@ -107,6 +107,13 @@ describe('Mnemon config and resolution', () => {
     await expect(runner.runText(['--version'], { globalFlags: false })).resolves.toBe('recovered')
   })
 
+  it('points launch failures at the environment variable and actual settings namespace', async () => {
+    const process = vi.fn<ProcessRunner>().mockRejectedValue(new Error('spawn mnemon ENOENT'))
+    const runner = createRunner(resolveConfig({ cliPath: '/missing/mnemon' }), process)
+
+    await expect(runner.runText(['status'])).rejects.toThrow('MNEMON_CLI_PATH or mnemon.cliPath')
+  })
+
   it('holds the CLI queue across one exclusive Pack operation', async () => {
     const events: string[] = []
     const process = vi.fn<ProcessRunner>(async (_command, args) => {

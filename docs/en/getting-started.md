@@ -24,7 +24,7 @@ Homebrew Cask is recommended on macOS:
 brew install --cask mnemon-dev/tap/mnemon
 ```
 
-On macOS or Linux, Go is another option:
+Go works on macOS and Linux:
 
 ```sh
 go install github.com/mnemon-dev/mnemon@latest
@@ -36,7 +36,51 @@ Verify the binary:
 mnemon --version
 ```
 
-If DSH cannot find it on `PATH`, set `MNEMON_CLI_PATH` or configure an absolute `mnemon.cliPath`. `mnemon status` opens the effective Store and may initialize data or run upstream migrations, so it is not a side-effect-free installation probe.
+On Windows, the official release provides ZIP archives for AMD64 and ARM64. The following PowerShell installs v0.2.3 under the auto-discovered per-user Programs directory and verifies it against the published checksum:
+
+```powershell
+$version = '0.2.3'
+$arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
+$archiveName = "mnemon_${version}_windows_${arch}.zip"
+$releaseBase = "https://github.com/mnemon-dev/mnemon/releases/download/v${version}"
+$archive = Join-Path $env:TEMP $archiveName
+$checksumFile = Join-Path $env:TEMP "mnemon_${version}_checksums.txt"
+Invoke-WebRequest "${releaseBase}/${archiveName}" -OutFile $archive
+Invoke-WebRequest "${releaseBase}/checksums.txt" -OutFile $checksumFile
+$line = Get-Content $checksumFile | Where-Object { $_.EndsWith("  $archiveName") } | Select-Object -First 1
+if (-not $line) { throw "Checksum entry not found for $archiveName" }
+$expected = (($line -split '\s+')[0]).ToLowerInvariant()
+$actual = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -ne $expected) { throw "Checksum mismatch for $archiveName" }
+$installDir = Join-Path $env:LOCALAPPDATA 'Programs\mnemon'
+New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+Expand-Archive -Path $archive -DestinationPath $installDir -Force
+$mnemon = Join-Path $installDir 'mnemon.exe'
+& $mnemon --version
+```
+
+Go remains an alternative when a Go toolchain is already available:
+
+```powershell
+go install github.com/mnemon-dev/mnemon@latest
+$mnemonBin = go env GOBIN
+if (-not $mnemonBin) {
+  $mnemonBin = Join-Path (((go env GOPATH) -split ';')[0]) 'bin'
+}
+$mnemon = Join-Path $mnemonBin 'mnemon.exe'
+& $mnemon --version
+```
+
+On Windows, dsh-mnemon discovers native `mnemon.exe` from `PATH`, an exported `GOBIN` or `GOPATH`, the default `%USERPROFILE%\go\bin`, `%LOCALAPPDATA%\Programs\mnemon`, and Program Files. `.cmd` and `.bat` wrappers are not accepted because CLI calls deliberately run without a shell.
+
+If DSH still cannot find the binary, set `MNEMON_CLI_PATH` or add an absolute path to the user settings file instead of replacing the plugin's profile patch:
+
+```yaml
+mnemon:
+  cliPath: 'C:\Users\alice\AppData\Local\Programs\mnemon\mnemon.exe'
+```
+
+`mnemon status` opens the effective Store and may initialize data or run upstream migrations, so it is not a side-effect-free installation probe.
 
 ## 3. Install dsh-mnemon
 
@@ -103,7 +147,7 @@ Confirm that:
 - the storage root matches your chosen scope;
 - Runtime, Memory Spaces, and Documents report no errors.
 
-If Mnemon is unavailable, run `command -v mnemon` and `mnemon --version`. See [Troubleshooting](./operations.md#troubleshooting) for other symptoms.
+If Mnemon is unavailable, run `command -v mnemon` and `mnemon --version` on macOS/Linux, or `Get-Command mnemon` and `Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"` on Windows PowerShell. See [Troubleshooting](./operations.md#troubleshooting) for other symptoms.
 
 ## 6. Complete first verification
 

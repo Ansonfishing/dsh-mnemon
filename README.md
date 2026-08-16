@@ -40,6 +40,20 @@ go install github.com/mnemon-dev/mnemon@latest
 mnemon --version
 ```
 
+On Windows, install the official v0.2.3-or-newer release ZIP. This path is auto-discovered without changing `PATH`; see [Getting Started](./docs/en/getting-started.md#2-install-mnemon) for checksum verification:
+
+```powershell
+$version = '0.2.3'
+$arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
+$archiveName = "mnemon_${version}_windows_${arch}.zip"
+$archive = Join-Path $env:TEMP $archiveName
+Invoke-WebRequest "https://github.com/mnemon-dev/mnemon/releases/download/v${version}/${archiveName}" -OutFile $archive
+$installDir = Join-Path $env:LOCALAPPDATA 'Programs\mnemon'
+New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+Expand-Archive -Path $archive -DestinationPath $installDir -Force
+& (Join-Path $installDir 'mnemon.exe') --version
+```
+
 ### 2. Install the plugin
 
 ```sh

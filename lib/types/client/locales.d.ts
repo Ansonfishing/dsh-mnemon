@@ -399,6 +399,11 @@ export declare const zh: {
     'versions.unknown': string;
     'versions.installed': string;
     'versions.latest': string;
+    'versions.executable': string;
+    'versions.profileLocation': string;
+    'versions.sourceLocation': string;
+    'versions.linkSourceLocation': string;
+    'versions.packageLocation': string;
     'versions.update': string;
     'versions.updating': string;
     'versions.updated': string;
@@ -974,6 +979,11 @@ export declare const en: {
     'versions.unknown': string;
     'versions.installed': string;
     'versions.latest': string;
+    'versions.executable': string;
+    'versions.profileLocation': string;
+    'versions.sourceLocation': string;
+    'versions.linkSourceLocation': string;
+    'versions.packageLocation': string;
     'versions.update': string;
     'versions.updating': string;
     'versions.updated': string;

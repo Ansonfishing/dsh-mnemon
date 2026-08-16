@@ -46,7 +46,33 @@ describe('VersionUpdateManager', () => {
 
     const status = await manager.check()
     expect(status.components.find(component => component.id === 'dsh-mnemon')).toMatchObject({
-      current: '0.1.2', latest: '0.1.3', outdated: true, installMode: 'link', updateSupported: false, updateHint: 'link',
+      current: '0.1.2', latest: '0.1.3', outdated: true, installMode: 'link', installProfile: 'web', installPath: root, updateSupported: false, updateHint: 'link',
+    })
+  })
+
+  it('reports the Mnemon executable used for the version check', async () => {
+    const root = directory('executable-path')
+    const command = join(root, 'mnemon')
+    writeFileSync(command, '#!/bin/sh\n', 'utf8')
+    chmodSync(command, 0o755)
+    const manager = new VersionUpdateManager({
+      packageManifestPath: join(root, 'package.json'),
+      mnemonCliPath: () => command,
+      resolveExecutable: value => value === command ? command : undefined,
+      processRunner: async () => ({ stdout: 'mnemon version 0.2.3\n', stderr: '', exitCode: 0 }),
+      fetchNpmLatest: async () => '0.1.4',
+      fetchMnemonLatest: async () => '0.2.3',
+    })
+
+    const status = await manager.check()
+    expect(status.components.find(component => component.id === 'mnemon')).toMatchObject({
+      executablePath: command,
+      current: '0.2.3',
+      latest: '0.2.3',
+    })
+    expect(status.components.find(component => component.id === 'dsh-mnemon')).toMatchObject({
+      installMode: 'manual',
+      installPath: root,
     })
   })
 
@@ -66,6 +92,12 @@ describe('VersionUpdateManager', () => {
       fetchMnemonLatest: async () => '0.2.0',
     })
 
+    const status = await manager.check()
+    expect(status.components.find(component => component.id === 'dsh-mnemon')).toMatchObject({
+      installMode: 'npm',
+      installProfile: 'web',
+      installPath: profile,
+    })
     await expect(manager.update('dsh-mnemon')).resolves.toMatchObject({ updated: true, currentVersion: '0.1.3', restartRequired: true })
     expect(manager.currentDshMnemonVersion).toBe('0.1.3')
     expect(run).toHaveBeenCalledWith(expect.stringMatching(/pnpm$/), ['update', 'dsh-mnemon'], expect.objectContaining({ timeoutMs: 600_000, maxOutputBytes: 16 * 1024 }))

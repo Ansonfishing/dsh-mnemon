@@ -162,8 +162,8 @@ describe('MnemonView', () => {
       if (endpoint === 'versions') return { ok: true, value: {
         checkedAt: '2026-08-15T03:00:00.000Z',
         components: [
-          { id: 'mnemon', name: 'Mnemon CLI', current: mnemonVersionUpdated ? '0.2.0' : '0.1.2', latest: '0.2.0', outdated: !mnemonVersionUpdated, installMode: 'homebrew', updateSupported: true, updateHint: 'brew' },
-          { id: 'dsh-mnemon', name: 'dsh-mnemon', current: '0.1.2', latest: '0.1.3', outdated: true, installMode: 'link', updateSupported: false, updateHint: 'link' },
+          { id: 'mnemon', name: 'Mnemon CLI', executablePath: '/usr/local/bin/mnemon', current: mnemonVersionUpdated ? '0.2.0' : '0.1.2', latest: '0.2.0', outdated: !mnemonVersionUpdated, installMode: 'homebrew', updateSupported: true, updateHint: 'brew' },
+          { id: 'dsh-mnemon', name: 'dsh-mnemon', installProfile: 'web', installPath: '/workspace/dsh-mnemon', current: '0.1.2', latest: '0.1.3', outdated: true, installMode: 'link', updateSupported: false, updateHint: 'link' },
         ],
       } }
       if (endpoint === 'version-update') {
@@ -344,8 +344,11 @@ describe('MnemonView', () => {
     fireEvent.click(screen.getByRole('button', { name: '检查版本' }))
     const dialog = screen.getByRole('dialog', { name: '检查与更新版本' })
     await waitFor(() => expect(within(dialog).getByText('Mnemon CLI')).toBeTruthy())
+    expect(within(dialog).getByText('/usr/local/bin/mnemon')).toBeTruthy()
     expect(within(dialog).getByText('dsh-mnemon')).toBeTruthy()
     expect(within(dialog).getByText('本地 Link')).toBeTruthy()
+    expect(within(dialog).getByText('源码 · Profile web')).toBeTruthy()
+    expect(within(dialog).getByText('/workspace/dsh-mnemon')).toBeTruthy()
     expect(within(dialog).getByText(/请在源码目录拉取并构建/)).toBeTruthy()
     expect(within(dialog).getAllByRole('button', { name: '更新' })).toHaveLength(1)
 

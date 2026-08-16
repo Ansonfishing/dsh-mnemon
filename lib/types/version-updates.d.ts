@@ -4,6 +4,9 @@ export type VersionInstallMode = 'homebrew' | 'go' | 'npm' | 'link' | 'manual' |
 export interface VersionComponentStatus {
     id: VersionComponentId;
     name: string;
+    executablePath?: string;
+    installPath?: string;
+    installProfile?: string;
     current?: string;
     latest?: string;
     outdated: boolean;

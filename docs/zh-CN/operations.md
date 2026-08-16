@@ -11,6 +11,13 @@ command -v mnemon
 mnemon --version
 ```
 
+Windows PowerShell：
+
+```powershell
+Get-Command mnemon -ErrorAction SilentlyContinue
+Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"
+```
+
 ```text
 /mnemon status
 ```
@@ -125,7 +132,7 @@ mnemon --version
 
 | 现象 | 检查与处理 |
 |---|---|
-| Mnemon 不可用 | 运行 `command -v mnemon`、`mnemon --version`；设置 `MNEMON_CLI_PATH` 或 `cliPath` 后重启 |
+| Mnemon 不可用 | macOS/Linux 运行 `command -v mnemon`、`mnemon --version`；Windows PowerShell 运行 `Get-Command mnemon`、`Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"`。设置 `MNEMON_CLI_PATH` 或 `mnemon.cliPath` 后重启 |
 | 左侧栏没有“记忆系统” | 检查 `tabEnabled=true`、`displayMode=sidebar`；Buildin 位于对话区；本地 link 先 `pnpm run build` 再重启 profile |
 | 状态正常但召回为空 | 检查 active 记忆体、存储范围、查看目录、会话实际目录和查询是否足够聚焦 |
 | 顶部提示目录未对齐 | 工作台正在查看另一个工作区；点击一键对齐，或有意保留只读查看；Agent-backed 操作在未对齐时拒绝 |
