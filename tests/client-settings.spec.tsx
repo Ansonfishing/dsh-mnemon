@@ -450,6 +450,9 @@ describe('MnemonSettingsCard', () => {
     render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call } } as ClientConnectionHandle} />)
 
     const providerToggle = await screen.findByRole('checkbox', { name: '启用 Supermemory' }) as HTMLInputElement
+    const providerCard = screen.getByRole('group', { name: 'Supermemory 服务配置' }) as HTMLDivElement
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(providerCard, 'scrollIntoView', { configurable: true, value: scrollIntoView })
     expect(providerToggle.checked).toBe(false)
     expect(screen.queryByLabelText('服务地址')).toBeNull()
 
@@ -471,6 +474,7 @@ describe('MnemonSettingsCard', () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', expect.objectContaining({
       providerId: 'supermemory', enabled: false, settings: {},
     })))
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
     expect(screen.queryByLabelText('服务地址')).toBeNull()
   })
 

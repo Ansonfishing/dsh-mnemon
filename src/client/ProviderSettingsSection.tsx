@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type JSX } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type JSX } from 'react'
 import type {
   ClientConnectionHandle,
   MemoryProviderConfigField,
@@ -145,6 +145,14 @@ function ProviderPanel(props: {
   const [expanded, setExpanded] = useState(props.service.enabled && !props.service.configured)
   const [toggling, setToggling] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
+  const rowRef = useRef<HTMLDivElement>(null)
+  const keepCollapsedHeaderVisible = useRef(false)
+
+  useLayoutEffect(() => {
+    if (expanded || !keepCollapsedHeaderVisible.current) return
+    keepCollapsedHeaderVisible.current = false
+    rowRef.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [expanded])
 
   useEffect(() => {
     setEnabled(props.service.enabled)
@@ -163,12 +171,18 @@ function ProviderPanel(props: {
       setExpanded(false)
       return
     }
+    const restoreExpanded = expanded
+    if (!next && expanded) {
+      keepCollapsedHeaderVisible.current = true
+      setExpanded(false)
+    }
     setToggling(true)
     try {
       await props.onToggle(props.provider, next)
       setEnabled(next)
       if (!next) setExpanded(false)
     } catch (reason) {
+      if (!next && restoreExpanded) setExpanded(true)
       setFailed(message(reason))
     } finally {
       setToggling(false)
@@ -180,6 +194,7 @@ function ProviderPanel(props: {
     : props.service.configured ? 'config.providerDisabledConfigured' : 'config.providerDisabled'
   const controlDisabled = props.disabled || toggling
   return <div
+    ref={rowRef}
     className={css.providerRow}
     data-provider={props.provider.id}
     data-enabled={enabled || undefined}
