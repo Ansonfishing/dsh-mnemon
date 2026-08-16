@@ -3,6 +3,7 @@ import type { ClientConnectionHandle, ClientSettingsScope, ClientSettingsSnapsho
 import css from './MnemonSettingsCard.module.css'
 import { translateZh, type MnemonTranslate } from './locales.ts'
 import { MnemonPackSection } from './MnemonPackSection.tsx'
+import { ProviderIcon } from './ProviderIcon.tsx'
 import { ProviderSettingsSection } from './ProviderSettingsSection.tsx'
 
 export interface MnemonSettingsCardProps {
@@ -203,7 +204,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           </div>
           <details className={css.providerPanel} open>
             <summary>
-              <span className={css.providerIdentity}><i className={css.nativeMark} aria-hidden="true">M</i><span><strong>Mnemon Native</strong><small>{t('config.nativeSummary')}</small></span></span>
+              <span className={css.providerIdentity}><ProviderIcon providerId="mnemon-native" className={css.nativeMark} /><span><strong>Mnemon Native</strong><small>{t('config.nativeSummary')}</small></span></span>
               <span className={css.providerState}>{t('config.officialNative')}</span>
             </summary>
             <div className={css.providerPanelBody}>
