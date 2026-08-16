@@ -10,6 +10,7 @@ import {
   type UpdateMemoryBodyRequest,
 } from './memory-bodies.ts'
 import type { MnemonRunner } from './runner.ts'
+import { prepareMemoryPlacement, type PreparedMemoryPlacement } from './provider-placement.ts'
 import { OpenVikingProvider } from './providers/openviking.ts'
 import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './providers/provider.ts'
 import {
@@ -30,6 +31,7 @@ import {
   type MemoryGraphSnapshot,
   type MemoryListRequest,
   type MemoryListView,
+  type MemoryPlacementDecision,
   type RememberRequest,
   type SearchRequest,
   type Source,
@@ -424,9 +426,15 @@ export class MnemonService {
     return this.annotateResult(result, body)
   }
 
-  async createBody(request: CreateMemoryBodyRequest, signal?: AbortSignal): Promise<MemoryBody> {
+  prepareBodyPlacement(request: CreateMemoryBodyRequest): PreparedMemoryPlacement {
+    if (request.placement === undefined) throw new Error('automatic provider placement request is required')
+    if (request.providerId !== undefined) throw new Error('automatic provider placement cannot include a fixed providerId')
+    return prepareMemoryPlacement(request.placement, this.memoryBodies.placementCandidates(request))
+  }
+
+  async createBody(request: CreateMemoryBodyRequest, signal?: AbortSignal, placement?: MemoryPlacementDecision): Promise<MemoryBody> {
     this.assertWritable()
-    return this.memoryBodies.create(request, signal)
+    return this.memoryBodies.create(request, signal, placement)
   }
 
   updateBody(id: string, request: UpdateMemoryBodyRequest): MemoryBody {

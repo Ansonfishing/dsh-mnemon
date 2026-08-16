@@ -15,6 +15,7 @@ import { TurnActivityProjection, type TurnMemoryActivity, type TurnMemoryActivit
 import type { RuntimeMemoryController } from './runtime-memory.ts'
 import { registerAgentRuntimeMemoryContext } from './guidance.ts'
 import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot, ReviewActivityScore } from './shared/contracts.ts'
+import type { PreparedMemoryPlacement } from './provider-placement.ts'
 
 interface AgentRuntimeSource {
   forAgent(agent: HostAgent): { runtimeMemory: RuntimeMemoryController }
@@ -433,6 +434,10 @@ export class MnemonLifecycle {
 
   mutate(sessionId: string, operation: string, request: unknown, signal = new AbortController().signal) {
     return this.coordinator.write(this.liveAgent(sessionId), operation, request, signal)
+  }
+
+  placeProvider(sessionId: string, body: { name: string; description: string }, prepared: PreparedMemoryPlacement, signal = new AbortController().signal) {
+    return this.coordinator.placeProvider(this.liveAgent(sessionId), body, prepared, signal)
   }
 
   async supervise(sessionId: string, content: string, idempotencyKey?: string, signal = new AbortController().signal): Promise<SupervisedWritebackResult> {

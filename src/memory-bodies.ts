@@ -2,10 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import type { MnemonRunner, MnemonTextCommand } from './runner.ts'
+import type { MemoryPlacementCandidate } from './provider-placement.ts'
 import type {
   CreateMemoryBodyRequest,
   MemoryBody,
   MemoryBodyProvider,
+  MemoryPlacementDecision,
   MemoryProviderCapabilities,
   MemoryProviderId,
   OpenVikingBodyConnection,
@@ -169,10 +171,35 @@ export class MemoryBodyRegistry {
     return { ...body.openViking }
   }
 
-  async create(request: CreateMemoryBodyRequest, signal?: AbortSignal): Promise<MemoryBody> {
+  placementCandidates(request: Pick<CreateMemoryBodyRequest, 'openViking'>): MemoryPlacementCandidate[] {
+    return [
+      {
+        id: 'mnemon-native',
+        label: 'Mnemon Native',
+        kind: 'local',
+        configured: this.runner.commandFound,
+        summary: 'Official local-first memory with exact writes, typed graph relations, and soft deletion.',
+        capabilities: NATIVE_CAPABILITIES,
+      },
+      {
+        id: 'openviking',
+        label: 'OpenViking',
+        kind: 'remote',
+        configured: request.openViking !== undefined
+          && request.openViking.endpoint.trim() !== ''
+          && request.openViking.targetUri.trim() !== '',
+        summary: 'Shared remote memory with hierarchical browsing and asynchronous semantic extraction.',
+        capabilities: OPENVIKING_CAPABILITIES,
+      },
+    ]
+  }
+
+  async create(request: CreateMemoryBodyRequest, signal?: AbortSignal, placement?: MemoryPlacementDecision): Promise<MemoryBody> {
     const name = requiredText(request.name, 'name', 100)
     const description = requiredText(request.description, 'description', 1000)
-    const providerId = request.providerId ?? 'mnemon-native'
+    if (request.placement !== undefined && placement === undefined) throw new Error('automatic provider placement must be resolved before creating a Memory Space')
+    if (placement !== undefined && request.providerId !== undefined && request.providerId !== placement.providerId) throw new Error('resolved provider placement conflicts with providerId')
+    const providerId = placement?.providerId ?? request.providerId ?? 'mnemon-native'
     if (providerId !== 'mnemon-native' && providerId !== 'openviking') throw new Error(`unsupported memory provider: ${String(providerId)}`)
     const reservedIds = new Set(this.list().map(body => body.id))
     const nativeStoreIds = this.nativeStoreIds()
@@ -191,6 +218,7 @@ export class MemoryBodyRegistry {
       description,
       active: request.active ?? false,
       providerId,
+      ...(placement === undefined ? {} : { placement }),
       ...(openViking === undefined ? {} : { openViking }),
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -302,6 +330,7 @@ export class MemoryBodyRegistry {
               description: optionalText(syntheticDefault ? 'Existing Mnemon Store discovered on disk.' : body.description, 'description', 1000),
               active: body.active === true,
               providerId: 'providerId' in body && body.providerId === 'openviking' ? 'openviking' : 'mnemon-native',
+              ...('placement' in body && body.placement !== undefined ? { placement: body.placement } : {}),
               ...('openViking' in body && body.openViking != null ? { openViking: normalizeOpenViking(body.openViking as OpenVikingBodyConnection) } : {}),
               createdAt: body.createdAt,
               updatedAt: body.updatedAt,
@@ -326,6 +355,7 @@ export class MemoryBodyRegistry {
               description: optionalText(body.description, 'description', 1000),
               active: body.active === true,
               providerId: 'openviking' as const,
+              ...(body.placement === undefined ? {} : { placement: body.placement }),
               openViking: normalizeOpenViking(body.openViking ?? { endpoint: '', targetUri: '' }),
               createdAt: body.createdAt,
               updatedAt: body.updatedAt,

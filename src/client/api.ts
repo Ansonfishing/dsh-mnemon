@@ -3,6 +3,7 @@ import {
   MNEMON_READ_CHANNEL,
   MNEMON_WRITE_CHANNEL,
   type AssistantMessageText,
+  type CreateMemoryBodyRequest,
   type ClientConnectionHandle,
   type DocumentMutation,
   type DocumentMutationResult,
@@ -204,7 +205,7 @@ export class MnemonClient {
     return this.call(MNEMON_WRITE_CHANNEL, 'forget', this.scoped({ id, ...(memoryBodyId === undefined ? {} : { memoryBodyId }) }))
   }
 
-  createBody(request: { name: string; description: string; active?: boolean; providerId?: MemoryProviderId; openViking?: OpenVikingBodyConnection }): Promise<MemoryBody> {
+  createBody(request: CreateMemoryBodyRequest): Promise<MemoryBody> {
     return this.call(MNEMON_WRITE_CHANNEL, 'body-create', this.scoped(request))
   }
 

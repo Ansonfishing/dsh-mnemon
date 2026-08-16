@@ -7,6 +7,7 @@ import type { MnemonPackManager } from './pack.ts'
 import type { LiveMnemonRuntime, MnemonRuntimeGraph } from './live-runtime.ts'
 import { VersionUpdateManager, type VersionComponentId } from './version-updates.ts'
 import { MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from './channels.ts'
+import type { CreateMemoryBodyRequest, MemoryPlacementCapability, MemoryProviderId } from './shared/contracts.ts'
 export { MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from './channels.ts'
 
 type RuntimeInput = MnemonService | LiveMnemonRuntime
@@ -330,11 +331,14 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
         case 'body-create':
           {
             const openViking = payload.openViking === undefined ? undefined : object(payload.openViking)
-            return success(await service.createBody({
+            const placement = payload.placement === undefined ? undefined : object(payload.placement)
+            const placementRules = placement?.rules === undefined ? undefined : object(placement.rules)
+            if (placement !== undefined && placement.mode !== 'automatic') throw new Error(`unsupported provider placement mode: ${String(placement.mode)}`)
+            const request: CreateMemoryBodyRequest = {
               name: String(payload.name ?? ''),
               description: String(payload.description ?? ''),
               ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
-              ...(payload.providerId === undefined ? {} : { providerId: String(payload.providerId) as 'mnemon-native' | 'openviking' }),
+              ...(payload.providerId === undefined ? {} : { providerId: String(payload.providerId) as MemoryProviderId }),
               ...(openViking === undefined ? {} : {
                 openViking: {
                   endpoint: String(openViking.endpoint ?? ''),
@@ -345,7 +349,30 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
                   ...(openViking.actorPeerId === undefined ? {} : { actorPeerId: String(openViking.actorPeerId) }),
                 },
               }),
-            }))
+              ...(placement === undefined ? {} : {
+                placement: {
+                  mode: 'automatic',
+                  ...(placement.prompt === undefined ? {} : { prompt: String(placement.prompt) }),
+                  ...(placementRules === undefined ? {} : {
+                    rules: {
+                      ...(Array.isArray(placementRules.allowedProviderIds) ? { allowedProviderIds: placementRules.allowedProviderIds.map(String) as MemoryProviderId[] } : {}),
+                      ...(placementRules.dataBoundary === undefined ? {} : { dataBoundary: String(placementRules.dataBoundary) as 'allow-remote' | 'local-only' }),
+                      ...(Array.isArray(placementRules.requiredCapabilities) ? { requiredCapabilities: placementRules.requiredCapabilities.map(String) as MemoryPlacementCapability[] } : {}),
+                      ...(placementRules.preference === undefined ? {} : { preference: String(placementRules.preference) as 'balanced' | 'local-first' | 'shared-first' }),
+                    },
+                  }),
+                },
+              }),
+            }
+            if (request.placement === undefined) return success(await service.createBody(request))
+            if (lifecycle === undefined) throw new Error('automatic provider placement requires Mnemon lifecycle integration')
+            requireAligned(resolved.route)
+            const prepared = service.prepareBodyPlacement(request)
+            const decision = await lifecycle.placeProvider(String(payload.sessionId ?? ''), {
+              name: request.name,
+              description: request.description,
+            }, prepared)
+            return success(await service.createBody(request, undefined, decision))
           }
         case 'body-update':
           {

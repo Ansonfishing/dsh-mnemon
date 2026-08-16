@@ -33,4 +33,28 @@ describe('MnemonClient turn activity batching', () => {
     await client.turnActivity(2, 10)
     expect(call).toHaveBeenCalledTimes(2)
   })
+
+  it('keeps automatic placement policy scoped to the active session and workspace', async () => {
+    const call = vi.fn(async () => ({
+      ok: true as const,
+      value: { id: 'body-1', name: 'Team memory', description: 'Shared context.', active: false },
+    }))
+    const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle, 'session-1', 'workspace-1')
+
+    await client.createBody({
+      name: 'Team memory',
+      description: 'Shared context.',
+      placement: {
+        mode: 'automatic',
+        prompt: 'Prefer collaboration when policy allows it.',
+        rules: { preference: 'shared-first', allowedProviderIds: ['mnemon-native', 'openviking'] },
+      },
+    })
+
+    expect(call).toHaveBeenCalledWith(expect.any(String), 'body-create', expect.objectContaining({
+      sessionId: 'session-1',
+      workspaceId: 'workspace-1',
+      placement: expect.objectContaining({ mode: 'automatic', rules: expect.objectContaining({ preference: 'shared-first' }) }),
+    }))
+  })
 })

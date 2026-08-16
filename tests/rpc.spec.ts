@@ -22,6 +22,12 @@ function fakeService(writeEnabled = true): MnemonService {
     remember: vi.fn(async () => ({ action: 'added' })),
     link: vi.fn(async () => ({ status: 'linked' })),
     forget: vi.fn(async () => ({ status: 'deleted' })),
+    prepareBodyPlacement: vi.fn(request => ({
+      prompt: request.placement?.prompt ?? '',
+      candidates: [{ id: 'mnemon-native' }],
+      appliedRules: ['preference:balanced'],
+      selectorBrief: 'eligible providers',
+    })),
     createBody: vi.fn(async request => ({ id: '00000000-0000-4000-8000-000000000001', name: request.name, description: request.description, active: request.active ?? false })),
     updateBody: vi.fn((id, request) => ({ id, name: request.name ?? id, description: request.description ?? '', active: request.active ?? false })),
     deleteBody: vi.fn(async id => ({ id, name: id, description: '', active: false })),
@@ -106,6 +112,43 @@ describe('Mnemon RPC', () => {
     const service = fakeService()
     await expect(createWriteHandler(service)('body-delete', { memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { id: 'project' } })
     expect(service.deleteBody).toHaveBeenCalledWith('project')
+  })
+
+  it('resolves automatic provider placement through the bound Agent before creating a Memory Space', async () => {
+    const service = fakeService()
+    const decision = {
+      mode: 'automatic' as const,
+      providerId: 'mnemon-native' as const,
+      decidedBy: 'rules' as const,
+      reason: 'Graph support is required.',
+      confidence: 'high' as const,
+      candidateProviderIds: ['mnemon-native' as const],
+      appliedRules: ['requires:graph'],
+      decidedAt: '2026-08-16T00:00:00.000Z',
+    }
+    const lifecycle = {
+      placeProvider: vi.fn(async () => decision),
+    } as unknown as MnemonLifecycle
+
+    await expect(createWriteHandler(service, lifecycle)('body-create', {
+      sessionId: 'session-1',
+      name: '产品知识',
+      description: '精确记录产品决策并维护关系。',
+      placement: {
+        mode: 'automatic',
+        prompt: '共享不是重点，优先可解释性。',
+        rules: { dataBoundary: 'local-only', requiredCapabilities: ['graph'] },
+      },
+    })).resolves.toMatchObject({ ok: true, value: { name: '产品知识' } })
+
+    expect(service.prepareBodyPlacement).toHaveBeenCalledWith(expect.objectContaining({
+      placement: expect.objectContaining({ prompt: '共享不是重点，优先可解释性。' }),
+    }))
+    expect(lifecycle.placeProvider).toHaveBeenCalledWith('session-1', {
+      name: '产品知识',
+      description: '精确记录产品决策并维护关系。',
+    }, expect.objectContaining({ selectorBrief: 'eligible providers' }))
+    expect(service.createBody).toHaveBeenCalledWith(expect.objectContaining({ placement: expect.any(Object) }), undefined, decision)
   })
 
   it('routes supervised Tab writeback through an isolated memory subagent', async () => {

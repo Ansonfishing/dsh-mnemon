@@ -216,6 +216,41 @@ describe('MemoryBodyRegistry', () => {
     expect(process).not.toHaveBeenCalled()
   })
 
+  it('persists an audited automatic placement and refuses to create before placement resolves', async () => {
+    const dataDir = temporaryDirectory()
+    const process = vi.fn<ProcessRunner>(async () => ({ stdout: 'Created store', stderr: '', exitCode: 0 }))
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), process)
+    const registry = new MemoryBodyRegistry(runner, true, () => new Date('2026-08-16T00:00:00.000Z'))
+    const request = {
+      name: '本地产品决策',
+      description: '需要精确写入和关系图的长期产品决策。',
+      placement: {
+        mode: 'automatic' as const,
+        rules: { requiredCapabilities: ['graph' as const] },
+      },
+    }
+
+    await expect(registry.create(request)).rejects.toThrow('must be resolved')
+    const created = await registry.create(request, undefined, {
+      mode: 'automatic',
+      providerId: 'mnemon-native',
+      decidedBy: 'rules',
+      reason: 'Only Mnemon Native satisfies the configured placement rules.',
+      confidence: 'high',
+      candidateProviderIds: ['mnemon-native'],
+      appliedRules: ['requires:graph', 'preference:balanced'],
+      decidedAt: '2026-08-16T00:00:00.000Z',
+    })
+
+    expect(created).toMatchObject({
+      provider: { id: 'mnemon-native' },
+      placement: { decidedBy: 'rules', providerId: 'mnemon-native', confidence: 'high' },
+    })
+    expect(new MemoryBodyRegistry(runner, true).get(created.id)).toMatchObject({
+      placement: { reason: expect.stringContaining('Mnemon Native'), appliedRules: ['requires:graph', 'preference:balanced'] },
+    })
+  })
+
   it('migrates a version 2 mixed registry into native data and provider state without losing credentials', () => {
     const dataDir = temporaryDirectory()
     mkdirSync(join(dataDir, 'data', 'default'), { recursive: true })
