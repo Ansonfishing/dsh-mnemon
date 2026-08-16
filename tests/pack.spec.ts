@@ -47,6 +47,7 @@ async function fixture(label: string, seed: number, bodyId = 'project') {
     version: 1,
     bodies: [{ id: bodyId, name: `Space ${seed}`, description: `Seed ${seed}`, active: true, createdAt: now().toISOString(), updatedAt: now().toISOString() }],
   }, null, 2)}\n`)
+  writeFileSync(join(root, 'active'), `${bodyId}\n`)
   return { root, workspace, ...created, manager: new MnemonPackManager(created.runner, created.config, undefined, now) }
 }
 
@@ -113,6 +114,7 @@ describe('Mnemon Pack', () => {
 
     expect(readdirSync(join(target.root, 'data')).filter(name => !name.startsWith('.'))).toEqual(['source'])
     expect(readFileSync(join(target.root, 'data', 'source', 'mnemon.db'))).toEqual(sqlite(4))
+    expect(readFileSync(join(target.root, 'active'), 'utf8')).toBe('source\n')
     expect(refreshed).toHaveBeenCalledWith(['runtime', 'documents', 'memory-spaces'])
     expect(readdirSync(target.root).some(name => name.startsWith('.dsh-pack-stage-') || name.startsWith('.dsh-pack-backup-'))).toBe(false)
   })
@@ -144,6 +146,18 @@ describe('Mnemon Pack', () => {
 
     expect(readFileSync(join(target.root, 'data', 'target', 'mnemon.db'))).toEqual(beforeDatabase)
     expect(readdirSync(join(target.root, 'data')).filter(name => !name.startsWith('.'))).toEqual(['target'])
+  })
+
+  it('refuses to replace an initialized root with an empty Memory Space set', async () => {
+    const empty = runner(temporary('pack-empty-source'))
+    const emptyManager = new MnemonPackManager(empty.runner, empty.config, undefined, now)
+    const exported = await emptyManager.exportPack('memory-spaces')
+    const target = await fixture('pack-empty-target', 10, 'default')
+
+    await expect(target.manager.importPack(exported.base64, { mode: 'replace' })).rejects.toThrow('last Mnemon Store')
+
+    expect(readFileSync(join(target.root, 'data', 'default', 'mnemon.db'))).toEqual(sqlite(10))
+    expect(readFileSync(join(target.root, 'active'), 'utf8')).toBe('default\n')
   })
 
   it('leaves the target untouched when staging a merge fails', async () => {

@@ -551,6 +551,31 @@ function mergeRegistry(root: string, pack: ParsedPack): { registry: BodyRegistry
   return current
 }
 
+function persistedStore(root: string): string {
+  try {
+    const value = readFileSync(join(root, 'active'), 'utf8').trim()
+    if (BODY_ID.test(value)) return value
+  } catch {}
+  return 'default'
+}
+
+function reconcilePersistedStore(root: string): void {
+  const current = readCurrentRegistry(root).registry.bodies
+  const ids = new Set(current.map(body => body.id))
+  const selected = persistedStore(root)
+  if (ids.has(selected)) return
+  const replacement = ids.has('default')
+    ? 'default'
+    : current.filter(body => body.active).map(body => body.id).sort()[0] ?? [...ids].sort()[0] ?? 'default'
+  const temporary = join(root, `.active-${process.pid}-${randomUUID()}.tmp`)
+  try {
+    writeFileSync(temporary, `${replacement}\n`, { mode: 0o600 })
+    renameSync(temporary, join(root, 'active'))
+  } finally {
+    rmSync(temporary, { force: true })
+  }
+}
+
 function stageImport(root: string, pack: ParsedPack, components: MnemonPackComponent[], mode: MnemonPackImportMode): string {
   const staging = join(root, `.dsh-pack-stage-${randomUUID()}`)
   mkdirSync(staging, { recursive: true, mode: 0o700 })
@@ -565,6 +590,9 @@ function stageImport(root: string, pack: ParsedPack, components: MnemonPackCompo
     }
     if (components.includes('memory-spaces')) {
       const memory = mode === 'merge' ? mergeRegistry(root, pack) : archiveRegistry(pack)
+      if (mode === 'replace' && readCurrentRegistry(root).registry.bodies.length > 0 && memory.registry.bodies.length === 0) {
+        throw new Error('cannot replace the last Mnemon Store with an empty Memory Space set')
+      }
       writeRegistry(join(staging, 'data'), memory.registry, memory.databases)
     }
     return staging
@@ -581,6 +609,8 @@ function commitStaging(root: string, staging: string, components: MnemonPackComp
   const replacementLocks = components.flatMap(component => component === 'runtime'
     ? [join(staging, 'runtime', '.memories.lock')]
     : component === 'documents' ? [join(staging, 'documents', '.index.lock')] : [])
+  const activePath = join(root, 'active')
+  const previousActive = existsSync(activePath) ? readFileSync(activePath) : undefined
   try {
     for (const lock of replacementLocks) writeFileSync(lock, 'pack-import\n', { mode: 0o600 })
     for (const component of components) {
@@ -597,6 +627,7 @@ function commitStaging(root: string, staging: string, components: MnemonPackComp
       }
       committed.push({ directory, hadPrevious })
     }
+    if (components.includes('memory-spaces')) reconcilePersistedStore(root)
     if (components.includes('runtime')) rmSync(join(root, 'runtime', '.memories.lock'), { force: true })
     if (components.includes('documents')) rmSync(join(root, 'documents', '.index.lock'), { force: true })
   } catch (error) {
@@ -604,6 +635,10 @@ function commitStaging(root: string, staging: string, components: MnemonPackComp
       const target = join(root, entry.directory)
       rmSync(target, { recursive: true, force: true })
       if (entry.hadPrevious) renameSync(join(backup, entry.directory), target)
+    }
+    if (components.includes('memory-spaces')) {
+      if (previousActive === undefined) rmSync(activePath, { force: true })
+      else writeFileSync(activePath, previousActive, { mode: 0o600 })
     }
     throw error
   } finally {
