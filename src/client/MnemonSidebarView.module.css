@@ -196,6 +196,7 @@
   background: var(--dsw-alias-bg-base);
   box-shadow: var(--dsw-shadow-lv3);
 }
+.shell .modal.modalWide { width: min(780px, calc(100vw - 48px)); }
 .shell .modal > header {
   display: flex;
   flex: none;
