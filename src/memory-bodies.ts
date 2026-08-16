@@ -254,7 +254,7 @@ export class MemoryBodyRegistry {
   /** Atomically replace one provider's local projections after authoritative discovery. */
   syncProviderService(providerId: MemoryProviderId, service: MemoryProviderConnection, discovered: readonly ProviderMemorySpace[]): MemoryProviderServiceView {
     if (providerId === 'mnemon-native') throw new Error('Mnemon Native Stores are discovered from disk')
-    const normalizedService = normalizeProviderServiceConnection(providerId, service)
+    let normalizedService = normalizeProviderServiceConnection(providerId, service)
     const seen = new Set<string>()
     const existing = this.bodies.filter(body => body.providerId === providerId)
     const reservedIds = new Set(this.bodies.filter(body => body.providerId !== providerId).map(body => body.id))
@@ -273,11 +273,16 @@ export class MemoryBodyRegistry {
         suffix += 1
       }
       reservedIds.add(id)
+      const upstreamName = String(candidate.name ?? '').trim() || externalId
+      const upstreamDescription = String(candidate.description ?? '').trim()
       return {
         id,
         externalId,
-        name: requiredText(candidate.name || externalId, 'name', 100),
-        description: optionalText(candidate.description, 'description', 1000),
+        // Provider metadata is not user-controlled by this form. Keep every
+        // discovered namespace addressable even when an upstream title is
+        // blank or exceeds DSH's presentation limits.
+        name: requiredText(upstreamName.slice(0, 100), 'name', 100),
+        description: optionalText(upstreamDescription.slice(0, 1000), 'description', 1000),
         active: previous?.active ?? true,
         providerId,
         connection,
@@ -285,6 +290,15 @@ export class MemoryBodyRegistry {
         updatedAt: timestamp,
       } satisfies StoredMemoryBody
     })
+    // ByteRover cannot enumerate arbitrary working directories. Once its
+    // singleton directory has been discovered, promote it to the reusable
+    // service location so a later disconnect can rebuild the same mapping.
+    if (providerId === 'byterover' && String(normalizedService.defaultDirectory ?? '').trim() === '') {
+      const directory = projections[0]?.connection?.workingDirectory
+      if (typeof directory === 'string' && directory.trim() !== '') {
+        normalizedService = normalizeProviderServiceConnection(providerId, { ...normalizedService, defaultDirectory: directory })
+      }
+    }
     this.services[providerId] = normalizedService
     this.serviceEnabled[providerId] = true
     this.bodies = [...this.bodies.filter(body => body.providerId !== providerId), ...projections]

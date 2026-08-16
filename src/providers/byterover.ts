@@ -27,8 +27,10 @@ export class ByteRoverProvider implements MemoryProviderAdapter {
 
   async discover(connection: MemoryProviderConnection): Promise<ProviderMemorySpace[]> {
     const configured = String(connection.defaultDirectory ?? '').trim()
+    const existingDirectory = this.memoryBodies.list()
+      .find(body => body.provider.id === this.id)?.provider.settings.workingDirectory
     const directory = configured === ''
-      ? join(this.memoryBodies.runner.effectiveDataDir(), 'state', 'byterover', 'default')
+      ? String(existingDirectory ?? '').trim() || join(this.memoryBodies.runner.effectiveDataDir(), 'state', 'byterover', 'default')
       : isAbsolute(configured)
         ? configured
         : resolve(this.memoryBodies.runner.effectiveDataDir(), configured)

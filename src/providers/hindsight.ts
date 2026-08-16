@@ -59,10 +59,13 @@ export class HindsightProvider extends HttpMemoryProvider implements MemoryProvi
       const item = jsonObject(value)
       const id = jsonString(item?.bank_id) ?? jsonString(item?.id)
       if (id === undefined) return []
+      const description = jsonString(item?.mission)?.trim()
+        || jsonString(item?.description)?.trim()
+        || `Hindsight memory bank ${id}`
       return [{
         externalId: id,
         name: jsonString(item?.name) ?? id,
-        description: jsonString(item?.mission) ?? jsonString(item?.description) ?? `Hindsight memory bank ${id}`,
+        description,
         connection: { bankId: id, budget: 'mid' },
       }]
     })

@@ -321,6 +321,43 @@ describe('MemoryBodyRegistry', () => {
     })
   })
 
+  it('keeps provider namespaces when upstream presentation metadata is blank or oversized', () => {
+    const dataDir = temporaryDirectory()
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
+    const registry = new MemoryBodyRegistry(runner, true)
+    const longTitle = 'T'.repeat(120)
+    const longDescription = 'D'.repeat(1_200)
+
+    registry.syncProviderService('hindsight', { endpoint: 'https://hindsight.example' }, [
+      { externalId: 'blank-title', name: '   ', description: '   ', connection: { bankId: 'blank-title', budget: 'mid' } },
+      { externalId: 'long-title', name: longTitle, description: longDescription, connection: { bankId: 'long-title', budget: 'mid' } },
+    ])
+
+    expect(registry.list().map(body => ({ name: body.name, description: body.description }))).toEqual([
+      { name: 'blank-title', description: '' },
+      { name: longTitle.slice(0, 100), description: longDescription.slice(0, 1000) },
+    ])
+  })
+
+  it('promotes a discovered ByteRover directory into reusable service configuration', () => {
+    const dataDir = temporaryDirectory()
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
+    const registry = new MemoryBodyRegistry(runner, true)
+    const service = registry.resolveProviderService('byterover', { cliPath: 'brv' })
+
+    registry.syncProviderService('byterover', service, [{
+      externalId: '/srv/knowledge', name: 'knowledge', description: 'ByteRover directory', connection: { workingDirectory: '/srv/knowledge' },
+    }])
+    registry.updateProviderService('byterover', {}, [], false)
+
+    expect(registry.list()).toEqual([])
+    expect(registry.providerServices().items.find(item => item.providerId === 'byterover')).toMatchObject({
+      enabled: false,
+      configured: true,
+      settings: { cliPath: 'brv', defaultDirectory: '/srv/knowledge' },
+    })
+  })
+
   it('persists an audited automatic placement and refuses to create before placement resolves', async () => {
     const dataDir = temporaryDirectory()
     const process = vi.fn<ProcessRunner>(async () => ({ stdout: 'Created store', stderr: '', exitCode: 0 }))
