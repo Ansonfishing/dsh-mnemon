@@ -186,6 +186,8 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
           return success(await service.graph(undefined, Array.isArray(payload.memoryBodyIds) ? payload.memoryBodyIds.map(String) : undefined))
         case 'bodies':
           return success(await service.bodies())
+        case 'provider-services':
+          return success(service.memoryBodies.providerServices())
         case 'list':
           return success(await service.list({
             ...(payload.query === undefined ? {} : { query: String(payload.query) }),
@@ -271,6 +273,19 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
       const inspectionDiverged = resolved.explicitWorkspace && resolved.route?.aligned === false
       const alignedSession = resolved.explicitWorkspace && resolved.route?.aligned === true && resolved.route.effectiveWorkspace !== undefined
       switch (endpoint) {
+        case 'provider-service-update':
+          {
+            const providerId = String(payload.providerId ?? '')
+            if (!isMemoryProviderId(providerId) || providerId === 'mnemon-native') throw new Error(`unsupported provider service: ${providerId}`)
+            const settings = providerConnection(payload.settings)
+            if (settings === undefined) throw new Error('provider service settings are required')
+            const clearSecrets = payload.clearSecrets === undefined
+              ? []
+              : Array.isArray(payload.clearSecrets)
+                ? payload.clearSecrets.map(String)
+                : (() => { throw new Error('clearSecrets must be an array') })()
+            return success(service.memoryBodies.updateProviderService(providerId, settings, clearSecrets))
+          }
         case 'runtime-memory':
           if (resolved.graph.runtimeMemory === undefined) throw new Error('runtime memory is unavailable')
           {

@@ -344,7 +344,7 @@ describe('MnemonSettingsCard', () => {
     expect((view.getByLabelText('存入记忆按钮') as HTMLInputElement).checked).toBe(true)
   })
 
-  it('creates a ready-to-use external Memory Space from its provider panel', async () => {
+  it('edits a reusable provider service without creating a Memory Space', async () => {
     const snapshot = {
       status: 'ready' as const,
       value: { storageScope: 'workspace' as const },
@@ -361,13 +361,14 @@ describe('MnemonSettingsCard', () => {
       label: 'OpenViking', kind: 'remote' as const, origin: 'third-party' as const, summary: 'Shared memory',
       capabilities: { search: true, browse: true, graph: false, entities: false, related: false, remember: true, link: false, forget: true, writeMode: 'async-extracting' as const, deletionMode: 'hard' as const },
       fields: [
-        { key: 'endpoint', label: 'Endpoint', input: 'url' as const, required: true, defaultValue: 'http://127.0.0.1:1933' },
-        { key: 'targetUri', label: 'Memory URI', input: 'text' as const, required: true, defaultValue: 'viking://user/memories' },
+        { key: 'endpoint', label: 'Endpoint', scope: 'service' as const, input: 'url' as const, required: true, defaultValue: 'http://127.0.0.1:1933' },
+        { key: 'apiKey', label: 'API key', scope: 'service' as const, input: 'secret' as const, required: false },
+        { key: 'targetUri', label: 'Memory URI', scope: 'memory' as const, input: 'text' as const, required: true, defaultValue: 'viking://user/memories' },
       ],
     }
     const call = vi.fn(async (channel: string, endpoint: string) => {
-      if (channel === '/dsh-mnemon-read' && endpoint === 'bodies') return { ok: true as const, value: { items: [], providers: [{ id: 'mnemon-native', label: 'Mnemon Native', kind: 'local', origin: 'native', summary: 'Native', capabilities: provider.capabilities, fields: [] }, provider], total: 0, activeCount: 0, directory: '/workspace/.mnemon/data', generatedAt: '2026-08-17T00:00:00.000Z' } }
-      if (channel === '/dsh-mnemon-write' && endpoint === 'body-create') return { ok: true as const, value: {} }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'openviking', configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'] }], generatedAt: '2026-08-17T00:00:00.000Z' } }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') return { ok: true as const, value: { providerId: 'openviking', configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'] } }
       if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/workspace/.mnemon', scope: 'workspace' } }
       throw new Error(`unexpected ${channel} ${endpoint}`)
     })
@@ -380,17 +381,17 @@ describe('MnemonSettingsCard', () => {
     expect(screen.getByText('工作区配置目标：dsh-mnemon')).toBeTruthy()
     fireEvent.click(screen.getByText('OpenViking'))
     expect((screen.getByLabelText('服务地址') as HTMLInputElement).value).toBe('http://127.0.0.1:1933')
-    fireEvent.click(screen.getByRole('button', { name: '保存并启用' }))
+    expect(screen.queryByLabelText('记忆范围 URI')).toBeNull()
+    expect(screen.queryByLabelText('记忆体名称')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '保存服务配置' }))
 
-    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'body-create', {
-      name: 'OpenViking 记忆体',
-      description: '由 dsh-mnemon 使用的 OpenViking 长期记忆。',
-      active: true,
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', {
       providerId: 'openviking',
-      connection: { endpoint: 'http://127.0.0.1:1933', targetUri: 'viking://user/memories' },
+      settings: { endpoint: 'http://127.0.0.1:1933' },
       sessionId: 'session-1',
       workspaceId: 'workspace-1',
     }))
+    expect(call.mock.calls.some(([, endpoint]) => endpoint === 'body-create')).toBe(false)
   })
 
   it('previews and safely imports one complete directory ZIP', async () => {

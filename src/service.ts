@@ -276,7 +276,10 @@ export class MnemonService {
     }))
     return {
       items,
-      providers: [...MEMORY_PROVIDER_CATALOG],
+      providers: MEMORY_PROVIDER_CATALOG.map(provider => ({
+        ...provider,
+        serviceConfigured: provider.id === 'mnemon-native' || this.memoryBodies.providerServiceConfigured(provider.id),
+      })),
       total: items.length,
       activeCount: items.filter(body => body.active).length,
       directory: this.memoryBodies.directory,

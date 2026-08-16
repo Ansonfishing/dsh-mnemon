@@ -654,7 +654,6 @@ describe('MnemonView', () => {
     fireEvent.click(within(dialog).getByRole('radio', { name: /OpenViking/ }))
     fireEvent.change(within(dialog).getByRole('textbox', { name: '新记忆体名称' }), { target: { value: '团队 OpenViking' } })
     fireEvent.change(within(dialog).getByRole('textbox', { name: '新记忆体描述' }), { target: { value: '跨项目共享的团队长期记忆。' } })
-    fireEvent.change(within(dialog).getByRole('textbox', { name: '服务地址' }), { target: { value: 'https://memory.example.com' } })
     fireEvent.change(within(dialog).getByRole('textbox', { name: '记忆范围 URI' }), { target: { value: 'viking://user/team/memories' } })
     fireEvent.click(within(dialog).getByRole('button', { name: '创建' }))
 
@@ -664,7 +663,6 @@ describe('MnemonView', () => {
       description: '跨项目共享的团队长期记忆。',
       providerId: 'openviking',
       connection: expect.objectContaining({
-        endpoint: 'https://memory.example.com',
         targetUri: 'viking://user/team/memories',
       }),
       sessionId: 'session-1',
@@ -687,7 +685,6 @@ describe('MnemonView', () => {
     fireEvent.click(within(dialog).getByRole('checkbox', { name: /OpenViking/ }))
     fireEvent.change(within(dialog).getByRole('textbox', { name: '新记忆体名称' }), { target: { value: '团队产品知识' } })
     fireEvent.change(within(dialog).getByRole('textbox', { name: '新记忆体描述' }), { target: { value: '团队共享的产品约束与决策。' } })
-    fireEvent.change(within(dialog).getByRole('textbox', { name: '服务地址' }), { target: { value: 'https://memory.example.com' } })
     fireEvent.change(within(dialog).getByRole('textbox', { name: '记忆范围 URI' }), { target: { value: 'viking://user/team/memories' } })
     fireEvent.click(within(dialog).getByRole('button', { name: '创建' }))
 
@@ -706,7 +703,7 @@ describe('MnemonView', () => {
         },
       },
       providerConnections: {
-        openviking: expect.objectContaining({ endpoint: 'https://memory.example.com', targetUri: 'viking://user/team/memories' }),
+        openviking: expect.objectContaining({ targetUri: 'viking://user/team/memories' }),
       },
       sessionId: 'session-1',
     })
@@ -733,7 +730,7 @@ describe('MnemonView', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '创建记忆体' })).toBeNull())
     expect(call).toHaveBeenCalledWith(expect.anything(), 'body-create', expect.objectContaining({
       providerId: 'mem0',
-      connection: expect.objectContaining({ endpoint: 'https://api.mem0.ai', mode: 'platform', userId: 'dsh-user', agentId: 'dsh' }),
+      connection: expect.objectContaining({ userId: 'dsh-user', agentId: 'dsh', rerank: false }),
     }))
   })
 

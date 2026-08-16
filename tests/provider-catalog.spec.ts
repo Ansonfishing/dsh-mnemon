@@ -3,6 +3,8 @@ import {
   MEMORY_PROVIDER_CATALOG,
   MEMORY_PROVIDER_IDS,
   memoryProviderDescriptor,
+  normalizeProviderMemoryConnection,
+  normalizeProviderServiceConnection,
   normalizeProviderConnection,
   publicProviderConnection,
 } from '../src/providers/catalog.ts'
@@ -46,6 +48,15 @@ describe('memory provider catalog', () => {
       },
       configuredSecrets: ['apiKey'],
     })
+  })
+
+  it('separates reusable service fields from per-Memory-Space fields', () => {
+    const mem0 = memoryProviderDescriptor('mem0')
+    expect(mem0.fields.filter(field => field.scope === 'service').map(field => field.key)).toEqual(['endpoint', 'apiKey', 'mode'])
+    expect(mem0.fields.filter(field => field.scope === 'memory').map(field => field.key)).toEqual(['userId', 'agentId', 'rerank'])
+    expect(normalizeProviderServiceConnection('mem0', { endpoint: 'http://127.0.0.1:8888', mode: 'self-hosted' })).toEqual({ endpoint: 'http://127.0.0.1:8888', apiKey: '', mode: 'self-hosted' })
+    expect(normalizeProviderMemoryConnection('mem0', { userId: 'alice' })).toEqual({ userId: 'alice', agentId: 'dsh', rerank: false })
+    expect(() => normalizeProviderServiceConnection('mem0', { userId: 'alice' })).toThrow(/service setting/u)
   })
 
   it('preserves an existing secret when editing non-secret settings and clears it explicitly', () => {

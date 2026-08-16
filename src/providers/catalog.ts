@@ -69,12 +69,12 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
       writeMode: 'async-extracting',
     },
     fields: [
-      field({ key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'http://127.0.0.1:1933', placeholder: 'http://127.0.0.1:1933' }),
-      field({ key: 'targetUri', label: 'Memory URI', input: 'text', required: true, defaultValue: 'viking://user/memories', placeholder: 'viking://user/memories' }),
-      field({ key: 'apiKey', label: 'API key', input: 'secret', required: false }),
-      field({ key: 'account', label: 'Account', input: 'text', required: false }),
-      field({ key: 'user', label: 'User', input: 'text', required: false }),
-      field({ key: 'actorPeerId', label: 'Agent peer', input: 'text', required: false, defaultValue: 'dsh' }),
+      field({ key: 'endpoint', label: 'Endpoint', scope: 'service', input: 'url', required: true, defaultValue: 'http://127.0.0.1:1933', placeholder: 'http://127.0.0.1:1933' }),
+      field({ key: 'targetUri', label: 'Memory URI', scope: 'memory', input: 'text', required: true, defaultValue: 'viking://user/memories', placeholder: 'viking://user/memories' }),
+      field({ key: 'apiKey', label: 'API key', scope: 'service', input: 'secret', required: false }),
+      field({ key: 'account', label: 'Account', scope: 'service', input: 'text', required: false }),
+      field({ key: 'user', label: 'User', scope: 'memory', input: 'text', required: false }),
+      field({ key: 'actorPeerId', label: 'Agent peer', scope: 'memory', input: 'text', required: false, defaultValue: 'dsh' }),
     ],
   },
   {
@@ -85,11 +85,11 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     origin: 'third-party',
     capabilities: REMOTE_EXACT_CAPABILITIES,
     fields: [
-      field({ key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'https://api.honcho.dev' }),
-      field({ key: 'apiKey', label: 'API key', input: 'secret', required: false }),
-      field({ key: 'workspace', label: 'Workspace', input: 'text', required: true, defaultValue: 'dsh' }),
-      field({ key: 'userId', label: 'User peer', input: 'text', required: true, defaultValue: 'dsh-user' }),
-      field({ key: 'agentId', label: 'Agent peer', input: 'text', required: true, defaultValue: 'dsh' }),
+      field({ key: 'endpoint', label: 'Endpoint', scope: 'service', input: 'url', required: true, defaultValue: 'https://api.honcho.dev' }),
+      field({ key: 'apiKey', label: 'API key', scope: 'service', input: 'secret', required: false }),
+      field({ key: 'workspace', label: 'Workspace', scope: 'memory', input: 'text', required: true, defaultValue: 'dsh' }),
+      field({ key: 'userId', label: 'User peer', scope: 'memory', input: 'text', required: true, defaultValue: 'dsh-user' }),
+      field({ key: 'agentId', label: 'Agent peer', scope: 'memory', input: 'text', required: true, defaultValue: 'dsh' }),
     ],
   },
   {
@@ -100,12 +100,12 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     origin: 'third-party',
     capabilities: { ...REMOTE_EXACT_CAPABILITIES, writeMode: 'async-extracting' },
     fields: [
-      field({ key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'https://api.mem0.ai' }),
-      field({ key: 'apiKey', label: 'API key', input: 'secret', required: false }),
-      field({ key: 'mode', label: 'Mode', input: 'select', required: true, defaultValue: 'platform', options: [{ value: 'platform', label: 'Mem0 Platform' }, { value: 'self-hosted', label: 'Self-hosted server' }] }),
-      field({ key: 'userId', label: 'User ID', input: 'text', required: true, defaultValue: 'dsh-user' }),
-      field({ key: 'agentId', label: 'Agent ID', input: 'text', required: true, defaultValue: 'dsh' }),
-      field({ key: 'rerank', label: 'Rerank search results', input: 'boolean', required: false, defaultValue: false }),
+      field({ key: 'endpoint', label: 'Endpoint', scope: 'service', input: 'url', required: true, defaultValue: 'https://api.mem0.ai' }),
+      field({ key: 'apiKey', label: 'API key', scope: 'service', input: 'secret', required: false }),
+      field({ key: 'mode', label: 'Mode', scope: 'service', input: 'select', required: true, defaultValue: 'platform', options: [{ value: 'platform', label: 'Mem0 Platform' }, { value: 'self-hosted', label: 'Self-hosted server' }] }),
+      field({ key: 'userId', label: 'User ID', scope: 'memory', input: 'text', required: true, defaultValue: 'dsh-user' }),
+      field({ key: 'agentId', label: 'Agent ID', scope: 'memory', input: 'text', required: true, defaultValue: 'dsh' }),
+      field({ key: 'rerank', label: 'Rerank search results', scope: 'memory', input: 'boolean', required: false, defaultValue: false }),
     ],
   },
   {
@@ -123,10 +123,10 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
       deletionMode: 'soft',
     },
     fields: [
-      field({ key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'https://api.hindsight.vectorize.io' }),
-      field({ key: 'apiKey', label: 'API key', input: 'secret', required: false }),
-      field({ key: 'bankId', label: 'Memory bank', input: 'text', required: true, defaultValue: 'dsh' }),
-      field({ key: 'budget', label: 'Recall budget', input: 'select', required: true, defaultValue: 'mid', options: [{ value: 'low', label: 'Low' }, { value: 'mid', label: 'Medium' }, { value: 'high', label: 'High' }] }),
+      field({ key: 'endpoint', label: 'Endpoint', scope: 'service', input: 'url', required: true, defaultValue: 'https://api.hindsight.vectorize.io' }),
+      field({ key: 'apiKey', label: 'API key', scope: 'service', input: 'secret', required: false }),
+      field({ key: 'bankId', label: 'Memory bank', scope: 'memory', input: 'text', required: true, defaultValue: 'dsh' }),
+      field({ key: 'budget', label: 'Recall budget', scope: 'memory', input: 'select', required: true, defaultValue: 'mid', options: [{ value: 'low', label: 'Low' }, { value: 'mid', label: 'Medium' }, { value: 'high', label: 'High' }] }),
     ],
   },
   {
@@ -141,9 +141,9 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
       deletionMode: 'hard',
     },
     fields: [
-      field({ key: 'dataPath', label: 'Fact store path', input: 'path', required: false }),
-      field({ key: 'defaultTrust', label: 'Default trust', input: 'number', required: true, defaultValue: 0.5 }),
-      field({ key: 'minTrust', label: 'Minimum recall trust', input: 'number', required: true, defaultValue: 0.3 }),
+      field({ key: 'dataPath', label: 'Fact store path', scope: 'service', input: 'path', required: false }),
+      field({ key: 'defaultTrust', label: 'Default trust', scope: 'memory', input: 'number', required: true, defaultValue: 0.5 }),
+      field({ key: 'minTrust', label: 'Minimum recall trust', scope: 'memory', input: 'number', required: true, defaultValue: 0.3 }),
     ],
   },
   {
@@ -154,10 +154,10 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     origin: 'third-party',
     capabilities: REMOTE_EXACT_CAPABILITIES,
     fields: [
-      field({ key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'https://api.retaindb.com' }),
-      field({ key: 'apiKey', label: 'API key', input: 'secret', required: true }),
-      field({ key: 'project', label: 'Project', input: 'text', required: true, defaultValue: 'dsh' }),
-      field({ key: 'userId', label: 'User ID', input: 'text', required: true, defaultValue: 'dsh-user' }),
+      field({ key: 'endpoint', label: 'Endpoint', scope: 'service', input: 'url', required: true, defaultValue: 'https://api.retaindb.com' }),
+      field({ key: 'apiKey', label: 'API key', scope: 'service', input: 'secret', required: true }),
+      field({ key: 'project', label: 'Project', scope: 'memory', input: 'text', required: true, defaultValue: 'dsh' }),
+      field({ key: 'userId', label: 'User ID', scope: 'memory', input: 'text', required: true, defaultValue: 'dsh-user' }),
     ],
   },
   {
@@ -174,9 +174,9 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
       deletionMode: 'unsupported',
     },
     fields: [
-      field({ key: 'cliPath', label: 'brv executable', input: 'path', required: false, defaultValue: 'brv' }),
-      field({ key: 'workingDirectory', label: 'Knowledge directory', input: 'path', required: false }),
-      field({ key: 'apiKey', label: 'Cloud API key', input: 'secret', required: false }),
+      field({ key: 'cliPath', label: 'brv executable', scope: 'service', input: 'path', required: false, defaultValue: 'brv' }),
+      field({ key: 'workingDirectory', label: 'Knowledge directory', scope: 'memory', input: 'path', required: false }),
+      field({ key: 'apiKey', label: 'Cloud API key', scope: 'service', input: 'secret', required: false }),
     ],
   },
   {
@@ -187,10 +187,10 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     origin: 'third-party',
     capabilities: { ...REMOTE_EXACT_CAPABILITIES, writeMode: 'async-extracting', deletionMode: 'soft' },
     fields: [
-      field({ key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'https://api.supermemory.ai' }),
-      field({ key: 'apiKey', label: 'API key', input: 'secret', required: true }),
-      field({ key: 'containerTag', label: 'Container tag', input: 'text', required: true, defaultValue: 'dsh' }),
-      field({ key: 'searchMode', label: 'Search mode', input: 'select', required: true, defaultValue: 'hybrid', options: [{ value: 'hybrid', label: 'Hybrid' }, { value: 'memories', label: 'Memories' }, { value: 'documents', label: 'Documents' }] }),
+      field({ key: 'endpoint', label: 'Endpoint', scope: 'service', input: 'url', required: true, defaultValue: 'https://api.supermemory.ai' }),
+      field({ key: 'apiKey', label: 'API key', scope: 'service', input: 'secret', required: true }),
+      field({ key: 'containerTag', label: 'Container tag', scope: 'memory', input: 'text', required: true, defaultValue: 'dsh' }),
+      field({ key: 'searchMode', label: 'Search mode', scope: 'memory', input: 'select', required: true, defaultValue: 'hybrid', options: [{ value: 'hybrid', label: 'Hybrid' }, { value: 'memories', label: 'Memories' }, { value: 'documents', label: 'Documents' }] }),
     ],
   },
 ]
@@ -223,6 +223,101 @@ function normalizeString(value: unknown, field: MemoryProviderConfigField): stri
     throw new Error(`${field.label} has an unsupported value`)
   }
   return normalized
+}
+
+function validateProviderSpecific(providerId: MemoryProviderId, output: MemoryProviderConnection): void {
+  if (providerId === 'openviking' && output.targetUri !== undefined) {
+    const targetUri = String(output.targetUri).replace(/\/+$/u, '')
+    if (!/^viking:\/\/user(?:\/[^/]+)?\/memories$/u.test(targetUri)) {
+      throw new Error('OpenViking memory URI must be a viking://user/.../memories root')
+    }
+    output.targetUri = targetUri
+  }
+  if (providerId === 'holographic') {
+    for (const key of ['defaultTrust', 'minTrust'] as const) {
+      if (output[key] === undefined) continue
+      const value = Number(output[key])
+      if (value < 0 || value > 1) throw new Error(`${key} must be within 0..1`)
+    }
+  }
+  if (providerId === 'supermemory' && output.containerTag !== undefined) {
+    const containerTag = String(output.containerTag)
+    if (!/^[a-zA-Z0-9_:-]+$/u.test(containerTag) || containerTag.length > 100) {
+      throw new Error('Supermemory container tag may contain only letters, numbers, _, :, and - (max 100 characters)')
+    }
+  }
+}
+
+function normalizeScopedProviderConnection(
+  providerId: MemoryProviderId,
+  scope: MemoryProviderConfigField['scope'],
+  input: MemoryProviderConnection | undefined,
+  previous: MemoryProviderConnection = {},
+  clearSecrets: readonly string[] = [],
+): MemoryProviderConnection {
+  const descriptor = memoryProviderDescriptor(providerId)
+  if (providerId === 'mnemon-native') return {}
+  const fields = descriptor.fields.filter(item => item.scope === scope)
+  const allowed = new Set(fields.map(item => item.key))
+  for (const key of Object.keys(input ?? {})) if (!allowed.has(key)) throw new Error(`unsupported ${descriptor.label} ${scope} setting: ${key}`)
+  for (const key of clearSecrets) {
+    const configField = fields.find(item => item.key === key)
+    if (configField?.input !== 'secret') throw new Error(`cannot clear non-secret ${descriptor.label} ${scope} setting: ${key}`)
+  }
+  const output: MemoryProviderConnection = {}
+  for (const configField of fields) {
+    if (clearSecrets.includes(configField.key)) {
+      output[configField.key] = ''
+      continue
+    }
+    const supplied = input?.[configField.key]
+    const value = supplied ?? previous[configField.key] ?? configField.defaultValue
+    if (configField.input === 'boolean') {
+      if (value === undefined) continue
+      if (typeof value === 'boolean') output[configField.key] = value
+      else if (value === 'true' || value === 'false') output[configField.key] = value === 'true'
+      else throw new Error(`${configField.label} must be true or false`)
+      continue
+    }
+    if (configField.input === 'number') {
+      if (value === undefined || value === '') continue
+      const parsed = typeof value === 'number' ? value : Number(value)
+      if (!Number.isFinite(parsed)) throw new Error(`${configField.label} must be a finite number`)
+      output[configField.key] = parsed
+      continue
+    }
+    const normalized = normalizeString(value, configField)
+    if (normalized !== '' || configField.required || configField.input === 'secret') output[configField.key] = normalized
+  }
+  validateProviderSpecific(providerId, output)
+  return output
+}
+
+export function providerServiceFields(providerId: MemoryProviderId): MemoryProviderConfigField[] {
+  return memoryProviderDescriptor(providerId).fields.filter(field => field.scope === 'service')
+}
+
+export function providerMemoryFields(providerId: MemoryProviderId): MemoryProviderConfigField[] {
+  return memoryProviderDescriptor(providerId).fields.filter(field => field.scope === 'memory')
+}
+
+export function splitProviderConnection(providerId: MemoryProviderId, connection: MemoryProviderConnection | undefined): {
+  service: MemoryProviderConnection
+  memory: MemoryProviderConnection
+} {
+  const serviceKeys = new Set(providerServiceFields(providerId).map(field => field.key))
+  return {
+    service: Object.fromEntries(Object.entries(connection ?? {}).filter(([key]) => serviceKeys.has(key))),
+    memory: Object.fromEntries(Object.entries(connection ?? {}).filter(([key]) => !serviceKeys.has(key))),
+  }
+}
+
+export function normalizeProviderServiceConnection(providerId: MemoryProviderId, input: MemoryProviderConnection | undefined, previous: MemoryProviderConnection = {}, clearSecrets: readonly string[] = []): MemoryProviderConnection {
+  return normalizeScopedProviderConnection(providerId, 'service', input, previous, clearSecrets)
+}
+
+export function normalizeProviderMemoryConnection(providerId: MemoryProviderId, input: MemoryProviderConnection | undefined, previous: MemoryProviderConnection = {}): MemoryProviderConnection {
+  return normalizeScopedProviderConnection(providerId, 'memory', input, previous)
 }
 
 export function normalizeProviderConnection(
@@ -267,26 +362,22 @@ export function normalizeProviderConnection(
     if (normalized !== '' || configField.required || configField.input === 'secret') output[configField.key] = normalized
   }
 
-  if (providerId === 'openviking') {
-    const targetUri = String(output.targetUri ?? '').replace(/\/+$/u, '')
-    if (!/^viking:\/\/user(?:\/[^/]+)?\/memories$/u.test(targetUri)) {
-      throw new Error('OpenViking memory URI must be a viking://user/.../memories root')
-    }
-    output.targetUri = targetUri
-  }
-  if (providerId === 'holographic') {
-    for (const key of ['defaultTrust', 'minTrust'] as const) {
-      const value = Number(output[key])
-      if (value < 0 || value > 1) throw new Error(`${key} must be within 0..1`)
-    }
-  }
-  if (providerId === 'supermemory') {
-    const containerTag = String(output.containerTag ?? '')
-    if (!/^[a-zA-Z0-9_:-]+$/u.test(containerTag) || containerTag.length > 100) {
-      throw new Error('Supermemory container tag may contain only letters, numbers, _, :, and - (max 100 characters)')
-    }
-  }
+  validateProviderSpecific(providerId, output)
   return output
+}
+
+export function publicScopedProviderConnection(providerId: MemoryProviderId, scope: MemoryProviderConfigField['scope'], connection: MemoryProviderConnection): {
+  settings: MemoryProviderConnection
+  configuredSecrets: string[]
+} {
+  const descriptor = memoryProviderDescriptor(providerId)
+  const fields = descriptor.fields.filter(item => item.scope === scope)
+  const keys = new Set(fields.map(item => item.key))
+  const secrets = new Set(fields.filter(item => item.input === 'secret').map(item => item.key))
+  return {
+    settings: Object.fromEntries(Object.entries(connection).filter(([key]) => keys.has(key) && !secrets.has(key))),
+    configuredSecrets: [...secrets].filter(key => String(connection[key] ?? '') !== ''),
+  }
 }
 
 export function publicProviderConnection(providerId: MemoryProviderId, connection: MemoryProviderConnection): {

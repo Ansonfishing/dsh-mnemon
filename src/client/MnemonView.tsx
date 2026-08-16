@@ -108,15 +108,16 @@ const LEGACY_PROVIDER_CATALOG: MemoryProviderDescriptor[] = [
   },
   {
     id: 'openviking', label: 'OpenViking', kind: 'remote', origin: 'third-party',
+    serviceConfigured: true,
     summary: 'Filesystem-shaped shared memory.',
     capabilities: { ...LEGACY_NATIVE_CAPABILITIES, graph: false, entities: false, related: false, link: false, writeMode: 'async-extracting', deletionMode: 'hard' },
     fields: [
-      { key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'http://127.0.0.1:1933', placeholder: 'http://127.0.0.1:1933' },
-      { key: 'targetUri', label: 'Memory URI', input: 'text', required: true, defaultValue: 'viking://user/memories', placeholder: 'viking://user/memories' },
-      { key: 'apiKey', label: 'API key', input: 'secret', required: false },
-      { key: 'account', label: 'Account', input: 'text', required: false },
-      { key: 'user', label: 'User', input: 'text', required: false },
-      { key: 'actorPeerId', label: 'Agent peer', input: 'text', required: false, defaultValue: 'dsh' },
+      { key: 'endpoint', label: 'Endpoint', scope: 'service', input: 'url', required: true, defaultValue: 'http://127.0.0.1:1933', placeholder: 'http://127.0.0.1:1933' },
+      { key: 'targetUri', label: 'Memory URI', scope: 'memory', input: 'text', required: true, defaultValue: 'viking://user/memories', placeholder: 'viking://user/memories' },
+      { key: 'apiKey', label: 'API key', scope: 'service', input: 'secret', required: false },
+      { key: 'account', label: 'Account', scope: 'service', input: 'text', required: false },
+      { key: 'user', label: 'User', scope: 'memory', input: 'text', required: false },
+      { key: 'actorPeerId', label: 'Agent peer', scope: 'memory', input: 'text', required: false, defaultValue: 'dsh' },
     ],
   },
 ]
@@ -139,8 +140,12 @@ function normalizeMemoryBody(body: MemoryBodyView): MemoryBodyView {
   }
 }
 
+function memoryProviderFields(provider: MemoryProviderDescriptor): MemoryProviderConfigField[] {
+  return provider.fields.filter(field => field.scope !== 'service')
+}
+
 function providerDefaults(provider: MemoryProviderDescriptor): MemoryProviderConnection {
-  return Object.fromEntries(provider.fields.flatMap(field => field.defaultValue === undefined ? [] : [[field.key, field.defaultValue]]))
+  return Object.fromEntries(memoryProviderFields(provider).flatMap(field => field.defaultValue === undefined ? [] : [[field.key, field.defaultValue]]))
 }
 
 function mergeProviderDefaults(providers: readonly MemoryProviderDescriptor[], current: ProviderDrafts): ProviderDrafts {
@@ -149,7 +154,7 @@ function mergeProviderDefaults(providers: readonly MemoryProviderDescriptor[], c
 
 function providerDraftComplete(provider: MemoryProviderDescriptor | undefined, connection: MemoryProviderConnection | undefined): boolean {
   if (provider === undefined || provider.id === 'mnemon-native') return true
-  return provider.fields.every(field => !field.required || String(connection?.[field.key] ?? '').trim() !== '')
+  return provider.serviceConfigured !== false && memoryProviderFields(provider).every(field => !field.required || String(connection?.[field.key] ?? '').trim() !== '')
 }
 
 type NavEntry = { id: Page; label: MnemonKey; detail: MnemonKey; glyph: string }
@@ -1123,7 +1128,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
     body?: MemoryBodyView,
   ) => <div className={css.providerFields} data-provider={provider.id}>
     <div className={css.providerFieldHeading}><div><strong>{provider.label}</strong><small>{providerSummary(provider)}</small></div><span>{provider.kind === 'local' ? t('overview.providerKindLocal') : t('overview.providerKindRemote')}</span></div>
-    <div className={css.providerAdvancedGrid}>{provider.fields.map(field => {
+    <div className={css.providerAdvancedGrid}>{memoryProviderFields(provider).map(field => {
       const label = fieldLabel(provider, field)
       const value = connection[field.key] ?? ''
       const savedSecret = body?.provider.configuredSecrets.includes(field.key) === true
@@ -1147,13 +1152,13 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   </form>
   const bodyCreateForm = <form className={css.bodyEdit} onSubmit={event => void create(event)}>
     <fieldset className={css.placementMode}><legend>{t('overview.placementMode')}</legend><label data-selected={placementMode === 'manual' || undefined}><input type="radio" name="placement-mode" value="manual" checked={placementMode === 'manual'} onChange={() => setPlacementMode('manual')} /><span><strong>{t('overview.placementManual')}</strong><small>{t('overview.placementManualHint')}</small></span></label><label data-selected={placementMode === 'automatic' || undefined} data-disabled={!props.agentAvailable || undefined}><input type="radio" name="placement-mode" value="automatic" checked={placementMode === 'automatic'} disabled={!props.agentAvailable} onChange={() => setPlacementMode('automatic')} /><span><strong>{t('overview.placementAutomatic')} <em>{t('overview.recommended')}</em></strong><small>{props.agentAvailable ? t('overview.placementAutomaticHint') : t('overview.placementUnavailable')}</small></span></label></fieldset>
-    {placementMode === 'manual' && <><fieldset className={css.providerChoice}><legend>{t('overview.providerLabel')}</legend>{providers.map(provider => <label key={provider.id} data-selected={bodyProviderId === provider.id || undefined} data-native={provider.id === 'mnemon-native' || undefined}><input type="radio" name="memory-provider" value={provider.id} checked={bodyProviderId === provider.id} onChange={() => setBodyProviderId(provider.id)} /><span><strong>{provider.label}{provider.id === 'mnemon-native' && <em>{t('overview.nativeOfficial')}</em>}</strong><small>{providerSummary(provider)}</small></span></label>)}</fieldset>{selectedProvider !== undefined && selectedProvider.id !== 'mnemon-native' && providerFields(selectedProvider, providerDrafts[selectedProvider.id] ?? {}, (key, value) => updateProviderDraft(selectedProvider.id, key, value))}</>}
+    {placementMode === 'manual' && <><fieldset className={css.providerChoice}><legend>{t('overview.providerLabel')}</legend>{providers.map(provider => { const serviceMissing = provider.id !== 'mnemon-native' && provider.serviceConfigured === false; return <label key={provider.id} data-selected={bodyProviderId === provider.id || undefined} data-native={provider.id === 'mnemon-native' || undefined} data-disabled={serviceMissing || undefined}><input type="radio" name="memory-provider" value={provider.id} checked={bodyProviderId === provider.id} disabled={serviceMissing} onChange={() => setBodyProviderId(provider.id)} /><span><strong>{provider.label}{provider.id === 'mnemon-native' && <em>{t('overview.nativeOfficial')}</em>}</strong><small>{serviceMissing ? t('overview.providerServiceRequired') : providerSummary(provider)}</small></span></label> })}</fieldset>{selectedProvider !== undefined && selectedProvider.id !== 'mnemon-native' && providerFields(selectedProvider, providerDrafts[selectedProvider.id] ?? {}, (key, value) => updateProviderDraft(selectedProvider.id, key, value))}</>}
     {placementMode === 'automatic' && <section className={css.placementPolicy} aria-label={t('overview.placementPolicy')}>
       <div className={css.placementPolicyHeading}><div><strong>{t('overview.placementPolicy')}</strong><small>{t('overview.placementPolicyHint')}</small></div><span>{t('overview.agentDecision')}</span></div>
       <label>{t('overview.placementPrompt')}<textarea aria-label={t('overview.placementPrompt')} value={placementPrompt} onChange={event => setPlacementPrompt(event.target.value)} placeholder={t('overview.placementPromptPlaceholder')} rows={3} maxLength={4000} /></label>
       <div className={css.placementRuleGrid}><label>{t('overview.dataBoundary')}<select aria-label={t('overview.dataBoundary')} value={placementDataBoundary} onChange={event => { const value = event.target.value as 'allow-remote' | 'local-only'; setPlacementDataBoundary(value); if (value === 'local-only') setAutomaticProviderIds(current => current.filter(id => providers.find(provider => provider.id === id)?.kind === 'local')) }}><option value="allow-remote">{t('overview.dataBoundaryRemote')}</option><option value="local-only">{t('overview.dataBoundaryLocal')}</option></select></label><label>{t('overview.preference')}<select aria-label={t('overview.preference')} value={placementPreference} onChange={event => setPlacementPreference(event.target.value as MemoryPlacementPreference)}><option value="balanced">{t('overview.preferenceBalanced')}</option><option value="local-first">{t('overview.preferenceLocal')}</option><option value="shared-first">{t('overview.preferenceShared')}</option></select></label></div>
       <fieldset className={css.capabilityRules}><legend>{t('overview.requiredCapabilities')}</legend>{(['graph', 'exact-write', 'forget'] as const).map(capability => <label key={capability}><input type="checkbox" checked={requiredCapabilities.includes(capability)} onChange={() => toggleRequiredCapability(capability)} /><span>{t(`overview.capability.${capability}`)}</span></label>)}</fieldset>
-      <div className={css.placementCandidates}><span><strong>Mnemon Native</strong><small>{t('overview.candidateNativeReady')}</small></span>{providers.filter(provider => provider.id !== 'mnemon-native').map(provider => { const disabled = placementDataBoundary === 'local-only' && provider.kind === 'remote'; const selected = automaticProviderIds.includes(provider.id); return <label key={provider.id} data-selected={selected || undefined} data-disabled={disabled || undefined}><input type="checkbox" checked={selected} disabled={disabled} onChange={event => toggleAutomaticProvider(provider.id, event.target.checked)} /><span><strong>{provider.label}</strong><small>{provider.kind === 'local' ? t('overview.candidateLocal') : t('overview.candidateRemote')}</small></span></label> })}</div>
+      <div className={css.placementCandidates}><span><strong>Mnemon Native</strong><small>{t('overview.candidateNativeReady')}</small></span>{providers.filter(provider => provider.id !== 'mnemon-native').map(provider => { const disabled = provider.serviceConfigured === false || (placementDataBoundary === 'local-only' && provider.kind === 'remote'); const selected = automaticProviderIds.includes(provider.id); return <label key={provider.id} data-selected={selected || undefined} data-disabled={disabled || undefined}><input type="checkbox" checked={selected} disabled={disabled} onChange={event => toggleAutomaticProvider(provider.id, event.target.checked)} /><span><strong>{provider.label}</strong><small>{provider.serviceConfigured === false ? t('overview.providerServiceRequired') : provider.kind === 'local' ? t('overview.candidateLocal') : t('overview.candidateRemote')}</small></span></label> })}</div>
       {automaticProviderIds.map(id => { const provider = providers.find(candidate => candidate.id === id); return provider === undefined || provider.id === 'mnemon-native' ? null : <Fragment key={id}>{providerFields(provider, providerDrafts[id] ?? {}, (key, value) => updateProviderDraft(id, key, value))}</Fragment> })}
     </section>}
     <label>{t('overview.createName')}<input aria-label={t('overview.createName')} value={bodyName} onChange={event => setBodyName(event.target.value)} placeholder={t('overview.createNamePlaceholder')} maxLength={100} required /></label>

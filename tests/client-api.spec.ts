@@ -66,4 +66,15 @@ describe('MnemonClient turn activity batching', () => {
 
     expect(call).toHaveBeenCalledWith(expect.any(String), 'target', { sessionId: 'session-1', workspaceId: 'workspace-1' })
   })
+
+  it('routes provider service settings independently from Memory Spaces', async () => {
+    const call = vi.fn(async () => ({ ok: true as const, value: { providerId: 'mem0', configured: true, settings: { endpoint: 'http://127.0.0.1:8888' }, configuredSecrets: [] } }))
+    const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle, 'session-1', 'workspace-1')
+
+    await client.updateProviderService({ providerId: 'mem0', settings: { endpoint: 'http://127.0.0.1:8888', mode: 'self-hosted' } })
+
+    expect(call).toHaveBeenCalledWith(expect.any(String), 'provider-service-update', {
+      providerId: 'mem0', settings: { endpoint: 'http://127.0.0.1:8888', mode: 'self-hosted' }, sessionId: 'session-1', workspaceId: 'workspace-1',
+    })
+  })
 })

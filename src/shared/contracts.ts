@@ -125,6 +125,8 @@ export type MemoryProviderConnection = Record<string, MemoryProviderConnectionVa
 export interface MemoryProviderConfigField {
   key: string
   label: string
+  /** Service fields are configured once in Settings; memory fields belong to each Memory Space. */
+  scope: 'service' | 'memory'
   input: 'text' | 'url' | 'secret' | 'number' | 'boolean' | 'select' | 'path'
   required: boolean
   defaultValue?: MemoryProviderConnectionValue
@@ -184,6 +186,27 @@ export interface MemoryProviderDescriptor {
   origin: 'native' | 'third-party'
   capabilities: MemoryProviderCapabilities
   fields: MemoryProviderConfigField[]
+  /** Runtime projection: whether this scope has a usable saved service configuration. */
+  serviceConfigured?: boolean
+}
+
+export interface MemoryProviderServiceView {
+  providerId: MemoryProviderId
+  configured: boolean
+  settings: MemoryProviderConnection
+  configuredSecrets: string[]
+}
+
+export interface MemoryProviderServiceCatalog {
+  providers: MemoryProviderDescriptor[]
+  items: MemoryProviderServiceView[]
+  generatedAt: string
+}
+
+export interface UpdateMemoryProviderServiceRequest {
+  providerId: MemoryProviderId
+  settings: MemoryProviderConnection
+  clearSecrets?: string[]
 }
 
 export interface MemoryBodyProvider {

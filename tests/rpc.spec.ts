@@ -13,6 +13,10 @@ function fakeService(writeEnabled = true): MnemonService {
   return {
     config: resolveConfig({ writeEnabled }),
     status: vi.fn(async () => ({ healthy: true })),
+    memoryBodies: {
+      providerServices: vi.fn(() => ({ providers: [], items: [], generatedAt: 'now' })),
+      updateProviderService: vi.fn((providerId, settings) => ({ providerId, configured: true, settings, configuredSecrets: [] })),
+    },
     bodies: vi.fn(async () => ({ items: [], total: 0, activeCount: 0, directory: '/tmp/mnemon/data', generatedAt: 'now' })),
     graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
     list: vi.fn(async () => ({ items: [], total: 0, generatedAt: 'now' })),
@@ -54,6 +58,7 @@ describe('Mnemon RPC', () => {
     await expect(createReadHandler(service)('search', { query: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { query: 'SQLite' } })
     await expect(createReadHandler(service)('graph', {})).resolves.toMatchObject({ ok: true, value: { nodes: [] } })
     await expect(createReadHandler(service)('bodies', {})).resolves.toMatchObject({ ok: true, value: { items: [], total: 0 } })
+    await expect(createReadHandler(service)('provider-services', {})).resolves.toMatchObject({ ok: true, value: { items: [] } })
     await expect(createReadHandler(service)('list', { category: 'decision' })).resolves.toMatchObject({ ok: true, value: { total: 0 } })
     await expect(createReadHandler(service)('entities', { entity: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { insights: [] } })
     await expect(createReadHandler(service)('nope', {})).resolves.toEqual({
@@ -112,6 +117,15 @@ describe('Mnemon RPC', () => {
     const service = fakeService()
     await expect(createWriteHandler(service)('body-delete', { memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { id: 'project' } })
     expect(service.deleteBody).toHaveBeenCalledWith('project')
+  })
+
+  it('updates provider service settings without creating a Memory Space', async () => {
+    const service = fakeService()
+    await expect(createWriteHandler(service)('provider-service-update', {
+      providerId: 'openviking', settings: { endpoint: 'http://127.0.0.1:1933' }, clearSecrets: ['apiKey'],
+    })).resolves.toMatchObject({ ok: true, value: { providerId: 'openviking', configured: true } })
+    expect(service.memoryBodies.updateProviderService).toHaveBeenCalledWith('openviking', { endpoint: 'http://127.0.0.1:1933' }, ['apiKey'])
+    expect(service.createBody).not.toHaveBeenCalled()
   })
 
   it('resolves automatic provider placement through the bound Agent before creating a Memory Space', async () => {

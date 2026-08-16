@@ -14,6 +14,8 @@ import {
   type Insight,
   type MemoryBody,
   type MemoryBodyCatalog,
+  type MemoryProviderServiceCatalog,
+  type MemoryProviderServiceView,
   type MemoryGraphSnapshot,
   type MemoryListRequest,
   type MemoryListView,
@@ -32,6 +34,7 @@ import {
   type TurnMemoryActivity,
   type TurnMemoryActivitySnapshot,
   type UpdateMemoryBodyRequest,
+  type UpdateMemoryProviderServiceRequest,
   type VersionComponentId,
   type VersionStatus,
   type VersionUpdateResult,
@@ -156,6 +159,14 @@ export class MnemonClient {
 
   bodies(): Promise<MemoryBodyCatalog> {
     return this.call(MNEMON_READ_CHANNEL, 'bodies', this.scoped())
+  }
+
+  providerServices(): Promise<MemoryProviderServiceCatalog> {
+    return this.call(MNEMON_READ_CHANNEL, 'provider-services', this.scoped())
+  }
+
+  updateProviderService(request: UpdateMemoryProviderServiceRequest): Promise<MemoryProviderServiceView> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'provider-service-update', this.scoped(request))
   }
 
   graph(memoryBodyIds?: string[]): Promise<MemoryGraphSnapshot> {
