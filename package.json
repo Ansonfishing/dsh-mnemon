@@ -99,7 +99,8 @@
     "prepublishOnly": "pnpm run verify",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "verify": "pnpm run typecheck && pnpm run test && pnpm run build"
+    "verify:build": "node scripts/verify-deterministic-build.mjs",
+    "verify": "pnpm run typecheck && pnpm run test && pnpm run verify:build"
   },
   "dependencies": {
     "fflate": "^0.8.3",

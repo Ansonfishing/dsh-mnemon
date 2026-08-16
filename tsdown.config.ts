@@ -58,7 +58,8 @@ const client: UserConfig = {
         minify: true,
       })
       const classMap: Record<string, string> = {}
-      for (const [local, exported] of Object.entries(cssExports ?? {})) classMap[local] = exported.name
+      const entries = Object.entries(cssExports ?? {}).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+      for (const [local, exported] of entries) classMap[local] = exported.name
       const tagId = `${PLUGIN_ID}/${basename(fileId)}`
       return [
         `const css = ${JSON.stringify(code.toString())};`,
