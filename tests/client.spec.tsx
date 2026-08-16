@@ -20,7 +20,7 @@ describe('MnemonView', () => {
     unsetPath: async () => {},
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { withInactiveBody?: boolean; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean } = {}) {
+  function createConnection(options: { withInactiveBody?: boolean; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; reconnectPending?: boolean } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -199,6 +199,8 @@ describe('MnemonView', () => {
         }
         return { ok: true, value: documents.find(document => document.id === payload?.id) }
       }
+      if (endpoint === 'status-summary' && options.statusPending === true) return { ok: true, value: { ...status, memoryBodies: bodies.map(item => ({ ...item, statusLoading: true })) } }
+      if (endpoint === 'status' && options.statusPending === true) return await new Promise<never>(() => {})
       if (endpoint === 'status') return { ok: true, value: { ...status, memoryBodies: bodies } }
       if (endpoint === 'versions') return { ok: true, value: {
         checkedAt: '2026-08-15T03:00:00.000Z',
@@ -213,6 +215,10 @@ describe('MnemonView', () => {
         return { ok: true, value: { component: payload?.component, previousVersion: '0.1.2', currentVersion: '0.2.0', updated: true, restartRequired: false } }
       }
       if (endpoint === 'bodies' || endpoint === 'body-directory') return { ok: true, value: { items: bodies, providers: MEMORY_PROVIDER_CATALOG, total: bodies.length, activeCount: bodies.filter(item => item.active).length, directory: '/tmp/mnemon/data', generatedAt: '2026-08-13T03:00:00.000Z' } }
+      if (endpoint === 'body-reconnect') {
+        if (options.reconnectPending === true) return await new Promise<never>(() => {})
+        return { ok: true, value: bodies.find(item => item.id === payload?.memoryBodyId) ?? body }
+      }
       if (endpoint === 'body-metadata-maintain') {
         body.name = '产品决策'
         body.description = '记录稳定的产品范围、架构取舍与依据，在规划和复盘产品方向时召回。'
@@ -679,6 +685,33 @@ describe('MnemonView', () => {
     expect(await screen.findByText('项目记忆体')).toBeTruthy()
     expect(screen.getByRole('switch', { name: '项目记忆体读取开关' }).hasAttribute('disabled')).toBe(false)
     expect(screen.getByText('正在同步多记忆体实时快照…')).toBeTruthy()
+    expect(screen.getAllByRole('status', { name: '正在加载多记忆体实时快照' })).toHaveLength(1)
+  })
+
+  it('uses the card status signal as the only per-space reconnect spinner', async () => {
+    const { connection, call } = createConnection({ reconnectPending: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    const title = await screen.findByText('项目记忆体')
+    const card = title.closest('article')
+    if (card === null) throw new Error('Memory Space card missing')
+    fireEvent.click(card)
+
+    await waitFor(() => expect(call).toHaveBeenCalledWith(expect.anything(), 'body-reconnect', expect.objectContaining({ memoryBodyId: 'project' })))
+    expect(card.hasAttribute('data-reconnecting')).toBe(true)
+    expect(within(card).getByText('重连中')).toBeTruthy()
+    expect(card.querySelector('[class*="bodySignal"]')).toBeTruthy()
+  })
+
+  it('shows one page-level spinner while deep status checks continue in the background', async () => {
+    const { connection } = createConnection({ statusPending: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    fireEvent.click(await screen.findByRole('tab', { name: '状态' }))
+    expect(await screen.findByRole('heading', { name: '系统状态' })).toBeTruthy()
+    expect(screen.getAllByRole('status', { name: '检查中…' })).toHaveLength(1)
+    expect(screen.getByText('dsh-mnemon 0.1.2')).toBeTruthy()
   })
 
   it('edits an existing Memory Space name and description', async () => {

@@ -127,6 +127,8 @@
 .pageHeader p { max-width: 72ch; margin: 0; color: var(--mn-muted); font-size: 12px; line-height: 1.65; }
 .pageHeaderMeta { display: flex; flex: 0 0 auto; align-items: center; gap: 9px; }
 .pageHeaderMeta > code { padding: 6px 8px; border: 1px solid var(--mn-line); border-radius: 7px; color: var(--mn-faint); background: var(--mn-layer-1); font: 600 9px/1 var(--mn-code); letter-spacing: .06em; }
+.pageSpinner { display: grid; width: 24px; height: 24px; flex: 0 0 auto; place-items: center; border: 1px solid color-mix(in srgb, var(--mn-accent) 18%, var(--mn-line)); border-radius: 7px; color: var(--mn-accent); background: var(--mn-layer-1); }
+.pageSpinner > i { width: 11px; height: 11px; border: 1.5px solid color-mix(in srgb, currentColor 24%, transparent); border-top-color: currentColor; border-radius: 50%; animation: mnemon-spin .72s linear infinite; }
 
 .primaryButton, .secondaryButton, .ghostButton, .dangerButton, .dangerSolidButton { min-height: 36px; border-radius: 8px; padding: 0 13px; font-size: 12px; cursor: pointer; transition: border-color .14s ease, background-color .14s ease, color .14s ease, transform .14s ease; }
 .primaryButton { border: 1px solid var(--mn-accent); color: white; background: var(--mn-accent); }
@@ -192,11 +194,15 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 .bodyDirectoryEmpty p { margin: 3px 0 0; font-size: 10px; }
 .bodyCard { --mn-body-accent: var(--mn-success); min-width: 0; padding: 9px 10px 9px 13px; border: 1px solid var(--mn-line); border-radius: 9px; background: linear-gradient(90deg, color-mix(in srgb, var(--mn-provider-color) 4%, var(--mn-layer-1)), var(--mn-layer-1) 28%); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--mn-provider-color) 54%, transparent); opacity: .7; transition: opacity .18s, border-color .18s; }
 .bodyCard[data-active] { border-color: color-mix(in srgb, var(--mn-body-accent) 42%, var(--mn-line)); opacity: 1; box-shadow: inset 3px 0 0 color-mix(in srgb, var(--mn-provider-color) 78%, transparent), inset 0 1px 0 color-mix(in srgb, var(--mn-body-accent) 10%, transparent); }
+.bodyCard[data-reconnectable] { cursor: pointer; }
+.bodyCard[data-reconnectable]:hover { border-color: color-mix(in srgb, var(--mn-provider-color) 46%, var(--mn-line)); }
+.bodyCard[data-reconnectable]:focus-visible { outline: 2px solid color-mix(in srgb, var(--mn-accent) 58%, transparent); outline-offset: 2px; }
 .bodyCardTop { display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .bodySignal { width: 7px; height: 7px; border-radius: 50%; background: var(--mn-faint); }
 .bodyCard[data-active] .bodySignal { background: var(--mn-body-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mn-body-accent) 14%, transparent); }
 .bodyCard:not([data-healthy]) .bodySignal { background: var(--mn-danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mn-danger) 12%, transparent); }
 .bodyCard[data-status-loading] .bodySignal { background: var(--mn-faint); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mn-faint) 12%, transparent); }
+.bodyCard[data-reconnecting] .bodySignal { box-sizing: border-box; width: 7px; height: 7px; border: 1.5px solid color-mix(in srgb, var(--mn-provider-color) 24%, transparent); border-top-color: var(--mn-provider-color); background: transparent; box-shadow: none; animation: mnemon-spin .72s linear infinite; }
 .bodyCardTop > div { display: grid; min-width: 0; }
 .bodyCardTop strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .bodyCardTop code { overflow: hidden; color: var(--mn-faint); font: 9px var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }

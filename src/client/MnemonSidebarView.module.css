@@ -609,6 +609,10 @@
   flex: 0 0 auto;
   margin-top: 7px;
 }
+.shell article[class*='bodyCard'][data-reconnecting] .bodyCardIdentity > [class*='bodySignal'] {
+  width: 6px;
+  height: 6px;
+}
 .shell .bodyCardIdentity > div { display: grid; min-width: 0; flex: 1; gap: 2px; }
 .shell .bodyCardIdentity strong {
   overflow: hidden;
