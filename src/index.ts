@@ -15,11 +15,23 @@ import { registerTools } from './tools.ts'
 import { StorageScopeInspector } from './storage-scope.ts'
 import { MnemonPackManager } from './pack.ts'
 import { VersionUpdateManager } from './version-updates.ts'
+import type { HostWorkspaceRegistry } from './contracts.ts'
 
 export const name = 'dsh-mnemon'
-export const inject = ['tools', 'settings', 'commands', 'agents', 'subagents', 'workspaceRegistry']
+// workspaceRegistry belongs to the Web profile. Core tools, lifecycle hooks,
+// and per-Agent cwd routing must also mount in profiles such as Headless.
+export const inject = ['tools', 'settings', 'commands', 'agents', 'subagents']
 export { Config, InteractionConfig, resolveConfig, resolveInteractionConfig, DocumentManager, LiveMnemonRuntime, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, StorageScopeInspector, MnemonPackManager, VersionUpdateManager, createRunner, createRuntimeGraph }
 export type { MnemonConfig }
+
+/** Resolve the optional Web workspace service at call time, not plugin-mount time. */
+function optionalWorkspaceRegistry(ctx: HostContextShape): HostWorkspaceRegistry {
+  const current = (): HostWorkspaceRegistry | undefined => ctx.get('workspaceRegistry') as HostWorkspaceRegistry | undefined
+  return {
+    get: id => current()?.get(id),
+    list: () => current()?.list() ?? [],
+  }
+}
 
 /** Mount native model tools on every DSH surface and UI RPC only when Web connection exists. */
 export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
@@ -33,7 +45,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     },
   })
   const initialSettings = settings.get()
-  const runtime = new LiveMnemonRuntime(prepared.get(initialSettings) ?? createRuntimeGraph(resolveConfig(initialSettings)), ctx.workspaceRegistry, ctx.agents)
+  const runtime = new LiveMnemonRuntime(prepared.get(initialSettings) ?? createRuntimeGraph(resolveConfig(initialSettings)), optionalWorkspaceRegistry(ctx), ctx.agents)
   const resolved = runtime.config
   ctx.on('settings/updated', ((namespace: string, next: Config) => {
     if (namespace !== 'mnemon') return
@@ -51,6 +63,9 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   registerGuidance(ctx, resolved)
   registerRuntimeMemoryContext(ctx, runtime.runtimeMemory)
   ctx.inject(['connection'], (webContext) => {
+    // `inject` guarantees the service at runtime; retain the defensive guard
+    // because HostContextShape also models profiles where it is absent.
+    if (webContext.connection === undefined) return
     registerRpc(webContext.connection, runtime, lifecycle)
     registerSettingsRpc(webContext.connection, ctx.settings)
   })

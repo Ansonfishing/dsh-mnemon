@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1040" viewBox="0 0 1600 1040" role="img" aria-labelledby="title description" lang="zh-CN">
   <title id="title">dsh-mnemon 运行时架构</title>
-  <desc id="description">DSH Web、主 Agent 和工具命令进入 dsh-mnemon 控制与监督层，再分别连接运行时热记忆、项目档案和 Mnemon 长期记忆体。</desc>
+  <desc id="description">DSH Web 或 Headless 的主 Agent 通过记忆上下文、工具和命令进入 dsh-mnemon 控制与监督层，再分别连接运行时热记忆、项目档案和 Mnemon 长期记忆体。</desc>
   <style>
     text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; fill: #172033; }
     .canvas { fill: #f7f9fc; }

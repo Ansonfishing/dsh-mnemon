@@ -1,4 +1,4 @@
-# WebUI, Tools, Commands, and RPC
+# Web, Headless, Tools, Commands, and RPC
 
 [简体中文](../zh-CN/interfaces.md) | **English** | [Documentation hub](./README.md)
 
@@ -16,6 +16,19 @@ This page is an integration reference. For daily use, start with the [Sidebar an
 | Model tools | — | Structured Root Agent read/write entry |
 
 Sidebar and Buildin are live, mutually exclusive mounts that share functionality, data, and Host services. The two conversation entries can be disabled independently through `mnemon-ui` settings.
+
+## Profile surfaces
+
+| Capability | Web | Headless |
+|---|---:|---:|
+| Runtime context and lifecycle guidance | Yes | Yes |
+| Model tools and supervised subagents | Yes | Yes |
+| Agent-cwd routing for `workspace` scope | Yes | Yes |
+| Sidebar / Buildin / conversation actions | Yes | No |
+| Host-to-client RPC | Yes | No |
+| Delayed score-based review after Agent idle | While the Host remains alive | Cancelled when the one-shot process exits |
+
+Headless receives the full model-tool surface. Its task argument is submitted as an ordinary user message, so it does not provide an interactive slash-command dispatcher. Explicit and model-guided writes that finish before the Agent becomes idle are durable.
 
 ## Model tools
 
@@ -83,12 +96,14 @@ Both are additive and replace no official DSH rendering. The assistant-message c
 
 ## Workspace routing
 
-Workbench requests carry `sessionId` and an optional `workspaceId`. The Host accepts only IDs registered in `workspaceRegistry`:
+Web workbench requests carry `sessionId` and an optional `workspaceId`. The Host accepts only IDs registered in `workspaceRegistry`:
 
 - deterministic reads and manual maintenance may route to the inspected root selected by `workspaceId`;
 - Agents, tools, commands, and lifecycle hooks still route by the Agent cwd associated with `sessionId`;
 - `status.workspaceContext` returns selected / effective roots and `aligned`;
 - Agent-backed operations are rejected while misaligned.
+
+Profiles without a Web workspace registry, including Headless, have no arbitrary inspection target. Agent execution still routes `workspace` scope directly from the session cwd.
 
 ## RPC channels
 

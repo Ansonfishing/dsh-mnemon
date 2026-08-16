@@ -16,7 +16,7 @@
 - **Cross-agent sharing**: Mnemon-enabled agents can read and reuse DSH's Mnemon Memory Spaces.
 - **Three cooperating tiers**: Runtime Memory, Project Documents, and Memory Spaces retain information at the right granularity.
 - **Supervised writes**: isolated memory subagents make semantic decisions; the Host enforces paths, permissions, capacity, locks, and revisions.
-- **Native DSH experience**: a Sidebar workbench by default, turn memory, a Save-to-memory dialog, bilingual copy, and global themes.
+- **Web and Headless**: a complete Sidebar workbench for interactive management, plus the same Agent tools, memory context, and cwd routing in one-shot Headless tasks.
 
 Current user instructions, repository files, and live tool results always take precedence over historical memory.
 
@@ -56,15 +56,25 @@ Expand-Archive -Path $archive -DestinationPath $installDir -Force
 
 ### 2. Install the plugin
 
+For the complete Web workbench:
+
 ```sh
 dsh plugin --profile web add dsh-mnemon
 dsh --profile web
+```
+
+DSH profiles have independent plugin rosters. Install it separately for one-shot Headless tasks:
+
+```sh
+dsh plugin --profile headless add dsh-mnemon
+dsh --profile headless "Check durable project context before answering this task."
 ```
 
 Use an absolute path for a local development checkout:
 
 ```sh
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
+dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 ```
 
 ### 3. Open Memory System
@@ -78,6 +88,8 @@ New installations use `sidebar` by default. Click **Memory System** in the DSH s
 5. Return to the conversation and expand **Turn memory** below the answer.
 
 See [Getting Started](./docs/en/getting-started.md) for provider requirements and complete verification.
+
+Headless has no workbench or conversation buttons. It still mounts Runtime context, Documents, Memory Space tools, lifecycle guidance, and supervised writes. With `storageScope=workspace`, its memory root follows the invocation directory. Because the process exits as soon as the one-shot Agent becomes idle, delayed background review is cancelled at shutdown; explicit or model-guided writes completed during the task remain durable.
 
 ## One workbench, three memory tiers
 
@@ -180,7 +192,7 @@ pnpm install
 pnpm run verify
 ```
 
-`verify` runs TypeScript checks, Vitest, a reproducible double build, and published-package validation. `lib/` is generated and intentionally not tracked.
+`verify` runs TypeScript checks, Vitest, a reproducible double build, an isolated real Headless-profile activation check, and published-package validation. `lib/` is generated and intentionally not tracked.
 
 ## License
 

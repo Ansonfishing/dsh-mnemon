@@ -36,7 +36,13 @@ settings.register("mnemon")
   -> register RPC when a Web connection exists
 ```
 
-The Host declares dependencies on `tools`, `settings`, `commands`, `agents`, and `subagents`. The Web client additionally depends on slots, connection, and DSH locale services.
+The Host declares dependencies on `tools`, `settings`, `commands`, `agents`, and `subagents`. `workspaceRegistry` is discovered optionally through the Host service registry and is used only for authorized Web inspection. The Web client additionally depends on slots, connection, and DSH locale services.
+
+## Web and Headless Boundaries
+
+The core Host composition is profile-neutral. Both Web and Headless mount settings, Runtime context, Documents, Memory Space tools, lifecycle hooks, and supervised workers. Agent operations always derive `workspace` storage from the session cwd.
+
+Web additionally provides `workspaceRegistry`, client slots, and `connection`. Those services enable cross-workspace inspection, RPC, Sidebar / Buildin, settings UI, Turn memory, and Save to memory. Headless provides none of those browser services; its one-shot runner submits an ordinary user message, waits for Agent idle, flushes the session, prints the final answer, and exits. Plugin disposal cancels a pending delayed review, so Headless relies on explicit or model-guided writes completed inside the task rather than post-idle maintenance.
 
 ## Dual Paths for the Root Agent and Workers
 
@@ -91,7 +97,7 @@ whether a reusable artifact exists  UTF-8 capacity accounting
 
 Persona constraints must be distinguished from hard Host guarantees. For example, the MEMORY archival worker is instructed to cover every committed hot-memory item, but the Host can strictly validate only the structured action, revision, and byte budget; the Host does validate USER compaction source coverage item by item.
 
-## Web Boundary
+## Web RPC Boundary
 
 The WebUI does not start system processes or open SQLite directly:
 

@@ -77,6 +77,8 @@ Web workbench inspection: resolve(workspaceRegistry.get(selectedWorkspaceId).pat
 
 Each DSH workspace owns an independent three-tier memory root. Agents, model tools, commands, and lifecycle hooks route by the current session cwd and are unaffected by the Web workbench's inspection target. The workbench can select only Host-registered workspaces, never an arbitrary path. When inspection and execution differ, the header shows both paths and offers one-click alignment with the current session. Agent-backed actions are rejected while misaligned to prevent writes to the wrong project.
 
+Headless has no `workspaceRegistry`; its fresh session cwd is the directory from which `dsh --profile headless ...` was launched, so `workspace` resolves directly to `<invocation cwd>/.mnemon`.
+
 ### `custom`
 
 ```yaml

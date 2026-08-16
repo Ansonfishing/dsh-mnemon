@@ -16,7 +16,7 @@
 - **跨 Agent 共享**：DSH 的 Mnemon 记忆体可以被其他支持 Mnemon 的 Agent 读取和复用。
 - **三层协作**：运行时记忆、项目档案、记忆体各自保存适合自己的信息粒度。
 - **受监督写入**：语义判断交给隔离的记忆子 Agent，路径、权限、容量、锁与 revision 由 Host 控制。
-- **DSH 原生体验**：默认 Sidebar 工作台、对话内回合记忆、存入记忆弹窗、双语界面与明暗主题。
+- **Web 与 Headless**：Web 提供完整 Sidebar 工作台；一次性 Headless 任务获得同一套 Agent 工具、记忆上下文和 cwd 路由。
 
 当前用户指令、仓库文件与实时工具结果始终高于历史记忆。
 
@@ -56,15 +56,25 @@ Expand-Archive -Path $archive -DestinationPath $installDir -Force
 
 ### 2. 安装插件
 
+完整 Web 工作台：
+
 ```sh
 dsh plugin --profile web add dsh-mnemon
 dsh --profile web
+```
+
+DSH 各 profile 的插件清单彼此独立；一次性 Headless 任务需要单独安装：
+
+```sh
+dsh plugin --profile headless add dsh-mnemon
+dsh --profile headless "回答前先检查持久化的项目上下文。"
 ```
 
 本地开发检出使用绝对路径：
 
 ```sh
 dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
+dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 ```
 
 ### 3. 打开记忆系统
@@ -78,6 +88,8 @@ dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 5. 回到对话，展开回复下方的“本回合记忆”查看工具轨迹。
 
 更完整的安装、Provider 要求与验证步骤见[快速开始](./docs/zh-CN/getting-started.md)。
+
+Headless 没有工作台和对话按钮，但仍会挂载运行时上下文、档案、记忆体工具、生命周期提示和受监督写入。`storageScope=workspace` 时，记忆根跟随启动命令所在目录。一次性 Agent 进入 idle 后进程立即退出，因此延迟后台审查会在关闭时取消；任务内已经完成的显式或模型引导写入仍会持久化。
 
 ## 一个工作台，三层记忆
 
@@ -180,7 +192,7 @@ pnpm install
 pnpm run verify
 ```
 
-`verify` 依次运行 TypeScript 检查、Vitest、两次可复现构建和发布包校验。`lib/` 是生成目录，不再提交到仓库。
+`verify` 依次运行 TypeScript 检查、Vitest、两次可复现构建、隔离的真实 Headless profile 激活检查和发布包校验。`lib/` 是生成目录，不再提交到仓库。
 
 ## License
 

@@ -1,7 +1,7 @@
 {
   "name": "dsh-mnemon",
   "version": "0.1.6",
-  "description": "Cross-agent, local-first persistent memory plugin for DeepSeek Harness (DSH), powered by Mnemon. It shares long-term memory across Mnemon-enabled agents and adds runtime memory, searchable project documents, semantic recall, knowledge graph, and a Sidebar UI.",
+  "description": "Cross-agent, local-first persistent memory plugin for DeepSeek Harness (DSH), powered by Mnemon. It supports Web and Headless profiles with runtime memory, searchable project documents, semantic recall, knowledge graph, and an optional Sidebar UI.",
   "keywords": [
     "deepseek-harness",
     "deepseek-harness-plugin",
@@ -35,6 +35,7 @@
     "typescript",
     "cordis",
     "web-ui",
+    "headless",
     "sidebar"
   ],
   "repository": {
@@ -97,8 +98,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "verify:build": "node scripts/verify-deterministic-build.mjs",
+    "verify:headless": "node scripts/verify-headless-profile.mjs",
     "verify:package": "node scripts/verify-package-contents.mjs && pnpm run lint:package",
-    "verify": "pnpm run typecheck && pnpm run test && pnpm run verify:build && pnpm run verify:package"
+    "verify": "pnpm run typecheck && pnpm run test && pnpm run verify:build && pnpm run verify:headless && pnpm run verify:package"
   },
   "dependencies": {
     "fflate": "^0.8.3",

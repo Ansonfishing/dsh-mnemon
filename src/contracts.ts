@@ -175,10 +175,12 @@ export interface HostContextShape {
   tools: { register(definition: ToolDefinition): unknown }
   commands: CommandService
   settings: HostSettingsService
-  connection: HostConnectionHandle
+  /** Web-only transport; absent from non-Web profiles such as Headless. */
+  connection?: HostConnectionHandle
   agents: HostAgentsService
   subagents: HostSubagentsService
-  workspaceRegistry: HostWorkspaceRegistry
+  /** Web workbench catalog; Agent execution routes by session cwd without it. */
+  workspaceRegistry?: HostWorkspaceRegistry
   get(name: string): unknown
   inject(services: string[], callback: (ctx: HostContextShape) => void): unknown
   on(name: string, listener: (...args: never[]) => unknown): () => unknown

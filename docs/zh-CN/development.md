@@ -80,10 +80,11 @@ Host 将所有 package dependency 保持为 external。Client 将 React、ReactD
 - worker 工具隔离、schema 子集、结构化回执；
 - 生命周期 cue、评分、idle debounce、取消和水位保留；
 - RPC authority、只读行为和设置 revision；
-- Web 工作台、双语文案和关键交互。
+- Web 工作台、双语文案和关键交互；
+- 不依赖 Web 专有服务的核心激活，以及 Headless 按 Agent cwd 路由；
 - Client/Host 源码边界、确定性构建 hash、发布包内容、exports 和 TypeScript 解析。
 
-这些主要是临时目录、fake runner 和 mock Host 集成测试，不等同于自动化的真实 DSH + Mnemon WebUI E2E。
+这些主要是临时目录、fake runner 和 mock Host 集成测试。此外，`verify:headless` 会构建包、安装到隔离的真实 DSH Headless profile、启动本地模拟模型，并断言代表性 Mnemon 工具进入模型请求。真实 DSH + Mnemon WebUI 的自动化端到端测试仍是独立工作。
 
 ## 真实 WebUI 验证
 
@@ -175,6 +176,7 @@ Web locale 变更时，中文键集合仍是类型事实源；英文词典必须
 [ ] 确认 worktree 中没有生成的 lib diff
 [ ] 确认发布包只包含运行时、声明、根文档和 cordis.patch.yml
 [ ] install the built/local bundle into an isolated Web profile
+[ ] confirm `verify:headless` activates the built bundle in an isolated Headless profile
 [ ] run real Mnemon CLI and WebUI smoke tests
 [ ] verify Chinese and English workspaces
 [ ] verify global/workspace/custom paths as applicable
