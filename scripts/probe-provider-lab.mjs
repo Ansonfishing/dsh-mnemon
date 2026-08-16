@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const requests = [
-  ['OpenViking', 'http://127.0.0.1:1933/health', { headers: { Authorization: `Bearer ${process.env.OPENVIKING_ROOT_API_KEY ?? 'dsh-provider-lab-local-only'}` } }],
+  ['OpenViking', 'http://127.0.0.1:1933/health', { headers: { Authorization: `Bearer ${process.env.OPENVIKING_ROOT_API_KEY ?? 'dsh-provider-lab-local-only'}`, 'X-OpenViking-Account': 'dsh-lab', 'X-OpenViking-User': 'demo-user' } }],
   ['Honcho', 'http://127.0.0.1:18000/health'],
   ['Mem0', 'http://127.0.0.1:18888/openapi.json'],
   ['Hindsight', 'http://127.0.0.1:18889/health'],

@@ -92,18 +92,43 @@ const memories = [
   { category: 'insight', importance: 4, tags: ['product', 'compatibility'], entities: ['Hermes', 'DSH'], content: '参考 Hermes 的价值在于复用成熟 Provider 模式与社区生态，但 dsh-mnemon 仍以既有记忆体心智为主，并保留 Mnemon Native 的官方优先级。' },
 ]
 
-async function ensureHindsightBank() {
-  const response = await fetch('http://127.0.0.1:18889/v1/default/banks', {
+async function postJson(url, body) {
+  const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ bank_id: 'dsh-lab', name: 'DSH Provider Lab', background: 'A test bank for multi-provider memory UI validation.' }),
+    body: JSON.stringify(body),
   })
-  if (response.ok || response.status === 409) return
+  if (response.ok || response.status === 409) return response
   const detail = await response.text()
-  if (!detail.toLowerCase().includes('already')) throw new Error(`Hindsight bank setup failed (${response.status}): ${detail}`)
+  if (!detail.toLowerCase().includes('already')) throw new Error(`${url} failed (${response.status}): ${detail}`)
+  return response
 }
 
-try { await ensureHindsightBank() } catch (error) { console.warn(`WARN  Hindsight bank: ${error instanceof Error ? error.message : String(error)}`) }
+async function ensureHonchoScope() {
+  await postJson('http://127.0.0.1:18000/v3/workspaces', { id: 'dsh-lab', metadata: { source: 'dsh-mnemon-provider-lab' } })
+  for (const id of ['dsh', 'demo-user']) {
+    await postJson('http://127.0.0.1:18000/v3/workspaces/dsh-lab/peers', { id, metadata: { source: 'dsh-mnemon-provider-lab' } })
+  }
+}
+
+async function ensureMem0Config() {
+  await postJson('http://127.0.0.1:18888/configure', {
+    version: 'v1.1',
+    vector_store: {
+      provider: 'pgvector',
+      config: {
+        host: 'mem0-db', port: 5432, dbname: 'postgres', user: 'postgres', password: 'mem0',
+        collection_name: 'dsh_memory_768', embedding_model_dims: 768,
+      },
+    },
+    llm: { provider: 'openai', config: { api_key: 'ollama', temperature: 0.2, model: process.env.MEM0_LLM_MODEL ?? 'qwen2.5:3b' } },
+    embedder: { provider: 'openai', config: { api_key: 'ollama', model: 'nomic-embed-text', embedding_dims: 768 } },
+    history_db_path: '/app/history/history.db',
+  })
+}
+
+try { await ensureHonchoScope() } catch (error) { console.warn(`WARN  Honcho scope: ${error instanceof Error ? error.message : String(error)}`) }
+try { await ensureMem0Config() } catch (error) { console.warn(`WARN  Mem0 config: ${error instanceof Error ? error.message : String(error)}`) }
 
 const existing = service.memoryBodies.list()
 const report = []

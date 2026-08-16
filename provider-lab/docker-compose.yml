@@ -15,7 +15,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "-H", "Authorization: Bearer ${OPENVIKING_ROOT_API_KEY:-dsh-provider-lab-local-only}", "http://127.0.0.1:1933/health"]
+      test: ["CMD", "curl", "-fsS", "-H", "Authorization: Bearer ${OPENVIKING_ROOT_API_KEY:-dsh-provider-lab-local-only}", "-H", "X-OpenViking-Account: dsh-lab", "-H", "X-OpenViking-User: demo-user", "http://127.0.0.1:1933/health"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -117,7 +117,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/openapi.json"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -220,4 +220,3 @@ volumes:
   hindsight-pgdata:
   retaindb-data:
   supermemory-data:
-
