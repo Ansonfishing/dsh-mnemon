@@ -169,7 +169,7 @@ location      local store/CLI scope, or remote endpoint + provider scope
 - Merge imports source content into the target through Mnemon; the source database remains in place, and by default only the source is marked inactive.
 - Pack replacement cannot empty an initialized Store set. If replacement removes the former default Store, the plugin repairs the native default pointer to an existing Store.
 - `forget` is a soft delete by exact ID, not deletion of a database file.
-- Users choose Mnemon Native or any registered third-party engine in the existing Create Memory Space dialog, or explicitly include configured engines as smart-selection candidates. Disconnect removes local connection metadata and never provider content.
+- Users create Mnemon Native spaces directly. Enabling or saving a third-party service discovers all visible provider-native namespaces, atomically maps their titles/descriptions and scope into the directory, and makes them available as smart-selection candidates. Disabling the provider removes those local mappings and never provider content.
 - Smart placement treats the allowlist, data boundary, and required capabilities as Host-enforced rules. Soft preference and prompt guide semantic choice only among multiple eligible candidates and cannot override hard rules. The decision receipt is persisted with Memory Space metadata.
 - Merge remains Mnemon Native-specific. Graph, relationships, browsing, exact/async writes, and hard/soft/unsupported deletion follow each provider's declared capabilities; the UI and agents do not pretend missing behavior exists. See the [provider matrix](./memory-providers.md).
 

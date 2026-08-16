@@ -20,7 +20,7 @@ Cross-agent interoperability therefore applies only to the third tier: Mnemon Na
 
 ### Third-tier provider contract
 
-`MemoryProviderAdapter` keeps catalog, lifecycle, and user operations in dsh-mnemon's control plane while delegating `status / search / graph projection / browse / remember / related / link / forget` to data-plane adapters. Capability declarations are a shared hard boundary for UI, agents, and Host: unsupported actions are hidden and rejected. The complete current matrix is maintained in [Long-term memory providers](./memory-providers.md).
+`MemoryProviderAdapter` keeps catalog, lifecycle, and user operations in dsh-mnemon's control plane while delegating provider discovery plus `status / search / graph projection / browse / remember / related / link / forget` to data-plane adapters. Discovery is authoritative: a successful provider save atomically replaces that provider's local namespace mappings and maps upstream titles/descriptions; a failed discovery leaves the prior configuration untouched. Capability declarations are a shared hard boundary for UI, agents, and Host: unsupported actions are hidden and rejected. The complete current matrix is maintained in [Long-term memory providers](./memory-providers.md).
 
 Cross-provider search runs concurrently, with one failure reduced to a Memory-Space-scoped hint. Heterogeneous raw scores are never compared directly; results use reciprocal-rank fusion over each provider's returned order. New adapters reuse this contract without changing the upper-layer Memory Space semantics.
 

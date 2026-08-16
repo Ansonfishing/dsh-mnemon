@@ -440,7 +440,7 @@ describe('MnemonSettingsCard', () => {
     })))
   })
 
-  it('edits a reusable provider service without creating a Memory Space', async () => {
+  it('edits a reusable provider service and reports its Memory Space synchronization', async () => {
     const snapshot = {
       status: 'ready' as const,
       value: { storageScope: 'workspace' as const },
@@ -508,7 +508,7 @@ describe('MnemonSettingsCard', () => {
       sessionId: 'session-1',
       workspaceId: 'workspace-1',
     }))
-    expect(await screen.findByText('服务配置已保存')).toBeTruthy()
+    expect(await screen.findByText('服务配置已保存，记忆体目录已同步')).toBeTruthy()
     expect(disclosure.getAttribute('aria-expanded')).toBe('true')
     expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'provider-services')).toHaveLength(1)
     expect(call.mock.calls.some(([, endpoint]) => endpoint === 'body-create')).toBe(false)
@@ -577,7 +577,7 @@ describe('MnemonSettingsCard', () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', expect.objectContaining({
       providerId: 'supermemory', enabled: true, settings: { endpoint: 'https://api.supermemory.ai', apiKey: 'service-secret' },
     })))
-    expect(await screen.findByText('服务配置已保存')).toBeTruthy()
+    expect(await screen.findByText('服务配置已保存，记忆体目录已同步')).toBeTruthy()
 
     fireEvent.click(providerToggle)
     await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', expect.objectContaining({
