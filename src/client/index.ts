@@ -147,8 +147,8 @@ export function apply(rawContext: unknown): void {
     label: () => translate('tab.label'),
     locale: namespace,
     inject: (): { scope: MnemonSettingsScope<Config>; interactionScope: MnemonSettingsScope<InteractionConfig>; connection: ClientConnectionHandle; sessionId?: string; workspaceId?: string; workspaceLabel?: string; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => {
-      const sessions = ctx.sessions.list.getSnapshot()
-      const workspaces = ctx.workspaces.list.getSnapshot()
+      const sessions = ctx.sessions?.list?.getSnapshot?.() ?? { current: undefined, byId: {} }
+      const workspaces = ctx.workspaces?.list?.getSnapshot?.() ?? { items: [], recentWorkspaceId: undefined }
       const sessionId = sessions.current
       const cwd = sessionId === undefined ? undefined : sessions.byId[sessionId]?.cwd
       const normalizePath = (value: string): string => value.replace(/[\\/]+$/u, '')
