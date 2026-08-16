@@ -189,6 +189,8 @@ export interface Insight {
   entities?: string[]
   source?: string
   score?: number
+  /** Comparable rank score only when results were fused across providers. */
+  federatedScore?: number
   confidence?: string
   intent?: string
   matchedVia?: string

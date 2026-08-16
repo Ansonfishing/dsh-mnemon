@@ -17,6 +17,7 @@ var edges = new vis.DataSet([{from:"m1",to:"m2",label:"backbone",color:{color:"#
 const temporaryDirectories: string[] = []
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 
@@ -208,6 +209,32 @@ describe('MnemonService', () => {
     await expect(service.deleteBody(research.id)).resolves.toMatchObject({ id: research.id })
     expect(service.memoryBodies.list().some(body => body.id === research.id)).toBe(false)
     expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--store', research.id, 'store', 'remove', research.id]), expect.anything())
+  })
+
+  it('fuses heterogeneous provider ranks without comparing raw scores and isolates provider failures', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      status: 'success',
+      result: { memories: [{ uri: 'viking://user/team/memories/preferences/concise.md', overview: 'Prefer concise answers.', score: 99 }] },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { service } = fixture()
+    await service.createBody({
+      name: '团队 OpenViking', description: '团队共享的远程长期记忆。', active: true, providerId: 'openviking',
+      openViking: { endpoint: 'https://memory.example.com', targetUri: 'viking://user/team/memories' },
+    })
+
+    const result = await service.search({ query: 'answer style' })
+
+    expect(result.results).toHaveLength(2)
+    expect(result.results.map(item => item.memoryProviderId)).toEqual(['mnemon-native', 'openviking'])
+    expect(result.results.map(item => item.score)).toEqual([0.91, 99])
+    expect(result.results[0]!.federatedScore).toBe(result.results[1]!.federatedScore)
+
+    fetchMock.mockRejectedValueOnce(new Error('remote offline'))
+    await expect(service.search({ query: 'fallback' })).resolves.toMatchObject({
+      results: [expect.objectContaining({ memoryProviderId: 'mnemon-native' })],
+      hint: expect.stringContaining('团队 OpenViking: unavailable: remote offline'),
+    })
   })
 
   it('rejects explicit reads from an inactive memory body', async () => {

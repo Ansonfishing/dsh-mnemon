@@ -46,8 +46,12 @@ function number(value: unknown): number | undefined {
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted === true) return Promise.reject(signal.reason)
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, ms)
-    signal?.addEventListener('abort', () => { clearTimeout(timer); reject(signal.reason) }, { once: true })
+    const aborted = () => { clearTimeout(timer); reject(signal?.reason ?? new Error('OpenViking request aborted')) }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', aborted)
+      resolve()
+    }, ms)
+    signal?.addEventListener('abort', aborted, { once: true })
   })
 }
 
@@ -112,7 +116,9 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
   }
 
   async graph(body: MemoryBody, signal?: AbortSignal): Promise<MemoryGraphSnapshot> {
-    const items = await this.list(body, { limit: 1000 }, signal)
+    // Remote providers are projected as a bounded, disconnected browse view;
+    // they do not pretend to expose Mnemon's typed graph relationships.
+    const items = await this.list(body, { limit: 200 }, signal)
     return {
       nodes: items.map(item => ({ ...item, color: '#5568d9' })),
       edges: [],

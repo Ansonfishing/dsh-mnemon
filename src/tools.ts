@@ -53,7 +53,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
   const config = serviceOrSource.config
   ctx.tools.register(definition({
     name: 'mnemon_memory_bodies',
-    description: 'List the global Mnemon Memory Space catalog, including each space id, name, description, activation state, database path, and statistics. Read only. Use this before choosing a write target, or when the Prime summary is insufficient. Recall may only read active spaces; writes may target any space.',
+    description: 'List the Memory Space catalog, including each space id, name, routing description, provider, capabilities, activation state, location, health, and statistics when available. Read only. Use this before choosing a read or write target. Recall may only read active spaces; writes may target any space whose provider supports remember.',
     parameters: { type: 'object', properties: {} },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     execute: (_args: unknown, exec: ToolExecution) => runtimeFor(exec).service.bodies(exec.signal),
@@ -63,7 +63,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_recall',
-    description: 'Recall durable knowledge from one or more active Mnemon Memory Spaces. Choose spaces whose name/description matches the task; omit memoryBodyIds only when a cross-space search is intentionally useful. Use one focused query when prior decisions, preferences, rationale, conventions, pitfalls, or earlier work could materially change the answer.',
+    description: 'Recall durable knowledge from one or more active provider-backed Memory Spaces. Choose spaces whose name and routing description match the task; omit memoryBodyIds only when federated cross-space search is intentionally useful. Provider-native scores are not directly comparable, so cross-provider results are rank-fused. Use one focused query when prior decisions, preferences, rationale, conventions, pitfalls, or earlier work could materially change the answer.',
     parameters: {
       type: 'object',
       properties: {
@@ -92,7 +92,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_related',
-    description: 'Traverse the Mnemon graph from a known insight id. Use after mnemon_recall when causal, semantic, temporal, or entity neighbors help explain or verify a remembered fact.',
+    description: 'Traverse a provider graph from a known insight id. Use after mnemon_recall only when the owning Memory Space reports capabilities.related=true and causal, semantic, temporal, or entity neighbors help explain or verify a remembered fact. OpenViking does not currently support this operation.',
     parameters: {
       type: 'object',
       properties: {
@@ -123,7 +123,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_status',
-    description: 'Check the local Mnemon integration, active Memory Spaces, aggregate database statistics, and configuration. Use when a Mnemon operation fails or the user asks about memory health.',
+    description: 'Check configured memory-provider integrations, active Memory Spaces, aggregate local database statistics, and configuration. Use when a memory operation fails or the user asks about memory health.',
     parameters: { type: 'object', properties: {} },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     execute: (_args: unknown, exec: ToolExecution) => runtimeFor(exec).service.status(exec.signal),
@@ -241,7 +241,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_remember',
-    description: 'Archive one durable insight in a selected Mnemon Memory Space. Ordinary new hot memory belongs in mnemon_runtime_memory; use direct archival only for explicit long-term persistence or runtime capacity migration. Choose the narrowest existing space, search it first, and do not dump transcripts, temporary progress, routine observations, or repository-obvious facts.',
+    description: 'Archive one durable insight in a selected provider-backed Memory Space. Ordinary new hot memory belongs in mnemon_runtime_memory; use direct archival only for explicit long-term persistence or runtime capacity migration. Choose the narrowest existing space, search it first, verify capabilities.remember=true, and wait for the provider receipt. OpenViking writes are asynchronous semantic extraction and may truthfully return skipped. Do not dump transcripts, temporary progress, routine observations, or repository-obvious facts.',
     parameters: {
       type: 'object',
       properties: {
@@ -268,7 +268,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_link',
-    description: 'Create a typed, bidirectional relation between two known Mnemon insights. Link only when the relation improves future recall and both ids were verified through recall or graph traversal.',
+    description: 'Create a typed, bidirectional relation between two known insights in one Memory Space. Use only when its provider reports capabilities.link=true (currently Mnemon Native), the relation improves future recall, and both ids were verified through recall or graph traversal.',
     parameters: {
       type: 'object',
       properties: {
@@ -293,7 +293,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_forget',
-    description: 'Soft-delete one Mnemon insight by exact id. This is a destructive semantic operation; use only when the user explicitly asks to forget it or the insight is verified obsolete/incorrect.',
+    description: 'Forget one insight by exact id only when its provider reports capabilities.forget=true (currently Mnemon Native soft-delete). This is a destructive semantic operation; use only when the user explicitly asks or the insight is verified obsolete or incorrect.',
     parameters: {
       type: 'object',
       properties: { id: { type: 'string' }, memoryBodyId: { type: 'string', description: 'Body containing the insight id.' } },
@@ -309,7 +309,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_memory_body_create',
-    description: 'Create a new isolated Mnemon Memory Space. Use only when durable knowledge forms a recurring scope not owned by any existing space; never create one for a single temporary task. Supply a topic-specific human name and a precise routing description that states what belongs here and when it should be recalled; avoid generic labels such as miscellaneous, archive, or new memory. The host generates the immutable UUID. After creation, write the qualifying insight into it with mnemon_remember, which will activate it.',
+    description: 'Create a new isolated Mnemon Native Memory Space. External provider connections are user-managed in WebUI and must not be invented by an agent. Use only when durable knowledge forms a recurring scope not owned by any existing space; never create one for a temporary task. Supply a topic-specific human name and a precise routing description; the host generates the immutable UUID. After creation, write the qualifying insight with mnemon_remember, which activates it.',
     parameters: {
       type: 'object',
       properties: {
@@ -349,7 +349,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_memory_body_merge',
-    description: 'Non-destructively merge complete source Memory Spaces into one existing target through Mnemon import, preserving durable nodes and typed graph edges where available. Use only after confirming substantial scope overlap or when the user requests consolidation. Source databases are retained; they are merely deactivated by default.',
+    description: 'Non-destructively merge complete Mnemon Native source Memory Spaces into one Mnemon Native target through import, preserving durable nodes and typed graph edges. External providers are not mergeable. Use only after confirming substantial scope overlap or when the user requests consolidation. Source databases are retained and merely deactivated by default.',
     parameters: {
       type: 'object',
       properties: {

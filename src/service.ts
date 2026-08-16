@@ -207,12 +207,14 @@ export class MnemonService {
   }
 
   async bodies(signal?: AbortSignal): Promise<MemoryBodyCatalog> {
-    const items: MemoryBodyView[] = []
     const mnemonDefaultStore = this.runner.persistedStore()
-    for (const body of this.memoryBodies.list()) {
-      const status = await this.providerFor(body).status(body, signal)
-      items.push({ ...body, mnemonDefault: body.provider.id === 'mnemon-native' && body.id === mnemonDefaultStore, ...status })
-    }
+    const items: MemoryBodyView[] = await Promise.all(this.memoryBodies.list().map(async body => {
+      let status: ProviderBodyStatus
+      try { status = await this.providerFor(body).status(body, signal) } catch (error) {
+        status = { healthy: false, error: error instanceof Error ? error.message : String(error) }
+      }
+      return { ...body, mnemonDefault: body.provider.id === 'mnemon-native' && body.id === mnemonDefaultStore, ...status }
+    }))
     return {
       items,
       total: items.length,
@@ -298,20 +300,21 @@ export class MnemonService {
         return { body, result: { results: [], hint: `unavailable: ${error instanceof Error ? error.message : String(error)}` } satisfies ProviderSearchResult }
       }
     }))
-    const results: Array<Insight & { providerRank: number }> = []
+    const results: Array<Insight & { providerRank: number; bodyOrder: number }> = []
     const hints: string[] = []
-    for (const { body, result } of batches) {
-      results.push(...result.results.map((entry, index) => ({ ...this.annotate(entry, body), providerRank: index + 1 })))
+    for (const [bodyOrder, { body, result }] of batches.entries()) {
+      results.push(...result.results.map((entry, index) => ({ ...this.annotate(entry, body), providerRank: index + 1, bodyOrder })))
       if (result.hint !== undefined) hints.push(`${body.name}: ${result.hint}`)
     }
     const heterogeneous = new Set(bodies.map(body => body.provider.id)).size > 1
+    if (heterogeneous) for (const result of results) result.federatedScore = 1 / (60 + result.providerRank)
     results.sort((left, right) => heterogeneous
-      ? left.providerRank - right.providerRank || (right.score ?? 0) - (left.score ?? 0)
+      ? (right.federatedScore ?? 0) - (left.federatedScore ?? 0) || left.bodyOrder - right.bodyOrder
       : (right.score ?? 0) - (left.score ?? 0))
     return {
       query,
       mode,
-      results: results.slice(0, limit).map(({ providerRank: _providerRank, ...entry }) => entry),
+      results: results.slice(0, limit).map(({ providerRank: _providerRank, bodyOrder: _bodyOrder, ...entry }) => entry),
       ...(hints.length === 0 ? {} : { hint: hints.join('\n') }),
     }
   }
@@ -320,9 +323,12 @@ export class MnemonService {
     const bodies = this.readBodies(memoryBodyIds)
     const nodes: MemoryGraphNode[] = []
     const edges: MemoryGraphEdge[] = []
-    for (const body of bodies) {
-      let snapshot: MemoryGraphSnapshot
-      try { snapshot = await this.providerFor(body).graph(body, signal) } catch { continue }
+    const snapshots = await Promise.all(bodies.map(async body => {
+      try { return { body, snapshot: await this.providerFor(body).graph(body, signal) } } catch { return undefined }
+    }))
+    for (const item of snapshots) {
+      if (item === undefined) continue
+      const { body, snapshot } = item
       const graphId = (id: string): string => `${body.id}:${id}`
       nodes.push(...snapshot.nodes.map(node => ({ ...this.annotate(node, body), color: node.color, graphId: graphId(node.id) })))
       edges.push(...snapshot.edges.map(edge => ({ ...edge, sourceId: graphId(edge.sourceId), targetId: graphId(edge.targetId) })))
