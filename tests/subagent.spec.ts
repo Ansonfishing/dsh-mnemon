@@ -36,6 +36,15 @@ function service(): MnemonService {
       generatedAt: 'now',
     })),
     search: vi.fn(async request => ({ query: request.query, mode: 'smart', results: [{ id: 'm1', content: 'SQLite', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }] })),
+    metadataSample: vi.fn(async (memoryBodyId: string) => ({
+      memoryBodyId,
+      name: memoryBodyId === 'release' ? 'Release' : 'Product',
+      description: memoryBodyId === 'release' ? 'Release gates and rollback notes.' : 'Product scope and decisions.',
+      providerId: 'mnemon-native',
+      providerLabel: 'mnemon',
+      method: 'native-basic',
+      evidence: [{ content: memoryBodyId === 'release' ? 'Use staged rollout and a rollback gate.' : 'The product keeps durable architecture decisions.', category: 'decision', entities: ['DSH'] }],
+    })),
     related: vi.fn(async () => []),
     status: vi.fn(async () => ({ healthy: true })),
     remember: vi.fn(async () => ({ action: 'added' })),
@@ -160,7 +169,9 @@ describe('Mnemon memory subagent coordinator', () => {
         { memoryBodyId: 'release', title: '发布运行手册', description: '沉淀发布门禁、部署约束和回滚经验，在准备上线或处理故障时召回。' },
       ],
     })
-    const coordinator = new MnemonSubagentCoordinator(host.value)
+    const memoryService = service()
+    const runtime = { forAgent: vi.fn(() => ({ service: memoryService })) } as never
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtime)
 
     await expect(coordinator.maintainMetadata(parent(), ['product', 'release'], new AbortController().signal)).resolves.toMatchObject({
       delegated: true,
@@ -168,13 +179,20 @@ describe('Mnemon memory subagent coordinator', () => {
       updates: [{ memoryBodyId: 'product', title: '产品决策' }, { memoryBodyId: 'release', title: '发布运行手册' }],
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
-      toolFilter: { allow: ['mnemon_memory_bodies', 'mnemon_recall'] },
-      persona: expect.stringContaining('call mnemon_recall separately for every supplied id'),
+      toolFilter: { allow: [] },
+      agentOptions: { maxTokens: 4_096 },
+      persona: expect.stringContaining('fastest bounded metadata-sampling path'),
     }))
+    expect(memoryService.metadataSample).toHaveBeenCalledWith('product', expect.any(AbortSignal))
+    expect(memoryService.metadataSample).toHaveBeenCalledWith('release', expect.any(AbortSignal))
+    const metadataCall = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }> }])[1]
+    expect(metadataCall.prompt[0]!.text).toContain('sampling method: native-basic')
+    expect(metadataCall.prompt[0]!.text).toContain('The product keeps durable architecture decisions.')
+    expect(metadataCall.prompt[0]!.text).not.toMatch(/dbPath|endpoint|api.?key/iu)
     expect(coordinator.snapshot()).toMatchObject({ metadataMaintenances: 1, lastOperation: 'metadata-maintenance' })
 
     const incomplete = subagents({ summary: 'Only one.', updates: [{ memoryBodyId: 'product', title: '产品决策', description: '记录稳定的产品范围与取舍，在规划和复盘产品方向时召回。' }] })
-    await expect(new MnemonSubagentCoordinator(incomplete.value).maintainMetadata(parent(), ['product', 'release'], new AbortController().signal)).rejects.toThrow('omitted')
+    await expect(new MnemonSubagentCoordinator(incomplete.value, runtime).maintainMetadata(parent(), ['product', 'release'], new AbortController().signal)).rejects.toThrow('omitted')
   })
 
   it('reviews a completed full-context checkpoint through fork with a maintenance-only tool set', async () => {

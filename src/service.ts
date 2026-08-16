@@ -72,6 +72,16 @@ export type {
   StatusView,
 } from './shared/contracts.ts'
 
+export interface MemoryBodyMetadataSample {
+  memoryBodyId: string
+  name: string
+  description: string
+  providerId: MemoryBody['provider']['id']
+  providerLabel: string
+  method: 'native-basic' | 'browse' | 'search'
+  evidence: Array<Pick<Insight, 'content' | 'category' | 'entities'>>
+}
+
 function record(value: JsonValue | undefined): Record<string, JsonValue> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, JsonValue>
@@ -521,6 +531,43 @@ export class MnemonService {
     }
   }
 
+  /**
+   * Read a deliberately small metadata sample through the cheapest useful path
+   * exposed by the owning Provider. This avoids federated ranking, graph
+   * expansion, and large browse projections before an LLM metadata pass.
+   */
+  async metadataSample(memoryBodyId: string, signal?: AbortSignal): Promise<MemoryBodyMetadataSample> {
+    const body = this.readBodies([memoryBodyId])[0]!
+    const provider = this.providerFor(body)
+    const limit = 6
+    let method: MemoryBodyMetadataSample['method']
+    let items: Insight[]
+    if (body.provider.id === 'mnemon-native') {
+      method = 'native-basic'
+      items = await this.nativeMetadataSample(body, limit, signal)
+    } else if (body.provider.capabilities.browse) {
+      method = 'browse'
+      items = await provider.list(body, { limit }, signal)
+    } else {
+      method = 'search'
+      const query = (body.description.trim() || body.name.trim()).slice(0, 400)
+      items = (await provider.search(body, { query, mode: 'basic', limit }, signal)).results
+    }
+    return {
+      memoryBodyId: body.id,
+      name: body.name,
+      description: body.description,
+      providerId: body.provider.id,
+      providerLabel: body.provider.label,
+      method,
+      evidence: items.slice(0, limit).map(item => ({
+        content: item.content.length > 720 ? `${item.content.slice(0, 719)}…` : item.content,
+        ...(item.category === undefined ? {} : { category: item.category }),
+        ...(item.entities === undefined ? {} : { entities: item.entities.slice(0, 8) }),
+      })),
+    }
+  }
+
   async graph(signal?: AbortSignal, memoryBodyIds?: string[]): Promise<MemoryGraphSnapshot> {
     const bodies = this.readBodies(memoryBodyIds)
     const nodes: MemoryGraphNode[] = []
@@ -855,6 +902,16 @@ export class MnemonService {
       'recall', '', '--basic', '--limit', '100000',
     ], { ...(signal === undefined ? {} : { signal }), store: body.id })
     const values = Array.isArray(payload) ? payload : Array.isArray(record(payload)?.results) ? record(payload)!.results as JsonValue[] : []
+    return values.map(normalizeInsight).filter((entry): entry is Insight => entry !== undefined)
+  }
+
+  private async nativeMetadataSample(body: MemoryBody, limit: number, signal?: AbortSignal): Promise<Insight[]> {
+    const payload = await this.runner.runJson([
+      '--readonly',
+      'recall', '', '--basic', '--limit', String(limit),
+    ], { ...(signal === undefined ? {} : { signal }), store: body.id })
+    const wrapper = record(payload)
+    const values = Array.isArray(payload) ? payload : Array.isArray(wrapper?.results) ? wrapper.results : []
     return values.map(normalizeInsight).filter((entry): entry is Insight => entry !== undefined)
   }
 

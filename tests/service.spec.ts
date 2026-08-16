@@ -244,6 +244,43 @@ describe('MnemonService', () => {
     expect(process.mock.calls.filter(([, args]) => args.includes('recall')).every(([, args]) => args.includes('--readonly'))).toBe(true)
   })
 
+  it('samples Native metadata through one bounded readonly basic recall', async () => {
+    const { service, process } = fixture()
+
+    await expect(service.metadataSample('work')).resolves.toMatchObject({
+      memoryBodyId: 'work',
+      providerId: 'mnemon-native',
+      method: 'native-basic',
+      evidence: [{ content: 'Use SQLite for local-first storage.' }, { content: 'Four graph memory' }],
+    })
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining([
+      '--readonly', 'recall', '', '--basic', '--limit', '6',
+    ]), expect.anything())
+  })
+
+  it('uses a Provider browse endpoint directly for a bounded metadata sample', async () => {
+    const { service } = fixture()
+    const provider = {
+      id: 'openviking' as const,
+      status: vi.fn(async () => ({ healthy: true })),
+      search: vi.fn(async () => ({ results: [] })),
+      graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
+      list: vi.fn(async () => [{ id: 'memory-1', content: 'Team release gates and rollback decisions.', category: 'decision', entities: ['Release'] }]),
+      remember: vi.fn(async () => ({ action: 'stored' })),
+    }
+    ;(service as unknown as { providers: Map<string, typeof provider> }).providers.set('openviking', provider)
+    const body = await service.createBody({
+      name: 'Team memory', description: 'Shared provider memory.', active: true, providerId: 'openviking',
+      connection: { endpoint: 'http://127.0.0.1:1933', targetUri: 'viking://user/team/memories' },
+    })
+
+    await expect(service.metadataSample(body.id)).resolves.toMatchObject({
+      providerId: 'openviking', method: 'browse', evidence: [{ content: 'Team release gates and rollback decisions.' }],
+    })
+    expect(provider.list).toHaveBeenCalledWith(body, { limit: 6 }, undefined)
+    expect(provider.search).not.toHaveBeenCalled()
+  })
+
   it('exposes top entities and recalls one entity on demand', async () => {
     const { service, process } = fixture()
     await expect(service.entities()).resolves.toMatchObject({
@@ -381,6 +418,14 @@ describe('MnemonService', () => {
     })
     expect(provider.list).not.toHaveBeenCalled()
     expect(provider.search).toHaveBeenCalledWith(body, expect.objectContaining({ query: 'architecture' }), undefined)
+
+    provider.search.mockClear()
+    await expect(service.metadataSample(body.id)).resolves.toMatchObject({ providerId: 'byterover', method: 'search' })
+    expect(provider.search).toHaveBeenCalledWith(body, {
+      query: 'Query-oriented coding context.',
+      mode: 'basic',
+      limit: 6,
+    }, undefined)
   })
 
   it('rejects explicit reads from an inactive memory body', async () => {
