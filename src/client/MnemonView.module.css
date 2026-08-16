@@ -340,7 +340,9 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 .bodyDeleteContent { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; font-weight: 400; line-height: 1.55; }
 .bodyDeleteSummary span { color: var(--mn-muted); font-size: 11px; }
 .bodyCard > p { min-height: 15px; margin: 7px 0; color: var(--mn-muted); font-size: 10px; line-height: 1.45; }
-.bodyCard footer { display: flex; flex-wrap: wrap; gap: 5px 11px; padding-top: 6px; border-top: 1px solid var(--mn-line); color: var(--mn-faint); font-size: 9px; }
+.bodyCard footer { display: flex; min-width: 0; flex-wrap: nowrap; gap: 5px 11px; padding-top: 6px; overflow: hidden; border-top: 1px solid var(--mn-line); color: var(--mn-faint); font-size: 9px; }
+.bodyFooterBlock { display: block; min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bodyFooterGrow { flex: 1 1 auto; }
 .bodyCreate { margin-top: 10px; border-top: 1px solid var(--mn-line); padding-top: 8px; }
 .bodyCreate summary { width: max-content; cursor: pointer; color: var(--mn-accent); font-size: 10px; list-style: none; }
 .bodyCreate summary::-webkit-details-marker { display: none; }
@@ -686,18 +688,25 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 .modal > div:last-child { min-height: 0; overflow-y: auto; padding: 18px; }
 .metadataDialog { display: grid; gap: 12px; }
 .metadataToolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--mn-muted); font-size: 10px; }
+.metadataToolbar > span { display: flex; min-width: 0; align-items: center; gap: 7px; }
+.metadataToolbar em { padding: 2px 5px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 9%, transparent); font: 650 8px var(--mn-code); font-style: normal; }
 .metadataList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .metadataList > label { position: relative; display: grid; min-width: 0; min-height: 76px; grid-template-columns: 16px minmax(0, 1fr); align-items: start; gap: 9px; padding: 10px 10px 10px 13px; cursor: pointer; }
 .metadataList > label[data-selected] { border-color: color-mix(in srgb, var(--mn-accent) 48%, var(--mn-line)); box-shadow: inset 3px 0 0 var(--mn-provider-color), inset 0 0 0 1px color-mix(in srgb, var(--mn-accent) 10%, transparent); }
 .metadataList > label[data-refreshing] { overflow: hidden; }
 .metadataList > label[data-refreshing]::after { position: absolute; inset: 0; content: ""; background: linear-gradient(105deg, transparent 20%, color-mix(in srgb, var(--mn-provider-color) 16%, transparent) 45%, transparent 70%); transform: translateX(-120%); animation: mnemon-metadata-sweep .9s ease-in-out infinite; pointer-events: none; }
 .metadataList > label[data-refreshed] { animation: mnemon-metadata-refreshed .9s ease-out; }
+.metadataList > label[data-failed] { border-color: color-mix(in srgb, var(--mn-danger) 42%, var(--mn-line)); }
 .metadataList > label > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .metadataList > label > span { display: grid; min-width: 0; gap: 4px; }
 .metadataList strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .metadataList small { display: -webkit-box; overflow: hidden; color: var(--mn-muted); font-size: 9px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .metadataList > label > span > span { display: flex; min-width: 0; align-items: center; gap: 6px; }
 .metadataList code { overflow: hidden; color: var(--mn-faint); font: 8px var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
+.metadataTaskStatus { min-width: 0; overflow: hidden; font: 650 8px var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
+.metadataTaskStatus[data-status='running'] { color: var(--mn-provider-color); }
+.metadataTaskStatus[data-status='success'] { color: var(--mn-success); }
+.metadataTaskStatus[data-status='error'] { color: var(--mn-danger); }
 @keyframes mnemon-metadata-sweep { to { transform: translateX(120%); } }
 @keyframes mnemon-metadata-refreshed { 0% { border-color: color-mix(in srgb, var(--mn-provider-color) 72%, var(--mn-line)); box-shadow: inset 3px 0 0 var(--mn-provider-color), 0 0 0 3px color-mix(in srgb, var(--mn-provider-color) 14%, transparent); } 100% { border-color: var(--mn-line); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--mn-provider-color) 68%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .metadataList > label[data-refreshing]::after, .metadataList > label[data-refreshed] { animation: none; } }

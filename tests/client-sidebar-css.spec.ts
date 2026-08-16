@@ -21,11 +21,12 @@ describe('Sidebar layout invariants', () => {
     expect(sidebarCss).toContain('.shell select { cursor: pointer; font-weight: 400; }')
   })
 
-  it('keeps every memory-space footer on one aligned row', () => {
+  it('keeps memory-space footer blocks aligned and safely truncatable', () => {
     expect(sidebarCss).toContain(".shell [class*='bodyGrid'] {\n  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));")
-    expect(sidebarCss).toContain('grid-template-columns: minmax(max-content, 1fr) max-content;')
+    expect(sidebarCss).toContain('grid-template-columns: minmax(0, 1fr) max-content;')
     expect(sidebarCss).toContain(".shell .bodyCardFooter {\n  display: grid;")
     expect(sidebarCss).toContain('white-space: nowrap;')
-    expect(sidebarCss).toContain(".shell .bodyCardStats {\n  display: flex;\n  min-width: max-content;\n  flex-wrap: nowrap;")
+    expect(sidebarCss).toContain(".shell .bodyCardStats {\n  display: flex;\n  min-width: 0;\n  flex-wrap: nowrap;")
+    expect(sidebarCss).toContain('  overflow: hidden;')
   })
 })

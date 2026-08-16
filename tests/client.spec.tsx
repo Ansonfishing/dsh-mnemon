@@ -20,7 +20,7 @@ describe('MnemonView', () => {
     unsetPath: async () => {},
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { withInactiveBody?: boolean; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; reconnectPending?: boolean } = {}) {
+  function createConnection(options: { withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; reconnectPending?: boolean } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -46,7 +46,8 @@ describe('MnemonView', () => {
       ...(options.nativeUnhealthy === true ? { error: 'Mnemon Store 无法打开' } : {}),
       stats: { totalInsights: 12, deletedInsights: 0, edgeCount: 9, oplogCount: 20, dbSizeBytes: 4096, byCategory: {}, topEntities: [{ entity: 'SQLite', count: 2 }] },
     }
-    let secondaryActive = false
+    const includeSecondaryBody = options.withInactiveBody === true || options.withSecondActiveBody === true
+    let secondaryActive = options.withSecondActiveBody === true
     let mnemonVersionUpdated = false
     const secondaryBody = {
       ...body,
@@ -71,7 +72,7 @@ describe('MnemonView', () => {
       timeoutMs: 10000,
       defaultRecallLimit: 10,
       memoryBodyDirectory: '/tmp/mnemon/data',
-      memoryBodies: options.withInactiveBody ? [body, secondaryBody] : [body],
+      memoryBodies: includeSecondaryBody ? [body, secondaryBody] : [body],
       providerServices: [
         { providerId: 'openviking' as const, label: 'OpenViking', enabled: true, configured: true, status: 'healthy' as const, memoryBodyCount: 1, activeMemoryBodyCount: 1 },
         { providerId: 'mem0' as const, label: 'Mem0', enabled: false, configured: true, status: 'disabled' as const, memoryBodyCount: 1, activeMemoryBodyCount: 0 },
@@ -160,7 +161,7 @@ describe('MnemonView', () => {
       ? [baseDocument]
       : Array.from({ length: options.documentCount }, (_, index) => ({ ...baseDocument, id: `document-${String(index + 1).padStart(8, '0')}`, title: `档案条目 ${index + 1}`, filename: `document-${index + 1}.md`, relativePath: `.mnemon/documents/active/document-${index + 1}.md`, content: `# 档案条目 ${index + 1}\n\n正文 ${index + 1}`, excerpt: `档案摘要 ${index + 1}` }))
     const call = vi.fn(async (_channel: string, endpoint: string, payload?: Record<string, unknown>) => {
-      const bodies = options.withInactiveBody ? [body, { ...secondaryBody, active: secondaryActive }] : [body]
+      const bodies = includeSecondaryBody ? [body, { ...secondaryBody, active: secondaryActive }] : [body]
       if (endpoint === 'runtime-memory') {
         if (payload?.action !== undefined) {
           const target = String(payload.target)
@@ -220,9 +221,14 @@ describe('MnemonView', () => {
         return { ok: true, value: bodies.find(item => item.id === payload?.memoryBodyId) ?? body }
       }
       if (endpoint === 'body-metadata-maintain') {
-        body.name = '产品决策'
-        body.description = '记录稳定的产品范围、架构取舍与依据，在规划和复盘产品方向时召回。'
-        return { ok: true, value: { delegated: true, runId: 'metadata-child-1', provider: 'spawn', summary: '已更新产品决策元信息。', updates: [{ memoryBodyId: 'project', title: body.name, description: body.description }] } }
+        const memoryBodyId = Array.isArray(payload?.memoryBodyIds) ? String(payload.memoryBodyIds[0]) : ''
+        if (memoryBodyId === options.metadataFailureBodyId) return { ok: false, error: { code: 'metadata_failed', message: `${memoryBodyId} subagent failed` } }
+        const target = memoryBodyId === secondaryBody.id ? secondaryBody : body
+        target.name = memoryBodyId === secondaryBody.id ? '协作偏好' : '产品决策'
+        target.description = memoryBodyId === secondaryBody.id
+          ? '记录跨会话稳定的表达风格与协作偏好。'
+          : '记录稳定的产品范围、架构取舍与依据，在规划和复盘产品方向时召回。'
+        return { ok: true, value: { delegated: true, runId: `metadata-child-${memoryBodyId}`, provider: 'spawn', summary: `已更新${target.name}元信息。`, updates: [{ memoryBodyId, title: target.name, description: target.description }] } }
       }
       if (endpoint === 'graph') {
         if (options.graphPending === true) return await new Promise<never>(() => {})
@@ -779,6 +785,29 @@ describe('MnemonView', () => {
     expect(within(dialog).getByText('记录稳定的产品范围、架构取舍与依据，在规划和复盘产品方向时召回。')).toBeTruthy()
     expect(within(dialog).getByText('产品决策').closest('label')?.hasAttribute('data-refreshed')).toBe(true)
     expect(screen.queryByText('已更新产品决策元信息。')).toBeNull()
+  })
+
+  it('isolates concurrent metadata subagents and contains failures inside the affected card', async () => {
+    const { connection, call } = createConnection({ withSecondActiveBody: true, metadataFailureBodyId: 'preferences' })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'AI 维护元信息' }))
+    const dialog = screen.getByRole('dialog', { name: 'AI 维护记忆体元信息' })
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /项目记忆体/ }))
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /偏好记忆体/ }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'AI 生成（2）' }))
+
+    await waitFor(() => expect(within(dialog).getByText('产品决策')).toBeTruthy())
+    await waitFor(() => expect(within(dialog).getByText('失败：preferences subagent failed')).toBeTruthy())
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['project'], sessionId: 'session-1' })
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['preferences'], sessionId: 'session-1' })
+    expect(call).not.toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['project', 'preferences'], sessionId: 'session-1' })
+    expect(within(dialog).getByText('产品决策').closest('label')?.hasAttribute('data-refreshed')).toBe(true)
+    expect(within(dialog).getByText('偏好记忆体').closest('label')?.hasAttribute('data-failed')).toBe(true)
+    expect(screen.getByRole('dialog', { name: 'AI 维护记忆体元信息' })).toBe(dialog)
+    expect(screen.getByRole('button', { name: 'AI 维护元信息' }).hasAttribute('disabled')).toBe(false)
   })
 
   it('adds OpenViking through the existing Memory Space creation flow', async () => {

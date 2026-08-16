@@ -649,7 +649,7 @@
 }
 .shell .bodyCardFooter {
   display: grid;
-  grid-template-columns: minmax(max-content, 1fr) max-content;
+  grid-template-columns: minmax(0, 1fr) max-content;
   min-width: 0;
   align-items: center;
   gap: 10px;
@@ -659,10 +659,11 @@
 }
 .shell .bodyCardStats {
   display: flex;
-  min-width: max-content;
+  min-width: 0;
   flex-wrap: nowrap;
   align-items: center;
   gap: 10px;
+  overflow: hidden;
 }
 .shell .bodyCardFooter [class*='bodyCardActions'] {
   display: flex;
