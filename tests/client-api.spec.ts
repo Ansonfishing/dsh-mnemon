@@ -57,4 +57,13 @@ describe('MnemonClient turn activity batching', () => {
       placement: expect.objectContaining({ mode: 'automatic', rules: expect.objectContaining({ preference: 'shared-first' }) }),
     }))
   })
+
+  it('routes native backup operations to the selected workspace', async () => {
+    const call = vi.fn(async () => ({ ok: true as const, value: { root: '/workspace/.mnemon', scope: 'workspace' } }))
+    const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle, 'session-1', 'workspace-1')
+
+    await client.packTarget()
+
+    expect(call).toHaveBeenCalledWith(expect.any(String), 'target', { sessionId: 'session-1', workspaceId: 'workspace-1' })
+  })
 })

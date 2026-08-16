@@ -3,6 +3,7 @@ import type { ClientConnectionHandle, ClientSettingsScope, ClientSettingsSnapsho
 import css from './MnemonSettingsCard.module.css'
 import { translateZh, type MnemonTranslate } from './locales.ts'
 import { MnemonPackSection } from './MnemonPackSection.tsx'
+import { ProviderSettingsSection } from './ProviderSettingsSection.tsx'
 
 export interface MnemonSettingsCardProps {
   scope: ClientSettingsScope<Config>
@@ -10,6 +11,9 @@ export interface MnemonSettingsCardProps {
   interactionScope?: ClientSettingsScope<InteractionConfig>
   /** Loopback RPC used for whole-directory ZIP backup and restore. */
   connection?: ClientConnectionHandle
+  sessionId?: string
+  workspaceId?: string
+  workspaceLabel?: string
   t?: MnemonTranslate
 }
 
@@ -97,7 +101,7 @@ async function commit<T>(scope: ClientSettingsScope<T>, edits: SettingsOperation
 }
 
 /** Dedicated Mnemon page contributed directly to DSH's settings navigation. */
-export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, connection, t = translateZh }: MnemonSettingsCardProps): JSX.Element | null {
+export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, connection, sessionId, workspaceId, workspaceLabel, t = translateZh }: MnemonSettingsCardProps): JSX.Element | null {
   const interactionScope = suppliedInteractionScope ?? scope as unknown as ClientSettingsScope<InteractionConfig>
   const coreSnapshot = useScope(scope)
   const interactionSnapshot = useScope(interactionScope)
@@ -164,6 +168,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
 
   const coreDisabled = loading || saving || !coreSnapshot.writable
   const interactionDisabled = loading || saving || !interactionSnapshot.writable
+  const scopeChanging = dirty.has('storageScope') || dirty.has('dataDir')
   return (
     <section className={css.page} aria-label={t('config.aria')} aria-busy={saving || loading}>
       {loading ? <p className={css.loading} role="status">{t('common.loading')}</p> : <>
@@ -230,9 +235,19 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
                   />
                 </div>
               </div>}
-              <MnemonPackSection {...(connection === undefined ? {} : { connection })} refreshKey={targetRevision} t={t} embedded />
+              <MnemonPackSection {...(connection === undefined ? {} : { connection })} {...(sessionId === undefined ? {} : { sessionId })} {...(workspaceId === undefined ? {} : { workspaceId })} refreshKey={targetRevision} t={t} embedded />
             </div>
           </details>
+          <ProviderSettingsSection
+            {...(connection === undefined ? {} : { connection })}
+            {...(sessionId === undefined ? {} : { sessionId })}
+            {...(workspaceId === undefined ? {} : { workspaceId })}
+            {...(workspaceLabel === undefined ? {} : { workspaceLabel })}
+            refreshKey={targetRevision}
+            disabled={coreDisabled}
+            scopeChanging={scopeChanging}
+            t={t}
+          />
         </section>
 
         <section className={css.section} aria-labelledby="mnemon-interaction-heading">

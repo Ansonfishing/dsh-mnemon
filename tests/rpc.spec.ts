@@ -346,6 +346,12 @@ describe('Mnemon RPC', () => {
     expect(packs.importPack).toHaveBeenCalledWith('eA==', { mode: 'merge' })
     await expect(createPackHandler(packs, false)('import', { base64: 'eA==', mode: 'merge' })).resolves.toMatchObject({ ok: false, error: { code: 'internal' } })
 
+    const workspacePacks = { ...packs, target: vi.fn(() => ({ root: '/workspace/.mnemon', scope: 'workspace' })) } as unknown as MnemonPackManager
+    const route = vi.fn(() => ({ graph: { packs: workspacePacks } }))
+    const runtime = { route } as unknown as LiveMnemonRuntime
+    await expect(createPackHandler(runtime)('target', { sessionId: 'session-1', workspaceId: 'workspace-1' })).resolves.toMatchObject({ ok: true, value: { root: '/workspace/.mnemon' } })
+    expect(route).toHaveBeenCalledWith({ sessionId: 'session-1', workspaceId: 'workspace-1' })
+
     const handle = vi.fn()
     registerRpc({ rpc: { handle } } as unknown as HostConnectionHandle, fakeService(), undefined, undefined, undefined, packs)
     expect(handle).toHaveBeenCalledWith(MNEMON_PACK_CHANNEL, expect.any(Function), { authority: 'loopback' })

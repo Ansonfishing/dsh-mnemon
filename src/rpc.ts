@@ -23,6 +23,10 @@ function isRoutedRuntime(value: RuntimeInput): value is LiveMnemonRuntime {
   return 'route' in value && typeof value.route === 'function'
 }
 
+function isRoutedPackInput(value: MnemonPackManager | LiveMnemonRuntime): value is LiveMnemonRuntime {
+  return 'route' in value && typeof value.route === 'function'
+}
+
 function requestedScope(payload: Record<string, unknown>): { workspaceId?: string; sessionId?: string } {
   const workspaceId = payload.workspaceId === undefined ? undefined : String(payload.workspaceId).trim()
   const sessionId = payload.sessionId === undefined ? undefined : String(payload.sessionId).trim()
@@ -449,10 +453,13 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
 }
 
 /** Backup payloads contain private memory and therefore remain loopback-only. */
-export function createPackHandler(manager: MnemonPackManager, writeEnabled: boolean | (() => boolean) = true): HostRpcHandler {
+export function createPackHandler(input: MnemonPackManager | LiveMnemonRuntime, writeEnabled: boolean | (() => boolean) = true): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
       const payload = object(rawPayload)
+      const manager = isRoutedPackInput(input)
+        ? input.route(requestedScope(payload)).graph.packs
+        : input
       if (endpoint === 'target') return success(manager.target())
       if (endpoint === 'export') return success(await manager.exportPack('full'))
       if (endpoint === 'inspect') return success(manager.inspectPack(String(payload.base64 ?? ''), payload.fileName === undefined ? undefined : String(payload.fileName)))
@@ -473,7 +480,7 @@ export function registerRpc(connection: HostConnectionHandle, input: RuntimeInpu
   const versionManager = versions ?? new VersionUpdateManager({ mnemonCliPath: () => findVersionCli(input) })
   connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(input, lifecycle, runtimeMemory, storage, versionManager), { authority: 'trusted-host' })
   connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(input, lifecycle, runtimeMemory, versionManager), { authority: 'loopback' })
-  const packManager = isRoutedRuntime(input) ? input.packs : packs
+  const packManager = isRoutedRuntime(input) ? input : packs
   const config = input.config
   if (packManager !== undefined) connection.rpc.handle(MNEMON_PACK_CHANNEL, createPackHandler(packManager, () => config.writeEnabled), { authority: 'loopback' })
 }

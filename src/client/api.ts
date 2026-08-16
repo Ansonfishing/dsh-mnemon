@@ -221,18 +221,18 @@ export class MnemonClient {
   }
 
   packTarget(): Promise<{ root: string; scope: 'global' | 'workspace' | 'custom' }> {
-    return this.call(MNEMON_PACK_CHANNEL, 'target', {})
+    return this.call(MNEMON_PACK_CHANNEL, 'target', this.scoped())
   }
 
   exportPack(): Promise<MnemonPackExport> {
-    return this.call(MNEMON_PACK_CHANNEL, 'export', {})
+    return this.call(MNEMON_PACK_CHANNEL, 'export', this.scoped())
   }
 
   inspectPack(base64: string, fileName?: string): Promise<MnemonPackPreview> {
-    return this.call(MNEMON_PACK_CHANNEL, 'inspect', { base64, ...(fileName === undefined ? {} : { fileName }) })
+    return this.call(MNEMON_PACK_CHANNEL, 'inspect', this.scoped({ base64, ...(fileName === undefined ? {} : { fileName }) }))
   }
 
   importPack(base64: string): Promise<MnemonPackImportResult> {
-    return this.call(MNEMON_PACK_CHANNEL, 'import', { base64 })
+    return this.call(MNEMON_PACK_CHANNEL, 'import', this.scoped({ base64 }))
   }
 }

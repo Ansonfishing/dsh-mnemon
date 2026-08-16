@@ -108,8 +108,9 @@
 .providerIdentity strong { font-size: 14px; font-weight: 500; line-height: 21px; }
 .providerIdentity small { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 17px; }
 .nativeMark { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border-radius: 10px; color: var(--dsw-alias-label-primary-foreground); background: var(--dsw-alias-label-primary); font-size: 14px; font-style: normal; font-weight: 600; }
+.providerMark { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-2); font-size: 13px; font-style: normal; font-weight: 600; }
 .providerState { flex: 0 0 auto; border-radius: 999px; padding: 3px 8px; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-layer-2); font-size: 10px; line-height: 16px; }
-.providerPanelBody { display: flex; flex-direction: column; padding: 0 14px 14px; }
+.providerPanelBody { display: flex; flex-direction: column; gap: 12px; padding: 0 14px 14px; }
 
 .nativeLocation {
   display: flex;
@@ -128,6 +129,71 @@
 .inlineChoices input:disabled + span { cursor: default; opacity: .42; }
 
 .embeddedSection { display: flex; min-width: 0; flex-direction: column; gap: 10px; border-top: 1px solid var(--dsw-alias-border-l2); padding-top: 13px; }
+
+.memoryConfig {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.memoryConfig:first-child { margin-top: 12px; }
+.memoryConfigHeader { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; }
+.memoryConfigHeader > div { display: flex; min-width: 0; flex-direction: column; }
+.memoryConfigHeader strong { overflow: hidden; font-size: 13px; font-weight: 500; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
+.memoryConfigHeader small { color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 16px; }
+
+.configActive { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; color: var(--dsw-alias-label-secondary); cursor: pointer; font-size: 11px; }
+.configActive input { accent-color: var(--dsw-alias-label-primary); }
+
+.providerIdentityFields,
+.providerSettingsGrid { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.providerIdentityFields > label,
+.providerFieldControl > label:not(.providerBoolean):not(.providerSecretClear) { display: flex; min-width: 0; flex-direction: column; gap: 4px; color: var(--dsw-alias-label-secondary); font-size: 10px; line-height: 16px; }
+.providerIdentityFields input,
+.providerFieldControl input:not([type='checkbox']),
+.providerFieldControl select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  outline: none;
+  padding: 0 10px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-3);
+  font: inherit;
+  font-size: 12px;
+}
+
+.providerIdentityFields input:focus-visible,
+.providerFieldControl input:focus-visible,
+.providerFieldControl select:focus-visible { box-shadow: 0 0 0 2px var(--dsw-alias-border-l3); }
+.providerIdentityFields input:disabled,
+.providerFieldControl input:disabled,
+.providerFieldControl select:disabled { opacity: .5; }
+.providerFieldControl { display: flex; min-width: 0; flex-direction: column; justify-content: flex-end; gap: 3px; }
+.providerBoolean { display: flex; min-height: 36px; align-items: center; gap: 7px; color: var(--dsw-alias-label-secondary); font-size: 11px; }
+.providerBoolean input { accent-color: var(--dsw-alias-label-primary); }
+.providerSecretClear { display: inline-flex; align-items: center; gap: 5px; color: var(--dsw-alias-label-tertiary); font-size: 9px; line-height: 14px; }
+.providerSecretClear input { accent-color: var(--dsw-alias-state-error-primary); }
+
+.memoryConfigFooter { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--dsw-alias-border-l2); padding-top: 10px; }
+.memoryConfigFooter > div { display: flex; align-items: center; gap: 6px; }
+.configFeedback { min-width: 0; flex: 1; font-size: 10px; line-height: 15px; }
+.addConfigButton { appearance: none; min-height: 36px; border: 1px dashed var(--dsw-alias-border-l2); border-radius: 10px; color: var(--dsw-alias-label-secondary); background: transparent; cursor: pointer; font-size: 11px; }
+.addConfigButton:hover:not(:disabled) { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+.addConfigButton:disabled { cursor: default; opacity: .4; }
+.scopeChanging,
+.providerTarget,
+.providerLoading { margin: 0; border-radius: 10px; padding: 8px 10px; color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-bg-layer-2); font-size: 10px; line-height: 16px; }
+.scopeChanging { color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-label-secondary)); }
+.providerTarget { margin-top: -4px; background: transparent; padding: 0; }
+.providerLoadError { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 11px; }
 
 .choiceCard { display: block; min-width: 0; cursor: pointer; }
 .choiceCard > input, .toggleRow > input, .visuallyHidden {
@@ -368,6 +434,14 @@
   .importBar .primaryPill { grid-column: 1 / -1; }
   .actionsVisible { align-items: stretch; flex-direction: column; }
   .actions > div, .actions button { flex: 1; }
+  .nativeLocation { align-items: stretch; flex-direction: column; gap: 9px; }
+  .inlineChoices { width: 100%; }
+  .inlineChoices label { flex: 1; }
+  .inlineChoices span { width: 100%; justify-content: center; }
+  .providerIdentityFields, .providerSettingsGrid { grid-template-columns: minmax(0, 1fr); }
+  .memoryConfigFooter { align-items: stretch; flex-direction: column; }
+  .memoryConfigFooter > div:last-child { width: 100%; }
+  .memoryConfigFooter button { flex: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {

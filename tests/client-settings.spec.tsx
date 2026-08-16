@@ -88,7 +88,7 @@ describe('MnemonSettingsCard', () => {
 
     render(<MnemonSettingsCard scope={scope} t={translateEn} />)
 
-    expect(screen.getByRole('radiogroup', { name: 'Mnemon storage scope' })).toBeTruthy()
+    expect(screen.getByRole('radiogroup', { name: 'Memory system scope' })).toBeTruthy()
     fireEvent.click(screen.getByRole('radio', { name: /Workspace/ }))
     expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
   })
@@ -260,7 +260,7 @@ describe('MnemonSettingsCard', () => {
 
     expect(screen.getByRole('status').textContent).toBe('载入中…')
     expect(screen.queryByText('当前部署的插件设置为只读。')).toBeNull()
-    expect(screen.queryByRole('radiogroup', { name: 'Mnemon 存储范围' })).toBeNull()
+    expect(screen.queryByRole('radiogroup', { name: '记忆系统范围' })).toBeNull()
   })
 
   it('persists live interaction toggles as one atomic mnemon-ui mutation', async () => {
@@ -342,6 +342,53 @@ describe('MnemonSettingsCard', () => {
     expect(view.queryByLabelText('记忆工具卡')).toBeNull()
     expect((view.getByLabelText('回合记忆条') as HTMLInputElement).checked).toBe(true)
     expect((view.getByLabelText('存入记忆按钮') as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('creates a ready-to-use external Memory Space from its provider panel', async () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'workspace' as const },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+    const provider = {
+      id: 'openviking' as const,
+      label: 'OpenViking', kind: 'remote' as const, origin: 'hermes-inspired' as const, summary: 'Shared memory',
+      capabilities: { search: true, browse: true, graph: false, entities: false, related: false, remember: true, link: false, forget: true, writeMode: 'async-extracting' as const, deletionMode: 'hard' as const },
+      fields: [
+        { key: 'endpoint', label: 'Endpoint', input: 'url' as const, required: true, defaultValue: 'http://127.0.0.1:1933' },
+        { key: 'targetUri', label: 'Memory URI', input: 'text' as const, required: true, defaultValue: 'viking://user/memories' },
+      ],
+    }
+    const call = vi.fn(async (channel: string, endpoint: string) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'bodies') return { ok: true as const, value: { items: [], providers: [{ id: 'mnemon-native', label: 'Mnemon Native', kind: 'local', origin: 'native', summary: 'Native', capabilities: provider.capabilities, fields: [] }, provider], total: 0, activeCount: 0, directory: '/workspace/.mnemon/data', generatedAt: '2026-08-17T00:00:00.000Z' } }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'body-create') return { ok: true as const, value: {} }
+      if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/workspace/.mnemon', scope: 'workspace' } }
+      throw new Error(`unexpected ${channel} ${endpoint}`)
+    })
+    const connection = { rpc: { call } } as ClientConnectionHandle
+
+    render(<MnemonSettingsCard scope={scope} connection={connection} sessionId="session-1" workspaceId="workspace-1" workspaceLabel="dsh-mnemon" />)
+
+    await waitFor(() => expect(screen.getByText('OpenViking')).toBeTruthy())
+    fireEvent.click(screen.getByText('OpenViking'))
+    expect((screen.getByLabelText('服务地址') as HTMLInputElement).value).toBe('http://127.0.0.1:1933')
+    fireEvent.click(screen.getByRole('button', { name: '保存并启用' }))
+
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'body-create', {
+      name: 'OpenViking 记忆体',
+      description: '由 dsh-mnemon 使用的 OpenViking 长期记忆。',
+      active: true,
+      providerId: 'openviking',
+      connection: { endpoint: 'http://127.0.0.1:1933', targetUri: 'viking://user/memories' },
+      sessionId: 'session-1',
+      workspaceId: 'workspace-1',
+    }))
   })
 
   it('previews and safely imports one complete directory ZIP', async () => {

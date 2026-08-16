@@ -6,6 +6,8 @@ import css from './MnemonSettingsCard.module.css'
 
 interface MnemonPackSectionProps {
   connection?: ClientConnectionHandle
+  sessionId?: string
+  workspaceId?: string
   refreshKey: number
   t: MnemonTranslate
   embedded?: boolean
@@ -56,8 +58,8 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function MnemonPackSection({ connection, refreshKey, t, embedded = false }: MnemonPackSectionProps): JSX.Element {
-  const client = useMemo(() => connection === undefined ? null : new MnemonClient(connection), [connection])
+export function MnemonPackSection({ connection, sessionId, workspaceId, refreshKey, t, embedded = false }: MnemonPackSectionProps): JSX.Element {
+  const client = useMemo(() => connection === undefined ? null : new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
   const input = useRef<HTMLInputElement | null>(null)
   const [target, setTarget] = useState<{ root: string; scope: 'global' | 'workspace' | 'custom' } | null>(null)
   const [pending, setPending] = useState<PendingZip | null>(null)
