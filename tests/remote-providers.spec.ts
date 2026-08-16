@@ -106,6 +106,23 @@ describe('third-party remote memory providers', () => {
     })
   })
 
+  it('supplies stable Honcho peers when a discovered workspace uses wildcard scope', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = []
+    const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
+      requests.push({ url: String(url), ...(init === undefined ? {} : { init }) })
+      return response([])
+    })
+    const { registry, body } = await providerBody('honcho', {
+      endpoint: 'https://api.honcho.dev', workspace: 'dsh-lab', userId: '*', agentId: '*',
+    })
+
+    await new HonchoProvider(registry, { fetch: fetchMock }).search(body, { query: 'provider routing', limit: 5 })
+
+    expect(JSON.parse(String(requests[0]?.init?.body))).toEqual({
+      query: 'provider routing', top_k: 5, filters: { observer_id: 'dsh', observed_id: 'dsh-user' },
+    })
+  })
+
   it('maps Hindsight recall, graph traversal, asynchronous retain, and soft forget', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = []
     const fetchMock = vi.fn<typeof fetch>(async (url, init) => {

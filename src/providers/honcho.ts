@@ -66,7 +66,10 @@ export class HonchoProvider extends HttpMemoryProvider implements MemoryProvider
       json: {
         query: request.query,
         top_k: Math.min(request.limit ?? 10, 100),
-        filters: this.scope(connection),
+        // Honcho semantic query requires both peers even when discovery mapped
+        // the workspace-wide body with wildcard scope. Use the same stable
+        // DSH peer defaults as explicit writes so native recall remains valid.
+        filters: this.scope(connection, true),
       },
       signal,
     })
@@ -126,12 +129,12 @@ export class HonchoProvider extends HttpMemoryProvider implements MemoryProvider
     return `/v3/workspaces/${encodeURIComponent(String(connection.workspace))}`
   }
 
-  private scope(connection: Record<string, string | number | boolean>): Record<string, JsonValue> {
+  private scope(connection: Record<string, string | number | boolean>, requirePeers = false): Record<string, JsonValue> {
     const agentId = String(connection.agentId)
     const userId = String(connection.userId)
     return {
-      ...(agentId === '*' ? {} : { observer_id: agentId }),
-      ...(userId === '*' ? {} : { observed_id: userId }),
+      ...(agentId === '*' ? requirePeers ? { observer_id: 'dsh' } : {} : { observer_id: agentId }),
+      ...(userId === '*' ? requirePeers ? { observed_id: 'dsh-user' } : {} : { observed_id: userId }),
     }
   }
 
