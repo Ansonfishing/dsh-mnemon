@@ -154,10 +154,10 @@
 .readSources > header > button { min-height: 26px; flex: 0 0 auto; border: 1px solid var(--mn-line); border-radius: 7px; padding: 0 8px; color: var(--mn-muted); background: var(--mn-layer-2); font-size: 9px; cursor: pointer; }
 .readSources > header > button[data-selected] { border-color: color-mix(in srgb, var(--mn-accent) 42%, var(--mn-line)); color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 7%, var(--mn-layer-2)); }
 .readSources > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 6px; }
-.readSourceCard { display: grid; min-width: 0; min-height: 54px; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 8px; border: 1px solid var(--mn-line); border-radius: 8px; padding: 7px 8px; color: var(--mn-text); background: var(--mn-layer-1); text-align: left; }
+.readSourceCard { display: grid; min-width: 0; min-height: 58px; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 8px; border: 1px solid var(--mn-line); border-radius: 8px; padding: 7px 8px 7px 11px; color: var(--mn-text); background: linear-gradient(90deg, color-mix(in srgb, var(--mn-provider-color) 5%, var(--mn-layer-1)), var(--mn-layer-1) 34%); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--mn-provider-color) 68%, transparent); text-align: left; }
 button.readSourceCard { cursor: pointer; }
-button.readSourceCard:hover { border-color: var(--mn-line-strong); background: var(--mn-hover); }
-.readSourceCard[data-selected] { border-color: color-mix(in srgb, var(--mn-accent) 48%, var(--mn-line)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mn-accent) 10%, transparent); }
+button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider-color) 32%, var(--mn-line-strong)); background: linear-gradient(90deg, color-mix(in srgb, var(--mn-provider-color) 8%, var(--mn-hover)), var(--mn-hover) 40%); }
+.readSourceCard[data-selected] { border-color: color-mix(in srgb, var(--mn-accent) 48%, var(--mn-line)); box-shadow: inset 3px 0 0 var(--mn-provider-color), inset 0 0 0 1px color-mix(in srgb, var(--mn-accent) 10%, transparent); }
 .readSourceSignal { width: 7px; height: 7px; border-radius: 50%; background: var(--mn-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mn-success) 12%, transparent); }
 .readSourceCard[data-mode="projection"] .readSourceSignal, .readSourceCard[data-mode="enumerable"] .readSourceSignal { background: #6574d9; box-shadow: 0 0 0 3px color-mix(in srgb, #6574d9 14%, transparent); }
 .readSourceCard[data-mode="query-only"] .readSourceSignal { background: #c38a32; box-shadow: 0 0 0 3px color-mix(in srgb, #c38a32 14%, transparent); }
@@ -165,7 +165,8 @@ button.readSourceCard:hover { border-color: var(--mn-line-strong); background: v
 .readSourceCard[data-status="empty"] .readSourceSignal { background: var(--mn-faint); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mn-faint) 12%, transparent); }
 .readSourceIdentity, .readSourceState { display: grid; min-width: 0; gap: 1px; }
 .readSourceIdentity strong { overflow: hidden; font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
-.readSourceIdentity small { overflow: hidden; color: var(--mn-faint); font-size: 8.5px; text-overflow: ellipsis; white-space: nowrap; }
+.readSourceMeta { display: flex; min-width: 0; align-items: center; gap: 5px; margin-top: 3px; }
+.readSourceMeta > small { overflow: hidden; color: var(--mn-faint); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .readSourceState { justify-items: end; text-align: right; }
 .readSourceState em { width: fit-content; padding: 2px 5px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 9%, transparent); font: 650 8px var(--mn-code); font-style: normal; white-space: nowrap; }
 .readSourceState small { color: var(--mn-faint); font-size: 8px; white-space: nowrap; }
@@ -181,8 +182,8 @@ button.readSourceCard:hover { border-color: var(--mn-line-strong); background: v
 .bodyDirectoryEmpty > span { font-size: 28px; opacity: .6; }
 .bodyDirectoryEmpty strong { display: block; color: var(--mn-text); }
 .bodyDirectoryEmpty p { margin: 3px 0 0; font-size: 10px; }
-.bodyCard { --mn-body-accent: var(--mn-success); min-width: 0; padding: 9px 10px; border: 1px solid var(--mn-line); border-radius: 9px; background: var(--mn-layer-1); opacity: .7; transition: opacity .18s, border-color .18s; }
-.bodyCard[data-active] { border-color: color-mix(in srgb, var(--mn-body-accent) 42%, var(--mn-line)); opacity: 1; box-shadow: inset 0 1px 0 color-mix(in srgb, var(--mn-body-accent) 10%, transparent); }
+.bodyCard { --mn-body-accent: var(--mn-success); min-width: 0; padding: 9px 10px 9px 13px; border: 1px solid var(--mn-line); border-radius: 9px; background: linear-gradient(90deg, color-mix(in srgb, var(--mn-provider-color) 4%, var(--mn-layer-1)), var(--mn-layer-1) 28%); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--mn-provider-color) 54%, transparent); opacity: .7; transition: opacity .18s, border-color .18s; }
+.bodyCard[data-active] { border-color: color-mix(in srgb, var(--mn-body-accent) 42%, var(--mn-line)); opacity: 1; box-shadow: inset 3px 0 0 color-mix(in srgb, var(--mn-provider-color) 78%, transparent), inset 0 1px 0 color-mix(in srgb, var(--mn-body-accent) 10%, transparent); }
 .bodyCardTop { display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .bodySignal { width: 7px; height: 7px; border-radius: 50%; background: var(--mn-faint); }
 .bodyCard[data-active] .bodySignal { background: var(--mn-body-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mn-body-accent) 14%, transparent); }
@@ -194,8 +195,18 @@ button.readSourceCard:hover { border-color: var(--mn-line-strong); background: v
 .bodyCard:not([data-healthy]) .bodyHealth { color: var(--mn-danger); }
 .mnemonDefaultBadge { width: fit-content; padding: 2px 5px; border: 1px solid color-mix(in srgb, var(--mn-accent) 24%, var(--mn-line)); border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 7%, transparent); font: 650 8px var(--mn-code); white-space: nowrap; }
 .bodyProviderRow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 2px; }
-.providerBadge { width: fit-content; padding: 2px 6px; border: 1px solid color-mix(in srgb, var(--mn-line-strong) 82%, transparent); border-radius: 999px; color: var(--mn-muted); background: color-mix(in srgb, var(--mn-layer-2) 84%, transparent); font: 650 8px var(--mn-code); white-space: nowrap; }
-.providerBadge[data-provider="openviking"] { border-color: color-mix(in srgb, #6574d9 38%, var(--mn-line)); color: color-mix(in srgb, #8793ef 80%, var(--mn-text)); background: color-mix(in srgb, #6574d9 11%, transparent); }
+.providerBadge { display: inline-flex; width: fit-content; min-height: 17px; max-width: 100%; flex: 0 0 auto; align-items: center; justify-content: center; padding: 2px 6px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--mn-provider-color) 34%, var(--mn-line)); border-radius: 999px; color: color-mix(in srgb, var(--mn-provider-color) 78%, var(--mn-text)); background: color-mix(in srgb, var(--mn-provider-color) 10%, var(--mn-layer-1)); font: 650 8px/11px var(--mn-code); text-align: center; text-overflow: ellipsis; vertical-align: middle; white-space: nowrap; }
+
+.providerBadge, .readSourceCard, .bodyCard, .graphNode { --mn-provider-color: #64748b; }
+.providerBadge[data-provider="mnemon-native"], .readSourceCard[data-provider="mnemon-native"], .bodyCard[data-provider="mnemon-native"], .graphNode[data-provider="mnemon-native"] { --mn-provider-color: #64748b; }
+.providerBadge[data-provider="openviking"], .readSourceCard[data-provider="openviking"], .bodyCard[data-provider="openviking"], .graphNode[data-provider="openviking"] { --mn-provider-color: #3b82d0; }
+.providerBadge[data-provider="honcho"], .readSourceCard[data-provider="honcho"], .bodyCard[data-provider="honcho"], .graphNode[data-provider="honcho"] { --mn-provider-color: #c44fcf; }
+.providerBadge[data-provider="mem0"], .readSourceCard[data-provider="mem0"], .bodyCard[data-provider="mem0"], .graphNode[data-provider="mem0"] { --mn-provider-color: #8b5cf6; }
+.providerBadge[data-provider="hindsight"], .readSourceCard[data-provider="hindsight"], .bodyCard[data-provider="hindsight"], .graphNode[data-provider="hindsight"] { --mn-provider-color: #0891b2; }
+.providerBadge[data-provider="holographic"], .readSourceCard[data-provider="holographic"], .bodyCard[data-provider="holographic"], .graphNode[data-provider="holographic"] { --mn-provider-color: #6366d9; }
+.providerBadge[data-provider="retaindb"], .readSourceCard[data-provider="retaindb"], .bodyCard[data-provider="retaindb"], .graphNode[data-provider="retaindb"] { --mn-provider-color: #d08a28; }
+.providerBadge[data-provider="byterover"], .readSourceCard[data-provider="byterover"], .bodyCard[data-provider="byterover"], .graphNode[data-provider="byterover"] { --mn-provider-color: #0f9a83; }
+.providerBadge[data-provider="supermemory"], .readSourceCard[data-provider="supermemory"], .bodyCard[data-provider="supermemory"], .graphNode[data-provider="supermemory"] { --mn-provider-color: #df4d72; }
 .bodySwitch { display: flex; min-height: 32px; align-items: center; gap: 6px; border: 0; padding: 0 1px; color: var(--mn-faint); background: transparent; font-size: 9.5px; cursor: pointer; }
 .bodySwitchTrack { position: relative; width: 29px; height: 17px; flex: 0 0 auto; border: 1px solid var(--mn-line-strong); border-radius: 999px; background: var(--mn-layer-2); transition: border-color .18s, background-color .18s; }
 .bodySwitchTrack i { position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--mn-faint); transition: transform .2s cubic-bezier(.2, .8, .2, 1), background-color .18s; }
@@ -360,7 +371,7 @@ button.readSourceCard:hover { border-color: var(--mn-line-strong); background: v
 .graphNode[data-category="fact"] { --node: #4d7cfe; }
 .graphNode[data-category="insight"] { --node: #19a77d; }
 .graphNode[data-category="context"] { --node: #d8a624; }
-.graphNode[data-kind="space"] { --node: var(--mn-success); }
+.graphNode[data-kind="space"] { --node: var(--mn-provider-color); }
 .graphNode[data-kind="entity"] { --node: #2b9db9; }
 .nodeHalo { fill: color-mix(in srgb, var(--node) 18%, var(--mn-layer-1)); stroke: color-mix(in srgb, var(--node) 60%, var(--mn-layer-1)); stroke-width: 1.5; transition: r .16s; }
 .nodeCore { fill: var(--node); }
@@ -378,7 +389,8 @@ button.readSourceCard:hover { border-color: var(--mn-line-strong); background: v
 .inspectorHeading { display: flex; align-items: center; justify-content: space-between; }
 .inspectorHeading button, .sectionHeading button { display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: 7px; color: var(--mn-muted); background: transparent; cursor: pointer; }
 .inspectorHeading button:hover, .sectionHeading button:hover { background: var(--mn-hover); }
-.categoryChip { display: inline-flex; margin-top: 24px; padding: 3px 8px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 10%, transparent); font-size: 10px; }
+.inspectorChips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 24px; }
+.categoryChip { display: inline-flex; padding: 3px 8px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 10%, transparent); font-size: 10px; }
 .inspectorTitleRow { display: flex; min-width: 0; align-items: flex-start; gap: 8px; margin: 12px 0 20px; }
 .inspectorTitle { display: -webkit-box; min-width: 0; flex: 1; margin: 0; overflow: hidden; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; -webkit-box-orient: vertical; -webkit-line-clamp: 6; }
 .inspectorEye { display: grid; width: 27px; height: 27px; flex: 0 0 auto; place-items: center; border: 1px solid var(--mn-line); border-radius: 7px; color: var(--mn-muted); background: var(--mn-layer-1); cursor: pointer; transition: color .15s, border-color .15s, background-color .15s; }

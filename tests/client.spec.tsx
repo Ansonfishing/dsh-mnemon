@@ -414,6 +414,11 @@ describe('MnemonView', () => {
     expect(within(snapshot).getByText('内容投影')).toBeTruthy()
     expect(within(snapshot).getByText('仅查询')).toBeTruthy()
     expect(within(snapshot).getByText(/2 条真实关系/)).toBeTruthy()
+    expect(within(snapshot).getAllByText('Mnemon').length).toBeGreaterThan(0)
+    const openVikingSnapshot = within(snapshot).getByText('OpenViking 团队知识').closest('article')
+    expect(openVikingSnapshot?.getAttribute('data-provider')).toBe('openviking')
+    expect(openVikingSnapshot?.querySelector('[data-provider="openviking"]')?.textContent).toBe('OpenViking')
+    expect(document.querySelector('[data-kind="space"][data-provider="mnemon-native"]')).toBeTruthy()
 
     const memoryTabs = screen.getByRole('tablist', { name: '记忆体页面' })
     fireEvent.click(within(memoryTabs).getByRole('tab', { name: '检索' }))
@@ -423,6 +428,9 @@ describe('MnemonView', () => {
     expect(within(recallSources).getByText('项目记忆体')).toBeTruthy()
     expect(within(recallSources).getByText('Mem0 用户画像')).toBeTruthy()
     expect(within(recallSources).getByText('已连接 · 暂无内容')).toBeTruthy()
+    const mem0RecallSource = within(recallSources).getByText('Mem0 用户画像').closest('article')
+    expect(mem0RecallSource?.getAttribute('data-provider')).toBe('mem0')
+    expect(mem0RecallSource?.querySelector('[data-provider="mem0"]')?.textContent).toBe('Mem0')
 
     fireEvent.click(within(memoryTabs).getByRole('tab', { name: '内容' }))
     const contentSources = await screen.findByRole('region', { name: 'Provider 内容模型' })
