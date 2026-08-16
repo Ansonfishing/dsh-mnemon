@@ -110,6 +110,36 @@ export interface ResolvedInteractionConfig {
 
 export type MemoryProviderId = 'mnemon-native' | 'openviking'
 
+export type MemoryPlacementCapability = 'graph' | 'entities' | 'related' | 'exact-write' | 'link' | 'forget'
+export type MemoryPlacementPreference = 'balanced' | 'local-first' | 'shared-first'
+
+export interface MemoryPlacementRules {
+  allowedProviderIds?: MemoryProviderId[]
+  dataBoundary?: 'allow-remote' | 'local-only'
+  requiredCapabilities?: MemoryPlacementCapability[]
+  preference?: MemoryPlacementPreference
+}
+
+export interface AutomaticMemoryPlacementRequest {
+  mode: 'automatic'
+  /** User-authored routing guidance. Hard rules above always take precedence. */
+  prompt?: string
+  rules?: MemoryPlacementRules
+}
+
+export interface MemoryPlacementDecision {
+  mode: 'automatic'
+  providerId: MemoryProviderId
+  decidedBy: 'rules' | 'llm'
+  reason: string
+  confidence: 'high' | 'medium' | 'low'
+  candidateProviderIds: MemoryProviderId[]
+  appliedRules: string[]
+  decidedAt: string
+  runId?: string
+  subagentProvider?: string
+}
+
 export interface MemoryProviderCapabilities {
   search: boolean
   browse: boolean
@@ -152,6 +182,7 @@ export interface MemoryBody {
   active: boolean
   dbPath: string
   provider: MemoryBodyProvider
+  placement?: MemoryPlacementDecision
   createdAt: string
   updatedAt: string
 }
@@ -162,6 +193,7 @@ export interface CreateMemoryBodyRequest {
   active?: boolean
   providerId?: MemoryProviderId
   openViking?: OpenVikingBodyConnection
+  placement?: AutomaticMemoryPlacementRequest
 }
 
 export interface UpdateMemoryBodyRequest {
