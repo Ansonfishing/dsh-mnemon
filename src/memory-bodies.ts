@@ -3,12 +3,19 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, w
 import { basename, dirname, join } from 'node:path'
 import type { MnemonRunner, MnemonTextCommand } from './runner.ts'
 import type { MemoryPlacementCandidate } from './provider-placement.ts'
+import {
+  MEMORY_PROVIDER_CATALOG,
+  isMemoryProviderId,
+  memoryProviderDescriptor,
+  normalizeProviderConnection,
+  publicProviderConnection,
+} from './providers/catalog.ts'
 import type {
   CreateMemoryBodyRequest,
   MemoryBody,
   MemoryBodyProvider,
   MemoryPlacementDecision,
-  MemoryProviderCapabilities,
+  MemoryProviderConnection,
   MemoryProviderId,
   OpenVikingBodyConnection,
   UpdateMemoryBodyRequest,
@@ -17,34 +24,8 @@ import type {
 export type { CreateMemoryBodyRequest, MemoryBody, UpdateMemoryBodyRequest } from './shared/contracts.ts'
 
 const NATIVE_REGISTRY_VERSION = 1
-const PROVIDER_REGISTRY_VERSION = 1
+const PROVIDER_REGISTRY_VERSION = 2
 const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/
-
-const NATIVE_CAPABILITIES: MemoryProviderCapabilities = {
-  search: true,
-  browse: true,
-  graph: true,
-  entities: true,
-  related: true,
-  remember: true,
-  link: true,
-  forget: true,
-  writeMode: 'exact',
-  deletionMode: 'soft',
-}
-
-const OPENVIKING_CAPABILITIES: MemoryProviderCapabilities = {
-  search: true,
-  browse: true,
-  graph: false,
-  entities: false,
-  related: false,
-  remember: true,
-  link: false,
-  forget: false,
-  writeMode: 'async-extracting',
-  deletionMode: 'hard',
-}
 
 interface StoredOpenVikingConnection {
   endpoint: string
@@ -57,10 +38,12 @@ interface StoredOpenVikingConnection {
 
 interface StoredMemoryBody extends Omit<MemoryBody, 'dbPath' | 'provider'> {
   providerId: MemoryProviderId
+  connection?: MemoryProviderConnection
+  /** Provider-registry v1 compatibility; migrated to connection on load. */
   openViking?: StoredOpenVikingConnection
 }
 
-interface StoredNativeMemoryBody extends Omit<StoredMemoryBody, 'providerId' | 'openViking'> {}
+interface StoredNativeMemoryBody extends Omit<StoredMemoryBody, 'providerId' | 'connection' | 'openViking'> {}
 
 interface NativeRegistryFile {
   version: 1
@@ -73,7 +56,7 @@ interface LegacyProviderRegistryFile {
 }
 
 interface ProviderRegistryFile {
-  version: 1
+  version: 1 | 2
   bodies: StoredMemoryBody[]
 }
 
@@ -90,32 +73,8 @@ function optionalText(value: string | undefined, label: string, max: number): st
   return normalized
 }
 
-function normalizeEndpoint(value: string): string {
-  const normalized = requiredText(value, 'OpenViking endpoint', 2000).replace(/\/+$/, '')
-  let url: URL
-  try { url = new URL(normalized) } catch { throw new Error('OpenViking endpoint must be a valid http(s) URL') }
-  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('OpenViking endpoint must use http or https')
-  if (url.username !== '' || url.password !== '') throw new Error('OpenViking endpoint must not contain credentials')
-  return normalized
-}
-
-function normalizeTargetUri(value: string): string {
-  const normalized = requiredText(value, 'OpenViking memory URI', 2000).replace(/\/+$/, '')
-  if (!/^viking:\/\/user(?:\/[^/]+)?\/memories$/u.test(normalized)) {
-    throw new Error('OpenViking memory URI must be a viking://user/.../memories root')
-  }
-  return normalized
-}
-
-function normalizeOpenViking(connection: OpenVikingBodyConnection): StoredOpenVikingConnection {
-  return {
-    endpoint: normalizeEndpoint(connection.endpoint),
-    targetUri: normalizeTargetUri(connection.targetUri),
-    apiKey: optionalText(connection.apiKey, 'OpenViking API key', 8000),
-    account: optionalText(connection.account, 'OpenViking account', 200),
-    user: optionalText(connection.user, 'OpenViking user', 200),
-    actorPeerId: optionalText(connection.actorPeerId, 'OpenViking actor peer', 200),
-  }
+function legacyOpenVikingConnection(connection: StoredOpenVikingConnection | OpenVikingBodyConnection): MemoryProviderConnection {
+  return normalizeProviderConnection('openviking', connection as unknown as MemoryProviderConnection)
 }
 
 function normalizePlacementDecision(value: unknown, providerId: MemoryProviderId): MemoryPlacementDecision | undefined {
@@ -125,7 +84,7 @@ function normalizePlacementDecision(value: unknown, providerId: MemoryProviderId
   if (placement.decidedBy !== 'rules' && placement.decidedBy !== 'llm') return undefined
   if (placement.confidence !== 'high' && placement.confidence !== 'medium' && placement.confidence !== 'low') return undefined
   if (typeof placement.reason !== 'string' || placement.reason.trim() === '' || placement.reason.length > 1000) return undefined
-  if (!Array.isArray(placement.candidateProviderIds) || !placement.candidateProviderIds.every(id => id === 'mnemon-native' || id === 'openviking') || !placement.candidateProviderIds.includes(providerId)) return undefined
+  if (!Array.isArray(placement.candidateProviderIds) || !placement.candidateProviderIds.every(isMemoryProviderId) || !placement.candidateProviderIds.includes(providerId)) return undefined
   if (!Array.isArray(placement.appliedRules) || !placement.appliedRules.every(rule => typeof rule === 'string' && rule.length <= 500)) return undefined
   if (typeof placement.decidedAt !== 'string' || placement.decidedAt.trim() === '') return undefined
   if (placement.runId !== undefined && typeof placement.runId !== 'string') return undefined
@@ -191,33 +150,52 @@ export class MemoryBodyRegistry {
   }
 
   openVikingConnection(id: string): OpenVikingBodyConnection {
-    const normalized = validateMemoryBodyId(id)
-    const body = this.bodies.find(entry => entry.id === normalized)
-    if (body?.providerId !== 'openviking' || body.openViking === undefined) throw new Error(`memory body is not backed by OpenViking: ${normalized}`)
-    return { ...body.openViking }
+    const connection = this.providerConnection(id, 'openviking')
+    return {
+      endpoint: String(connection.endpoint ?? ''),
+      targetUri: String(connection.targetUri ?? ''),
+      apiKey: String(connection.apiKey ?? ''),
+      account: String(connection.account ?? ''),
+      user: String(connection.user ?? ''),
+      actorPeerId: String(connection.actorPeerId ?? ''),
+    }
   }
 
-  placementCandidates(request: Pick<CreateMemoryBodyRequest, 'openViking'>): MemoryPlacementCandidate[] {
-    return [
-      {
-        id: 'mnemon-native',
-        label: 'Mnemon Native',
-        kind: 'local',
-        configured: this.runner.commandFound,
-        summary: 'Official local-first memory with exact writes, typed graph relations, and soft deletion.',
-        capabilities: NATIVE_CAPABILITIES,
-      },
-      {
-        id: 'openviking',
-        label: 'OpenViking',
-        kind: 'remote',
-        configured: request.openViking !== undefined
-          && request.openViking.endpoint.trim() !== ''
-          && request.openViking.targetUri.trim() !== '',
-        summary: 'Shared remote memory with hierarchical browsing and asynchronous semantic extraction.',
-        capabilities: OPENVIKING_CAPABILITIES,
-      },
-    ]
+  providerConnection(id: string, expectedProviderId?: MemoryProviderId): MemoryProviderConnection {
+    const normalized = validateMemoryBodyId(id)
+    const body = this.bodies.find(entry => entry.id === normalized)
+    if (body === undefined || body.providerId === 'mnemon-native') throw new Error(`memory body has no external provider connection: ${normalized}`)
+    if (expectedProviderId !== undefined && body.providerId !== expectedProviderId) {
+      throw new Error(`memory body ${normalized} uses ${body.providerId}, not ${expectedProviderId}`)
+    }
+    const legacy = body.providerId === 'openviking' && body.openViking !== undefined
+      ? legacyOpenVikingConnection(body.openViking)
+      : undefined
+    return { ...(legacy ?? {}), ...(body.connection ?? {}) }
+  }
+
+  placementCandidates(request: Pick<CreateMemoryBodyRequest, 'connection' | 'providerConnections' | 'openViking'>): MemoryPlacementCandidate[] {
+    return MEMORY_PROVIDER_CATALOG.map(descriptor => {
+      const requestConnection = request.providerConnections?.[descriptor.id]
+        ?? (descriptor.id === 'openviking' && request.connection === undefined && request.openViking !== undefined
+        ? request.openViking as unknown as MemoryProviderConnection
+        : request.connection)
+      let configured = descriptor.id === 'mnemon-native' ? this.runner.commandFound : false
+      if (descriptor.id !== 'mnemon-native' && requestConnection !== undefined) {
+        try {
+          normalizeProviderConnection(descriptor.id, requestConnection)
+          configured = true
+        } catch { configured = false }
+      }
+      return {
+        id: descriptor.id,
+        label: descriptor.label,
+        kind: descriptor.kind,
+        configured,
+        summary: descriptor.summary,
+        capabilities: descriptor.capabilities,
+      }
+    })
   }
 
   async create(request: CreateMemoryBodyRequest, signal?: AbortSignal, placement?: MemoryPlacementDecision): Promise<MemoryBody> {
@@ -226,18 +204,22 @@ export class MemoryBodyRegistry {
     if (request.placement !== undefined && placement === undefined) throw new Error('automatic provider placement must be resolved before creating a Memory Space')
     if (placement !== undefined && request.providerId !== undefined && request.providerId !== placement.providerId) throw new Error('resolved provider placement conflicts with providerId')
     const providerId = placement?.providerId ?? request.providerId ?? 'mnemon-native'
-    if (providerId !== 'mnemon-native' && providerId !== 'openviking') throw new Error(`unsupported memory provider: ${String(providerId)}`)
+    if (!isMemoryProviderId(providerId)) throw new Error(`unsupported memory provider: ${String(providerId)}`)
     const normalizedPlacement = placement === undefined ? undefined : normalizePlacementDecision(placement, providerId)
     if (placement !== undefined && normalizedPlacement === undefined) throw new Error('resolved provider placement is invalid')
     const reservedIds = new Set(this.list().map(body => body.id))
     const nativeStoreIds = this.nativeStoreIds()
     let id = providerId === 'mnemon-native' && nativeStoreIds.length === 0 && !reservedIds.has('default')
       ? 'default'
-      : validateMemoryBodyId(providerId === 'openviking' ? `openviking-${randomUUID()}` : randomUUID())
+      : validateMemoryBodyId(providerId === 'mnemon-native' ? randomUUID() : `${providerId}-${randomUUID()}`)
     while (reservedIds.has(id) || nativeStoreIds.includes(id)) id = validateMemoryBodyId(randomUUID())
-    const openViking = providerId === 'openviking'
-      ? normalizeOpenViking(request.openViking ?? { endpoint: '', targetUri: '' })
-      : undefined
+    const connectionInput = request.providerConnections?.[providerId]
+      ?? (providerId === 'openviking' && request.connection === undefined && request.openViking !== undefined
+      ? request.openViking as unknown as MemoryProviderConnection
+      : request.connection)
+    const connection = providerId === 'mnemon-native'
+      ? undefined
+      : normalizeProviderConnection(providerId, connectionInput)
     if (providerId === 'mnemon-native') await this.runner.runText(['store', 'create', id], { ...(signal === undefined ? {} : { signal }), store: id })
     const timestamp = this.now().toISOString()
     const body: StoredMemoryBody = {
@@ -247,7 +229,7 @@ export class MemoryBodyRegistry {
       active: request.active ?? false,
       providerId,
       ...(normalizedPlacement === undefined ? {} : { placement: normalizedPlacement }),
-      ...(openViking === undefined ? {} : { openViking }),
+      ...(connection === undefined ? {} : { connection }),
       createdAt: timestamp,
       updatedAt: timestamp,
     }
@@ -262,22 +244,30 @@ export class MemoryBodyRegistry {
     if (index < 0) throw new Error(`unknown memory body: ${normalized}`)
     const current = this.bodies[index]!
     if (request.openViking !== undefined && current.providerId !== 'openviking') throw new Error('OpenViking connection settings only apply to OpenViking memory bodies')
-    const openViking = request.openViking === undefined
-      ? current.openViking
-      : normalizeOpenViking({
-          endpoint: request.openViking.endpoint ?? current.openViking!.endpoint,
-          targetUri: request.openViking.targetUri ?? current.openViking!.targetUri,
-          apiKey: request.openViking.clearApiKey === true ? '' : request.openViking.apiKey ?? current.openViking!.apiKey,
-          account: request.openViking.account ?? current.openViking!.account,
-          user: request.openViking.user ?? current.openViking!.user,
-          actorPeerId: request.openViking.actorPeerId ?? current.openViking!.actorPeerId,
-        })
+    if ((request.connection !== undefined || request.clearSecrets !== undefined) && current.providerId === 'mnemon-native') {
+      throw new Error('Mnemon Native memory bodies do not have provider connection settings')
+    }
+    const legacyPatch = request.openViking === undefined ? undefined : {
+      ...request.openViking,
+      ...(request.openViking.clearApiKey === true ? { apiKey: '' } : {}),
+    } as unknown as MemoryProviderConnection
+    const previousConnection = current.providerId === 'mnemon-native' ? {} : this.providerConnection(current.id)
+    const connectionPatch = request.connection ?? legacyPatch
+    const connection = current.providerId === 'mnemon-native'
+      ? undefined
+      : normalizeProviderConnection(
+          current.providerId,
+          connectionPatch,
+          previousConnection,
+          [...(request.clearSecrets ?? []), ...(request.openViking?.clearApiKey === true ? ['apiKey'] : [])],
+        )
+    const { openViking: _legacyOpenViking, ...currentBody } = current
     const body: StoredMemoryBody = {
-      ...current,
+      ...currentBody,
       ...(request.name === undefined ? {} : { name: requiredText(request.name, 'name', 100) }),
       ...(request.description === undefined ? {} : { description: optionalText(request.description, 'description', 1000) }),
       ...(request.active === undefined ? {} : { active: request.active }),
-      ...(openViking === undefined ? {} : { openViking }),
+      ...(connection === undefined ? {} : { connection }),
       updatedAt: this.now().toISOString(),
     }
     this.bodies[index] = body
@@ -287,7 +277,7 @@ export class MemoryBodyRegistry {
 
   async remove(id: string, signal?: AbortSignal): Promise<MemoryBody> {
     const body = this.get(id)
-    if (body.provider.id === 'openviking') {
+    if (body.provider.id !== 'mnemon-native') {
       this.bodies = this.bodies.filter(entry => entry.id !== body.id)
       this.save()
       return body
@@ -352,8 +342,18 @@ export class MemoryBodyRegistry {
               && body.name === '默认记忆体'
               && body.description === '从现有 Mnemon Store 自动接入。'
             migratedSyntheticDefault ||= syntheticDefault
-            const providerId: MemoryProviderId = 'providerId' in body && body.providerId === 'openviking' ? 'openviking' : 'mnemon-native'
+            const providerId: MemoryProviderId = 'providerId' in body && isMemoryProviderId(body.providerId) ? body.providerId : 'mnemon-native'
             const placement = 'placement' in body ? normalizePlacementDecision(body.placement, providerId) : undefined
+            const connection = providerId === 'mnemon-native'
+              ? undefined
+              : normalizeProviderConnection(
+                  providerId,
+                  'connection' in body && body.connection != null
+                    ? body.connection as MemoryProviderConnection
+                    : providerId === 'openviking' && 'openViking' in body && body.openViking != null
+                      ? body.openViking as unknown as MemoryProviderConnection
+                      : undefined,
+                )
             return {
               id: body.id,
               name: requiredText(syntheticDefault ? body.id : body.name || body.id, 'name', 100),
@@ -361,7 +361,7 @@ export class MemoryBodyRegistry {
               active: body.active === true,
               providerId,
               ...(placement === undefined ? {} : { placement }),
-              ...('openViking' in body && body.openViking != null ? { openViking: normalizeOpenViking(body.openViking as OpenVikingBodyConnection) } : {}),
+              ...(connection === undefined ? {} : { connection }),
               createdAt: body.createdAt,
               updatedAt: body.updatedAt,
             }
@@ -375,20 +375,27 @@ export class MemoryBodyRegistry {
     if (this.persistent && existsSync(this.providerRegistryPath)) {
       try {
         const parsed = JSON.parse(readFileSync(this.providerRegistryPath, 'utf8')) as ProviderRegistryFile
-        if (parsed.version === PROVIDER_REGISTRY_VERSION && Array.isArray(parsed.bodies)) {
+        if ((parsed.version === 1 || parsed.version === PROVIDER_REGISTRY_VERSION) && Array.isArray(parsed.bodies)) {
           const existingIds = new Set(this.bodies.map(body => body.id))
           this.bodies.push(...parsed.bodies
-            .filter(body => body.providerId === 'openviking' && ID_PATTERN.test(body.id) && !existingIds.has(body.id))
+            .filter(body => isMemoryProviderId(body.providerId) && body.providerId !== 'mnemon-native' && ID_PATTERN.test(body.id) && !existingIds.has(body.id))
             .map(body => {
-              const placement = normalizePlacementDecision(body.placement, 'openviking')
+              const providerId = body.providerId
+              const placement = normalizePlacementDecision(body.placement, providerId)
+              const connection = normalizeProviderConnection(
+                providerId,
+                body.connection ?? (providerId === 'openviking' && body.openViking !== undefined
+                  ? body.openViking as unknown as MemoryProviderConnection
+                  : undefined),
+              )
               return {
                 id: body.id,
                 name: requiredText(body.name || body.id, 'name', 100),
                 description: optionalText(body.description, 'description', 1000),
                 active: body.active === true,
-                providerId: 'openviking' as const,
+                providerId,
                 ...(placement === undefined ? {} : { placement }),
-                openViking: normalizeOpenViking(body.openViking ?? { endpoint: '', targetUri: '' }),
+                connection,
                 createdAt: body.createdAt,
                 updatedAt: body.updatedAt,
               }
@@ -433,28 +440,26 @@ export class MemoryBodyRegistry {
   }
 
   private view(body: StoredMemoryBody): MemoryBody {
-    const provider: MemoryBodyProvider = body.providerId === 'openviking'
-      ? {
-          id: 'openviking',
-          label: 'OpenViking',
-          kind: 'remote',
-          location: body.openViking!.endpoint,
-          targetUri: body.openViking!.targetUri,
-          ...(body.openViking!.account === '' ? {} : { account: body.openViking!.account }),
-          ...(body.openViking!.user === '' ? {} : { user: body.openViking!.user }),
-          ...(body.openViking!.actorPeerId === '' ? {} : { actorPeerId: body.openViking!.actorPeerId }),
-          apiKeyConfigured: body.openViking!.apiKey !== '',
-          capabilities: OPENVIKING_CAPABILITIES,
-        }
-      : {
-          id: 'mnemon-native',
-          label: 'Mnemon Native',
-          kind: 'local',
-          location: join(this.directory, body.id, 'mnemon.db'),
-          apiKeyConfigured: false,
-          capabilities: NATIVE_CAPABILITIES,
-        }
-    const { providerId: _providerId, openViking: _openViking, ...metadata } = body
+    const descriptor = memoryProviderDescriptor(body.providerId)
+    const connection = body.providerId === 'mnemon-native' ? {} : this.providerConnection(body.id)
+    const publicConnection = publicProviderConnection(body.providerId, connection)
+    const location = body.providerId === 'mnemon-native'
+      ? join(this.directory, body.id, 'mnemon.db')
+      : String(connection.endpoint ?? connection.dataPath ?? connection.workingDirectory ?? connection.cliPath ?? '')
+    const provider: MemoryBodyProvider = {
+      id: descriptor.id,
+      label: descriptor.label,
+      kind: descriptor.kind,
+      location,
+      ...(typeof connection.targetUri === 'string' && connection.targetUri !== '' ? { targetUri: connection.targetUri } : {}),
+      ...(typeof connection.account === 'string' && connection.account !== '' ? { account: connection.account } : {}),
+      ...(typeof connection.user === 'string' && connection.user !== '' ? { user: connection.user } : {}),
+      ...(typeof connection.actorPeerId === 'string' && connection.actorPeerId !== '' ? { actorPeerId: connection.actorPeerId } : {}),
+      apiKeyConfigured: publicConnection.configuredSecrets.includes('apiKey'),
+      ...publicConnection,
+      capabilities: descriptor.capabilities,
+    }
+    const { providerId: _providerId, connection: _connection, openViking: _openViking, ...metadata } = body
     return { ...metadata, dbPath: provider.id === 'mnemon-native' ? provider.location : '', provider }
   }
 
@@ -463,7 +468,7 @@ export class MemoryBodyRegistry {
     mkdirSync(this.directory, { recursive: true, mode: 0o700 })
     const nativeBodies: StoredNativeMemoryBody[] = this.bodies
       .filter(body => body.providerId === 'mnemon-native')
-      .map(({ providerId: _providerId, openViking: _openViking, ...body }) => body)
+      .map(({ providerId: _providerId, connection: _connection, openViking: _openViking, ...body }) => body)
     this.writeRegistry(this.registryPath, { version: NATIVE_REGISTRY_VERSION, bodies: nativeBodies })
 
     const providerBodies = this.bodies.filter(body => body.providerId !== 'mnemon-native')

@@ -18,7 +18,6 @@ import {
   type MemoryListRequest,
   type MemoryListView,
   type MemoryProviderId,
-  type OpenVikingBodyConnection,
   type MnemonPackExport,
   type MnemonPackImportResult,
   type MnemonPackPreview,
@@ -31,6 +30,7 @@ import {
   type StatusView,
   type TurnMemoryActivity,
   type TurnMemoryActivitySnapshot,
+  type UpdateMemoryBodyRequest,
   type VersionComponentId,
   type VersionStatus,
   type VersionUpdateResult,
@@ -209,7 +209,7 @@ export class MnemonClient {
     return this.call(MNEMON_WRITE_CHANNEL, 'body-create', this.scoped(request))
   }
 
-  updateBody(memoryBodyId: string, request: { name?: string; description?: string; active?: boolean; openViking?: Partial<OpenVikingBodyConnection> & { clearApiKey?: boolean } }): Promise<MemoryBody> {
+  updateBody(memoryBodyId: string, request: UpdateMemoryBodyRequest): Promise<MemoryBody> {
     return this.call(MNEMON_WRITE_CHANNEL, 'body-update', this.scoped({ memoryBodyId, ...request }))
   }
 

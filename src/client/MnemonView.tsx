@@ -95,6 +95,8 @@ function normalizeMemoryBody(body: MemoryBodyView): MemoryBodyView {
       kind: 'local',
       location: body.dbPath,
       apiKeyConfigured: false,
+      settings: {},
+      configuredSecrets: [],
       capabilities: LEGACY_NATIVE_CAPABILITIES,
     },
   }
@@ -906,6 +908,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
           setCatalogUnavailable(!props.catalogKnown)
           return {
             items: props.fallbackBodies,
+            providers: [],
             total: props.fallbackBodies.length,
             activeCount: props.fallbackBodies.filter(body => body.active).length,
             directory: props.fallbackDirectory ?? '',

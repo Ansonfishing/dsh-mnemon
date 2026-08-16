@@ -6,6 +6,7 @@ import type {
   MemoryProviderCapabilities,
   MemoryProviderId,
 } from './shared/contracts.ts'
+import { MEMORY_PROVIDER_ID_SET } from './providers/catalog.ts'
 
 export interface MemoryPlacementCandidate {
   id: MemoryProviderId
@@ -37,7 +38,6 @@ const CAPABILITY_LABELS: Record<MemoryPlacementCapability, string> = {
   link: 'explicit links',
   forget: 'safe forget',
 }
-const PROVIDER_IDS = new Set<MemoryProviderId>(['mnemon-native', 'openviking'])
 const CAPABILITIES = new Set<MemoryPlacementCapability>(Object.keys(CAPABILITY_LABELS) as MemoryPlacementCapability[])
 const PREFERENCES = new Set<MemoryPlacementPreference>(['balanced', 'local-first', 'shared-first'])
 
@@ -66,7 +66,7 @@ export function prepareMemoryPlacement(
   const rules = request.rules ?? {}
   const allowed = uniqueProviderIds(rules.allowedProviderIds)
   const required = [...new Set(rules.requiredCapabilities ?? [])]
-  for (const providerId of allowed ?? []) if (!PROVIDER_IDS.has(providerId)) throw new Error(`unsupported memory provider in placement rules: ${String(providerId)}`)
+  for (const providerId of allowed ?? []) if (!MEMORY_PROVIDER_ID_SET.has(providerId)) throw new Error(`unsupported memory provider in placement rules: ${String(providerId)}`)
   if (rules.dataBoundary !== undefined && rules.dataBoundary !== 'allow-remote' && rules.dataBoundary !== 'local-only') throw new Error(`unsupported data boundary: ${String(rules.dataBoundary)}`)
   for (const capability of required) if (!CAPABILITIES.has(capability)) throw new Error(`unsupported required memory capability: ${String(capability)}`)
   if (rules.preference !== undefined && !PREFERENCES.has(rules.preference)) throw new Error(`unsupported provider placement preference: ${String(rules.preference)}`)

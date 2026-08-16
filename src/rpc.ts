@@ -7,7 +7,14 @@ import type { MnemonPackManager } from './pack.ts'
 import type { LiveMnemonRuntime, MnemonRuntimeGraph } from './live-runtime.ts'
 import { VersionUpdateManager, type VersionComponentId } from './version-updates.ts'
 import { MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from './channels.ts'
-import type { CreateMemoryBodyRequest, MemoryPlacementCapability, MemoryProviderId } from './shared/contracts.ts'
+import { isMemoryProviderId } from './providers/catalog.ts'
+import type {
+  CreateMemoryBodyRequest,
+  MemoryPlacementCapability,
+  MemoryProviderConnection,
+  MemoryProviderId,
+  UpdateMemoryBodyRequest,
+} from './shared/contracts.ts'
 export { MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from './channels.ts'
 
 type RuntimeInput = MnemonService | LiveMnemonRuntime
@@ -59,6 +66,30 @@ function requireAligned(route: ReturnType<LiveMnemonRuntime['route']> | undefine
 function object(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('payload must be an object')
   return value as Record<string, unknown>
+}
+
+function providerConnection(value: unknown): MemoryProviderConnection | undefined {
+  if (value === undefined) return undefined
+  const input = object(value)
+  const connection: MemoryProviderConnection = {}
+  for (const [key, setting] of Object.entries(input)) {
+    if (typeof setting !== 'string' && typeof setting !== 'number' && typeof setting !== 'boolean') {
+      throw new Error(`provider connection setting ${key} must be a string, number, or boolean`)
+    }
+    connection[key] = setting
+  }
+  return connection
+}
+
+function providerConnections(value: unknown): CreateMemoryBodyRequest['providerConnections'] | undefined {
+  if (value === undefined) return undefined
+  const input = object(value)
+  return Object.fromEntries(Object.entries(input).map(([providerId, settings]) => {
+    if (!isMemoryProviderId(providerId)) throw new Error(`unsupported memory provider: ${providerId}`)
+    const parsed = providerConnection(settings)
+    if (parsed === undefined) throw new Error(`provider connection is missing for ${providerId}`)
+    return [providerId, parsed]
+  })) as CreateMemoryBodyRequest['providerConnections']
 }
 
 function success(value: unknown): RpcResult<unknown> {
@@ -330,6 +361,8 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
             : await lifecycle.mutate(String(payload.sessionId ?? ''), 'forget', { id: String(payload.id ?? ''), ...(payload.memoryBodyId === undefined ? {} : { memoryBodyId: String(payload.memoryBodyId) }) }))
         case 'body-create':
           {
+            const connection = providerConnection(payload.connection)
+            const connections = providerConnections(payload.providerConnections)
             const openViking = payload.openViking === undefined ? undefined : object(payload.openViking)
             const placement = payload.placement === undefined ? undefined : object(payload.placement)
             const placementRules = placement?.rules === undefined ? undefined : object(placement.rules)
@@ -339,6 +372,8 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
               description: String(payload.description ?? ''),
               ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
               ...(payload.providerId === undefined ? {} : { providerId: String(payload.providerId) as MemoryProviderId }),
+              ...(connection === undefined ? {} : { connection }),
+              ...(connections === undefined ? {} : { providerConnections: connections }),
               ...(openViking === undefined ? {} : {
                 openViking: {
                   endpoint: String(openViking.endpoint ?? ''),
@@ -376,11 +411,18 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
           }
         case 'body-update':
           {
+            const connection = providerConnection(payload.connection)
             const openViking = payload.openViking === undefined ? undefined : object(payload.openViking)
-            return success(service.updateBody(String(payload.memoryBodyId ?? ''), {
+            const request: UpdateMemoryBodyRequest = {
               ...(payload.name === undefined ? {} : { name: String(payload.name) }),
               ...(payload.description === undefined ? {} : { description: String(payload.description) }),
               ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
+              ...(connection === undefined ? {} : { connection }),
+              ...(payload.clearSecrets === undefined
+                ? {}
+                : Array.isArray(payload.clearSecrets)
+                  ? { clearSecrets: payload.clearSecrets.map(String) }
+                  : (() => { throw new Error('clearSecrets must be an array') })()),
               ...(openViking === undefined ? {} : {
                 openViking: {
                   ...(openViking.endpoint === undefined ? {} : { endpoint: String(openViking.endpoint) }),
@@ -392,7 +434,8 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
                   ...(openViking.clearApiKey === undefined ? {} : { clearApiKey: Boolean(openViking.clearApiKey) }),
                 },
               }),
-            }))
+            }
+            return success(service.updateBody(String(payload.memoryBodyId ?? ''), request))
           }
         case 'body-delete':
           return success(await service.deleteBody(String(payload.memoryBodyId ?? '')))

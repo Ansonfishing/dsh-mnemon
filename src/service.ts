@@ -12,6 +12,7 @@ import {
 import type { MnemonRunner } from './runner.ts'
 import { prepareMemoryPlacement, type PreparedMemoryPlacement } from './provider-placement.ts'
 import { OpenVikingProvider } from './providers/openviking.ts'
+import { MEMORY_PROVIDER_CATALOG } from './providers/catalog.ts'
 import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './providers/provider.ts'
 import {
   CATEGORIES,
@@ -219,6 +220,7 @@ export class MnemonService {
     }))
     return {
       items,
+      providers: [...MEMORY_PROVIDER_CATALOG],
       total: items.length,
       activeCount: items.filter(body => body.active).length,
       directory: this.memoryBodies.directory,

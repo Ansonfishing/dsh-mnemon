@@ -108,7 +108,30 @@ export interface ResolvedInteractionConfig {
   saveAction: boolean
 }
 
-export type MemoryProviderId = 'mnemon-native' | 'openviking'
+export type MemoryProviderId =
+  | 'mnemon-native'
+  | 'openviking'
+  | 'honcho'
+  | 'mem0'
+  | 'hindsight'
+  | 'holographic'
+  | 'retaindb'
+  | 'byterover'
+  | 'supermemory'
+
+export type MemoryProviderConnectionValue = string | number | boolean
+export type MemoryProviderConnection = Record<string, MemoryProviderConnectionValue>
+
+export interface MemoryProviderConfigField {
+  key: string
+  label: string
+  input: 'text' | 'url' | 'secret' | 'number' | 'boolean' | 'select' | 'path'
+  required: boolean
+  defaultValue?: MemoryProviderConnectionValue
+  placeholder?: string
+  help?: string
+  options?: Array<{ value: string; label: string }>
+}
 
 export type MemoryPlacementCapability = 'graph' | 'entities' | 'related' | 'exact-write' | 'link' | 'forget'
 export type MemoryPlacementPreference = 'balanced' | 'local-first' | 'shared-first'
@@ -153,6 +176,16 @@ export interface MemoryProviderCapabilities {
   deletionMode: 'soft' | 'hard' | 'unsupported'
 }
 
+export interface MemoryProviderDescriptor {
+  id: MemoryProviderId
+  label: string
+  kind: 'local' | 'remote'
+  summary: string
+  origin: 'native' | 'hermes-inspired'
+  capabilities: MemoryProviderCapabilities
+  fields: MemoryProviderConfigField[]
+}
+
 export interface MemoryBodyProvider {
   id: MemoryProviderId
   label: string
@@ -163,6 +196,8 @@ export interface MemoryBodyProvider {
   user?: string
   actorPeerId?: string
   apiKeyConfigured: boolean
+  settings: MemoryProviderConnection
+  configuredSecrets: string[]
   capabilities: MemoryProviderCapabilities
 }
 
@@ -192,6 +227,9 @@ export interface CreateMemoryBodyRequest {
   description: string
   active?: boolean
   providerId?: MemoryProviderId
+  connection?: MemoryProviderConnection
+  /** Candidate-specific settings used only while resolving automatic placement. */
+  providerConnections?: Partial<Record<MemoryProviderId, MemoryProviderConnection>>
   openViking?: OpenVikingBodyConnection
   placement?: AutomaticMemoryPlacementRequest
 }
@@ -200,6 +238,8 @@ export interface UpdateMemoryBodyRequest {
   name?: string
   description?: string
   active?: boolean
+  connection?: MemoryProviderConnection
+  clearSecrets?: string[]
   openViking?: Partial<OpenVikingBodyConnection> & { clearApiKey?: boolean }
 }
 
@@ -275,6 +315,7 @@ export interface MemoryBodyView extends MemoryBody {
 
 export interface MemoryBodyCatalog {
   items: MemoryBodyView[]
+  providers: MemoryProviderDescriptor[]
   total: number
   activeCount: number
   directory: string

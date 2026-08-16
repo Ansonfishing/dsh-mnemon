@@ -16,6 +16,7 @@ import {
 } from './runtime-memory.ts'
 import type { Insight, RememberRequest, SearchRequest } from './service.ts'
 import { finalizeLlmPlacement, rulesOnlyPlacement, type PreparedMemoryPlacement } from './provider-placement.ts'
+import { MEMORY_PROVIDER_IDS } from './providers/catalog.ts'
 import type { MemoryPlacementDecision, SubagentCounters } from './shared/contracts.ts'
 
 export type { SubagentCounters } from './shared/contracts.ts'
@@ -99,7 +100,7 @@ const ANSWER_SCHEMA = {
 const PROVIDER_PLACEMENT_SCHEMA = {
   type: 'object',
   properties: {
-    providerId: { type: 'string', enum: ['mnemon-native', 'openviking'] },
+    providerId: { type: 'string', enum: [...MEMORY_PROVIDER_IDS] },
     reason: { type: 'string' },
     confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
   },

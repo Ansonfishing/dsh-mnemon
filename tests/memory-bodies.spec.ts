@@ -203,8 +203,8 @@ describe('MemoryBodyRegistry', () => {
     expect(registry.openVikingConnection(created.id)).toMatchObject({ apiKey: 'secret-token' })
     expect(JSON.parse(readFileSync(registry.registryPath, 'utf8'))).toEqual({ version: 1, bodies: [] })
     expect(JSON.parse(readFileSync(registry.providerRegistryPath, 'utf8'))).toMatchObject({
-      version: 1,
-      bodies: [expect.objectContaining({ id: created.id, providerId: 'openviking', openViking: expect.objectContaining({ apiKey: 'secret-token' }) })],
+      version: 2,
+      bodies: [expect.objectContaining({ id: created.id, providerId: 'openviking', connection: expect.objectContaining({ apiKey: 'secret-token' }) })],
     })
     expect(statSync(registry.providerRegistryPath).mode & 0o777).toBe(0o600)
     expect(new MemoryBodyRegistry(runner, true).get(created.id)).toMatchObject({ provider: { id: 'openviking', apiKeyConfigured: true } })
@@ -249,6 +249,49 @@ describe('MemoryBodyRegistry', () => {
     expect(new MemoryBodyRegistry(runner, true).get(created.id)).toMatchObject({
       placement: { reason: expect.stringContaining('Mnemon Native'), appliedRules: ['requires:graph', 'preference:balanced'] },
     })
+  })
+
+  it('keeps candidate credentials out of placement metadata and persists only the selected provider connection', async () => {
+    const dataDir = temporaryDirectory()
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
+    const registry = new MemoryBodyRegistry(runner, true, () => new Date('2026-08-16T00:00:00.000Z'))
+    const request = {
+      name: '用户偏好',
+      description: '由外部服务提炼和去重的跨会话用户偏好。',
+      providerConnections: {
+        mem0: { endpoint: 'https://api.mem0.ai', apiKey: 'mem0-secret', mode: 'platform', userId: 'alice', agentId: 'dsh' },
+        supermemory: { endpoint: 'https://api.supermemory.ai', apiKey: 'sm-secret', containerTag: 'alice', searchMode: 'hybrid' },
+      },
+      placement: { mode: 'automatic' as const },
+    }
+
+    const candidates = registry.placementCandidates(request)
+    expect(candidates.find(candidate => candidate.id === 'mem0')).toMatchObject({ configured: true })
+    expect(candidates.find(candidate => candidate.id === 'supermemory')).toMatchObject({ configured: true })
+    expect(JSON.stringify(candidates)).not.toContain('secret')
+
+    const created = await registry.create(request, undefined, {
+      mode: 'automatic',
+      providerId: 'mem0',
+      decidedBy: 'llm',
+      reason: 'Mem0 best matches automatic extraction and deduplication.',
+      confidence: 'high',
+      candidateProviderIds: ['mem0', 'supermemory'],
+      appliedRules: ['preference:balanced'],
+      decidedAt: '2026-08-16T00:00:00.000Z',
+      runId: 'placement-1',
+      subagentProvider: 'spawn',
+    })
+
+    expect(created).toMatchObject({
+      provider: {
+        id: 'mem0',
+        settings: { endpoint: 'https://api.mem0.ai', mode: 'platform', userId: 'alice', agentId: 'dsh' },
+        configuredSecrets: ['apiKey'],
+      },
+    })
+    expect(registry.providerConnection(created.id, 'mem0')).toMatchObject({ apiKey: 'mem0-secret' })
+    expect(readFileSync(registry.providerRegistryPath, 'utf8')).not.toContain('sm-secret')
   })
 
   it('ignores malformed placement metadata without losing the Memory Space', () => {

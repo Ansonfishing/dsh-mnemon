@@ -139,10 +139,14 @@ describe('Mnemon RPC', () => {
         prompt: '共享不是重点，优先可解释性。',
         rules: { dataBoundary: 'local-only', requiredCapabilities: ['graph'] },
       },
+      providerConnections: {
+        holographic: { dataPath: '/tmp/holographic.json', defaultTrust: 0.6, minTrust: 0.4 },
+      },
     })).resolves.toMatchObject({ ok: true, value: { name: '产品知识' } })
 
     expect(service.prepareBodyPlacement).toHaveBeenCalledWith(expect.objectContaining({
       placement: expect.objectContaining({ prompt: '共享不是重点，优先可解释性。' }),
+      providerConnections: { holographic: { dataPath: '/tmp/holographic.json', defaultTrust: 0.6, minTrust: 0.4 } },
     }))
     expect(lifecycle.placeProvider).toHaveBeenCalledWith('session-1', {
       name: '产品知识',
