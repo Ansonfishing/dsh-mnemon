@@ -668,6 +668,21 @@ button.readSourceCard:hover { border-color: var(--mn-line-strong); background: v
 .healthGood { color: var(--mn-success); background: currentColor; }
 .healthBad { color: var(--mn-danger); background: currentColor; }
 .healthMuted { color: var(--mn-faint); background: currentColor; }
+.nativeProviderHealth { display: flex; min-width: 0; min-height: 62px; align-items: center; gap: 10px; margin-bottom: 9px; padding: 10px 12px; border: 1px solid var(--mn-line); border-radius: 11px; background: var(--mn-layer-1); }
+.nativeProviderHealth[data-status='healthy'] { border-color: color-mix(in srgb, var(--mn-success) 22%, var(--mn-line)); }
+.nativeProviderHealth[data-status='unhealthy'] { border-color: color-mix(in srgb, var(--mn-danger) 30%, var(--mn-line)); background: color-mix(in srgb, var(--mn-danger) 3%, var(--mn-layer-1)); }
+.nativeProviderCopy { display: grid; min-width: 0; flex: 1; gap: 1px; }
+.nativeProviderCopy > small { color: var(--mn-faint); font: 650 8px var(--mn-code); letter-spacing: .06em; text-transform: uppercase; }
+.nativeProviderCopy > strong { font-size: 11.5px; }
+.nativeProviderCopy > p { margin: 2px 0 0; overflow: hidden; color: var(--mn-danger); font-size: 8.5px; text-overflow: ellipsis; white-space: nowrap; }
+.nativeProviderMeta { display: grid; flex: 0 0 auto; gap: 3px; justify-items: end; text-align: right; }
+.nativeProviderMeta > span { display: flex; align-items: center; gap: 6px; color: var(--mn-muted); font-size: 9px; }
+.nativeProviderMeta > span i { width: 6px; height: 6px; border-radius: 50%; color: var(--mn-faint); background: currentColor; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 8%, transparent); }
+.nativeProviderHealth[data-status='healthy'] .nativeProviderMeta > span i { color: var(--mn-success); }
+.nativeProviderHealth[data-status='idle'] .nativeProviderMeta > span i { color: var(--mn-accent); }
+.nativeProviderHealth[data-status='unhealthy'] .nativeProviderMeta > span { color: var(--mn-danger); }
+.nativeProviderHealth[data-status='unhealthy'] .nativeProviderMeta > span i { color: var(--mn-danger); }
+.nativeProviderMeta > small { color: var(--mn-faint); font: 9px var(--mn-code); }
 .providerHealth { margin-bottom: 13px; padding: 16px; border: 1px solid var(--mn-line); border-radius: 12px; background: var(--mn-layer-1); }
 .providerHealthList { margin-top: 12px; border-top: 1px solid var(--mn-line); border-bottom: 1px solid var(--mn-line); }
 .providerHealthList article { display: flex; min-width: 0; min-height: 58px; align-items: center; gap: 10px; padding: 9px 2px; }
@@ -820,6 +835,8 @@ button.readSourceCard:hover { border-color: var(--mn-line-strong); background: v
   .previewOverlay { padding: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
   .previewDialog { max-height: min(84vh, 640px); max-height: min(84dvh, 640px); }
   .healthStrip { grid-template-columns: 1fr; }
+  .nativeProviderHealth { align-items: flex-start; }
+  .nativeProviderMeta { justify-items: end; }
   .providerHealthMeta { align-items: flex-end; flex-direction: column; gap: 4px; }
   .storageRoot { align-items: flex-start; flex-direction: column; }
   .storageRoot > div:last-child { justify-items: start; }

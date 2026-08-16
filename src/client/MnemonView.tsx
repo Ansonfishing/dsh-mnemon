@@ -1960,20 +1960,44 @@ function StatusPage(props: { client: MnemonClient; status: StatusView | null; lo
   const runtimeMemoryEntries = runtimeArea === undefined ? 0 : Number(runtimeArea.details.memoryEntries ?? 0)
   return (
     <div className={css.page}>
-      <PageHeader title={t('status.title')} description={t('status.description')} meta={status === null && props.loading ? t('common.loading') : status?.healthy === true ? t('status.nominal') : t('status.checkRequired')} action={<div className={css.statusHeaderActions}><button type="button" className={css.ghostButton} disabled={props.loading} onClick={props.onRefresh}>{props.loading ? t('status.rechecking') : t('status.recheck')}</button><button type="button" className={css.secondaryButton} onClick={() => setVersionsOpen(true)}>{t('versions.checkAction')}</button></div>} />
+      <PageHeader title={t('status.title')} description={t('status.description')} meta={status === null && props.loading ? t('common.loading') : status === null ? t('status.checkRequired') : t('status.nominal')} action={<div className={css.statusHeaderActions}><button type="button" className={css.ghostButton} disabled={props.loading} onClick={props.onRefresh}>{props.loading ? t('status.rechecking') : t('status.recheck')}</button><button type="button" className={css.secondaryButton} onClick={() => setVersionsOpen(true)}>{t('versions.checkAction')}</button></div>} />
 
       <section className={css.healthStrip} aria-label={t('status.aria')}>
-        <article><span className={`${css.healthIndicator} ${status === null ? css.healthMuted : status.healthy ? css.healthGood : css.healthBad}`} /><div><small>{t('status.engine')}</small><strong>{status === null ? t('status.engineChecking') : status.healthy ? status.version === undefined ? t('status.engineConnected') : `Mnemon ${status.version}` : t('status.engineUnavailable')}</strong><p>{status?.dshMnemonVersion === undefined ? t('status.versionWaiting') : `dsh-mnemon ${status.dshMnemonVersion}`}</p></div></article>
+        <article><span className={`${css.healthIndicator} ${status === null ? css.healthMuted : css.healthGood}`} /><div><small>{t('status.engine')}</small><strong>{status?.dshMnemonVersion === undefined ? 'dsh-mnemon' : `dsh-mnemon ${status.dshMnemonVersion}`}</strong><p>{status === null ? t('status.pluginChecking') : t('status.pluginReady')}</p></div></article>
         <article><span className={`${css.healthIndicator} ${runtimeArea === undefined ? css.healthMuted : runtimeArea.status === 'invalid' ? css.healthBad : css.healthGood}`} /><div><small>{t('status.runtime')}</small><strong>{runtimeArea === undefined ? t('status.runtimeWaiting') : t('status.runtimeRatio', { user: runtimeUserEntries, memory: runtimeMemoryEntries })}</strong><p>{runtimeArea === undefined ? t('status.runtimeWaitingDetail') : t('status.runtimeBytes', { bytes: humanBytes(runtimeArea.bytes) })}</p></div></article>
         <article><span className={`${css.healthIndicator} ${activeBodies > 0 ? css.healthGood : css.healthMuted}`} /><div><small>{t('status.spaces')}</small><strong>{catalogKnown ? t('status.activeRatio', { active: activeBodies, total: memoryBodies.length }) : t('status.directoryUnsynced')}</strong><p>{t('status.activeMemories', { count: status?.stats?.totalInsights ?? 0 })}</p></div></article>
         <article><span className={`${css.healthIndicator} ${documents === undefined ? css.healthMuted : css.healthGood}`} /><div><small>{t('status.documents')}</small><strong>{documents === undefined ? t('status.documentsWaiting') : t('status.documentRatio', { active: documents.activeCount, archived: documents.archivedCount })}</strong><p>{documents === undefined ? t('status.documentsSession') : t('status.documentUsage', { used: humanBytes(documents.activeBytes), limit: humanBytes(documents.limitBytes) })}</p></div></article>
       </section>
 
-      {status?.providerServices !== undefined && <ProviderHealth services={status.providerServices} />}
+      {status !== null && <NativeProviderHealth status={status} />}
+      {status?.providerServices !== undefined && <ProviderHealth services={status.providerServices.filter(service => service.providerId !== 'mnemon-native')} />}
       <StorageDomains catalog={storage} selected={selectedScope} selectedKind={selectedScopeKind} />
       {versionsOpen && <VersionDialog client={props.client} onClose={() => setVersionsOpen(false)} onRefreshStatus={props.onRefresh} />}
     </div>
   )
+}
+
+function NativeProviderHealth({ status }: { status: StatusView }): JSX.Element {
+  const t = useT()
+  const bodies = (status.memoryBodies ?? []).filter(body => body.provider?.id === undefined || body.provider.id === 'mnemon-native')
+  const active = bodies.filter(body => body.active)
+  const failed = active.filter(body => !body.healthy)
+  const state: MemoryProviderRuntimeStatus['status'] = !status.commandFound || failed.length > 0 ? 'unhealthy' : active.length === 0 ? 'idle' : 'healthy'
+  const error = !status.commandFound
+    ? t('status.nativeCliMissing')
+    : failed.map(body => `${body.name}: ${body.error ?? t('status.engineUnavailable')}`).join('; ')
+  return <section className={css.nativeProviderHealth} aria-label={t('status.nativeAria')} data-status={state}>
+    <ProviderIcon providerId="mnemon-native" className={css.providerHealthMark} />
+    <div className={css.nativeProviderCopy}>
+      <small>{t('status.nativeLabel')}</small>
+      <strong>Mnemon Native</strong>
+      {error !== '' && <p title={error}>{error}</p>}
+    </div>
+    <div className={css.nativeProviderMeta}>
+      <span><i aria-hidden="true" />{t(`status.providerState.${state}` as MnemonKey)}</span>
+      <small><span>{status.version === undefined ? t('status.versionWaiting') : `Mnemon ${status.version}`}</span><span> · {t('status.providerSpaces', { active: active.length, total: bodies.length })}</span></small>
+    </div>
+  </section>
 }
 
 function ProviderHealth({ services }: { services: MemoryProviderRuntimeStatus[] }): JSX.Element {

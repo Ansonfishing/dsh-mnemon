@@ -20,7 +20,7 @@ describe('MnemonView', () => {
     unsetPath: async () => {},
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { withInactiveBody?: boolean; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean } = {}) {
+  function createConnection(options: { withInactiveBody?: boolean; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -42,7 +42,8 @@ describe('MnemonView', () => {
           decidedAt: '2026-08-13T02:00:00.000Z',
         },
       } : {}),
-      healthy: true,
+      healthy: options.nativeUnhealthy !== true,
+      ...(options.nativeUnhealthy === true ? { error: 'Mnemon Store 无法打开' } : {}),
       stats: { totalInsights: 12, deletedInsights: 0, edgeCount: 9, oplogCount: 20, dbSizeBytes: 4096, byCategory: {}, topEntities: [{ entity: 'SQLite', count: 2 }] },
     }
     let secondaryActive = false
@@ -58,7 +59,8 @@ describe('MnemonView', () => {
       stats: { ...body.stats, totalInsights: 1, edgeCount: 0, topEntities: [{ entity: 'DSH', count: 1 }] },
     }
     const status = {
-      healthy: true,
+      healthy: options.nativeUnhealthy !== true,
+      ...(options.nativeUnhealthy === true ? { error: '项目记忆体: Mnemon Store 无法打开' } : {}),
       version: '0.1.2',
       dshMnemonVersion: '0.1.2',
       cliPath: '/usr/local/bin/mnemon',
@@ -355,7 +357,10 @@ describe('MnemonView', () => {
     expect(screen.queryByRole('heading', { name: '子 Agent 生命周期' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '记忆系统流转' })).toBeNull()
     expect(screen.getByRole('heading', { name: '三方 Provider' })).toBeTruthy()
+    const nativeProviderStatus = screen.getByRole('region', { name: 'Mnemon Native Provider 状态' })
     const providerStatus = screen.getByRole('region', { name: '三方 Provider 状态' })
+    expect(within(nativeProviderStatus).getByText('Mnemon Native')).toBeTruthy()
+    expect(nativeProviderStatus.compareDocumentPosition(providerStatus) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(within(providerStatus).getByText('OpenViking')).toBeTruthy()
     expect(within(providerStatus).getByText('连接正常')).toBeTruthy()
     expect(within(providerStatus).getByText('Mem0')).toBeTruthy()
@@ -365,6 +370,21 @@ describe('MnemonView', () => {
     expect(screen.queryByText('后台状态')).toBeNull()
     expect(screen.getByText('/tmp/mnemon')).toBeTruthy()
   }, 10_000)
+
+  it('keeps a Native Provider failure out of the dsh-mnemon engine summary', async () => {
+    const { connection } = createConnection({ nativeUnhealthy: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    const engineStatus = await screen.findByRole('region', { name: 'Mnemon 运行状态' })
+    expect(within(engineStatus).getByText('dsh-mnemon 0.1.2')).toBeTruthy()
+    expect(within(engineStatus).getByText('插件运行正常')).toBeTruthy()
+    expect(screen.getByText('系统正常')).toBeTruthy()
+    expect(screen.queryByText('Mnemon 不可用')).toBeNull()
+
+    const nativeStatus = screen.getByRole('region', { name: 'Mnemon Native Provider 状态' })
+    expect(within(nativeStatus).getByText('连接需要检查')).toBeTruthy()
+    expect(within(nativeStatus).getByText('项目记忆体: Mnemon Store 无法打开')).toBeTruthy()
+  })
 
   it('activates an additional memory space without crashing the live graph', async () => {
     const { connection } = createConnection({ withInactiveBody: true })
