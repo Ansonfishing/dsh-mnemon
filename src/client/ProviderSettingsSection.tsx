@@ -126,7 +126,7 @@ function ProviderServiceForm(props: {
   return <form className={css.providerServiceForm} onSubmit={event => void submit(event)} data-provider={props.provider.id}>
     <p className={css.providerServicePrompt}>{props.t(props.service.configured ? 'config.providerServiceHint' : 'config.providerEnableHint')}</p>
     <div className={css.providerSettingsGrid}>{serviceFields(props.provider).map(field => <ServiceField key={field.key} field={field} value={draft.settings[field.key]} configuredSecrets={props.service.configuredSecrets} clearing={draft.clearSecrets.includes(field.key)} disabled={props.disabled || saving} t={props.t} onChange={value => update(field.key, value)} onClear={clear => setClearing(field.key, clear)} />)}</div>
-    <div className={css.memoryConfigFooter}>
+    <div className={`${css.memoryConfigFooter} ${css.providerServiceFooter}`}>
       <div className={css.configFeedback} aria-live="polite">{failed !== null && <span className={css.error}>{props.t('config.providerSaveFailed', { error: failed })}</span>}{saved && <span className={css.packSuccess}>{props.t('config.providerServiceSaved')}</span>}</div>
       <button type="submit" className={css.primaryPill} disabled={props.disabled || saving || !configurationComplete(props.provider, draft, props.service)}>{saving ? props.t('config.saving') : props.t(props.service.configured ? 'config.saveProviderService' : 'config.enableProvider')}</button>
     </div>
@@ -179,7 +179,14 @@ function ProviderPanel(props: {
     ? props.service.configured ? 'config.providerEnabled' : 'config.providerNeedsConfiguration'
     : props.service.configured ? 'config.providerDisabledConfigured' : 'config.providerDisabled'
   const controlDisabled = props.disabled || toggling
-  return <div className={css.providerRow} data-provider={props.provider.id} data-enabled={enabled || undefined}>
+  return <div
+    className={css.providerRow}
+    data-provider={props.provider.id}
+    data-enabled={enabled || undefined}
+    data-expanded={expanded || undefined}
+    role="group"
+    aria-label={`${props.provider.label} ${props.t('config.providerServiceTitle')}`}
+  >
     <div className={css.providerRowHeader}>
       <button type="button" className={css.providerDisclosure} aria-expanded={expanded} disabled={!enabled || controlDisabled} onClick={() => setExpanded(value => !value)}>
         <span className={css.providerIdentity}><ProviderIcon providerId={props.provider.id} className={css.providerMark} /><span><strong>{props.provider.label}</strong><small>{props.t(`overview.workspaceBinding.${props.provider.workspaceBinding}`)} · {props.t(`overview.providerSummary.${props.provider.id}` as MnemonKey)}</small></span></span>

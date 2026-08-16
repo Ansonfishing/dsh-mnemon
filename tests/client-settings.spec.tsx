@@ -378,6 +378,7 @@ describe('MnemonSettingsCard', () => {
     render(<MnemonSettingsCard scope={scope} connection={connection} sessionId="session-1" workspaceId="workspace-1" workspaceLabel="dsh-mnemon" />)
 
     await waitFor(() => expect(screen.getByText('OpenViking')).toBeTruthy())
+    expect(screen.getByRole('group', { name: 'OpenViking 服务配置' })).toBeTruthy()
     const disclosure = screen.getByText('OpenViking').closest('button') as HTMLButtonElement
     expect(disclosure.getAttribute('aria-expanded')).toBe('false')
     expect((screen.getByRole('checkbox', { name: '启用 OpenViking' }) as HTMLInputElement).checked).toBe(true)
