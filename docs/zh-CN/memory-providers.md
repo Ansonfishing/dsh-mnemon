@@ -33,7 +33,7 @@ Host 只暴露适配器能够兑现的能力；UI 与 Agent 工具不会伪造�
 | ByteRover | `cliPath` | `workingDirectory`、`apiKey` |
 | Supermemory | `endpoint`、`apiKey`、`containerTag`、`searchMode` | — |
 
-连接统一在“**记忆体 → 概览**”创建和编辑。普通设置会返回 WebUI；Secret 字段保存在 `<storageRoot>/state/memory-providers.json`，权限为 `0600`，Host 只返回哪些 Secret 已配置。编辑时将已保存 Secret 留空会保持原值，显式“清除”才会移除。
+“**设置 → 记忆系统**”按 Provider 展示折叠配置；每保存一份配置，就直接创建或更新一个可用记忆体。“**记忆体 → 概览**”继续提供同一批记忆体的状态、编辑与生命周期入口。Secret 字段保存在 `<storageRoot>/state/memory-providers.json`，权限为 `0600`，Host 只返回哪些 Secret 已配置。编辑时将已保存 Secret 留空会保持原值，显式“清除”才会移除。
 
 ## 手动与智能选择
 

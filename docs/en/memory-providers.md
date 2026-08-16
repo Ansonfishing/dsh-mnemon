@@ -33,7 +33,7 @@ The Host exposes only capabilities an adapter can honor. UI actions and Agent to
 | ByteRover | `cliPath` | `workingDirectory`, `apiKey` |
 | Supermemory | `endpoint`, `apiKey`, `containerTag`, `searchMode` | — |
 
-Create or edit these connections only through **Memory Spaces → Overview**. Non-secret settings are returned to the WebUI. Secret fields are stored in `<storageRoot>/state/memory-providers.json` with mode `0600`; the Host returns only which secret fields are configured. Leaving a saved secret blank keeps it, while the explicit clear control removes it.
+**Settings → Memory System** exposes one collapsible configuration area per provider; saving one configuration directly creates or updates a ready-to-use Memory Space. **Memory Spaces → Overview** remains the status, editing, and lifecycle surface for the same set of Memory Spaces. Secret fields are stored in `<storageRoot>/state/memory-providers.json` with mode `0600`; the Host returns only which secret fields are configured. Leaving a saved secret blank keeps it, while the explicit clear control removes it.
 
 ## Manual and smart placement
 
