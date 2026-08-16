@@ -189,7 +189,8 @@ export class MnemonService {
 
   async bodies(signal?: AbortSignal): Promise<MemoryBodyCatalog> {
     const items: MemoryBodyView[] = []
-    for (const body of this.memoryBodies.list()) items.push(await this.bodyStatus(body, signal))
+    const mnemonDefaultStore = this.runner.persistedStore()
+    for (const body of this.memoryBodies.list()) items.push(await this.bodyStatus(body, body.id === mnemonDefaultStore, signal))
     return {
       items,
       total: items.length,
@@ -202,11 +203,14 @@ export class MnemonService {
   async status(signal?: AbortSignal): Promise<StatusView> {
     const catalog = await this.bodies(signal)
     const active = catalog.items.filter(body => body.active)
+    const dshActiveStores = active.map(body => body.id)
     const base = {
       cliPath: this.runner.command,
       commandFound: this.runner.commandFound,
       dataDir: this.runner.effectiveDataDir(),
-      store: active.map(body => body.id).join(', ') || 'none',
+      store: dshActiveStores.join(', ') || 'none',
+      mnemonDefaultStore: this.runner.persistedStore(),
+      dshActiveStores,
       writeEnabled: this.config.writeEnabled,
       timeoutMs: this.config.timeoutMs,
       defaultRecallLimit: this.config.defaultRecallLimit,
@@ -429,14 +433,14 @@ export class MnemonService {
     }
   }
 
-  private async bodyStatus(body: MemoryBody, signal?: AbortSignal): Promise<MemoryBodyView> {
+  private async bodyStatus(body: MemoryBody, mnemonDefault: boolean, signal?: AbortSignal): Promise<MemoryBodyView> {
     try {
       const raw = await this.runner.runJson(['status'], { ...(signal === undefined ? {} : { signal }), store: body.id })
       const status = record(raw)
       if (status === undefined) throw new Error('mnemon status returned an unexpected payload')
-      return { ...body, healthy: true, stats: this.parseStats(status) }
+      return { ...body, mnemonDefault, healthy: true, stats: this.parseStats(status) }
     } catch (error) {
-      return { ...body, healthy: false, error: error instanceof Error ? error.message : String(error) }
+      return { ...body, mnemonDefault, healthy: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
 

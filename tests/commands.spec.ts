@@ -29,13 +29,18 @@ describe('/mnemon command', () => {
         cliPath: '/usr/local/bin/mnemon',
         dataDir: '/tmp/mnemon',
         store: 'project',
+        mnemonDefaultStore: 'default',
+        dshActiveStores: ['project'],
         writeEnabled: true,
         defaultRecallLimit: 10,
         stats: { totalInsights: 3, edgeCount: 2, deletedInsights: 1 },
       })),
     } as unknown as MnemonService
     const result = await createMnemonCommand(service, coordinator()).handler(invocation('status'))
-    expect(result).toEqual(expect.objectContaining({ kind: 'success', text: expect.stringContaining('store=project') }))
+    expect(result).toEqual(expect.objectContaining({
+      kind: 'success',
+      text: expect.stringMatching(/default=default[\s\S]*DSH 已激活: project/u),
+    }))
     expect(service.status).toHaveBeenCalledOnce()
   })
 

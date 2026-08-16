@@ -189,6 +189,8 @@ export interface MemoryBodyStats {
 }
 
 export interface MemoryBodyView extends MemoryBody {
+  /** True when Mnemon's persisted active-file selection points to this Store. */
+  mnemonDefault: boolean
   healthy: boolean
   error?: string
   stats?: MemoryBodyStats
@@ -500,7 +502,10 @@ export interface StatusView {
   cliPath: string
   commandFound: boolean
   dataDir: string
+  /** Legacy comma-separated DSH-enabled Store list. */
   store: string
+  mnemonDefaultStore: string
+  dshActiveStores: string[]
   writeEnabled: boolean
   timeoutMs: number
   defaultRecallLimit: number

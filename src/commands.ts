@@ -53,7 +53,8 @@ async function execute(serviceOrSource: MnemonService | AgentServiceSource, coor
       return {
         kind: 'success',
         text: [
-          `Mnemon ${status.version ?? ''} · store=${status.store}`.trim(),
+          `Mnemon ${status.version ?? ''} · default=${status.mnemonDefaultStore}`.trim(),
+          `DSH 已激活: ${status.dshActiveStores.join(', ') || 'none'}`,
           `CLI: ${status.cliPath}`,
           `数据目录: ${status.dataDir}`,
           `有效记忆: ${stats?.totalInsights ?? 0} · 连接: ${stats?.edgeCount ?? 0} · 已删除: ${stats?.deletedInsights ?? 0}`,
