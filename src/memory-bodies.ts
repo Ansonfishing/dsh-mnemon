@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
 import type { MnemonRunner, MnemonTextCommand } from './runner.ts'
 import type {
   CreateMemoryBodyRequest,
@@ -14,7 +14,8 @@ import type {
 
 export type { CreateMemoryBodyRequest, MemoryBody, UpdateMemoryBodyRequest } from './shared/contracts.ts'
 
-const REGISTRY_VERSION = 2
+const NATIVE_REGISTRY_VERSION = 1
+const PROVIDER_REGISTRY_VERSION = 1
 const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/
 
 const NATIVE_CAPABILITIES: MemoryProviderCapabilities = {
@@ -57,11 +58,21 @@ interface StoredMemoryBody extends Omit<MemoryBody, 'dbPath' | 'provider'> {
   openViking?: StoredOpenVikingConnection
 }
 
-interface LegacyStoredMemoryBody extends Omit<StoredMemoryBody, 'providerId' | 'openViking'> {}
+interface StoredNativeMemoryBody extends Omit<StoredMemoryBody, 'providerId' | 'openViking'> {}
 
-interface RegistryFile {
-  version: 1 | 2
-  bodies: Array<StoredMemoryBody | LegacyStoredMemoryBody>
+interface NativeRegistryFile {
+  version: 1
+  bodies: StoredNativeMemoryBody[]
+}
+
+interface LegacyProviderRegistryFile {
+  version: 2
+  bodies: StoredMemoryBody[]
+}
+
+interface ProviderRegistryFile {
+  version: 1
+  bodies: StoredMemoryBody[]
 }
 
 function requiredText(value: string, label: string, max: number): string {
@@ -114,12 +125,14 @@ export function validateMemoryBodyId(value: string): string {
 /**
  * Persistent metadata layered over Mnemon's native named stores.
  *
- * The registry lives beside the store directories, while each body keeps using
- * Mnemon's stable `<dataDir>/data/<id>/mnemon.db` layout.
+ * Native metadata lives beside Store directories so existing Mnemon Packs stay
+ * compatible. External connection metadata lives under state and is never
+ * included in Memory Space Packs.
  */
 export class MemoryBodyRegistry {
   readonly directory: string
   readonly registryPath: string
+  readonly providerRegistryPath: string
   private bodies: StoredMemoryBody[] = []
 
   constructor(
@@ -129,6 +142,7 @@ export class MemoryBodyRegistry {
   ) {
     this.directory = join(runner.effectiveDataDir(), 'data')
     this.registryPath = join(this.directory, '.dsh-memory-bodies.json')
+    this.providerRegistryPath = join(runner.effectiveDataDir(), 'state', 'memory-providers.json')
     this.loadAndReconcile()
   }
 
@@ -266,10 +280,12 @@ export class MemoryBodyRegistry {
 
   private loadAndReconcile(): void {
     let migratedSyntheticDefault = false
+    let migratedProviderRegistry = false
     if (this.persistent && existsSync(this.registryPath)) {
       try {
-        const parsed = JSON.parse(readFileSync(this.registryPath, 'utf8')) as RegistryFile
-        if ((parsed.version === 1 || parsed.version === REGISTRY_VERSION) && Array.isArray(parsed.bodies)) {
+        const parsed = JSON.parse(readFileSync(this.registryPath, 'utf8')) as NativeRegistryFile | LegacyProviderRegistryFile
+        if ((parsed.version === NATIVE_REGISTRY_VERSION || parsed.version === 2) && Array.isArray(parsed.bodies)) {
+          migratedProviderRegistry = parsed.version === 2
           this.bodies = parsed.bodies.filter(body => ID_PATTERN.test(body.id)).map(body => {
             // Earlier dsh-mnemon builds gave an already-existing upstream
             // `default` Store a synthetic Chinese product name. That made a
@@ -286,7 +302,7 @@ export class MemoryBodyRegistry {
               description: optionalText(syntheticDefault ? 'Existing Mnemon Store discovered on disk.' : body.description, 'description', 1000),
               active: body.active === true,
               providerId: 'providerId' in body && body.providerId === 'openviking' ? 'openviking' : 'mnemon-native',
-              ...('openViking' in body && body.openViking !== undefined ? { openViking: normalizeOpenViking(body.openViking) } : {}),
+              ...('openViking' in body && body.openViking != null ? { openViking: normalizeOpenViking(body.openViking as OpenVikingBodyConnection) } : {}),
               createdAt: body.createdAt,
               updatedAt: body.updatedAt,
             }
@@ -297,8 +313,30 @@ export class MemoryBodyRegistry {
         this.bodies = []
       }
     }
+    if (this.persistent && existsSync(this.providerRegistryPath)) {
+      try {
+        const parsed = JSON.parse(readFileSync(this.providerRegistryPath, 'utf8')) as ProviderRegistryFile
+        if (parsed.version === PROVIDER_REGISTRY_VERSION && Array.isArray(parsed.bodies)) {
+          const existingIds = new Set(this.bodies.map(body => body.id))
+          this.bodies.push(...parsed.bodies
+            .filter(body => body.providerId === 'openviking' && ID_PATTERN.test(body.id) && !existingIds.has(body.id))
+            .map(body => ({
+              id: body.id,
+              name: requiredText(body.name || body.id, 'name', 100),
+              description: optionalText(body.description, 'description', 1000),
+              active: body.active === true,
+              providerId: 'openviking' as const,
+              openViking: normalizeOpenViking(body.openViking ?? { endpoint: '', targetUri: '' }),
+              createdAt: body.createdAt,
+              updatedAt: body.updatedAt,
+            })))
+        }
+      } catch {
+        // Ignore an invalid optional provider registry; native Stores remain usable.
+      }
+    }
     this.reconcileDiscoveredStores()
-    if (migratedSyntheticDefault) this.save()
+    if (migratedSyntheticDefault || migratedProviderRegistry) this.save()
   }
 
   private reconcileDiscoveredStores(): void {
@@ -359,10 +397,24 @@ export class MemoryBodyRegistry {
 
   private save(): void {
     if (!this.persistent) return
-    mkdirSync(this.directory, { recursive: true })
-    const file: RegistryFile = { version: REGISTRY_VERSION, bodies: this.bodies }
-    const temporary = join(this.directory, `.${basename(this.registryPath)}.${process.pid}.tmp`)
+    mkdirSync(this.directory, { recursive: true, mode: 0o700 })
+    const nativeBodies: StoredNativeMemoryBody[] = this.bodies
+      .filter(body => body.providerId === 'mnemon-native')
+      .map(({ providerId: _providerId, openViking: _openViking, ...body }) => body)
+    this.writeRegistry(this.registryPath, { version: NATIVE_REGISTRY_VERSION, bodies: nativeBodies })
+
+    const providerBodies = this.bodies.filter(body => body.providerId !== 'mnemon-native')
+    if (providerBodies.length === 0) {
+      rmSync(this.providerRegistryPath, { force: true })
+      return
+    }
+    mkdirSync(join(this.runner.effectiveDataDir(), 'state'), { recursive: true, mode: 0o700 })
+    this.writeRegistry(this.providerRegistryPath, { version: PROVIDER_REGISTRY_VERSION, bodies: providerBodies })
+  }
+
+  private writeRegistry(path: string, file: NativeRegistryFile | ProviderRegistryFile): void {
+    const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.tmp`)
     writeFileSync(temporary, `${JSON.stringify(file, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
-    renameSync(temporary, this.registryPath)
+    renameSync(temporary, path)
   }
 }

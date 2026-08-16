@@ -115,9 +115,17 @@ function stateArea(root: string): StorageAreaInventory {
   if (!existsSync(path)) return missing('state', path)
   try {
     const files = readdirSync(path, { withFileTypes: true }).filter(entry => entry.isFile())
+    const providerRegistry = join(path, 'memory-providers.json')
+    let providerConnections = 0
+    if (existsSync(providerRegistry)) {
+      try {
+        const registry = record(readJson(providerRegistry))
+        providerConnections = Array.isArray(registry?.bodies) ? registry.bodies.length : 0
+      } catch {}
+    }
     return {
       kind: 'state', path, status: files.length === 0 ? 'empty' : 'ready', bytes: safeBytes(path), itemCount: files.length,
-      details: { reviewLedger: existsSync(join(path, 'review-ledger.json')), files: files.length },
+      details: { reviewLedger: existsSync(join(path, 'review-ledger.json')), providerConnections, files: files.length },
     }
   } catch (error) {
     return { kind: 'state', path, status: 'invalid', bytes: safeBytes(path), itemCount: 0, details: {}, issue: error instanceof Error ? error.message : String(error) }

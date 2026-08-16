@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -201,12 +201,39 @@ describe('MemoryBodyRegistry', () => {
       },
     })
     expect(registry.openVikingConnection(created.id)).toMatchObject({ apiKey: 'secret-token' })
-    expect(JSON.parse(readFileSync(registry.registryPath, 'utf8'))).toMatchObject({ version: 2 })
+    expect(JSON.parse(readFileSync(registry.registryPath, 'utf8'))).toEqual({ version: 1, bodies: [] })
+    expect(JSON.parse(readFileSync(registry.providerRegistryPath, 'utf8'))).toMatchObject({
+      version: 1,
+      bodies: [expect.objectContaining({ id: created.id, providerId: 'openviking', openViking: expect.objectContaining({ apiKey: 'secret-token' }) })],
+    })
+    expect(statSync(registry.providerRegistryPath).mode & 0o777).toBe(0o600)
+    expect(new MemoryBodyRegistry(runner, true).get(created.id)).toMatchObject({ provider: { id: 'openviking', apiKeyConfigured: true } })
     expect(process).not.toHaveBeenCalled()
 
     await expect(registry.remove(created.id)).resolves.toMatchObject({ id: created.id })
     expect(registry.list()).toEqual([])
+    expect(existsSync(registry.providerRegistryPath)).toBe(false)
     expect(process).not.toHaveBeenCalled()
+  })
+
+  it('migrates a version 2 mixed registry into native data and provider state without losing credentials', () => {
+    const dataDir = temporaryDirectory()
+    mkdirSync(join(dataDir, 'data', 'default'), { recursive: true })
+    writeFileSync(join(dataDir, 'data', 'default', 'mnemon.db'), 'existing database')
+    writeFileSync(join(dataDir, 'data', '.dsh-memory-bodies.json'), JSON.stringify({
+      version: 2,
+      bodies: [
+        { id: 'default', name: 'Local', description: 'Local data.', active: true, providerId: 'mnemon-native', createdAt: '2026-08-16T00:00:00.000Z', updatedAt: '2026-08-16T00:00:00.000Z' },
+        { id: 'openviking-legacy', name: 'Remote', description: 'Remote data.', active: true, providerId: 'openviking', openViking: { endpoint: 'https://memory.example.com', targetUri: 'viking://user/team/memories', apiKey: 'legacy-secret', account: '', user: '', actorPeerId: '' }, createdAt: '2026-08-16T00:00:00.000Z', updatedAt: '2026-08-16T00:00:00.000Z' },
+      ],
+    }))
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
+
+    const registry = new MemoryBodyRegistry(runner, true)
+
+    expect(registry.list()).toHaveLength(2)
+    expect(JSON.parse(readFileSync(registry.registryPath, 'utf8'))).toMatchObject({ version: 1, bodies: [expect.objectContaining({ id: 'default' })] })
+    expect(readFileSync(registry.providerRegistryPath, 'utf8')).toContain('legacy-secret')
   })
 
   it('rejects OpenViking targets outside the user memory namespace', async () => {
