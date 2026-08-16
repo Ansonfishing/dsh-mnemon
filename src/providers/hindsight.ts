@@ -57,7 +57,41 @@ export class HindsightProvider extends HttpMemoryProvider implements MemoryProvi
     try {
       const connection = this.connection(body)
       await this.request(body, '/health/live', { headers: this.headers(connection), signal })
-      return { healthy: true }
+      try {
+        const [statsPayload, entitiesPayload] = await Promise.all([
+          this.request(body, `${this.bankPath(connection)}/stats`, { headers: this.headers(connection), signal }),
+          this.request(body, `${this.bankPath(connection)}/entities?limit=100&offset=0`, { headers: this.headers(connection), signal }),
+        ])
+        const stats = jsonObject(statsPayload) ?? {}
+        const byFactType = jsonObject(stats.nodes_by_fact_type) ?? {}
+        const byCategory = Object.fromEntries(Object.entries(byFactType).flatMap(([category, count]) => {
+          const value = jsonNumber(count)
+          return value === undefined ? [] : [[category, value]]
+        }))
+        const operations = jsonObject(stats.operations_by_status) ?? {}
+        const topEntities = firstArray(entitiesPayload, 'items').flatMap(value => {
+          const item = jsonObject(value)
+          const entity = jsonString(item?.canonical_name)
+          const count = jsonNumber(item?.mention_count)
+          return entity === undefined || count === undefined ? [] : [{ entity, count }]
+        })
+        return {
+          healthy: true,
+          stats: {
+            totalInsights: jsonNumber(stats.total_nodes) ?? 0,
+            deletedInsights: 0,
+            edgeCount: jsonNumber(stats.total_links) ?? 0,
+            oplogCount: Object.values(operations).reduce<number>((total, value) => total + (jsonNumber(value) ?? 0), 0),
+            dbSizeBytes: 0,
+            byCategory,
+            topEntities,
+          },
+        }
+      } catch {
+        // Older Hindsight deployments may expose recall and graph APIs without
+        // the newer statistics surfaces. Liveness remains sufficient there.
+        return { healthy: true }
+      }
     } catch (error) {
       return { healthy: false, error: error instanceof Error ? error.message : String(error) }
     }

@@ -78,6 +78,8 @@ describe('Hermes-inspired remote memory providers', () => {
       requests.push({ url: String(url), ...(init === undefined ? {} : { init }) })
       const path = new URL(String(url)).pathname
       if (path === '/health/live') return response({ status: 'alive', version: '0.9.1' })
+      if (path.endsWith('/stats')) return response({ total_nodes: 3, total_links: 2, nodes_by_fact_type: { world: 2, observation: 1 }, operations_by_status: { completed: 4 } })
+      if (path.endsWith('/entities')) return response({ items: [{ canonical_name: 'Alice', mention_count: 3 }], total: 1 })
       if (path.endsWith('/memories/recall')) return response({ results: [{ id: 'hs-1', text: 'Alice uses TypeScript.', type: 'world', entities: ['Alice'], scores: { final: 0.93 } }] })
       if (path.endsWith('/memories/list')) return response({ items: [{ id: 'hs-1', text: 'Alice uses TypeScript.', type: 'world' }], total: 1 })
       if (path.endsWith('/graph')) return response({
@@ -107,18 +109,21 @@ describe('Hermes-inspired remote memory providers', () => {
     await expect(provider.related(body, 'hs-1', 2)).resolves.toEqual([
       expect.objectContaining({ id: 'hs-2' }), expect.objectContaining({ id: 'hs-3' }),
     ])
-    await expect(provider.status(body)).resolves.toEqual({ healthy: true })
+    await expect(provider.status(body)).resolves.toEqual({
+      healthy: true,
+      stats: expect.objectContaining({ totalInsights: 3, edgeCount: 2, oplogCount: 4, byCategory: { world: 2, observation: 1 }, topEntities: [{ entity: 'Alice', count: 3 }] }),
+    })
     await expect(provider.remember(body, { content: 'Alice ships TypeScript.', category: 'decision', tags: ['dsh'], entities: ['Alice'] })).resolves.toMatchObject({ operationId: 'op-1', itemsCount: 1 })
     await expect(provider.forget(body, 'hs-1')).resolves.toMatchObject({ action: 'invalidated', id: 'hs-1' })
 
     expect(new URL(requests[0]!.url).pathname).toBe('/v1/default/banks/alice%2Fprofile/memories/recall')
     expect(new Headers(requests[0]?.init?.headers).get('Authorization')).toBe('Bearer hs-secret')
     expect(JSON.parse(String(requests[0]?.init?.body))).toMatchObject({ query: 'language', budget: 'high', types: ['world', 'experience', 'observation'] })
-    expect(JSON.parse(String(requests[4]?.init?.body))).toMatchObject({
+    expect(JSON.parse(String(requests[6]?.init?.body))).toMatchObject({
       items: [{ content: 'Alice ships TypeScript.', context: 'decision', tags: ['dsh'], entities: [{ text: 'Alice' }] }],
       async: true,
     })
-    expect(JSON.parse(String(requests[5]?.init?.body))).toEqual({ state: 'invalidated', reason: 'Forgotten from dsh-mnemon' })
+    expect(JSON.parse(String(requests[7]?.init?.body))).toEqual({ state: 'invalidated', reason: 'Forgotten from dsh-mnemon' })
   })
 
   it('uses Mem0 Platform v3 scoping and keeps the token out of result projections', async () => {
