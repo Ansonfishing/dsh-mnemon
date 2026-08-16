@@ -40,6 +40,9 @@ import {
   type MemoryListRequest,
   type MemoryListView,
   type MemoryPlacementDecision,
+  type MemoryReadMode,
+  type MemoryReadSource,
+  type MemoryReadStatus,
   type RememberRequest,
   type SearchRequest,
   type Source,
@@ -61,6 +64,7 @@ export type {
   MemoryGraphSnapshot,
   MemoryListRequest,
   MemoryListView,
+  MemoryReadSource,
   RememberRequest,
   SearchRequest,
   Source,
@@ -84,6 +88,34 @@ function number(value: JsonValue | undefined): number | undefined {
 function stringArray(value: JsonValue | undefined): string[] | undefined {
   if (!Array.isArray(value)) return undefined
   return value.filter((entry): entry is string => typeof entry === 'string')
+}
+
+function readSource(
+  body: MemoryBody,
+  mode: MemoryReadMode,
+  status: MemoryReadStatus,
+  itemCount: number,
+  options: { edgeCount?: number; hint?: string } = {},
+): MemoryReadSource {
+  return {
+    memoryBodyId: body.id,
+    memoryBodyName: body.name,
+    providerId: body.provider.id,
+    providerLabel: body.provider.label,
+    mode,
+    status,
+    itemCount,
+    ...options,
+  }
+}
+
+function insightColor(category: string | undefined): string {
+  if (category === 'preference') return '#9b59b6'
+  if (category === 'decision') return '#e74c3c'
+  if (category === 'fact') return '#3498db'
+  if (category === 'insight') return '#2ecc71'
+  if (category === 'context') return '#f39c12'
+  return '#6574d9'
 }
 
 function normalizeInsight(value: JsonValue): Insight | undefined {
@@ -301,7 +333,7 @@ export class MnemonService {
     }
   }
 
-  async search(request: SearchRequest, signal?: AbortSignal): Promise<{ query: string; mode: string; results: Insight[]; hint?: string }> {
+  async search(request: SearchRequest, signal?: AbortSignal): Promise<{ query: string; mode: string; results: Insight[]; hint?: string; sources: MemoryReadSource[] }> {
     const query = required(request.query, 'query', 2000)
     const limit = boundedInteger(request.limit, this.config.defaultRecallLimit, 1, 50)
     const mode = allowed(request.mode, ['smart', 'keyword', 'basic'] as const, 'mode') ?? 'smart'
@@ -318,11 +350,27 @@ export class MnemonService {
       ...(intent === undefined ? {} : { intent }),
     }
     const batches = await Promise.all(bodies.map(async body => {
+      if (!body.provider.capabilities.search) {
+        return {
+          body,
+          result: { results: [], hint: 'search is not supported' } satisfies ProviderSearchResult,
+          source: readSource(body, 'unsupported', 'unsupported', 0, { hint: 'This provider does not expose search.' }),
+        }
+      }
       try {
         const result = await this.providerFor(body).search(body, normalizedRequest, signal)
-        return { body, result }
+        return {
+          body,
+          result,
+          source: readSource(body, 'search', result.results.length === 0 ? 'empty' : 'ready', result.results.length, result.hint === undefined ? {} : { hint: result.hint }),
+        }
       } catch (error) {
-        return { body, result: { results: [], hint: `unavailable: ${error instanceof Error ? error.message : String(error)}` } satisfies ProviderSearchResult }
+        const hint = error instanceof Error ? error.message : String(error)
+        return {
+          body,
+          result: { results: [], hint: `unavailable: ${hint}` } satisfies ProviderSearchResult,
+          source: readSource(body, 'search', 'unavailable', 0, { hint }),
+        }
       }
     }))
     const results: Array<Insight & { providerRank: number; bodyOrder: number }> = []
@@ -340,6 +388,7 @@ export class MnemonService {
       query,
       mode,
       results: results.slice(0, limit).map(({ providerRank: _providerRank, bodyOrder: _bodyOrder, ...entry }) => entry),
+      sources: batches.map(batch => batch.source),
       ...(hints.length === 0 ? {} : { hint: hints.join('\n') }),
     }
   }
@@ -348,11 +397,38 @@ export class MnemonService {
     const bodies = this.readBodies(memoryBodyIds)
     const nodes: MemoryGraphNode[] = []
     const edges: MemoryGraphEdge[] = []
+    const sources: MemoryReadSource[] = []
     const snapshots = await Promise.all(bodies.map(async body => {
-      try { return { body, snapshot: await this.providerFor(body).graph(body, signal) } } catch { return undefined }
+      const mode: MemoryReadMode = body.provider.capabilities.graph
+        ? 'graph'
+        : body.provider.capabilities.browse
+          ? 'projection'
+          : body.provider.capabilities.search
+            ? 'query-only'
+            : 'unsupported'
+      if (mode === 'query-only') {
+        return { body, source: readSource(body, mode, 'query-required', 0, { edgeCount: 0, hint: 'Use Recall to query this provider.' }) }
+      }
+      if (mode === 'unsupported') {
+        return { body, source: readSource(body, mode, 'unsupported', 0, { edgeCount: 0, hint: 'This provider exposes neither graph nor browse projection.' }) }
+      }
+      try {
+        const snapshot = await this.providerFor(body).graph(body, signal)
+        return {
+          body,
+          snapshot,
+          source: readSource(body, mode, snapshot.nodes.length === 0 ? 'empty' : 'ready', snapshot.nodes.length, { edgeCount: snapshot.edges.length }),
+        }
+      } catch (error) {
+        return {
+          body,
+          source: readSource(body, mode, 'unavailable', 0, { edgeCount: 0, hint: error instanceof Error ? error.message : String(error) }),
+        }
+      }
     }))
     for (const item of snapshots) {
-      if (item === undefined) continue
+      sources.push(item.source)
+      if (item.snapshot === undefined) continue
       const { body, snapshot } = item
       const graphId = (id: string): string => `${body.id}:${id}`
       nodes.push(...snapshot.nodes.map(node => ({ ...this.annotate(node, body), color: node.color, graphId: graphId(node.id) })))
@@ -363,30 +439,83 @@ export class MnemonService {
       edges,
       generatedAt: new Date().toISOString(),
       memoryBodies: bodies.map(({ id, name, active }) => ({ id, name, active })),
+      sources,
     }
   }
 
   async list(request: MemoryListRequest = {}, signal?: AbortSignal): Promise<MemoryListView> {
-    const query = request.query?.trim().toLocaleLowerCase() ?? ''
-    if (query.length > 500) throw new Error('query is too long (max 500 characters)')
+    const rawQuery = request.query?.trim() ?? ''
+    const query = rawQuery.toLocaleLowerCase()
+    if (rawQuery.length > 500) throw new Error('query is too long (max 500 characters)')
     const category = allowed(request.category, CATEGORIES, 'category')
     const limit = boundedInteger(request.limit, 200, 1, 1000)
-    const graph = await this.graph(signal, request.memoryBodyIds)
-    const matches = graph.nodes.filter(node =>
-      (category === undefined || node.category === category)
-      && (query === '' || node.content.toLocaleLowerCase().includes(query) || node.id.toLocaleLowerCase().includes(query)),
-    )
-    return { items: matches.slice(0, limit), total: matches.length, generatedAt: graph.generatedAt }
+    const bodies = this.readBodies(request.memoryBodyIds)
+    const batches = await Promise.all(bodies.map(async body => {
+      const mode: MemoryReadMode = body.provider.capabilities.browse
+        ? 'enumerable'
+        : body.provider.capabilities.search
+          ? 'query-only'
+          : 'unsupported'
+      if (mode === 'query-only' && rawQuery === '') {
+        return { body, items: [] as Insight[], source: readSource(body, mode, 'query-required', 0, { hint: 'Enter a query to inspect this provider.' }) }
+      }
+      if (mode === 'unsupported') {
+        return { body, items: [] as Insight[], source: readSource(body, mode, 'unsupported', 0, { hint: 'This provider does not expose content browsing.' }) }
+      }
+      try {
+        const provider = this.providerFor(body)
+        const rawItems = mode === 'query-only'
+          ? (await provider.search(body, { query: rawQuery, limit }, signal)).results
+          : await provider.list(body, { ...request, limit }, signal)
+        const items = rawItems.filter(item =>
+          (category === undefined || item.category === category)
+          && (query === '' || item.content.toLocaleLowerCase().includes(query) || item.id.toLocaleLowerCase().includes(query)),
+        )
+        return {
+          body,
+          items,
+          source: readSource(body, mode, items.length === 0 ? 'empty' : 'ready', items.length),
+        }
+      } catch (error) {
+        return {
+          body,
+          items: [] as Insight[],
+          source: readSource(body, mode, 'unavailable', 0, { hint: error instanceof Error ? error.message : String(error) }),
+        }
+      }
+    }))
+    const items = batches.flatMap(({ body, items: bodyItems }) => bodyItems.map(item => ({ ...this.annotate(item, body), color: insightColor(item.category) })))
+    return {
+      items: items.slice(0, limit),
+      total: items.length,
+      generatedAt: new Date().toISOString(),
+      sources: batches.map(batch => batch.source),
+    }
   }
 
   async entities(entity?: string, limit?: number, signal?: AbortSignal): Promise<EntityView> {
-    const status = await this.status(signal)
-    const items = status.stats?.topEntities ?? []
+    const catalog = await this.bodies(signal)
+    const active = catalog.items.filter(body => body.active)
+    const capable = active.filter(body => body.provider.capabilities.entities)
+    const entityCounts = new Map<string, number>()
+    for (const body of capable) {
+      for (const item of body.stats?.topEntities ?? []) entityCounts.set(item.entity, (entityCounts.get(item.entity) ?? 0) + item.count)
+    }
+    const items = [...entityCounts].map(([name, count]) => ({ entity: name, count })).sort((left, right) => right.count - left.count)
+    const sources = active.map(body => {
+      if (!body.provider.capabilities.entities) return readSource(body, 'unsupported', 'unsupported', 0, { hint: 'This provider does not expose an entity index.' })
+      if (!body.healthy) return readSource(body, 'entities', 'unavailable', 0, { hint: body.error ?? 'Provider unavailable.' })
+      const count = body.stats?.topEntities.length ?? 0
+      return readSource(body, 'entities', count === 0 ? 'empty' : 'ready', count)
+    })
     const selected = entity?.trim() ?? ''
-    if (selected === '') return { items, insights: [] }
+    if (selected === '') return { items, insights: [], sources }
     if (selected.length > 200) throw new Error('entity is too long (max 200 characters)')
-    const response = await this.search({ query: selected, intent: 'ENTITY', limit: boundedInteger(limit, 20, 1, 50) }, signal)
-    return { items, selected, insights: response.results }
+    const readableIds = capable.filter(body => body.healthy).map(body => body.id)
+    const insights = readableIds.length === 0
+      ? []
+      : (await this.search({ query: selected, intent: 'ENTITY', limit: boundedInteger(limit, 20, 1, 50), memoryBodyIds: readableIds }, signal)).results
+    return { items, selected, insights, sources }
   }
 
   async remember(request: RememberRequest, signal?: AbortSignal): Promise<JsonValue> {

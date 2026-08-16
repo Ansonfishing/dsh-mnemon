@@ -83,7 +83,7 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     kind: 'remote',
     summary: 'Cross-session user modelling, peer profiles, dialectic reasoning, and persistent conclusions.',
     origin: 'hermes-inspired',
-    capabilities: { ...REMOTE_EXACT_CAPABILITIES, entities: true },
+    capabilities: REMOTE_EXACT_CAPABILITIES,
     fields: [
       field({ key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'https://api.honcho.dev' }),
       field({ key: 'apiKey', label: 'API key', input: 'secret', required: false }),
@@ -152,7 +152,7 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     kind: 'remote',
     summary: 'Cloud memory with hybrid vector/BM25 retrieval, profiles, and typed durable facts.',
     origin: 'hermes-inspired',
-    capabilities: { ...REMOTE_EXACT_CAPABILITIES, entities: true },
+    capabilities: REMOTE_EXACT_CAPABILITIES,
     fields: [
       field({ key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'https://api.retaindb.com' }),
       field({ key: 'apiKey', label: 'API key', input: 'secret', required: true }),
@@ -185,7 +185,7 @@ export const MEMORY_PROVIDER_CATALOG: readonly MemoryProviderDescriptor[] = [
     kind: 'remote',
     summary: 'Semantic memory, persistent profiles, conversation ingest, and multi-container recall.',
     origin: 'hermes-inspired',
-    capabilities: { ...REMOTE_EXACT_CAPABILITIES, entities: true, writeMode: 'async-extracting', deletionMode: 'soft' },
+    capabilities: { ...REMOTE_EXACT_CAPABILITIES, writeMode: 'async-extracting', deletionMode: 'soft' },
     fields: [
       field({ key: 'endpoint', label: 'Endpoint', input: 'url', required: true, defaultValue: 'https://api.supermemory.ai' }),
       field({ key: 'apiKey', label: 'API key', input: 'secret', required: true }),

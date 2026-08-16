@@ -344,6 +344,31 @@ export interface MemoryGraphSnapshot {
   edges: MemoryGraphEdge[]
   generatedAt: string
   memoryBodies?: Array<Pick<MemoryBody, 'id' | 'name' | 'active'>>
+  /** Per-space observation state for capability-aware overview rendering. */
+  sources?: MemoryReadSource[]
+}
+
+export type MemoryReadMode = 'search' | 'graph' | 'projection' | 'enumerable' | 'query-only' | 'entities' | 'unsupported'
+export type MemoryReadStatus = 'ready' | 'empty' | 'query-required' | 'unsupported' | 'unavailable'
+
+/**
+ * One provider-backed Memory Space participating in a read surface.
+ *
+ * The mode describes what the provider can truthfully expose; status describes
+ * the result of this particular read. Keeping those dimensions separate lets
+ * the UI distinguish an empty graph from a flat projection, a query-only
+ * engine, and an unavailable connection.
+ */
+export interface MemoryReadSource {
+  memoryBodyId: string
+  memoryBodyName: string
+  providerId: MemoryProviderId
+  providerLabel: string
+  mode: MemoryReadMode
+  status: MemoryReadStatus
+  itemCount: number
+  edgeCount?: number
+  hint?: string
 }
 
 export interface MemoryListRequest {
@@ -357,12 +382,16 @@ export interface MemoryListView {
   items: MemoryGraphNode[]
   total: number
   generatedAt: string
+  /** Omitted only when talking to a pre-provider-aware Host. */
+  sources?: MemoryReadSource[]
 }
 
 export interface EntityView {
   items: Array<{ entity: string; count: number }>
   insights: Insight[]
   selected?: string
+  /** Omitted only when talking to a pre-provider-aware Host. */
+  sources?: MemoryReadSource[]
 }
 
 export type DocumentStatus = 'active' | 'archived'

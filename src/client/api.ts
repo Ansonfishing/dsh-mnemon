@@ -18,6 +18,7 @@ import {
   type MemoryListRequest,
   type MemoryListView,
   type MemoryProviderId,
+  type MemoryReadSource,
   type MnemonPackExport,
   type MnemonPackImportResult,
   type MnemonPackPreview,
@@ -80,6 +81,8 @@ export interface SearchResponse {
   mode: string
   results: Insight[]
   hint?: string
+  /** Omitted only when talking to a pre-provider-aware Host. */
+  sources?: MemoryReadSource[]
 }
 
 export interface AgentSearchResponse extends SearchResponse {

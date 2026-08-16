@@ -22,6 +22,12 @@ describe('memory provider catalog', () => {
     ])
     expect(MEMORY_PROVIDER_CATALOG).toHaveLength(9)
     expect(MEMORY_PROVIDER_CATALOG.filter(provider => provider.origin === 'hermes-inspired')).toHaveLength(8)
+    expect(MEMORY_PROVIDER_CATALOG.filter(provider => provider.capabilities.entities).map(provider => provider.id)).toEqual([
+      'mnemon-native',
+      'hindsight',
+      'holographic',
+    ])
+    expect(memoryProviderDescriptor('byterover').capabilities).toMatchObject({ search: true, browse: false, graph: false, entities: false })
   })
 
   it('normalizes provider defaults without exposing secrets to clients', () => {

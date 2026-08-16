@@ -107,6 +107,7 @@ describe('MnemonService', () => {
     const { service, process, dataDir } = fixture()
     const result = await service.search({ query: ' database choice ' })
     expect(result.results).toEqual([expect.objectContaining({ id: 'm1', score: 0.91, confidence: 'high' })])
+    expect(result.sources).toEqual([expect.objectContaining({ memoryBodyId: 'work', mode: 'search', status: 'ready', itemCount: 1 })])
     expect(process).toHaveBeenCalledWith(
       '/fake/mnemon',
       ['--data-dir', dataDir, '--store', 'work', 'recall', 'database choice', '--limit', '7'],
@@ -122,6 +123,7 @@ describe('MnemonService', () => {
       expect.objectContaining({ id: 'm1', category: 'decision', entities: ['SQLite'], tags: ['storage'] }),
     ])
     expect(graph.edges).toEqual([expect.objectContaining({ sourceId: 'work:m1', targetId: 'work:m2', type: 'temporal', label: 'backbone' })])
+    expect(graph.sources).toEqual([expect.objectContaining({ memoryBodyId: 'work', mode: 'graph', status: 'ready', itemCount: 2, edgeCount: 1 })])
     expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['viz', '--format', 'html']), expect.anything())
     expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--readonly', 'recall', '', '--basic']), expect.anything())
   })
@@ -131,13 +133,18 @@ describe('MnemonService', () => {
     await expect(service.list({ query: 'sqlite', category: 'decision' })).resolves.toMatchObject({
       total: 1,
       items: [{ id: 'm1', content: 'Use SQLite for local-first storage.', category: 'decision', color: '#e74c3c' }],
+      sources: [{ memoryBodyId: 'work', mode: 'enumerable', status: 'ready', itemCount: 1 }],
     })
     expect(process.mock.calls.filter(([, args]) => args.includes('recall')).every(([, args]) => args.includes('--readonly'))).toBe(true)
   })
 
   it('exposes top entities and recalls one entity on demand', async () => {
     const { service, process } = fixture()
-    await expect(service.entities()).resolves.toMatchObject({ items: [{ entity: 'SQLite', count: 2 }], insights: [] })
+    await expect(service.entities()).resolves.toMatchObject({
+      items: [{ entity: 'SQLite', count: 2 }],
+      insights: [],
+      sources: [{ memoryBodyId: 'work', mode: 'entities', status: 'ready', itemCount: 1 }],
+    })
     await expect(service.entities('SQLite', 5)).resolves.toMatchObject({ selected: 'SQLite', insights: [{ id: 'm1' }] })
     expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--intent', 'ENTITY', '--limit', '5']), expect.anything())
   })
@@ -229,12 +236,45 @@ describe('MnemonService', () => {
     expect(result.results.map(item => item.memoryProviderId)).toEqual(['mnemon-native', 'openviking'])
     expect(result.results.map(item => item.score)).toEqual([0.91, 99])
     expect(result.results[0]!.federatedScore).toBe(result.results[1]!.federatedScore)
+    expect(result.sources).toEqual([
+      expect.objectContaining({ memoryBodyId: 'work', mode: 'search', status: 'ready' }),
+      expect.objectContaining({ providerId: 'openviking', mode: 'search', status: 'ready' }),
+    ])
 
     fetchMock.mockRejectedValueOnce(new Error('remote offline'))
     await expect(service.search({ query: 'fallback' })).resolves.toMatchObject({
       results: [expect.objectContaining({ memoryProviderId: 'mnemon-native' })],
       hint: expect.stringContaining('团队 OpenViking: unavailable: remote offline'),
+      sources: expect.arrayContaining([expect.objectContaining({ providerId: 'openviking', status: 'unavailable' })]),
     })
+  })
+
+  it('reports query-only providers without pretending they expose an enumerable content list', async () => {
+    const { service } = fixture()
+    const provider = {
+      id: 'byterover' as const,
+      status: vi.fn(async () => ({ healthy: true })),
+      search: vi.fn(async () => ({ results: [{ id: 'brv:architecture', content: 'Architecture decisions are curated before compression.', category: 'context' }] })),
+      graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
+      list: vi.fn(async () => []),
+      remember: vi.fn(async () => ({ action: 'stored' })),
+    }
+    ;(service as unknown as { providers: Map<string, typeof provider> }).providers.set('byterover', provider)
+    const body = await service.createBody({
+      name: 'ByteRover Knowledge', description: 'Query-oriented coding context.', active: true, providerId: 'byterover',
+      connection: { cliPath: 'brv', workingDirectory: '/tmp/dsh-mnemon-bytrover' },
+    })
+
+    await expect(service.list({ memoryBodyIds: [body.id] })).resolves.toMatchObject({
+      items: [],
+      sources: [{ mode: 'query-only', status: 'query-required', itemCount: 0 }],
+    })
+    await expect(service.list({ query: 'architecture', memoryBodyIds: [body.id] })).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: 'brv:architecture', memoryProviderId: 'byterover' })],
+      sources: [{ mode: 'query-only', status: 'ready', itemCount: 1 }],
+    })
+    expect(provider.list).not.toHaveBeenCalled()
+    expect(provider.search).toHaveBeenCalledWith(body, expect.objectContaining({ query: 'architecture' }), undefined)
   })
 
   it('rejects explicit reads from an inactive memory body', async () => {
