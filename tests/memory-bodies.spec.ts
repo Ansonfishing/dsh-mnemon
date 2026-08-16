@@ -68,26 +68,29 @@ describe('MemoryBodyRegistry', () => {
     expect(readFileSync(join(dataDir, 'data', 'default', 'mnemon.db'), 'utf8')).toBe('existing database')
   })
 
-  it('persists names, descriptions, and activation independently from Mnemon data', async () => {
+  it('uses default for the first native Store and persists DSH metadata independently', async () => {
     const dataDir = temporaryDirectory()
     const process = vi.fn<ProcessRunner>(async () => ({ stdout: 'Created store', stderr: '', exitCode: 0 }))
     const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir, store: 'default' }), process)
     const registry = new MemoryBodyRegistry(runner, true, () => new Date('2026-08-13T00:00:00.000Z'))
 
     const created = await registry.create({ name: '产品决策', description: '产品范围、取舍与稳定决策；规划或复盘产品方向时召回。' })
-    expect(created.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    expect(created.id).toBe('default')
+    expect(created.active).toBe(false)
     registry.update(created.id, { active: true, description: '稳定产品上下文；规划或复盘产品方向时召回。' })
 
     const reloaded = new MemoryBodyRegistry(runner, true)
     expect(reloaded.get(created.id)).toMatchObject({ name: '产品决策', description: '稳定产品上下文；规划或复盘产品方向时召回。', active: true })
-    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--store', created.id, 'store', 'create', created.id]), expect.anything())
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--store', 'default', 'store', 'create', 'default']), expect.anything())
   })
 
   it('removes the native store before deleting its catalog entry', async () => {
     const dataDir = temporaryDirectory()
     const storeDirectory = join(dataDir, 'data', 'project')
-    mkdirSync(storeDirectory, { recursive: true })
-    writeFileSync(join(storeDirectory, 'mnemon.db'), 'existing database')
+    for (const store of ['default', 'project']) {
+      mkdirSync(join(dataDir, 'data', store), { recursive: true })
+      writeFileSync(join(dataDir, 'data', store, 'mnemon.db'), 'existing database')
+    }
     const process = vi.fn<ProcessRunner>(async (_command, args) => {
       if (args.includes('remove')) rmSync(storeDirectory, { recursive: true, force: true })
       return { stdout: 'Removed store', stderr: '', exitCode: 0 }
@@ -96,7 +99,7 @@ describe('MemoryBodyRegistry', () => {
     const registry = new MemoryBodyRegistry(runner, true)
 
     await expect(registry.remove('project')).resolves.toMatchObject({ id: 'project', name: 'project' })
-    expect(registry.list()).toEqual([])
+    expect(registry.list()).toEqual([expect.objectContaining({ id: 'default' })])
     expect(process).toHaveBeenCalledWith('/fake/mnemon', ['--data-dir', dataDir, '--store', 'default', 'store', 'remove', 'project'], expect.anything())
   })
 
@@ -128,7 +131,7 @@ describe('MemoryBodyRegistry', () => {
     ])
   })
 
-  it('preserves the last active Store when Mnemon has nowhere to switch', async () => {
+  it('preserves the last native Store even when it is disabled for DSH', async () => {
     const dataDir = temporaryDirectory()
     mkdirSync(join(dataDir, 'data', 'default'), { recursive: true })
     writeFileSync(join(dataDir, 'data', 'default', 'mnemon.db'), 'default database')
@@ -137,7 +140,7 @@ describe('MemoryBodyRegistry', () => {
     const registry = new MemoryBodyRegistry(runner, true)
     registry.setActive('default', false)
 
-    await expect(registry.remove('default')).rejects.toThrow('create another Memory Space first')
+    await expect(registry.remove('default')).rejects.toThrow('disable it for DSH or create another Memory Space first')
     expect(registry.list()).toEqual([expect.objectContaining({ id: 'default', active: false })])
     expect(process).not.toHaveBeenCalled()
   })
@@ -149,6 +152,7 @@ describe('MemoryBodyRegistry', () => {
     const registry = new MemoryBodyRegistry(runner, true)
 
     await expect(registry.create({ name: '含义不足', description: '' })).rejects.toThrow('description is required')
+    await registry.create({ name: '基础空间', description: '首次初始化使用 Mnemon 原生 default Store。' })
     const created = await registry.create({ name: '发布与交付', description: '发布门禁、部署约束与回滚经验；准备发布时召回。' })
     expect(created.id).not.toContain('发布')
     expect(created.id).toMatch(/^[0-9a-f-]{36}$/)

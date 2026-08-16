@@ -75,8 +75,10 @@ export class MemoryBodyRegistry {
   async create(request: CreateMemoryBodyRequest, signal?: AbortSignal): Promise<MemoryBody> {
     const name = requiredText(request.name, 'name', 100)
     const description = requiredText(request.description, 'description', 1000)
-    let id = validateMemoryBodyId(randomUUID())
-    while (this.list().some(body => body.id === id)) id = validateMemoryBodyId(randomUUID())
+    const reservedIds = new Set(this.list().map(body => body.id))
+    const nativeStoreIds = this.nativeStoreIds()
+    let id = nativeStoreIds.length === 0 && !reservedIds.has('default') ? 'default' : validateMemoryBodyId(randomUUID())
+    while (reservedIds.has(id) || nativeStoreIds.includes(id)) id = validateMemoryBodyId(randomUUID())
     await this.runner.runText(['store', 'create', id], { ...(signal === undefined ? {} : { signal }), store: id })
     const timestamp = this.now().toISOString()
     const body: StoredMemoryBody = {
@@ -111,20 +113,24 @@ export class MemoryBodyRegistry {
 
   async remove(id: string, signal?: AbortSignal): Promise<MemoryBody> {
     const body = this.get(id)
+    const nativeStoreIds = this.nativeStoreIds()
+    if (nativeStoreIds.includes(body.id) && nativeStoreIds.length === 1) {
+      throw new Error(`cannot delete the last Mnemon Store "${body.id}"; disable it for DSH or create another Memory Space first`)
+    }
     const persistedStore = this.runner.persistedStore()
     const commands: MnemonTextCommand[] = []
     let commandStore = persistedStore
     if (persistedStore === body.id) {
+      const nativeIds = new Set(nativeStoreIds)
       const replacement = this.list()
-        .filter(candidate => candidate.id !== body.id)
-        .sort((left, right) => Number(right.active) - Number(left.active) || left.id.localeCompare(right.id))[0]
-      if (replacement === undefined) {
-        throw new Error(`cannot delete the only Mnemon Store "${body.id}"; create another Memory Space first`)
-      }
-      commandStore = replacement.id
+        .filter(candidate => candidate.id !== body.id && nativeIds.has(candidate.id))
+        .sort((left, right) => Number(right.active) - Number(left.active) || left.id.localeCompare(right.id))[0]?.id
+        ?? nativeStoreIds.filter(candidate => candidate !== body.id).sort()[0]
+      if (replacement === undefined) throw new Error(`cannot switch away from Mnemon Store "${body.id}" before deleting it`)
+      commandStore = replacement
       commands.push({
-        args: ['store', 'set', replacement.id],
-        options: { ...(signal === undefined ? {} : { signal }), store: replacement.id },
+        args: ['store', 'set', replacement],
+        options: { ...(signal === undefined ? {} : { signal }), store: replacement },
       })
     }
     commands.push({
@@ -203,6 +209,14 @@ export class MemoryBodyRegistry {
       changed = true
     }
     if (changed) this.save()
+  }
+
+  private nativeStoreIds(): string[] {
+    if (!existsSync(this.directory)) return []
+    return readdirSync(this.directory, { withFileTypes: true })
+      .filter(entry => entry.isDirectory() && ID_PATTERN.test(entry.name))
+      .map(entry => entry.name)
+      .sort()
   }
 
   private view(body: StoredMemoryBody): MemoryBody {
