@@ -1059,19 +1059,25 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const toggleRequiredCapability = (capability: MemoryPlacementCapability) => setRequiredCapabilities(current => current.includes(capability) ? current.filter(value => value !== capability) : [...current, capability])
   const updateProviderDraft = (providerId: MemoryProviderId, key: string, value: string | number | boolean) => setProviderDrafts(current => ({ ...current, [providerId]: { ...(current[providerId] ?? {}), [key]: value } }))
   const toggleAutomaticProvider = (providerId: MemoryProviderId, selected: boolean) => setAutomaticProviderIds(current => selected ? [...new Set([...current, providerId])] : current.filter(id => id !== providerId))
+  const providerSummary = (provider: MemoryProviderDescriptor): string => t(`overview.providerSummary.${provider.id}` as MnemonKey)
   const fieldLabel = (provider: MemoryProviderDescriptor, field: MemoryProviderConfigField): string => {
-    if (field.key === 'endpoint') return t('overview.providerEndpoint')
-    if (field.key === 'apiKey') return t('overview.providerApiKey')
-    if (provider.id === 'openviking' && field.key === 'targetUri') return t('overview.providerTargetUri')
+    const labels: Record<string, MnemonKey> = {
+      endpoint: 'overview.providerEndpoint', apiKey: 'overview.providerApiKey', targetUri: 'overview.providerTargetUri', account: 'overview.providerAccount', user: 'overview.providerUser', actorPeerId: 'overview.providerActorPeer',
+      workspace: 'overview.providerField.workspace', userId: 'overview.providerField.userId', agentId: 'overview.providerField.agentId', mode: 'overview.providerField.mode', rerank: 'overview.providerField.rerank',
+      bankId: 'overview.providerField.bankId', budget: 'overview.providerField.budget', dataPath: 'overview.providerField.dataPath', defaultTrust: 'overview.providerField.defaultTrust', minTrust: 'overview.providerField.minTrust',
+      project: 'overview.providerField.project', cliPath: 'overview.providerField.cliPath', workingDirectory: 'overview.providerField.workingDirectory', containerTag: 'overview.providerField.containerTag', searchMode: 'overview.providerField.searchMode',
+    }
+    if (labels[field.key] !== undefined) return t(labels[field.key]!)
     return field.label
   }
+  const optionLabel = (value: string): string => t(`overview.providerOption.${value}` as MnemonKey)
   const providerFields = (
     provider: MemoryProviderDescriptor,
     connection: MemoryProviderConnection,
     update: (key: string, value: string | number | boolean) => void,
     body?: MemoryBodyView,
   ) => <div className={css.providerFields} data-provider={provider.id}>
-    <div className={css.providerFieldHeading}><div><strong>{provider.label}</strong><small>{provider.summary}</small></div><span>{provider.kind === 'local' ? t('overview.providerKindLocal') : t('overview.providerKindRemote')}</span></div>
+    <div className={css.providerFieldHeading}><div><strong>{provider.label}</strong><small>{providerSummary(provider)}</small></div><span>{provider.kind === 'local' ? t('overview.providerKindLocal') : t('overview.providerKindRemote')}</span></div>
     <div className={css.providerAdvancedGrid}>{provider.fields.map(field => {
       const label = fieldLabel(provider, field)
       const value = connection[field.key] ?? ''
@@ -1081,7 +1087,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
       const input = field.input === 'boolean'
         ? <input aria-label={label} type="checkbox" checked={Boolean(value)} onChange={event => update(field.key, event.target.checked)} />
         : field.input === 'select'
-          ? <select aria-label={label} value={String(value)} required={required} onChange={event => update(field.key, event.target.value)}>{field.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+          ? <select aria-label={label} value={String(value)} required={required} onChange={event => update(field.key, event.target.value)}>{field.options?.map(option => <option key={option.value} value={option.value}>{optionLabel(option.value)}</option>)}</select>
           : <input aria-label={label} type={field.input === 'secret' ? 'password' : field.input === 'number' ? 'number' : field.input === 'url' ? 'url' : 'text'} value={String(value)} required={required} autoComplete={field.input === 'secret' ? 'new-password' : undefined} placeholder={savedSecret ? t('overview.providerApiKeyKeep') : field.placeholder ?? (field.input === 'secret' ? t('overview.providerApiKeyOptional') : undefined)} maxLength={field.input === 'secret' ? 8000 : 2000} step={field.input === 'number' ? 'any' : undefined} onChange={event => update(field.key, event.target.value)} />
       return <div key={field.key} className={css.providerFieldControl}><label>{label}{input}</label>{body !== undefined && field.input === 'secret' && savedSecret && <label className={css.providerSecretClear}><input type="checkbox" checked={clearingSecret} onChange={event => setEditClearSecrets(current => event.target.checked ? [...new Set([...current, field.key])] : current.filter(key => key !== field.key))} />{t('overview.providerSecretClear')}</label>}</div>
     })}</div>
@@ -1096,7 +1102,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   </form>
   const bodyCreateForm = <form className={css.bodyEdit} onSubmit={event => void create(event)}>
     <fieldset className={css.placementMode}><legend>{t('overview.placementMode')}</legend><label data-selected={placementMode === 'manual' || undefined}><input type="radio" name="placement-mode" value="manual" checked={placementMode === 'manual'} onChange={() => setPlacementMode('manual')} /><span><strong>{t('overview.placementManual')}</strong><small>{t('overview.placementManualHint')}</small></span></label><label data-selected={placementMode === 'automatic' || undefined} data-disabled={!props.agentAvailable || undefined}><input type="radio" name="placement-mode" value="automatic" checked={placementMode === 'automatic'} disabled={!props.agentAvailable} onChange={() => setPlacementMode('automatic')} /><span><strong>{t('overview.placementAutomatic')} <em>{t('overview.recommended')}</em></strong><small>{props.agentAvailable ? t('overview.placementAutomaticHint') : t('overview.placementUnavailable')}</small></span></label></fieldset>
-    {placementMode === 'manual' && <><fieldset className={css.providerChoice}><legend>{t('overview.providerLabel')}</legend>{providers.map(provider => <label key={provider.id} data-selected={bodyProviderId === provider.id || undefined} data-native={provider.id === 'mnemon-native' || undefined}><input type="radio" name="memory-provider" value={provider.id} checked={bodyProviderId === provider.id} onChange={() => setBodyProviderId(provider.id)} /><span><strong>{provider.label}{provider.id === 'mnemon-native' && <em>{t('overview.nativeOfficial')}</em>}</strong><small>{provider.id === 'mnemon-native' ? t('overview.providerNativeHint') : provider.summary}</small></span></label>)}</fieldset>{selectedProvider !== undefined && selectedProvider.id !== 'mnemon-native' && providerFields(selectedProvider, providerDrafts[selectedProvider.id] ?? {}, (key, value) => updateProviderDraft(selectedProvider.id, key, value))}</>}
+    {placementMode === 'manual' && <><fieldset className={css.providerChoice}><legend>{t('overview.providerLabel')}</legend>{providers.map(provider => <label key={provider.id} data-selected={bodyProviderId === provider.id || undefined} data-native={provider.id === 'mnemon-native' || undefined}><input type="radio" name="memory-provider" value={provider.id} checked={bodyProviderId === provider.id} onChange={() => setBodyProviderId(provider.id)} /><span><strong>{provider.label}{provider.id === 'mnemon-native' && <em>{t('overview.nativeOfficial')}</em>}</strong><small>{providerSummary(provider)}</small></span></label>)}</fieldset>{selectedProvider !== undefined && selectedProvider.id !== 'mnemon-native' && providerFields(selectedProvider, providerDrafts[selectedProvider.id] ?? {}, (key, value) => updateProviderDraft(selectedProvider.id, key, value))}</>}
     {placementMode === 'automatic' && <section className={css.placementPolicy} aria-label={t('overview.placementPolicy')}>
       <div className={css.placementPolicyHeading}><div><strong>{t('overview.placementPolicy')}</strong><small>{t('overview.placementPolicyHint')}</small></div><span>{t('overview.agentDecision')}</span></div>
       <label>{t('overview.placementPrompt')}<textarea aria-label={t('overview.placementPrompt')} value={placementPrompt} onChange={event => setPlacementPrompt(event.target.value)} placeholder={t('overview.placementPromptPlaceholder')} rows={3} maxLength={4000} /></label>
