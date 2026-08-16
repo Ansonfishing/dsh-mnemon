@@ -32,6 +32,8 @@
 
 跨 Provider 检索并发执行，单个失败只生成带记忆体名称的 hint；异构原始分数不直接比较，而是按各 Provider 返回次序做 reciprocal-rank 融合。未来 mem0、GBrain 等适配器应复用同一契约，而不改变上层“记忆体”语义。
 
+创建时的 Provider placement 与召回路由是两个独立阶段。placement 先在 Host 内按已配置状态、允许列表、数据边界和必需能力裁剪候选；只剩一个候选时确定性落定，多个候选时才把脱敏后的能力摘要、记忆体用途和用户策略交给无工具权限的 `spawn` worker。Host 会再次校验结构化结果必须来自合格候选，再实例化 Provider，并把规则、理由、置信度和 worker 审计信息写入记忆体元数据。endpoint、API Key 与身份头始终留在 Host。
+
 ## Host 组合根
 
 `src/index.ts::apply()` 按以下顺序组装插件：

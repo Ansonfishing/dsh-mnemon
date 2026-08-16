@@ -14,6 +14,7 @@
 
 - **默认本地优先**：Mnemon Native 将记忆保存在本机 SQLite、JSON 与 Markdown；OpenViking 是显式可选连接。
 - **跨 Agent 共享**：Mnemon Native 通过本地 Store 共享；OpenViking 通过连接的远程服务共享。
+- **可解释的智能选底层**：创建记忆体时可保持手动指定，也可用硬规则与策略 Prompt 让隔离子 Agent 在合格 Provider 中选择；结果会记录理由与置信度。
 - **三层协作**：运行时记忆、项目档案、记忆体各自保存适合自己的信息粒度。
 - **受监督写入**：语义判断交给隔离的记忆子 Agent，路径、权限、容量、锁与 revision 由 Host 控制。
 - **Web 与 Headless**：Web 提供完整 Sidebar 工作台；一次性 Headless 任务获得同一套 Agent 工具、记忆上下文和 cwd 路由。
@@ -82,7 +83,7 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 安装后默认使用 `sidebar`：点击 DSH 左侧栏的“记忆系统”即可进入。第一次使用建议按以下顺序：
 
 1. 在“状态”确认 Mnemon CLI、运行时、记忆体与档案均正常；
-2. 在“记忆体 → 概览”创建一个边界明确的记忆体；
+2. 在“记忆体 → 概览”创建一个边界明确的记忆体；可手动指定底层，或让规则与策略 Prompt 引导智能选择；
 3. 用“沉淀记忆”提交一条稳定、未来仍有用的信息；
 4. 在“检索”用一个聚焦问题验证召回；
 5. 回到对话，展开回复下方的“本回合记忆”查看工具轨迹。

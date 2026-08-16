@@ -169,7 +169,8 @@ location      local mnemon.db, or remote endpoint + target URI
 - Merge imports source content into the target through Mnemon; the source database remains in place, and by default only the source is marked inactive.
 - Pack replacement cannot empty an initialized Store set. If replacement removes the former default Store, the plugin repairs the native default pointer to an existing Store.
 - `forget` is a soft delete by exact ID, not deletion of a database file.
-- Users connect OpenViking by choosing a provider inside the existing Create Memory Space dialog. Disconnect removes local connection metadata and never remote content.
+- Users connect OpenViking either by choosing it manually in the existing Create Memory Space dialog or explicitly including it as a smart-selection candidate. Disconnect removes local connection metadata and never remote content.
+- Smart placement treats the allowlist, data boundary, and required capabilities as Host-enforced rules. Soft preference and prompt guide semantic choice only among multiple eligible candidates and cannot override hard rules. The decision receipt is persisted with Memory Space metadata.
 - Merge, relationships, and soft delete currently apply only to Mnemon Native. The UI and agents do not pretend unsupported provider capabilities exist.
 
 ### Cross-Agent Visibility

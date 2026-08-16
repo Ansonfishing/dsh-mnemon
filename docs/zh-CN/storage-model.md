@@ -169,7 +169,8 @@ location      本地 mnemon.db，或远程 endpoint + target URI
 - 合并通过 Mnemon import 把来源内容导入目标；来源数据库保留，默认只将来源设为未激活。
 - Pack 替换不能把已初始化的 Store 集合清空；替换后若原默认 Store 已不存在，插件会选择一个现存 Store 修复原生默认指针。
 - `forget` 是按精确 ID 的软删除，不等于删除数据库文件。
-- OpenViking 连接由用户在既有“创建记忆体”弹窗选择 Provider 后建立；断开只删除本地连接登记，不删除远程内容。
+- OpenViking 连接由用户在既有“创建记忆体”弹窗手动选择，或在智能模式中显式加入候选后建立；断开只删除本地连接登记，不删除远程内容。
+- 智能 placement 的允许列表、数据边界与必需能力是 Host 强制规则；软偏好与 Prompt 只用于多个合格候选之间的语义选择，不能绕过硬规则。决策回执与记忆体元数据一起保存。
 - 合并、关系与软删除当前仅适用于 Mnemon Native；Provider 能力不会被 UI 或 Agent 假装补齐。
 
 ### 跨 Agent 可见性

@@ -14,6 +14,7 @@
 
 - **Local-first default**: Mnemon Native keeps memory in local SQLite, JSON, and Markdown; OpenViking is an explicit optional connection.
 - **Cross-agent sharing**: Mnemon Native spaces share local Stores with Mnemon-enabled agents; OpenViking spaces share through the connected remote service.
+- **Explainable smart placement**: keep manual engine selection or let hard rules plus a strategy prompt guide an isolated subagent among eligible providers; the reason and confidence are retained.
 - **Three cooperating tiers**: Runtime Memory, Project Documents, and Memory Spaces retain information at the right granularity.
 - **Supervised writes**: isolated memory subagents make semantic decisions; the Host enforces paths, permissions, capacity, locks, and revisions.
 - **Web and Headless**: a complete Sidebar workbench for interactive management, plus the same Agent tools, memory context, and cwd routing in one-shot Headless tasks.
@@ -82,7 +83,7 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 New installations use `sidebar` by default. Click **Memory System** in the DSH sidebar, then follow this first-run path:
 
 1. Confirm the Mnemon CLI, Runtime, Memory Spaces, and Documents are healthy under **Status**.
-2. Create a narrowly scoped Memory Space under **Memory Spaces → Overview**.
+2. Create a narrowly scoped Memory Space under **Memory Spaces → Overview**; either choose the engine manually or guide smart selection with rules and a strategy prompt.
 3. Submit one stable, future-useful item through **Remember**.
 4. Verify it with a focused question under **Recall**.
 5. Return to the conversation and expand **Turn memory** below the answer.

@@ -69,7 +69,9 @@ A Runtime item should be compact, independent, and repeatedly useful. Put identi
 
 [![Memory Space catalog, activation, and multi-space relationship graph](../assets/screenshots/overview-memory-graph.png)](../assets/screenshots/overview-memory-graph.png)
 
-Each card leads with its name and routing description. Provider identity sits beside the ID and health state, while the familiar read-activation toggle stays at the top right. Creation adds no new top-level concept: it remains **Create Memory Space**, with **Mnemon Native** (default and official) or **OpenViking** (connect an existing service) selected inside the dialog. Native cards retain statistics, Edit, and Delete. OpenViking cards show the remote URI, asynchronous extraction semantics, and **Disconnect**, which never deletes remote data.
+Each card leads with its name and routing description. Provider identity sits beside the ID and health state, while the familiar read-activation toggle stays at the top right. Creation adds no new top-level concept: it remains **Create Memory Space**, defaulting to **Choose manually** with **Mnemon Native** (official) or **OpenViking** (connect an existing service) inside the dialog. When the current conversation is available, users may opt into **Smart selection**: data boundary and required capabilities are hard rules, while local/shared preference and a strategy prompt guide an isolated subagent. A model runs only when multiple eligible candidates remain, and credentials never enter its context.
+
+Native cards retain statistics, Edit, and Delete. OpenViking cards show the remote URI, asynchronous extraction semantics, and **Disconnect**. Smart-created cards additionally show whether rules or the Agent decided, plus confidence and a concise reason. Disconnect never deletes remote data.
 
 The graph aggregates all active spaces. Mnemon Native supplies complete relationships; OpenViking currently contributes bounded disconnected content nodes and never fabricated edges. Layout, dragging, and reset affect browser presentation only.
 

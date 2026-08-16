@@ -166,11 +166,14 @@ If Mnemon is unavailable, run `command -v mnemon` and `mnemon --version` on macO
 
 1. Open **Memory Spaces → Overview**.
 2. Select **Create Memory Space**.
-3. Use a narrow name such as “Project Decisions.”
-4. Describe what belongs there and which tasks should recall it.
-5. Enable read activation.
+3. The default **Choose manually** path preserves the existing flow. With a connected conversation, **Smart selection** adds data-boundary, required-capability, soft-preference, and strategy-prompt constraints.
+4. Use a narrow name such as “Project Decisions.”
+5. Describe what belongs there and which tasks should recall it.
+6. Enable read activation.
 
 In an empty storage root, the first Memory Space uses Mnemon's native `default` Store ID while keeping the name and description you supplied. Its activation toggle affects DSH only.
+
+Smart selection first has the Host enforce the provider allowlist, data boundary, and required capabilities. One remaining candidate is selected deterministically; only an ambiguous eligible set reaches an isolated subagent, which considers the soft preference and strategy prompt. Provider credentials never enter model context, and the resulting card retains the source, reason, and confidence.
 
 ### Remember one test item
 

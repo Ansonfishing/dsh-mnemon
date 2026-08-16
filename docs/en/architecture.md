@@ -32,6 +32,8 @@ Cross-agent interoperability therefore applies only to the third tier: Mnemon Na
 
 Cross-provider search runs concurrently, with one failure reduced to a Memory-Space-scoped hint. Heterogeneous raw scores are never compared directly; results use reciprocal-rank fusion over each provider's returned order. Future mem0 or GBrain adapters should reuse this contract without changing the upper-layer Memory Space semantics.
 
+Creation-time provider placement is separate from recall routing. The Host first narrows candidates by configured state, allowlist, data boundary, and required capabilities. One candidate resolves deterministically; multiple candidates send only a redacted capability brief, the Memory Space purpose, and the user's strategy to a tool-free `spawn` worker. The Host validates the structured selection against the eligible set before instantiating the provider, then persists rules, reason, confidence, and worker audit metadata. Endpoints, API keys, and identity headers remain Host-only.
+
 ## Host Composition Root
 
 `src/index.ts::apply()` assembles the plugin in this order:
