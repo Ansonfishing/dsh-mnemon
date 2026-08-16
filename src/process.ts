@@ -22,7 +22,7 @@ const DEFAULT_MAX_OUTPUT_BYTES = 2 * 1024 * 1024
 
 /** Spawn without a shell, with bounded output and cooperative cancellation. */
 export const runProcess: ProcessRunner = (command, args, options) => new Promise((resolve, reject) => {
-  const child = spawn(command, [...args], { stdio: ['ignore', 'pipe', 'pipe'], shell: false })
+  const child = spawn(command, [...args], { stdio: ['ignore', 'pipe', 'pipe'], shell: false, windowsHide: true })
   const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
   let stdout = ''
   let stderr = ''
