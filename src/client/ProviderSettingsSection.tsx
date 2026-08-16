@@ -136,10 +136,11 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JS
   const [loading, setLoading] = useState(client !== null)
   const [failed, setFailed] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (quiet = false) => {
     if (client === null) return
-    setLoading(true); setFailed(null)
-    try { setCatalog(await client.providerServices()) } catch (reason) { setFailed(message(reason)) } finally { setLoading(false) }
+    if (!quiet) setLoading(true)
+    setFailed(null)
+    try { setCatalog(await client.providerServices()) } catch (reason) { setFailed(message(reason)) } finally { if (!quiet) setLoading(false) }
   }, [client])
 
   useEffect(() => { void load() }, [load, props.refreshKey])
@@ -148,7 +149,7 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JS
     if (client === null) throw new Error(props.t('config.providerUnavailable'))
     const settings = Object.fromEntries(Object.entries(draft.settings).filter(([key, value]) => serviceFields(provider).find(field => field.key === key)?.input !== 'secret' || String(value).trim() !== ''))
     await client.updateProviderService({ providerId: provider.id, settings, ...(draft.clearSecrets.length === 0 ? {} : { clearSecrets: draft.clearSecrets }) })
-    await load()
+    await load(true)
   }
 
   const disabled = props.disabled || props.scopeChanging || client === null

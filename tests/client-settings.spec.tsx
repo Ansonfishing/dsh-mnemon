@@ -391,6 +391,8 @@ describe('MnemonSettingsCard', () => {
       sessionId: 'session-1',
       workspaceId: 'workspace-1',
     }))
+    expect(await screen.findByText('服务配置已保存')).toBeTruthy()
+    expect((screen.getByText('OpenViking').closest('details') as HTMLDetailsElement).open).toBe(true)
     expect(call.mock.calls.some(([, endpoint]) => endpoint === 'body-create')).toBe(false)
   })
 
