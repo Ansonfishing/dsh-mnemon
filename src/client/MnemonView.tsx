@@ -954,7 +954,7 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
   )
 }
 
-function OverviewPage(props: { client: MnemonClient; revision: number; writeEnabled: boolean; agentAvailable: boolean; fallbackBodies: MemoryBodyView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onBodyReconnect: (body: MemoryBodyView) => void; onBodyMetadata: (updates: readonly MemoryBodyMetadataUpdate[]) => void; onExplore: (query: string) => void }): JSX.Element {
+function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClient; revision: number; writeEnabled: boolean; agentAvailable: boolean; fallbackBodies: MemoryBodyView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onBodyReconnect: (body: MemoryBodyView) => void; onBodyMetadata: (updates: readonly MemoryBodyMetadataUpdate[]) => void; onExplore: (query: string) => void }): JSX.Element {
   const t = useT()
   const locale = useLocale()
   const appearance = useMnemonViewAppearance()
@@ -998,9 +998,6 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
   const initialSyncStarted = useRef(false)
   const compatibilityRetryStarted = useRef(false)
   const fullSyncObserved = useRef(true)
-  const metadataAgentWasAvailable = useRef(props.agentAvailable)
-  if (props.agentAvailable) metadataAgentWasAvailable.current = true
-
   const load = useCallback(async (quiet = false) => {
     const request = ++loadRequest.current
     setCatalogLoading(true)
@@ -1193,7 +1190,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
       ...Object.fromEntries(selectedIds.map(id => [id, { status: 'running' as const }])),
     }))
     for (const id of selectedIds) {
-      void props.client.maintainBodyMetadata([id]).then(result => {
+      void props.metadataClient.maintainBodyMetadata([id]).then(result => {
         const update = result.updates.find(candidate => candidate.memoryBodyId === id)
         if (update === undefined) throw new Error(`metadata subagent omitted Memory Space ${id}`)
         setCatalog(current => current === null ? current : {
@@ -1355,7 +1352,7 @@ function OverviewPage(props: { client: MnemonClient; revision: number; writeEnab
           <div><h3>{t('overview.directory')}</h3><p>{t('overview.directory.description')}</p><code className={css.bodyDirectoryPath}>{catalogUnavailable ? t('overview.directory.unsynced') : catalog?.directory || props.fallbackDirectory || t('overview.directory.waiting')}</code></div>
           <div className={appearance.surface === 'sidebar' ? appearanceClass(css.bodyDirectoryControls, appearance.classes.bodyDirectoryActions) : css.bodyDirectoryControls}>
             <strong>{catalogUnavailable ? t('overview.directory.unsyncedBadge') : `${catalog?.activeCount ?? '—'} / ${catalog?.total ?? '—'} ${t('common.active')}`}</strong>
-            {props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} disabled={!metadataAgentWasAvailable.current || metadataCandidates.length === 0} title={!metadataAgentWasAvailable.current ? t('overview.metadataUnavailable') : undefined} onClick={() => { setMetadataSelection([]); setMetadataTasks({}); setMetadataOpen(true) }}>{t('overview.metadataAction')}</button>}
+            {props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} disabled={!props.agentAvailable || metadataCandidates.length === 0} title={!props.agentAvailable ? t('overview.metadataUnavailable') : undefined} onClick={() => { setMetadataSelection([]); setMetadataTasks({}); setMetadataOpen(true) }}>{t('overview.metadataAction')}</button>}
             {appearance.surface === 'sidebar' && props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} onClick={() => setCreatingBodyOpen(true)}>{t('overview.createTitle')}</button>}
           </div>
         </div>
@@ -2284,6 +2281,8 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const status = currentStatusState.value
   const statusLoading = currentStatusState.loading
   const statusError = currentStatusState.error
+  const metadataSessionId = status?.lifecycle?.current?.sessionId
+  const metadataClient = useMemo(() => new MnemonClient(connection, metadataSessionId, workspaceId), [connection, metadataSessionId, workspaceId])
   const statusRequest = useRef(0)
   const [revision, setRevision] = useState(0)
   const [searchSeed, setSearchSeed] = useState('')
@@ -2430,7 +2429,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
         <WorkspaceNavigation page={page} onSelect={selectPrimaryPage} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} writeEnabled={writeEnabled} />
         <MemoryNavigation page={page} writeEnabled={writeEnabled} onSelect={selectPage} onRemember={() => openRemember()} />
         <section key={viewContextKey} className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={!isMemoryPage(page) ? '' : undefined}>
-          {page === 'overview' && <OverviewPage client={client} revision={revision} writeEnabled={writeEnabled} agentAvailable={sessionId !== undefined && status?.lifecycle?.sessionAvailable === true && !workspaceDiverged} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onBodyReconnect={bodyReconnected} onBodyMetadata={bodyMetadataUpdated} onExplore={explore} />}
+          {page === 'overview' && <OverviewPage client={client} metadataClient={metadataClient} revision={revision} writeEnabled={writeEnabled} agentAvailable={metadataSessionId !== undefined && status?.lifecycle?.sessionAvailable === true && !workspaceDiverged} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onBodyReconnect={bodyReconnected} onBodyMetadata={bodyMetadataUpdated} onExplore={explore} />}
           {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}
           {page === 'documents' && <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} />}
           {page === 'explore' && <ExplorePage client={client} status={status} seed={searchSeed} writeEnabled={writeEnabled} onForget={forget} />}

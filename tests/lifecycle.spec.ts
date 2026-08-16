@@ -88,6 +88,20 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
 afterEach(() => vi.useRealTimers())
 
 describe('Mnemon DSH lifecycle integration', () => {
+  it('offers an active root Agent to standalone WebUI maintenance when no session is selected', () => {
+    const value = fixture()
+
+    expect(value.lifecycle.snapshot()).toMatchObject({
+      activeAgents: 1,
+      sessionAvailable: true,
+      current: { sessionId: 'session-1' },
+    })
+    expect(value.lifecycle.snapshot('missing-session')).toMatchObject({
+      sessionAvailable: true,
+      current: { sessionId: 'session-1' },
+    })
+  })
+
   it('adds a short optional reminder without forcing recall or remember for an ordinary turn', async () => {
     const value = fixture()
     const prompt = userMessage('Aster 发布前需要检查哪些事项？')

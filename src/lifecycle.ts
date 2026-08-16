@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import type { ResolvedConfig } from './config.ts'
 import type {
   HostAgent,
@@ -357,8 +358,10 @@ export class MnemonLifecycle {
     }
   }
 
-  snapshot(sessionId?: string): LifecycleSnapshot {
-    const agent = sessionId === undefined ? undefined : this.ctx.agents.get(sessionId)
+  snapshot(sessionId?: string, workspaceRoot?: string): LifecycleSnapshot {
+    const requestedId = sessionId?.trim()
+    const requested = requestedId === undefined || requestedId === '' ? undefined : this.ctx.agents.get(requestedId)
+    const agent = requested !== undefined && this.owners.has(requested) ? requested : this.availableAgent(workspaceRoot)
     const owner = agent === undefined ? undefined : this.owners.get(agent)?.lifecycle
     return {
       enabled: this.config.lifecycleEnabled,
@@ -371,6 +374,18 @@ export class MnemonLifecycle {
       subagents: this.coordinator.snapshot(),
       ...(owner === undefined ? {} : { current: owner.snapshot() }),
     }
+  }
+
+  private availableAgent(workspaceRoot?: string): HostAgent | undefined {
+    const agents = [...this.owners.keys()]
+    const normalizedRoot = workspaceRoot?.trim()
+    if (normalizedRoot === undefined || normalizedRoot === '') return agents.find(agent => agent.status === 'idle') ?? agents[0]
+    const expected = resolve(normalizedRoot)
+    const matching = agents.filter(agent => {
+      const cwd = agent.session.header?.cwd?.trim()
+      return cwd !== undefined && cwd !== '' && resolve(cwd) === expected
+    })
+    return matching.find(agent => agent.status === 'idle') ?? matching[0]
   }
 
   workspaceRoot(sessionId?: string): string | undefined {

@@ -787,6 +787,24 @@ describe('MnemonView', () => {
     expect(screen.queryByText('已更新产品决策元信息。')).toBeNull()
   })
 
+  it('uses an available lifecycle Agent when the standalone Memory UI has no selected session', async () => {
+    const { connection, call } = createConnection()
+    render(<MnemonView connection={connection} settingsScope={settingsScope} surface="sidebar" />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
+    const action = screen.getByRole('button', { name: 'AI 维护元信息' })
+    expect(action.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(action)
+    const dialog = screen.getByRole('dialog', { name: 'AI 维护记忆体元信息' })
+    expect(within(dialog).getByText(/最快的原生查询路径读取少量样本/)).toBeTruthy()
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /项目记忆体/ }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'AI 生成（1）' }))
+
+    await waitFor(() => expect(within(dialog).getByText('产品决策')).toBeTruthy())
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'body-metadata-maintain', { memoryBodyIds: ['project'], sessionId: 'session-1' })
+  })
+
   it('isolates concurrent metadata subagents and contains failures inside the affected card', async () => {
     const { connection, call } = createConnection({ withSecondActiveBody: true, metadataFailureBodyId: 'preferences' })
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)

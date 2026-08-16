@@ -146,7 +146,9 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
             ...await service.status(),
             ...(versions === undefined ? {} : { dshMnemonVersion: versions.currentDshMnemonVersion }),
             ...(lifecycle === undefined ? {} : {
-              lifecycle: lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId)),
+              lifecycle: service.config.storageScope === 'workspace'
+                ? lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId), selectedWorkspace?.path)
+                : lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId)),
             }),
             ...(documents === undefined ? {} : { documents }),
             ...(resolved.graph.storage === undefined ? {} : { storage: resolved.graph.storage.catalog(selectedWorkspace?.path ?? lifecycle?.workspaceRoot(sessionId)) }),
@@ -174,7 +176,11 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
             return success({
               ...service.statusSummary(),
               ...(versions === undefined ? {} : { dshMnemonVersion: versions.currentDshMnemonVersion }),
-              ...(lifecycle === undefined ? {} : { lifecycle: lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId)) }),
+              ...(lifecycle === undefined ? {} : {
+                lifecycle: service.config.storageScope === 'workspace'
+                  ? lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId), selectedWorkspace?.path)
+                  : lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId)),
+              }),
               ...(documents === undefined ? {} : { documents }),
               ...(resolved.graph.storage === undefined ? {} : { storage: resolved.graph.storage.catalog(selectedWorkspace?.path ?? lifecycle?.workspaceRoot(sessionId)) }),
               ...(resolved.route === undefined ? {} : {
