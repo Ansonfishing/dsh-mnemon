@@ -58,7 +58,7 @@ Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"
 - 相同 Document ID + 相同内容跳过，ID 冲突且内容不同则生成新 ID；
 - 相同 Memory Space ID + 相同数据库跳过，内容不同则生成新 ID。
 
-导入受 `writeEnabled` 控制，只读部署会拒绝。ZIP 包含私有记忆，应加密、限制访问并验证恢复。Provider 凭据保存在 `state/memory-providers.json`（`0600`），不会进入 ZIP，也不会返回浏览器；若要备份连接，需要按下述离线快照保护整个 `state/`。
+导入受 `writeEnabled` 控制，只读部署会拒绝。ZIP 包含私有记忆，应加密、限制访问并验证恢复。Provider 凭据保存在 `state/memory-providers.json`（`0600`），不会进入 ZIP。已保存的值只返回给 loopback 设置编辑器，绝不经 trusted-host 读通道返回；若要备份连接，需要按下述离线快照保护整个 `state/`。
 
 ### 恢复演练
 
@@ -118,6 +118,8 @@ Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"
 ### Web 与模型
 
 - 读 RPC 与仅含记忆体激活的控制通道为 `trusted-host`；更宽泛的写、设置与备份 RPC 为 `loopback`。
+- trusted-host Provider 目录始终脱敏；凭据值只能从私密的 loopback 设置端点获取。
+- 远程 WebUI 会预先禁用本地专用控件；激活仍可用，但编辑、删除、重连、持久写入、更新、设置与备份不会进入传输。
 - WebUI 不直接读取 SQLite、启动进程、调用远程 Provider 或指定任意更新命令；Provider 网络访问只发生在 Host。
 - worker 使用 persona、工具白名单、结构化输出与 `maxDepth: 1`。
 - 查询、候选、档案正文与历史记忆全部按不可信数据处理。

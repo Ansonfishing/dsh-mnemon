@@ -123,6 +123,7 @@ authority: trusted-host
 | `runtime-memory` | Runtime snapshot |
 | `documents` / `document` / `document-search` | Directory, body, and deterministic search |
 | `graph` / `bodies` | Active multi-space graph projection and provider-capability catalog |
+| `provider-services` | Redacted Provider service catalog; configured-secret names may be present, secret values never are |
 | `list` / `entities` | Durable content list and entity aggregation |
 | `search` / `agent-search` / `related` | Direct retrieval, evidence answer, and relation traversal |
 | `turn-activities` / `turn-activity` | Session-wide or single-turn memory-tool activity |
@@ -154,9 +155,12 @@ authority: loopback
 | `document` | create / update / archive |
 | `remember` / `link` / `forget` | Durable semantic write, relation, and soft deletion |
 | `body-create` / `body-update` / `body-delete` | Create/connect, edit, or confirm Native deletion / remote disconnection |
+| `provider-services` / `provider-service-update` | Read private Provider settings for the local settings UI, or update one service |
 | `version-update` | Update a named component with Host-fixed commands and arguments |
 
-With `writeEnabled=false`, both activation control and the write channel remain registered but mutations are rejected at the Host boundary.
+The private `provider-services` response, including saved credential values needed by the local editor, is available only over this loopback channel. The trusted-host read endpoint always returns a redacted catalog.
+
+With `writeEnabled=false`, both activation control and the write channel remain registered but mutations are rejected at the Host boundary. A remote trusted-host client also disables every loopback-only control before transport while leaving activation available.
 
 ### Backup channel
 

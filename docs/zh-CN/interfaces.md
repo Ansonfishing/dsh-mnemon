@@ -123,6 +123,7 @@ authority: trusted-host
 | `runtime-memory` | 运行时快照 |
 | `documents` / `document` / `document-search` | 档案目录、正文与确定性搜索 |
 | `graph` / `bodies` | active 多空间图谱投影与含 Provider 能力的记忆体目录 |
+| `provider-services` | 脱敏的 Provider 服务目录；可包含已配置的凭据字段名，绝不包含凭据值 |
 | `list` / `entities` | 内容列表与实体聚合 |
 | `search` / `agent-search` / `related` | 直接检索、证据回答与关系遍历 |
 | `turn-activities` / `turn-activity` | 会话或单回合的记忆工具活动 |
@@ -154,9 +155,12 @@ authority: loopback
 | `document` | create / update / archive |
 | `remember` / `link` / `forget` | 长期语义写入、关系与软删除 |
 | `body-create` / `body-update` / `body-delete` | 记忆体创建/连接、编辑，以及确认后的 Native 删除或远程断开 |
+| `provider-services` / `provider-service-update` | 为本地设置 UI 读取 Provider 私密配置，或更新单个服务 |
 | `version-update` | 更新明确组件；Host 固定命令与参数 |
 
-`writeEnabled=false` 时激活控制与写通道仍稳定注册，但所有 mutation 都在 Host 边界拒绝。
+包含本地编辑器所需已保存凭据值的私密 `provider-services` 响应只存在于该 loopback 通道。trusted-host 读端点始终返回脱敏目录。
+
+`writeEnabled=false` 时激活控制与写通道仍稳定注册，但所有 mutation 都在 Host 边界拒绝。远程 trusted-host 客户端也会在发起传输前禁用所有 loopback-only 控件，同时保留激活开关。
 
 ### 备份通道
 
