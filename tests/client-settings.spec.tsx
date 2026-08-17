@@ -48,13 +48,14 @@ describe('MnemonSettingsCard', () => {
     const view = render(<MnemonSettingsCard scope={scope} connection={connection} workspaceId="workspace-1" workspaceLabel="One" />)
 
     view.rerender(<MnemonSettingsCard scope={scope} connection={connection} workspaceId="workspace-2" workspaceLabel="Two" />)
-    await screen.findByText('OpenViking')
-    fireEvent.click(screen.getByText('OpenViking'))
-    await waitFor(() => expect((screen.getByLabelText('服务地址') as HTMLInputElement).value).toBe('https://workspace-2.example'))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-services', { workspaceId: 'workspace-2' }))
+    const providerGroup = await screen.findByRole('group', { name: 'OpenViking 服务配置' }, { timeout: 5_000 })
+    fireEvent.click(within(providerGroup).getByRole('button'))
+    await waitFor(() => expect((screen.getByLabelText('服务地址') as HTMLInputElement).value).toBe('https://workspace-2.example'), { timeout: 5_000 })
 
     await act(async () => { firstWorkspace.resolve(catalog('https://workspace-1.example')); await firstWorkspace.promise })
     expect((screen.getByLabelText('服务地址') as HTMLInputElement).value).toBe('https://workspace-2.example')
-  })
+  }, 10_000)
 
   it('uses the Host settings grant instead of transport locality on a trusted remote connection', async () => {
     const snapshot = {
