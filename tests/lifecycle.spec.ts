@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveConfig } from '../src/config.ts'
 import type {
+  CreateHostAgentOptions,
   HostAgent,
   HostAgentContext,
   HostContextShape,
@@ -31,6 +32,11 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
   const steer = vi.fn()
   const taskAgents: HostAgent[] = []
   const disposedTaskAgents: string[] = []
+  const defaultModel = { currentSelection: vi.fn(() => ({ provider: 'deepseek', model: 'deepseek-chat' })) }
+  const agentPresets = {
+    resolve: vi.fn(async () => ({ id: 'default' })),
+    mount: vi.fn(async () => ({ id: 'default' })),
+  }
   const agentCtx = {
     on: vi.fn((name: string, listener: Listener) => {
       agentListeners.set(name, listener)
@@ -44,6 +50,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
   const agent = {
     id: 'session-1',
     status: 'idle',
+    options: { provider: 'deepseek', model: 'deepseek-chat' },
     session: { events },
     ctx: agentCtx,
     followup,
@@ -66,12 +73,21 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
     archiveDocument: vi.fn(async () => ({ success: true, action: 'archived', document: { id: 'doc-1' } })),
     snapshot: vi.fn(() => ({ recalls: 0, writes: 0, answers: 0, reviews: 0, failures: 0 })),
   } as unknown as MnemonSubagentCoordinator
-  const createTaskAgent = vi.fn(async (options: { sessionId: string; meta?: { cwd?: string } }) => {
+  const createTaskAgent = vi.fn(async (options: CreateHostAgentOptions) => {
+    const taskCtx = {
+      on: vi.fn(() => () => undefined),
+      effect: vi.fn((callback: () => (() => unknown) | void) => {
+        const cleanup = callback()
+        return () => cleanup?.()
+      }),
+    } as unknown as HostAgentContext
+    await options.setup?.(taskCtx)
     const taskAgent = {
       id: options.sessionId,
       status: 'idle' as const,
-      session: { header: options.meta?.cwd === undefined ? {} : { cwd: options.meta.cwd }, events: [] },
-      ctx: agentCtx,
+      ...(options.agentOptions === undefined ? {} : { options: options.agentOptions }),
+      session: { header: options.meta ?? {}, events: [] },
+      ctx: taskCtx,
       followup: vi.fn(),
       steer: vi.fn(),
       inject: vi.fn(),
@@ -89,6 +105,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
   })
   const ctx = {
     agents: { get: (id: string) => id === agent.id ? agent : taskAgents.find(candidate => candidate.id === id), roots: () => [agent, ...taskAgents], create: createTaskAgent },
+    get: vi.fn((name: string) => name === 'agentDefaultModel' ? defaultModel : name === 'agentPresets' ? agentPresets : undefined),
     on: vi.fn((name: string, listener: Listener) => {
       rootListeners.set(name, listener)
       return () => rootListeners.delete(name)
@@ -107,7 +124,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
     if (listener === undefined) throw new Error('turn-stopping listener missing')
     await listener({ agent, turn, signal: new AbortController().signal })
   }
-  return { agent, agentListeners, events, followup, steer, lifecycle, service, coordinator, createTaskAgent, disposedTaskAgents, preStep, turnStopping, stop }
+  return { agent, agentListeners, events, followup, steer, lifecycle, service, coordinator, createTaskAgent, disposedTaskAgents, defaultModel, agentPresets, preStep, turnStopping, stop }
 }
 
 afterEach(() => vi.useRealTimers())
@@ -137,13 +154,18 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.createTaskAgent).toHaveBeenCalledTimes(2)
     expect(value.createTaskAgent).toHaveBeenNthCalledWith(1, expect.objectContaining({
       sessionId: expect.any(String),
-      meta: { cwd: '/tmp/workspace-two' },
+      meta: { cwd: '/tmp/workspace-two', agentPreset: 'default' },
+      agentOptions: { provider: 'deepseek', model: 'deepseek-chat' },
+      setup: expect.any(Function),
       signal: expect.any(AbortSignal),
     }))
     const metadataAgent = vi.mocked(value.coordinator.maintainMetadata).mock.calls[0]?.[0] as HostAgent
     expect(metadataAgent).not.toBe(value.agent)
     expect(metadataAgent.session.header?.cwd).toBe('/tmp/workspace-two')
-    expect(value.coordinator.archiveDocument).toHaveBeenCalledWith(expect.objectContaining({ session: { header: { cwd: '/tmp/workspace-two' }, events: [] } }), 'doc-1', expect.any(AbortSignal))
+    expect(value.coordinator.archiveDocument).toHaveBeenCalledWith(expect.objectContaining({ session: { header: { cwd: '/tmp/workspace-two', agentPreset: 'default' }, events: [] } }), 'doc-1', expect.any(AbortSignal))
+    expect(value.defaultModel.currentSelection).toHaveBeenCalledTimes(2)
+    expect(value.agentPresets.resolve).toHaveBeenCalledTimes(2)
+    expect(value.agentPresets.mount).toHaveBeenCalledTimes(2)
     expect(value.disposedTaskAgents).toHaveLength(2)
     expect(value.lifecycle.snapshot()).toMatchObject({ activeAgents: 1, taskAgentAvailable: true })
   })
@@ -366,8 +388,8 @@ describe('Mnemon DSH lifecycle integration', () => {
     const result = await value.lifecycle.superviseTask('', 'Keep workspace release decisions durable.', undefined, '/tmp/workspace-two')
 
     expect(result).toMatchObject({ delegated: true, runId: 'write-child' })
-    expect(value.createTaskAgent).toHaveBeenCalledWith(expect.objectContaining({ meta: { cwd: '/tmp/workspace-two' } }))
-    expect(value.coordinator.write).toHaveBeenCalledWith(expect.objectContaining({ session: expect.objectContaining({ header: { cwd: '/tmp/workspace-two' } }) }), 'supervised-writeback', {
+    expect(value.createTaskAgent).toHaveBeenCalledWith(expect.objectContaining({ meta: { cwd: '/tmp/workspace-two', agentPreset: 'default' } }))
+    expect(value.coordinator.write).toHaveBeenCalledWith(expect.objectContaining({ session: expect.objectContaining({ header: expect.objectContaining({ cwd: '/tmp/workspace-two' }) }) }), 'supervised-writeback', {
       content: 'Keep workspace release decisions durable.',
       source: 'explicit Mnemon tab submission',
     }, expect.anything())

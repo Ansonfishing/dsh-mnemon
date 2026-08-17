@@ -112,7 +112,7 @@ export interface HostAgent {
   status: 'idle' | 'running'
   options?: { provider?: string; model?: string; maxTokens?: number }
   session: {
-    header?: { origin?: 'subagent'; delegationDepth?: number; cwd?: string }
+    header?: { origin?: 'subagent'; delegationDepth?: number; cwd?: string; agentPreset?: string }
     events: readonly HostSessionEvent[]
   }
   ctx: HostAgentContext
@@ -131,6 +131,7 @@ export interface CreateHostAgentOptions {
   meta?: { cwd?: string; agentPreset?: string }
   agentOptions?: { provider?: string; model?: string; maxTokens?: number }
   signal?: AbortSignal
+  setup?: (agentCtx: HostAgentContext) => unknown | Promise<unknown>
 }
 
 export interface HostAgentsService {

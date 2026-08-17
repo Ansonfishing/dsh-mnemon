@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { resolve } from 'node:path'
 import type { ResolvedConfig } from './config.ts'
 import type {
+  CreateHostAgentOptions,
   HostAgent,
   HostAgentHandle,
   HostContextShape,
@@ -22,6 +23,25 @@ import type { PreparedMemoryPlacement } from './provider-placement.ts'
 
 interface AgentRuntimeSource {
   forAgent(agent: HostAgent): { runtimeMemory: RuntimeMemoryController }
+}
+
+interface HostDefaultModelService {
+  currentSelection(): { provider: string; model: string }
+}
+
+interface HostAgentPresetService {
+  resolve(id?: string): Promise<{ id: string }>
+  mount(agentCtx: HostAgent['ctx'], id?: string): Promise<unknown>
+}
+
+function modelService(value: unknown): HostDefaultModelService | undefined {
+  if (typeof value !== 'object' || value === null || !('currentSelection' in value) || typeof value.currentSelection !== 'function') return undefined
+  return value as HostDefaultModelService
+}
+
+function presetService(value: unknown): HostAgentPresetService | undefined {
+  if (typeof value !== 'object' || value === null || !('resolve' in value) || typeof value.resolve !== 'function' || !('mount' in value) || typeof value.mount !== 'function') return undefined
+  return value as HostAgentPresetService
 }
 
 export type { TurnMemoryActivity, TurnMemoryActivitySnapshot } from './activity.ts'
@@ -573,9 +593,10 @@ export class MnemonLifecycle {
     let handle: HostAgentHandle | undefined
     let failure: unknown
     try {
+      const creation = await this.taskAgentCreation(fallbackSessionId, workspaceRoot)
       handle = await create({
         sessionId,
-        ...(workspaceRoot === undefined ? {} : { meta: { cwd: resolve(workspaceRoot) } }),
+        ...creation,
         signal,
       })
       return await operation(handle.agent)
@@ -587,6 +608,44 @@ export class MnemonLifecycle {
         try { await handle.dispose() } catch (error) { if (failure === undefined) throw error }
       }
       this.taskAgentIds.delete(sessionId)
+    }
+  }
+
+  /** Resolve the same model route and preset composition as an ordinary fresh DSH Agent. */
+  private async taskAgentCreation(
+    fallbackSessionId: string,
+    workspaceRoot: string | undefined,
+  ): Promise<Pick<CreateHostAgentOptions, 'meta' | 'agentOptions' | 'setup'>> {
+    const fallback = this.ctx.agents.get(fallbackSessionId.trim()) ?? this.availableAgent(workspaceRoot) ?? this.availableAgent()
+    const selected = modelService(this.ctx.get('agentDefaultModel'))?.currentSelection()
+    const provider = selected?.provider.trim() || fallback?.options?.provider?.trim()
+    const model = selected?.model.trim() || fallback?.options?.model?.trim()
+    if (provider === undefined || provider === '' || model === undefined || model === '') {
+      throw new Error('no default provider/model is available for a clean task Agent')
+    }
+
+    const agentOptions = {
+      provider,
+      model,
+      ...(fallback?.options?.maxTokens === undefined ? {} : { maxTokens: fallback.options.maxTokens }),
+    }
+    const cwd = workspaceRoot?.trim()
+    const presets = presetService(this.ctx.get('agentPresets'))
+    if (presets === undefined) {
+      return {
+        ...(cwd === undefined || cwd === '' ? {} : { meta: { cwd: resolve(cwd) } }),
+        agentOptions,
+      }
+    }
+
+    const presetId = (await presets.resolve()).id
+    return {
+      meta: {
+        ...(cwd === undefined || cwd === '' ? {} : { cwd: resolve(cwd) }),
+        agentPreset: presetId,
+      },
+      agentOptions,
+      setup: async agentCtx => { await presets.mount(agentCtx, presetId) },
     }
   }
 
