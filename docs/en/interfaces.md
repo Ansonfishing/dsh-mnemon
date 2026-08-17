@@ -122,7 +122,8 @@ authority: trusted-host
 | `versions` | Check installed/latest Mnemon and dsh-mnemon versions and installation sources |
 | `runtime-memory` | Runtime snapshot |
 | `documents` / `document` / `document-search` | Directory, body, and deterministic search |
-| `graph` / `bodies` | Active multi-space graph projection and provider-capability catalog |
+| `graph` / `bodies` / `body-directory` | Active multi-space graph projection, provider-capability catalog, and fast directory projection |
+| `body-reconnect` | Invalidate transient health state and refresh one Memory Space without changing persistent data |
 | `provider-services` | Redacted Provider service catalog; configured-secret names may be present, secret values never are |
 | `list` / `entities` | Durable content list and entity aggregation |
 | `search` / `agent-search` / `related` | Direct retrieval, evidence answer, and relation traversal |
@@ -155,6 +156,7 @@ authority: loopback (`trusted-host` when `remoteAccess=trusted-host`)
 | `document` | create / update / archive |
 | `remember` / `link` / `forget` | Durable semantic write, relation, and soft deletion |
 | `body-create` / `body-update` / `body-delete` | Create/connect, edit, or confirm Native deletion / remote disconnection |
+| `body-reconnect` | Legacy compatibility route for clients released before reconnect moved to the read channel |
 | `provider-services` / `provider-service-update` | Read private Provider settings for the local settings UI, or update one service |
 | `version-update` | Update a named component with Host-fixed commands and arguments |
 

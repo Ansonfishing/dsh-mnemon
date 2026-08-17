@@ -119,7 +119,7 @@ Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"
 
 - 读 RPC 与仅含记忆体激活的控制通道始终为 `trusted-host`；更宽泛的写、设置与备份 RPC 默认仍为 `loopback`，只有 Host 本地配置显式设置 `remoteAccess: trusted-host` 才会提升。
 - trusted-host 读侧 Provider 目录始终脱敏；已保存凭据只会在管理通道通过已配置的权限检查后返回。
-- WebUI 依据 Host 返回的设置能力，不再根据传输是否 loopback 猜测权限；设置通道不可用时会显示明确诊断，而不是空白页。
+- WebUI 依据 Host 返回的设置能力，不再根据传输是否 loopback 猜测权限；激活与只读的单卡健康刷新仍通过 trusted-host 通道可用，设置通道不可用时会显示明确诊断，而不是空白页。
 - WebUI 不直接读取 SQLite、启动进程、调用远程 Provider 或指定任意更新命令；Provider 网络访问只发生在 Host。
 - worker 使用 persona、工具白名单、结构化输出与 `maxDepth: 1`。
 - 查询、候选、档案正文与历史记忆全部按不可信数据处理。

@@ -122,7 +122,8 @@ authority: trusted-host
 | `versions` | 检查 Mnemon 与 dsh-mnemon 当前 / 最新版本和安装来源 |
 | `runtime-memory` | 运行时快照 |
 | `documents` / `document` / `document-search` | 档案目录、正文与确定性搜索 |
-| `graph` / `bodies` | active 多空间图谱投影与含 Provider 能力的记忆体目录 |
+| `graph` / `bodies` / `body-directory` | active 多空间图谱投影、含 Provider 能力的记忆体目录与快速目录投影 |
+| `body-reconnect` | 清除短期健康状态并刷新单个记忆体，不修改持久数据 |
 | `provider-services` | 脱敏的 Provider 服务目录；可包含已配置的凭据字段名，绝不包含凭据值 |
 | `list` / `entities` | 内容列表与实体聚合 |
 | `search` / `agent-search` / `related` | 直接检索、证据回答与关系遍历 |
@@ -155,6 +156,7 @@ authority: loopback（`remoteAccess=trusted-host` 时为 trusted-host）
 | `document` | create / update / archive |
 | `remember` / `link` / `forget` | 长期语义写入、关系与软删除 |
 | `body-create` / `body-update` / `body-delete` | 记忆体创建/连接、编辑，以及确认后的 Native 删除或远程断开 |
+| `body-reconnect` | 为迁移到读通道前发布的旧客户端保留的兼容入口 |
 | `provider-services` / `provider-service-update` | 为本地设置 UI 读取 Provider 私密配置，或更新单个服务 |
 | `version-update` | 更新明确组件；Host 固定命令与参数 |
 

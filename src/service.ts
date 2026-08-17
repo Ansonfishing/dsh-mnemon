@@ -469,7 +469,6 @@ export class MnemonService {
   }
 
   async reconnectBody(id: string, signal?: AbortSignal): Promise<MemoryBodyView> {
-    this.assertWritable()
     const body = this.memoryBodies.list().find(candidate => candidate.id === id)
     if (body === undefined) throw new Error(`unknown memory body: ${id}`)
     if (body.provider.id !== 'mnemon-native') {

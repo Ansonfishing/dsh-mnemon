@@ -63,6 +63,7 @@ describe('Mnemon RPC', () => {
     await expect(createReadHandler(service)('graph', {})).resolves.toMatchObject({ ok: true, value: { nodes: [] } })
     await expect(createReadHandler(service)('bodies', {})).resolves.toMatchObject({ ok: true, value: { items: [], total: 0 } })
     await expect(createReadHandler(service)('body-directory', {})).resolves.toMatchObject({ ok: true, value: { total: 1 } })
+    await expect(createReadHandler(service)('body-reconnect', { memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { id: 'project', healthy: true } })
     await expect(createReadHandler(service)('status-summary', {})).resolves.toMatchObject({ ok: true, value: { healthy: true } })
     await expect(createReadHandler(service)('provider-services', {})).resolves.toMatchObject({ ok: true, value: { items: [] } })
     await expect(createReadHandler(service)('list', { category: 'decision' })).resolves.toMatchObject({ ok: true, value: { total: 0 } })
@@ -71,6 +72,7 @@ describe('Mnemon RPC', () => {
       ok: false,
       error: { code: 'bad-request', message: 'unknown read endpoint: nope', details: { issues: [] } },
     })
+    expect(service.reconnectBody).toHaveBeenCalledWith('project')
   })
 
   it('keeps Provider secret values on the loopback channel while preserving a redacted trusted-host catalog', async () => {
@@ -183,7 +185,7 @@ describe('Mnemon RPC', () => {
     expect(service.updateBody).not.toHaveBeenCalled()
   })
 
-  it('reconnects one Memory Space through the loopback write channel', async () => {
+  it('keeps the legacy loopback reconnect route for older clients', async () => {
     const service = fakeService()
     await expect(createWriteHandler(service)('body-reconnect', { memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { id: 'project', healthy: true } })
     expect(service.reconnectBody).toHaveBeenCalledWith('project')
