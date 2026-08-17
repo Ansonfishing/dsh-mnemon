@@ -1,4 +1,4 @@
-import type { HostAgent, HostSubagentResult, HostSubagentsService } from './contracts.ts'
+import type { HostAgent, HostSubagentResult, HostSubagentRun, HostSubagentsService } from './contracts.ts'
 import {
   DocumentCapacityError,
   type DocumentManager,
@@ -227,6 +227,32 @@ function object(value: unknown): Record<string, unknown> {
 
 function strings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []
+}
+
+function safeFailureDetail(value: string): string {
+  return value
+    .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/gu, '[redacted]')
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .slice(0, 500)
+}
+
+/** Recover the contained DSH model/transport error without exposing the child transcript. */
+function subagentFailureDetail(run: HostSubagentRun): string | undefined {
+  const events = run.localAgent?.session.events ?? []
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    if (event?.type !== 'turn/end') continue
+    const reason = event.data.reason
+    if (typeof reason !== 'object' || reason === null || Array.isArray(reason)) continue
+    const error = (reason as Record<string, unknown>).error
+    if (typeof error !== 'object' || error === null || Array.isArray(error)) continue
+    const code = typeof (error as Record<string, unknown>).code === 'string' ? String((error as Record<string, unknown>).code) : ''
+    const message = typeof (error as Record<string, unknown>).message === 'string' ? String((error as Record<string, unknown>).message) : ''
+    const detail = safeFailureDetail([code, message].filter(Boolean).join(': '))
+    if (detail !== '') return detail
+  }
+  return undefined
 }
 
 function indentedText(value: string): string {
@@ -772,7 +798,10 @@ ${indentedText(request.content ?? '')}`
         persona,
       })
       const result = await run.result
-      if (result.stopReason !== 'completed' || result.structured === undefined) throw new Error(`memory subagent stopped with ${result.stopReason}`)
+      if (result.stopReason !== 'completed' || result.structured === undefined) {
+        const detail = subagentFailureDetail(run)
+        throw new Error(`memory subagent stopped with ${result.stopReason}${detail === undefined ? '' : `: ${detail}`}`)
+      }
       this.counters[operation === 'recall' ? 'recalls' : operation === 'write' ? 'writes' : operation === 'review' ? 'reviews' : operation === 'placement' ? 'placements' : operation === 'migration' ? 'migrations' : operation === 'compaction' ? 'compactions' : operation === 'document-archive' ? 'documentArchives' : operation === 'metadata-maintenance' ? 'metadataMaintenances' : 'answers'] += 1
       this.counters.lastRunId = run.id
       if (operation !== 'answer') this.counters.lastOperation = operation

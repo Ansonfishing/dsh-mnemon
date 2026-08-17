@@ -56,9 +56,9 @@ function service(): MnemonService {
   } as unknown as MnemonService
 }
 
-function subagents(structured: unknown, stopReason = 'completed', providers = ['spawn']) {
+function subagents(structured: unknown, stopReason = 'completed', providers = ['spawn'], localAgent?: HostAgent) {
   const dispose = vi.fn(async () => {})
-  const start = vi.fn(async () => ({ id: 'child-run-1', result: Promise.resolve({ output: [], structured, stopReason }), dispose }))
+  const start = vi.fn(async () => ({ id: 'child-run-1', result: Promise.resolve({ output: [], structured, stopReason }), dispose, ...(localAgent === undefined ? {} : { localAgent }) }))
   const value = {
     list: vi.fn(() => providers),
     getProvider: vi.fn((name: string) => providers.includes(name) ? { capabilities, inheritsParentContext: name === 'fork' } : undefined),
@@ -375,9 +375,13 @@ describe('Mnemon memory subagent coordinator', () => {
   })
 
   it('disposes failed child runs and reports a hard error instead of falling back to direct memory access', async () => {
-    const host = subagents(undefined, 'error')
+    const failedChild = {
+      ...parent('subagent'),
+      session: { header: { origin: 'subagent' as const }, events: [{ type: 'turn/end', data: { reason: { kind: 'error', error: { code: 'MODEL_ROUTE', message: 'provider rejected sk-secret123456' } } } }] },
+    }
+    const host = subagents(undefined, 'error', ['spawn'], failedChild)
     const coordinator = new MnemonSubagentCoordinator(host.value)
-    await expect(coordinator.recall(parent(), { query: 'x' }, new AbortController().signal)).rejects.toThrow('stopped with error')
+    await expect(coordinator.recall(parent(), { query: 'x' }, new AbortController().signal)).rejects.toThrow('stopped with error: MODEL_ROUTE: provider rejected [redacted]')
     expect(host.dispose).toHaveBeenCalledOnce()
     expect(coordinator.snapshot().failures).toBe(1)
   })
