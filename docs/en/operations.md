@@ -117,9 +117,9 @@ Recommended migration: export from the old scope → switch and confirm the new 
 
 ### Web and model
 
-- Read RPC and the activation-only Memory Space control are `trusted-host`; broader write, settings, and backup RPC are `loopback`.
-- The trusted-host Provider catalog is redacted. Credential values are available only from the private loopback settings endpoint.
-- Remote WebUI sessions pre-gate local-only controls; activation remains enabled without allowing edit, delete, reconnect, durable writes, updates, settings, or backups to reach transport.
+- Read RPC and the activation-only Memory Space control are always `trusted-host`; broader write, settings, and backup RPC remain `loopback` unless local Host configuration explicitly sets `remoteAccess: trusted-host`.
+- The trusted-host read-side Provider catalog is redacted. Saved credential values are returned only through the management channel after its configured authority check succeeds.
+- The WebUI follows the Host's settings capability result instead of inferring authority from transport locality. An unavailable settings channel renders an explicit diagnostic rather than an empty page.
 - The WebUI neither reads SQLite, starts processes, calls remote providers, nor supplies arbitrary update commands; provider network access remains inside the Host.
 - Workers use persona, tool allowlists, structured output, and `maxDepth: 1`.
 - Queries, candidates, Document bodies, and historical memory are treated as untrusted data.
