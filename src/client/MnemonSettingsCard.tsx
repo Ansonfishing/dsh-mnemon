@@ -129,6 +129,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const [modelCatalogError, setModelCatalogError] = useState<string | null>(null)
   const [fullModelCatalogLoaded, setFullModelCatalogLoaded] = useState(false)
   const modelCatalogRequest = useRef(0)
+  const configuredTaskAgentMode = coreSnapshot.value?.taskAgentModel?.mode === 'fixed' ? 'fixed' : 'inherit'
 
   useEffect(() => {
     if (dirty.size === 0) setDraft(draftOf(coreSnapshot.value, interactionSnapshot.value))
@@ -177,9 +178,9 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   }, [connection])
 
   useEffect(() => {
-    loadModelCatalog(false)
+    loadModelCatalog(configuredTaskAgentMode === 'fixed')
     return () => { modelCatalogRequest.current += 1 }
-  }, [loadModelCatalog])
+  }, [configuredTaskAgentMode, loadModelCatalog])
 
   const coreUser = useMemo(() => record(coreSnapshot.user), [coreSnapshot.user])
   const activeScope = coreDraft(coreSnapshot.value).storageScope === 'workspace' ? 'workspace' : 'global'

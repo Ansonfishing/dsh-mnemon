@@ -101,6 +101,46 @@ describe('MnemonSettingsCard', () => {
     expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'task-agent-models')).toHaveLength(2)
   })
 
+  it('hydrates the full model catalog when a fixed route was already saved', async () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: {
+        storageScope: 'global' as const,
+        taskAgentModel: { mode: 'fixed' as const, provider: 'openai', model: 'gpt-5' },
+      },
+      base: {}, user: {}, revision: 1, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}), mutate: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+    const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') return {
+        ok: true as const,
+        value: {
+          effective: { provider: 'openai', model: 'gpt-5', source: 'fixed' as const },
+          defaultSelection: { provider: 'deepseek', model: 'deepseek-chat' },
+          groups: [
+            { id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] },
+            { id: 'openai', name: 'OpenAI', models: [{ id: 'gpt-5', name: 'GPT-5' }] },
+          ],
+          failures: [],
+        },
+      }
+      throw new Error(`unexpected ${channel} ${endpoint}`)
+    })
+
+    render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call } } as ClientConnectionHandle} />)
+
+    expect((screen.getByRole('radio', { name: '指定模型 Provider' }) as HTMLInputElement).checked).toBe(true)
+    await waitFor(() => expect((screen.getByRole('combobox', { name: '模型 Provider' }) as HTMLSelectElement).disabled).toBe(false))
+    expect((screen.getByRole('combobox', { name: '模型 Provider' }) as HTMLSelectElement).value).toBe('openai')
+    expect((screen.getByRole('combobox', { name: '模型' }) as HTMLSelectElement).value).toBe('gpt-5')
+    expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'task-agent-models', { includeCatalog: true })
+  })
+
   it('defaults to sidebar and persists a buildin display-mode selection', async () => {
     const mutate = vi.fn(async () => {})
     const snapshot = {
