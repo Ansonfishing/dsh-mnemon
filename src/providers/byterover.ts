@@ -5,7 +5,7 @@ import type { JsonValue } from '../contracts.ts'
 import type { MemoryBodyRegistry } from '../memory-bodies.ts'
 import { runProcess, type ProcessRunner } from '../process.ts'
 import type { Insight, MemoryBody, MemoryGraphSnapshot, MemoryListRequest, MemoryProviderConnection, RememberRequest, SearchRequest } from '../shared/contracts.ts'
-import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderMemorySpace, ProviderSearchResult } from './provider.ts'
+import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus, type ProviderMemorySpace, type ProviderSearchResult } from './provider.ts'
 
 interface ByteRoverProviderOptions {
   process?: ProcessRunner
@@ -15,6 +15,7 @@ interface ByteRoverProviderOptions {
 
 export class ByteRoverProvider implements MemoryProviderAdapter {
   readonly id = 'byterover' as const
+  readonly scoreSemantics = NORMALIZED_RELEVANCE_SCORE
   private readonly process: ProcessRunner
   private readonly queryTimeoutMs: number
   private readonly curateTimeoutMs: number

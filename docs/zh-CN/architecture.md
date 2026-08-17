@@ -22,7 +22,7 @@
 
 `MemoryProviderAdapter` 把目录、生命周期和用户操作保持在 dsh-mnemon 控制面，把 `status / search / graph projection / browse / remember / related / link / forget` 交给数据面适配器。能力声明是 UI、Agent 和服务端共同使用的硬边界，不支持的操作会被隐藏并在 Host 拒绝。完整当前矩阵见[长期记忆 Provider](./memory-providers.md)。
 
-跨 Provider 检索并发执行，单个失败只生成带记忆体名称的 hint；异构原始分数不直接比较，而是按各 Provider 返回次序做 reciprocal-rank 融合。新适配器复用同一契约，不改变上层“记忆体”语义。
+跨 Provider 检索并发执行，单个失败只生成带记忆体名称的 hint。每个适配器声明 score 是否为标准化相关度；已注册的纯质量策略负责扩展候选、在序列化前过滤并输出结构化计数。异构原始分数不直接比较，保留结果按各 Provider 返回次序做 reciprocal-rank 融合。新适配器和质量策略复用这些契约，不改变上层“记忆体”语义。
 
 创建时的 Provider placement 与召回路由是两个独立阶段。placement 先在 Host 内按已配置状态、允许列表、数据边界和必需能力裁剪候选；只剩一个候选时确定性落定，多个候选时才把脱敏后的能力摘要、记忆体用途和用户策略交给无工具权限的 `spawn` worker。Host 会再次校验结构化结果必须来自合格候选，再实例化 Provider，并把规则、理由、置信度和 worker 审计信息写入记忆体元数据。endpoint、API Key 与身份头始终留在 Host。
 

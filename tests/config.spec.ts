@@ -11,6 +11,14 @@ describe('Mnemon config and resolution', () => {
       storageScope: 'global',
       timeoutMs: 10_000,
       defaultRecallLimit: 10,
+      recallQuality: {
+        policy: 'strict-v1',
+        lowScoreThreshold: 0.25,
+        highScoreThreshold: 0.6,
+        candidateMultiplier: 3,
+        maxMediumResults: 4,
+        maxUnknownResults: 2,
+      },
       routingGuidance: true,
       displayMode: 'sidebar',
       lifecycleEnabled: true,
@@ -35,6 +43,17 @@ describe('Mnemon config and resolution', () => {
       },
       taskAgentModel: { mode: 'inherit' },
     })
+  })
+
+  it('validates configurable recall quality policy thresholds and expansion', () => {
+    expect(resolveConfig({
+      recallQuality: { policy: 'team-v2', lowScoreThreshold: 0.2, highScoreThreshold: 0.7, candidateMultiplier: 2, maxMediumResults: 5, maxUnknownResults: 1 },
+    }).recallQuality).toEqual({ policy: 'team-v2', lowScoreThreshold: 0.2, highScoreThreshold: 0.7, candidateMultiplier: 2, maxMediumResults: 5, maxUnknownResults: 1 })
+    expect(() => resolveConfig({ recallQuality: { lowScoreThreshold: 0.7, highScoreThreshold: 0.6 } })).toThrow('less than')
+    expect(() => resolveConfig({ recallQuality: { candidateMultiplier: 1.5 } })).toThrow('integer')
+    expect(() => resolveConfig({ recallQuality: { policy: '../unsafe' } })).toThrow('policy id')
+    expect(() => resolveConfig({ recallQuality: { maxMediumResults: 51 } })).toThrow('max medium')
+    expect(() => resolveConfig({ recallQuality: { maxUnknownResults: -1 } })).toThrow('max unknown')
   })
 
   it('inherits the DSH new-session model by default and validates fixed task routes', () => {

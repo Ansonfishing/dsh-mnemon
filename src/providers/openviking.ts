@@ -11,7 +11,7 @@ import type {
   RememberRequest,
   SearchRequest,
 } from '../shared/contracts.ts'
-import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderMemorySpace, ProviderSearchResult } from './provider.ts'
+import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus, type ProviderMemorySpace, type ProviderSearchResult } from './provider.ts'
 
 interface OpenVikingEnvelope {
   status?: string
@@ -64,6 +64,7 @@ function categoryFromUri(uri: string): string {
 
 export class OpenVikingProvider implements MemoryProviderAdapter {
   readonly id = 'openviking' as const
+  readonly scoreSemantics = NORMALIZED_RELEVANCE_SCORE
   private readonly requestFetch: typeof fetch
   private readonly requestTimeoutMs: number
   private readonly settlementTimeoutMs: number

@@ -45,7 +45,7 @@ Each Memory Space has a stable ID, name, routing description, activation state, 
 
 - Reads cover active spaces only.
 - Writes may target any registered space and activate it after success.
-- Cross-provider recall retains Memory Space and provider provenance and fuses each engine's internal ranking instead of comparing heterogeneous raw scores.
+- Cross-provider recall retains Memory Space and provider provenance, applies the configured pluggable quality policy before content reaches an Agent, and fuses each engine's internal ranking instead of comparing heterogeneous raw scores. The default strict policy drops normalized scores below `0.25`, keeps all high-relevance rows within the request limit, and budgets medium and unknown-scale evidence instead of filling the limit.
 - Relationships, entities, deletion, and write semantics follow the target provider's declared capabilities. Mnemon Native keeps the complete graph and soft delete; external engines expose only the semantics documented in the [provider matrix](./memory-providers.md).
 
 See [Storage and the three-tier model](./storage-model.md) for authoritative files, capacities, and directories.

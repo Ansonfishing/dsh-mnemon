@@ -1,6 +1,16 @@
 import z from 'schemastery'
 import { isAbsolute } from 'node:path'
-import { DEFAULT_IDLE_REVIEW_MS, DEFAULT_RECALL_LIMIT, DEFAULT_TIMEOUT_MS } from './config-values.ts'
+import {
+  DEFAULT_IDLE_REVIEW_MS,
+  DEFAULT_RECALL_CANDIDATE_MULTIPLIER,
+  DEFAULT_RECALL_HIGH_SCORE_THRESHOLD,
+  DEFAULT_RECALL_LIMIT,
+  DEFAULT_RECALL_LOW_SCORE_THRESHOLD,
+  DEFAULT_RECALL_MAX_MEDIUM_RESULTS,
+  DEFAULT_RECALL_MAX_UNKNOWN_RESULTS,
+  DEFAULT_RECALL_QUALITY_POLICY,
+  DEFAULT_TIMEOUT_MS,
+} from './config-values.ts'
 import type {
   Config as SharedConfig,
   CustomPackConfig as SharedCustomPackConfig,
@@ -10,13 +20,24 @@ import type {
   MemoryPlacementPreference,
   MemoryProviderConnection,
   MemoryProviderId,
+  RecallQualityConfig,
   ResolvedConfig as SharedResolvedConfig,
   ResolvedInteractionConfig as SharedResolvedInteractionConfig,
   ResolvedTaskAgentModelConfig,
   TaskAgentModelConfig,
 } from './shared/contracts.ts'
 
-export { DEFAULT_IDLE_REVIEW_MS, DEFAULT_RECALL_LIMIT, DEFAULT_TIMEOUT_MS } from './config-values.ts'
+export {
+  DEFAULT_IDLE_REVIEW_MS,
+  DEFAULT_RECALL_CANDIDATE_MULTIPLIER,
+  DEFAULT_RECALL_HIGH_SCORE_THRESHOLD,
+  DEFAULT_RECALL_LIMIT,
+  DEFAULT_RECALL_LOW_SCORE_THRESHOLD,
+  DEFAULT_RECALL_MAX_MEDIUM_RESULTS,
+  DEFAULT_RECALL_MAX_UNKNOWN_RESULTS,
+  DEFAULT_RECALL_QUALITY_POLICY,
+  DEFAULT_TIMEOUT_MS,
+} from './config-values.ts'
 export type Config = SharedConfig
 export type CustomPackConfig = SharedCustomPackConfig
 export type InteractionConfig = SharedInteractionConfig
@@ -51,6 +72,15 @@ const TaskAgentModelSchema: z<TaskAgentModelConfig> = z.object({
   model: z.string(),
 })
 
+const RecallQualitySchema: z<RecallQualityConfig> = z.object({
+  policy: z.string().default(DEFAULT_RECALL_QUALITY_POLICY),
+  lowScoreThreshold: z.number().min(0).max(1).default(DEFAULT_RECALL_LOW_SCORE_THRESHOLD),
+  highScoreThreshold: z.number().min(0).max(1).default(DEFAULT_RECALL_HIGH_SCORE_THRESHOLD),
+  candidateMultiplier: z.number().step(1).min(1).max(5).default(DEFAULT_RECALL_CANDIDATE_MULTIPLIER),
+  maxMediumResults: z.number().step(1).min(0).max(50).default(DEFAULT_RECALL_MAX_MEDIUM_RESULTS),
+  maxUnknownResults: z.number().step(1).min(0).max(50).default(DEFAULT_RECALL_MAX_UNKNOWN_RESULTS),
+})
+
 export const Config: z<Config> = z.object({
   // Keep this optional in the schema so legacy dataDir-only installs still
   // resolve to the custom scope instead of being silently reset to global.
@@ -66,6 +96,14 @@ export const Config: z<Config> = z.object({
   store: z.string(),
   timeoutMs: z.number().step(1).min(100).max(120_000).default(DEFAULT_TIMEOUT_MS),
   defaultRecallLimit: z.number().step(1).min(1).max(50).default(DEFAULT_RECALL_LIMIT),
+  recallQuality: RecallQualitySchema.default({
+    policy: DEFAULT_RECALL_QUALITY_POLICY,
+    lowScoreThreshold: DEFAULT_RECALL_LOW_SCORE_THRESHOLD,
+    highScoreThreshold: DEFAULT_RECALL_HIGH_SCORE_THRESHOLD,
+    candidateMultiplier: DEFAULT_RECALL_CANDIDATE_MULTIPLIER,
+    maxMediumResults: DEFAULT_RECALL_MAX_MEDIUM_RESULTS,
+    maxUnknownResults: DEFAULT_RECALL_MAX_UNKNOWN_RESULTS,
+  }),
   routingGuidance: z.boolean().default(true),
   displayMode: z.union(['sidebar', 'buildin'] as const).default('sidebar'),
   tabEnabled: z.boolean().default(true),
@@ -181,6 +219,23 @@ function resolveTaskAgentModel(value: TaskAgentModelConfig | undefined): Resolve
   return { mode, provider, model }
 }
 
+function resolveRecallQuality(value: RecallQualityConfig | undefined): SharedResolvedConfig['recallQuality'] {
+  const policy = optionalText(value?.policy) ?? DEFAULT_RECALL_QUALITY_POLICY
+  if (!/^[a-z][a-z0-9-]{0,63}$/u.test(policy)) throw new Error('dsh-mnemon: recall quality policy id must match [a-z][a-z0-9-]{0,63}')
+  const lowScoreThreshold = value?.lowScoreThreshold ?? DEFAULT_RECALL_LOW_SCORE_THRESHOLD
+  const highScoreThreshold = value?.highScoreThreshold ?? DEFAULT_RECALL_HIGH_SCORE_THRESHOLD
+  const candidateMultiplier = value?.candidateMultiplier ?? DEFAULT_RECALL_CANDIDATE_MULTIPLIER
+  const maxMediumResults = value?.maxMediumResults ?? DEFAULT_RECALL_MAX_MEDIUM_RESULTS
+  const maxUnknownResults = value?.maxUnknownResults ?? DEFAULT_RECALL_MAX_UNKNOWN_RESULTS
+  if (!Number.isFinite(lowScoreThreshold) || lowScoreThreshold < 0 || lowScoreThreshold > 1) throw new Error('dsh-mnemon: recall low score threshold must be within 0..1')
+  if (!Number.isFinite(highScoreThreshold) || highScoreThreshold < 0 || highScoreThreshold > 1) throw new Error('dsh-mnemon: recall high score threshold must be within 0..1')
+  if (lowScoreThreshold >= highScoreThreshold) throw new Error('dsh-mnemon: recall low score threshold must be less than the high score threshold')
+  if (!Number.isInteger(candidateMultiplier) || candidateMultiplier < 1 || candidateMultiplier > 5) throw new Error('dsh-mnemon: recall candidate multiplier must be an integer within 1..5')
+  if (!Number.isInteger(maxMediumResults) || maxMediumResults < 0 || maxMediumResults > 50) throw new Error('dsh-mnemon: recall max medium results must be an integer within 0..50')
+  if (!Number.isInteger(maxUnknownResults) || maxUnknownResults < 0 || maxUnknownResults > 50) throw new Error('dsh-mnemon: recall max unknown results must be an integer within 0..50')
+  return { policy, lowScoreThreshold, highScoreThreshold, candidateMultiplier, maxMediumResults, maxUnknownResults }
+}
+
 export function resolveConfig(config: Config = {}): ResolvedConfig {
   const cliPath = optionalText(config.cliPath)
   const legacyDataDir = optionalText(config.dataDir)
@@ -205,6 +260,7 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     ...(store === undefined ? {} : { store }),
     timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     defaultRecallLimit: config.defaultRecallLimit ?? DEFAULT_RECALL_LIMIT,
+    recallQuality: resolveRecallQuality(config.recallQuality),
     routingGuidance: config.routingGuidance ?? true,
     displayMode: config.displayMode ?? 'sidebar',
     tabEnabled: config.tabEnabled ?? true,

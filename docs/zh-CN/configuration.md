@@ -25,6 +25,13 @@ mnemon:
   # store: legacy-store          # 兼容发现提示，不是常规路由目标
   timeoutMs: 10000
   defaultRecallLimit: 10
+  recallQuality:
+    policy: strict-v1
+    lowScoreThreshold: 0.25
+    highScoreThreshold: 0.6
+    candidateMultiplier: 3
+    maxMediumResults: 4
+    maxUnknownResults: 2
   routingGuidance: true
   lifecycleEnabled: true
   recallMode: guided
@@ -50,6 +57,12 @@ mnemon:
 | `store` | 未设置 | `[A-Za-z0-9][A-Za-z0-9_-]*` | 用于旧 Store 的兼容发现/首选提示；语义操作由 Memory Space 路由 |
 | `timeoutMs` | `10000` | 100–120000 ms | 单次 CLI 硬超时 |
 | `defaultRecallLimit` | `10` | 1–50 | 服务和 UI 默认召回条数；不同入口可能再收紧 |
+| `recallQuality.policy` | `strict-v1` | 已注册策略 ID | 在召回正文序列化给 Agent 或客户端前执行的确定性策略 |
+| `recallQuality.lowScoreThreshold` | `0.25` | 0–1，低于高分阈值 | `strict-v1` 会移除低于此边界的标准化分数结果 |
+| `recallQuality.highScoreThreshold` | `0.6` | 0–1，高于低分阈值 | 保留结果达到此边界时标记为高相关度 |
+| `recallQuality.candidateMultiplier` | `3` | 1–5 | 在过滤前扩大各 Provider 候选请求，最多不超过服务的 50 条上限 |
+| `recallQuality.maxMediumResults` | `4` | 0–50 | `strict-v1` 在全部高相关度结果之后最多接纳的中相关度条数 |
+| `recallQuality.maxUnknownResults` | `2` | 0–50 | `strict-v1` 在有分数证据之后最多接纳的无 score 或未知量纲条数 |
 | `routingGuidance` | `true` | boolean | 是否注册额外的分层路由 system section |
 | `lifecycleEnabled` | `true` | boolean | 是否启用 pre-step cue 和评分后台审查 |
 | `recallMode` | `guided` | `guided` / `off` | 是否注入按需 recall cue；不移除显式召回 |
@@ -63,6 +76,12 @@ mnemon:
 | `mnemon-ui.saveAction` | `true` | boolean | 已定稿助手回复旁的「存入记忆」图标与确认弹窗；默认开启，**保存后实时生效** |
 
 `mnemon` Host/存储命名空间和 `mnemon-ui` 浏览器呈现命名空间都实时生效。存储根只会在新运行图初始化成功后原子切换；旧版 `mnemon.conversationInteraction` 仍会作为迁移默认值读取，但新保存只写入 `mnemon-ui`。
+
+### 召回质量策略
+
+`strict-v1` 是面向 Agent 的安全默认值：仅对明确声明为 0–1 标准化相关度的 Provider，在正文进入 Agent 前移除非正分和低于阈值的结果；随后在请求上限内保留全部高相关度结果，默认最多保留 4 条中相关度结果和 2 条无 score 或未知量纲结果，不再用较弱证据补满 limit。`balanced-v1` 把低分结果放在主要证据之后，`exhaustive-v1` 为直接检查保留有限分数结果。超出声明范围的分数按未知量纲处理，不伪造成置信度。跨 Provider 排序继续使用倒数排名融合。
+
+策略是纯函数、受限的 Host 扩展。其他插件可在运行图创建前调用 `registerRecallQualityPolicy(policy)`，然后在配置中选择该策略 ID。非法候选上限、决策或选择会回退到 `strict-v1`；配置未知 ID 会拒绝候选运行图。过滤计数通过结构化的 `source.quality` 返回，不会拼接进 Agent hint。
 
 `remoteAccess` 是唯一的启动时安全边界，不通过 Web 设置桥开放修改。默认 `read-only` 时，受信任远程域名可以读取并使用范围严格受限的记忆体激活通道；设置、ZIP 备份、Provider 连接以及其他写操作仍限制为 loopback。若部署已经在反向代理层提供可靠认证，可在 Host 本地配置中显式设置：
 

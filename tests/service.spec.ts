@@ -7,6 +7,7 @@ import { MemoryBodyRegistry } from '../src/memory-bodies.ts'
 import type { ProcessRunner } from '../src/process.ts'
 import { createRunner } from '../src/runner.ts'
 import { MnemonService, parseMemoryGraph } from '../src/service.ts'
+import { RecallQualityPolicyRegistry, STRICT_RECALL_QUALITY_POLICY, type RecallQualityPolicy } from '../src/recall-quality/index.ts'
 
 const VIZ_HTML = `<script>
 var nodes = new vis.DataSet([{id:"m2",label:"m2: [fact] Four graph memory",title:"Four graph memory",color:"#3498db",font:{color:"white"}},
@@ -76,6 +77,82 @@ function fixture(writeEnabled = true): { service: MnemonService; process: Return
 }
 
 describe('MnemonService', () => {
+  it('filters low normalized scores before returning recall content and reports structured quality stats', async () => {
+    const process = vi.fn<ProcessRunner>(async () => ({
+      stdout: JSON.stringify({ results: [
+        { id: 'zero', content: 'Irrelevant', score: 0 },
+        { id: 'low', content: 'Weak clue', score: 0.2 },
+        { id: 'medium', content: 'Useful evidence', score: 0.25 },
+        { id: 'high', content: 'Strong evidence', score: 0.6 },
+      ] }),
+      stderr: '',
+      exitCode: 0,
+    }))
+    const config = resolveConfig({ cliPath: '/fake/mnemon', dataDir: populatedDataDir(), store: 'work' })
+    const runner = createRunner(config, process)
+    const service = new MnemonService(runner, config, new MemoryBodyRegistry(runner, true))
+
+    const result = await service.search({ query: 'evidence', limit: 2 })
+    expect(result).toMatchObject({
+      results: [
+        { id: 'high', normalizedScore: 0.6, relevanceTier: 'high' },
+        { id: 'medium', normalizedScore: 0.25, relevanceTier: 'medium' },
+      ],
+      sources: [{
+        status: 'ready', itemCount: 2,
+        quality: {
+          policyId: 'strict-v1', fetched: 4, retained: 2, selected: 2,
+          droppedLowScore: 1, droppedNonPositiveScore: 1, droppedInvalidScore: 0,
+        },
+      }],
+    })
+    expect(JSON.stringify(result)).not.toContain('Weak clue')
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--limit', '6']), expect.anything())
+  })
+
+  it('resolves an injected recall quality policy without changing the service pipeline', async () => {
+    const process = vi.fn<ProcessRunner>(async () => ({
+      stdout: JSON.stringify({ results: [{ id: 'candidate', content: 'Policy-controlled evidence', score: 0.9 }] }),
+      stderr: '', exitCode: 0,
+    }))
+    const policy: RecallQualityPolicy = {
+      ...STRICT_RECALL_QUALITY_POLICY,
+      id: 'drop-all-v1',
+      evaluate: () => ({ action: 'drop', tier: 'unknown', reason: 'unscored' }),
+      select: () => [],
+    }
+    const registry = new RecallQualityPolicyRegistry()
+    registry.register(policy)
+    const config = resolveConfig({ cliPath: '/fake/mnemon', dataDir: populatedDataDir(), store: 'work', recallQuality: { policy: policy.id } })
+    const runner = createRunner(config, process)
+    const service = new MnemonService(runner, config, new MemoryBodyRegistry(runner, true), registry)
+
+    await expect(service.search({ query: 'evidence', limit: 2 })).resolves.toMatchObject({
+      results: [],
+      sources: [{ status: 'empty', itemCount: 0, quality: { policyId: 'drop-all-v1', fetched: 1, retained: 0 } }],
+    })
+  })
+
+  it('does not fill the Agent result limit with medium or unknown evidence', async () => {
+    const rows = [
+      { id: 'high', content: 'High evidence', score: 0.8 },
+      ...Array.from({ length: 6 }, (_, index) => ({ id: `medium-${index + 1}`, content: `Medium evidence ${index + 1}`, score: 0.5 - index * 0.01 })),
+      ...Array.from({ length: 3 }, (_, index) => ({ id: `unknown-${index + 1}`, content: `Unknown evidence ${index + 1}` })),
+    ]
+    const process = vi.fn<ProcessRunner>(async () => ({ stdout: JSON.stringify({ results: rows }), stderr: '', exitCode: 0 }))
+    const config = resolveConfig({ cliPath: '/fake/mnemon', dataDir: populatedDataDir(), store: 'work' })
+    const runner = createRunner(config, process)
+    const service = new MnemonService(runner, config, new MemoryBodyRegistry(runner, true))
+
+    const result = await service.search({ query: 'bounded evidence', limit: 10 })
+    expect(result.results.map(item => item.id)).toEqual([
+      'high', 'medium-1', 'medium-2', 'medium-3', 'medium-4', 'unknown-1', 'unknown-2',
+    ])
+    expect(result.sources[0]?.quality).toMatchObject({ retained: 10, selected: 7 })
+    expect(JSON.stringify(result.results)).not.toContain('Medium evidence 5')
+    expect(JSON.stringify(result.results)).not.toContain('Unknown evidence 3')
+  })
+
   it('keeps Agent-created Memory Spaces on the fixed Provider in manual persistence mode', async () => {
     const config = resolveConfig({ persistenceStrategy: { mode: 'manual', providerId: 'mnemon-native' } })
     const service = Object.create(MnemonService.prototype) as MnemonService
@@ -274,7 +351,7 @@ describe('MnemonService', () => {
     expect(result.sources).toEqual([expect.objectContaining({ memoryBodyId: 'work', mode: 'search', status: 'ready', itemCount: 1 })])
     expect(process).toHaveBeenCalledWith(
       '/fake/mnemon',
-      ['--data-dir', dataDir, '--store', 'work', 'recall', 'database choice', '--limit', '7'],
+      ['--data-dir', dataDir, '--store', 'work', 'recall', 'database choice', '--limit', '21'],
       expect.anything(),
     )
   })
@@ -351,7 +428,7 @@ describe('MnemonService', () => {
       sources: [{ memoryBodyId: 'work', mode: 'entities', status: 'ready', itemCount: 1 }],
     })
     await expect(service.entities('SQLite', 5)).resolves.toMatchObject({ selected: 'SQLite', insights: [{ id: 'm1' }] })
-    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--intent', 'ENTITY', '--limit', '5']), expect.anything())
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--intent', 'ENTITY', '--limit', '15']), expect.anything())
   })
 
   it('rejects malformed visualization output', () => {

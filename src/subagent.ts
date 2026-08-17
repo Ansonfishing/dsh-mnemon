@@ -70,7 +70,8 @@ const INSIGHT_SCHEMA = {
   type: 'object',
   properties: {
     id: { type: 'string' }, content: { type: 'string' }, memoryBodyId: { type: 'string' }, memoryBodyName: { type: 'string' },
-    category: { type: 'string' }, importance: { type: 'number' }, score: { type: 'number' }, confidence: { type: 'string' },
+    category: { type: 'string' }, importance: { type: 'number' }, score: { type: 'number' }, normalizedScore: { type: 'number' },
+    relevanceTier: { type: 'string', enum: ['high', 'medium', 'low', 'unknown'] }, confidence: { type: 'string' },
     intent: { type: 'string' }, matchedVia: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } },
     entities: { type: 'array', items: { type: 'string' } },
   },
@@ -491,7 +492,8 @@ function insight(value: unknown): Insight | undefined {
   if (item === undefined || typeof item.id !== 'string' || typeof item.content !== 'string' || typeof item.memoryBodyId !== 'string') return undefined
   const result: Insight = { id: item.id, content: item.content, memoryBodyId: item.memoryBodyId }
   for (const key of ['memoryBodyName', 'category', 'confidence', 'intent', 'matchedVia'] as const) if (typeof item[key] === 'string') result[key] = item[key]
-  for (const key of ['importance', 'score'] as const) if (typeof item[key] === 'number') result[key] = item[key]
+  if (item.relevanceTier === 'high' || item.relevanceTier === 'medium' || item.relevanceTier === 'low' || item.relevanceTier === 'unknown') result.relevanceTier = item.relevanceTier
+  for (const key of ['importance', 'score', 'normalizedScore'] as const) if (typeof item[key] === 'number') result[key] = item[key]
   if (Array.isArray(item.tags)) result.tags = strings(item.tags)
   if (Array.isArray(item.entities)) result.entities = strings(item.entities)
   return result

@@ -2,7 +2,7 @@ import type { JsonValue } from '../contracts.ts'
 import type { MemoryBodyRegistry } from '../memory-bodies.ts'
 import type { Insight, MemoryBody, MemoryListRequest, RememberRequest, SearchRequest } from '../shared/contracts.ts'
 import { HttpMemoryProvider, firstArray, jsonNumber, jsonObject, jsonString, type HttpProviderOptions } from './http.ts'
-import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderMemorySpace, ProviderSearchResult } from './provider.ts'
+import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus, type ProviderMemorySpace, type ProviderSearchResult } from './provider.ts'
 
 function insight(value: unknown): Insight | undefined {
   const item = jsonObject(value)
@@ -23,6 +23,7 @@ function insight(value: unknown): Insight | undefined {
 
 export class RetainDbProvider extends HttpMemoryProvider implements MemoryProviderAdapter {
   readonly id = 'retaindb' as const
+  readonly scoreSemantics = NORMALIZED_RELEVANCE_SCORE
 
   constructor(memoryBodies: MemoryBodyRegistry, options: HttpProviderOptions = {}) {
     super(memoryBodies, options)

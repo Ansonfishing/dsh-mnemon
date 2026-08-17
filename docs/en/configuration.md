@@ -25,6 +25,13 @@ mnemon:
   # store: legacy-store          # compatibility discovery hint, not a regular routing target
   timeoutMs: 10000
   defaultRecallLimit: 10
+  recallQuality:
+    policy: strict-v1
+    lowScoreThreshold: 0.25
+    highScoreThreshold: 0.6
+    candidateMultiplier: 3
+    maxMediumResults: 4
+    maxUnknownResults: 2
   routingGuidance: true
   lifecycleEnabled: true
   recallMode: guided
@@ -50,6 +57,12 @@ mnemon:
 | `store` | unset | `[A-Za-z0-9][A-Za-z0-9_-]*` | Compatibility discovery/preference hint for legacy Stores; semantic operations are routed through Memory Spaces |
 | `timeoutMs` | `10000` | 100–120000 ms | Hard timeout for a single CLI call |
 | `defaultRecallLimit` | `10` | 1–50 | Default recall count for the service and UI; individual entry points may impose a lower limit |
+| `recallQuality.policy` | `strict-v1` | registered policy id | Deterministic policy applied before recall content is serialized to an Agent or client |
+| `recallQuality.lowScoreThreshold` | `0.25` | 0–1, below high threshold | Normalized scores below this boundary are removed by `strict-v1` |
+| `recallQuality.highScoreThreshold` | `0.6` | 0–1, above low threshold | Retained normalized scores at or above this boundary are labeled high relevance |
+| `recallQuality.candidateMultiplier` | `3` | 1–5 | Expands each Provider request before filtering, capped by the service limit of 50 candidates |
+| `recallQuality.maxMediumResults` | `4` | 0–50 | Maximum medium-relevance rows admitted by `strict-v1` after all high-relevance rows |
+| `recallQuality.maxUnknownResults` | `2` | 0–50 | Maximum unscored or unknown-scale rows admitted by `strict-v1` after scored evidence |
 | `routingGuidance` | `true` | boolean | Whether to register an additional tiered-routing system section |
 | `lifecycleEnabled` | `true` | boolean | Whether to enable the pre-step cue and score-based background review |
 | `recallMode` | `guided` | `guided` / `off` | Whether to inject an on-demand recall cue; does not remove explicit recall |
@@ -63,6 +76,12 @@ mnemon:
 | `mnemon-ui.saveAction` | `true` | boolean | “Save to memory” icon and confirmation on finalized assistant replies; on by default, **applies live after saving** |
 
 Both the `mnemon` Host/storage namespace and the `mnemon-ui` browser-presentation namespace apply live. The storage root switches atomically only after the new runtime graph initializes successfully. Legacy `mnemon.conversationInteraction` values remain a migration default, but new saves write only to `mnemon-ui`.
+
+### Recall quality policies
+
+`strict-v1` is the Agent-safe default: for Providers that explicitly declare a normalized 0–1 relevance score, non-positive and below-threshold rows are removed before their content reaches an Agent. It then returns every high-relevance row up to the requested limit, at most four medium-relevance rows, and at most two unscored or unknown-scale rows by default; it does not fill the result limit with weaker evidence. `balanced-v1` retains low-score rows only after primary evidence, and `exhaustive-v1` preserves finite scored rows for direct inspection. An out-of-range score is treated as unknown-scale instead of being fabricated into a confidence value. Cross-provider ordering continues to use reciprocal-rank fusion.
+
+Policies are pure, bounded host extensions. A plugin may call `registerRecallQualityPolicy(policy)` before the runtime graph is constructed, then select that policy id in configuration. Invalid limits, decisions, or selections fall back to `strict-v1`; an unknown configured id rejects the candidate runtime graph. Filtering counts are returned as structured `source.quality` statistics and are not appended to Agent hints.
 
 `remoteAccess` is the sole startup-time security boundary and cannot be changed through the Web settings bridge. With the default `read-only` mode, a trusted remote authority can read and use the narrow Memory Space activation channel; settings, ZIP backups, provider connections, and all broader mutations remain loopback-only. If the deployment already has reliable authentication at its reverse proxy, opt in from the Host's local configuration:
 

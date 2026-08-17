@@ -53,6 +53,28 @@ export interface CustomPackConfig {
   dataDir: string
 }
 
+export interface RecallQualityConfig {
+  /** Registered deterministic policy id. */
+  policy?: string
+  lowScoreThreshold?: number
+  highScoreThreshold?: number
+  /** Provider candidate expansion before quality filtering, from 1 through 5. */
+  candidateMultiplier?: number
+  /** Maximum medium-relevance rows admitted by the strict policy. */
+  maxMediumResults?: number
+  /** Maximum unknown-scale or unscored rows admitted by the strict policy. */
+  maxUnknownResults?: number
+}
+
+export interface ResolvedRecallQualityConfig {
+  policy: string
+  lowScoreThreshold: number
+  highScoreThreshold: number
+  candidateMultiplier: number
+  maxMediumResults: number
+  maxUnknownResults: number
+}
+
 export interface Config {
   storageScope?: StorageScopeKind
   cliPath?: string
@@ -62,6 +84,7 @@ export interface Config {
   store?: string
   timeoutMs?: number
   defaultRecallLimit?: number
+  recallQuality?: RecallQualityConfig
   routingGuidance?: boolean
   displayMode?: 'sidebar' | 'buildin'
   tabEnabled?: boolean
@@ -132,6 +155,7 @@ export interface ResolvedConfig {
   store?: string
   timeoutMs: number
   defaultRecallLimit: number
+  recallQuality: ResolvedRecallQualityConfig
   routingGuidance: boolean
   displayMode: 'sidebar' | 'buildin'
   tabEnabled: boolean
@@ -380,6 +404,8 @@ export const EDGE_TYPES = ['temporal', 'semantic', 'causal', 'entity'] as const 
 export type Intent = 'WHY' | 'WHEN' | 'ENTITY' | 'GENERAL'
 export const INTENTS = ['WHY', 'WHEN', 'ENTITY', 'GENERAL'] as const satisfies readonly Intent[]
 
+export type RecallRelevanceTier = 'high' | 'medium' | 'low' | 'unknown'
+
 export interface Insight {
   id: string
   content: string
@@ -389,6 +415,10 @@ export interface Insight {
   entities?: string[]
   source?: string
   score?: number
+  /** Policy-normalized query relevance; absent for unknown Provider score scales. */
+  normalizedScore?: number
+  /** Query relevance assigned by the active deterministic recall quality policy. */
+  relevanceTier?: RecallRelevanceTier
   /** Comparable rank score only when results were fused across providers. */
   federatedScore?: number
   confidence?: string
@@ -505,6 +535,20 @@ export interface MemoryReadSource {
   itemCount: number
   edgeCount?: number
   hint?: string
+  quality?: RecallQualityStats
+}
+
+export interface RecallQualityStats {
+  policyId: string
+  fallbackFrom?: string
+  fetched: number
+  retained: number
+  selected: number
+  droppedLowScore: number
+  droppedNonPositiveScore: number
+  droppedInvalidScore: number
+  unscored: number
+  unscaled: number
 }
 
 export interface MemoryListRequest {
@@ -796,6 +840,7 @@ export interface StatusView {
   writeEnabled: boolean
   timeoutMs: number
   defaultRecallLimit: number
+  recallQuality: ResolvedRecallQualityConfig
   memoryBodyDirectory: string
   memoryBodies: MemoryBodyView[]
   providerServices?: MemoryProviderRuntimeStatus[]

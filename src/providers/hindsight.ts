@@ -13,7 +13,7 @@ import type {
   SearchRequest,
 } from '../shared/contracts.ts'
 import { HttpMemoryProvider, firstArray, jsonArray, jsonNumber, jsonObject, jsonString, type HttpProviderOptions } from './http.ts'
-import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderMemorySpace, ProviderSearchResult } from './provider.ts'
+import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus, type ProviderMemorySpace, type ProviderSearchResult } from './provider.ts'
 
 function insight(value: unknown): Insight | undefined {
   const item = jsonObject(value)
@@ -48,6 +48,7 @@ function edgeType(value: unknown): EdgeType | undefined {
 
 export class HindsightProvider extends HttpMemoryProvider implements MemoryProviderAdapter {
   readonly id = 'hindsight' as const
+  readonly scoreSemantics = NORMALIZED_RELEVANCE_SCORE
 
   constructor(memoryBodies: MemoryBodyRegistry, options: HttpProviderOptions = {}) {
     super(memoryBodies, options)
