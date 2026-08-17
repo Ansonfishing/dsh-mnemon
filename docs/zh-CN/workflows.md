@@ -4,10 +4,10 @@
 
 ## 每轮上下文
 
-插件注册两个 system prompt section：
+插件会注册稳定的路由指导和动态 runtime-context 贡献：
 
-- `mnemon:routing`：当 `routingGuidance=true` 时提供简短的分层查询边界；
-- `mnemon:runtime-memory`：每次组装 prompt 时读取最新 `USER.md` 和 `MEMORY.md`，并附带保存准入规则。
+- `mnemon:routing`：system prompt section；当 `routingGuidance=true` 时提供简短的分层查询边界；
+- `mnemon:runtime-memory`：DSH runtime-context snapshot；每次组装模型输入时读取最新 `USER.md` 和 `MEMORY.md`，并附带保存准入规则。内容变化时会追加到消息尾部，不再重写稳定的 system-prompt 前缀。
 
 生命周期 hook 不会在每轮开始无条件读取记忆体目录或执行 recall：
 
@@ -286,5 +286,5 @@ conservative maintenance decision
 - `recallMode=off`：不再注入 recall cue，显式 `mnemon_recall` 仍可用。
 - `writebackMode=off`：关闭写回 cue 和评分后台审查，显式写入仍由 `writeEnabled` 决定。
 - `lifecycleEnabled=false`：关闭生命周期提醒和审查，不移除显式工具或 Web 入口。
-- `routingGuidance=false`：只移除额外路由 section；Runtime Memory section 仍注册。
+- `routingGuidance=false`：只移除额外路由 section；Runtime Memory context 仍注册。
 - `writeEnabled=false`：移除语义写工具和写 RPC，拒绝写命令；它不是文件系统只读挂载保证。

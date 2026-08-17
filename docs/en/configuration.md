@@ -215,7 +215,7 @@ lifecycleEnabled=false
 
 routingGuidance=false
   -> removes only mnemon:routing
-  -> runtime-memory prompt section remains
+  -> runtime-memory context remains
 ```
 
 ## Display Mode and the `tabEnabled` UI Switch

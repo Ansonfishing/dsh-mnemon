@@ -4,10 +4,10 @@
 
 ## Per-Turn Context
 
-The plugin registers two system prompt sections:
+The plugin registers stable routing guidance and a dynamic runtime-context contribution:
 
-- `mnemon:routing`: when `routingGuidance=true`, provides concise boundaries for tiered queries;
-- `mnemon:runtime-memory`: reads the latest `USER.md` and `MEMORY.md` whenever a prompt is assembled and includes admission rules for saving content.
+- `mnemon:routing`: a system prompt section that, when `routingGuidance=true`, provides concise boundaries for tiered queries;
+- `mnemon:runtime-memory`: a DSH runtime-context snapshot that reads the latest `USER.md` and `MEMORY.md` whenever model input is assembled and includes admission rules for saving content. Changes are appended at the message tail instead of rewriting the stable system-prompt prefix.
 
 Lifecycle hooks do not unconditionally read the Memory Space catalog or run recall at the start of every turn:
 
@@ -286,5 +286,5 @@ conservative maintenance decision
 - `recallMode=off`: stops injecting recall cues; explicit `mnemon_recall` remains available.
 - `writebackMode=off`: disables writeback cues and scored background review; explicit writes are still governed by `writeEnabled`.
 - `lifecycleEnabled=false`: disables lifecycle reminders and review without removing explicit tools or Web entry points.
-- `routingGuidance=false`: removes only the additional routing section; the Runtime Memory section remains registered.
+- `routingGuidance=false`: removes only the additional routing section; the Runtime Memory context remains registered.
 - `writeEnabled=false`: removes semantic write tools and write RPC, and rejects write commands; it does not guarantee a read-only file-system mount.
