@@ -32,7 +32,17 @@ describe('Mnemon config and resolution', () => {
         },
         providerConnections: {},
       },
+      taskAgentModel: { mode: 'inherit' },
     })
+  })
+
+  it('inherits the DSH new-session model by default and validates fixed task routes', () => {
+    expect(resolveConfig({}).taskAgentModel).toEqual({ mode: 'inherit' })
+    expect(resolveConfig({
+      taskAgentModel: { mode: 'fixed', provider: ' deepseek ', model: ' deepseek-chat ' },
+    }).taskAgentModel).toEqual({ mode: 'fixed', provider: 'deepseek', model: 'deepseek-chat' })
+    expect(() => resolveConfig({ taskAgentModel: { mode: 'fixed', provider: 'deepseek' } }))
+      .toThrow('provider and model')
   })
 
   it('resolves a bounded automatic persistence strategy without changing its provider connections', () => {

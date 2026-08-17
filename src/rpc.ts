@@ -123,6 +123,10 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
         if (versions === undefined) throw new Error('version checks are unavailable')
         return success(await versions.check())
       }
+      if (endpoint === 'task-agent-models') {
+        if (lifecycle === undefined) throw new Error('Mnemon task Agent model directory is unavailable without lifecycle integration')
+        return success(await lifecycle.taskAgentModels())
+      }
       const resolved = runtimeFor(input, payload, runtimeMemory, storage)
       const { service } = resolved.graph
       const selectedWorkspace = resolved.route?.selectedWorkspace
@@ -348,12 +352,8 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
           {
             const sessionId = String(payload.sessionId ?? '')
             const idempotencyKey = payload.idempotencyKey === undefined ? undefined : String(payload.idempotencyKey)
-            const workspaceRoot = resolved.route?.selectedWorkspace?.path
-            if (sessionId.trim() === '' || resolved.explicitWorkspace) {
-              return success(await lifecycle.superviseTask(sessionId, String(payload.content ?? ''), idempotencyKey, workspaceRoot))
-            }
-            requireAligned(resolved.route)
-            return success(await lifecycle.supervise(sessionId, String(payload.content ?? ''), idempotencyKey))
+            const workspaceRoot = resolved.route?.selectedWorkspace?.path ?? lifecycle.workspaceRoot(sessionId)
+            return success(await lifecycle.superviseTask(sessionId, String(payload.content ?? ''), idempotencyKey, workspaceRoot))
           }
         case 'document':
           {

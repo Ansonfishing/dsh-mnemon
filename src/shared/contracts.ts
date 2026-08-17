@@ -76,6 +76,45 @@ export interface Config {
   }
   /** Provider policy used when an Agent must create a new Memory Space while distilling memory. */
   persistenceStrategy?: MemoryPersistenceStrategy
+  /** Model route used by clean, session-independent maintenance Agents. */
+  taskAgentModel?: TaskAgentModelConfig
+}
+
+export interface TaskAgentModelConfig {
+  mode?: 'inherit' | 'fixed'
+  provider?: string
+  model?: string
+}
+
+export interface ResolvedTaskAgentModelConfig {
+  mode: 'inherit' | 'fixed'
+  provider?: string
+  model?: string
+}
+
+export interface TaskAgentModelCatalogModel {
+  id: string
+  name: string
+  description?: string
+}
+
+export interface TaskAgentModelCatalogGroup {
+  id: string
+  name: string
+  models: TaskAgentModelCatalogModel[]
+}
+
+export interface TaskAgentModelCatalogFailure {
+  id: string
+  name: string
+  message: string
+}
+
+export interface TaskAgentModelCatalog {
+  effective?: { provider: string; model: string; source: 'fixed' | 'dsh-default' | 'active-agent' }
+  defaultSelection?: { provider: string; model: string }
+  groups: TaskAgentModelCatalogGroup[]
+  failures: TaskAgentModelCatalogFailure[]
 }
 
 export interface InteractionConfig {
@@ -104,6 +143,7 @@ export interface ResolvedConfig {
     saveAction: boolean
   }
   persistenceStrategy: ResolvedMemoryPersistenceStrategy
+  taskAgentModel: ResolvedTaskAgentModelConfig
 }
 
 export interface ResolvedInteractionConfig {

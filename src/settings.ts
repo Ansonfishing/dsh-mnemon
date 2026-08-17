@@ -45,7 +45,7 @@ function object(value: unknown): Record<string, unknown> {
 const MUTABLE_FIELDS = [
   'storageScope', 'cliPath', 'dataDir', 'customPackId', 'customPacks', 'store', 'timeoutMs', 'defaultRecallLimit',
   'routingGuidance', 'lifecycleEnabled', 'recallMode', 'writebackMode', 'idleReviewMs',
-  'displayMode', 'tabEnabled', 'writeEnabled',
+  'displayMode', 'tabEnabled', 'writeEnabled', 'taskAgentModel',
 ]
 
 /** Nested paths of the live in-conversation interaction toggles. */

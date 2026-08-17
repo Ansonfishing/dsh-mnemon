@@ -12,6 +12,8 @@ import type {
   MemoryProviderId,
   ResolvedConfig as SharedResolvedConfig,
   ResolvedInteractionConfig as SharedResolvedInteractionConfig,
+  ResolvedTaskAgentModelConfig,
+  TaskAgentModelConfig,
 } from './shared/contracts.ts'
 
 export { DEFAULT_IDLE_REVIEW_MS, DEFAULT_RECALL_LIMIT, DEFAULT_TIMEOUT_MS } from './config-values.ts'
@@ -41,6 +43,12 @@ const MemoryPersistenceStrategySchema: z<MemoryPersistenceStrategy> = z.object({
     preference: z.union(['balanced', 'local-first', 'shared-first'] as const),
   }),
   providerConnections: z.dict(MemoryProviderConnectionSchema),
+})
+
+const TaskAgentModelSchema: z<TaskAgentModelConfig> = z.object({
+  mode: z.union(['inherit', 'fixed'] as const),
+  provider: z.string(),
+  model: z.string(),
 })
 
 export const Config: z<Config> = z.object({
@@ -73,6 +81,7 @@ export const Config: z<Config> = z.object({
     saveAction: z.boolean().default(true),
   }).default({ toolviews: false, turnBar: true, saveAction: true }),
   persistenceStrategy: MemoryPersistenceStrategySchema,
+  taskAgentModel: TaskAgentModelSchema,
 })
 
 export function resolveInteractionConfig(config: InteractionConfig = {}): ResolvedInteractionConfig {
@@ -160,6 +169,17 @@ function resolvePersistenceStrategy(value: MemoryPersistenceStrategy | undefined
   }
 }
 
+function resolveTaskAgentModel(value: TaskAgentModelConfig | undefined): ResolvedTaskAgentModelConfig {
+  const mode = value?.mode ?? 'inherit'
+  if (mode !== 'inherit' && mode !== 'fixed') throw new Error(`dsh-mnemon: unsupported task Agent model mode: ${String(mode)}`)
+  if (mode === 'inherit') return { mode }
+  const provider = optionalText(value?.provider)
+  const model = optionalText(value?.model)
+  if (provider === undefined || model === undefined) throw new Error('dsh-mnemon: a fixed task Agent model requires both provider and model')
+  if (provider.length > 200 || model.length > 300) throw new Error('dsh-mnemon: task Agent provider or model id is too long')
+  return { mode, provider, model }
+}
+
 export function resolveConfig(config: Config = {}): ResolvedConfig {
   const cliPath = optionalText(config.cliPath)
   const legacyDataDir = optionalText(config.dataDir)
@@ -198,5 +218,6 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
       saveAction: config.conversationInteraction?.saveAction ?? true,
     },
     persistenceStrategy: resolvePersistenceStrategy(config.persistenceStrategy),
+    taskAgentModel: resolveTaskAgentModel(config.taskAgentModel),
   }
 }

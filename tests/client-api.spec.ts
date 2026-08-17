@@ -78,6 +78,19 @@ describe('MnemonClient turn activity batching', () => {
     })
   })
 
+  it('loads the independent task Agent model catalog without a session dependency', async () => {
+    const catalog = {
+      effective: { provider: 'deepseek', model: 'deepseek-chat', source: 'dsh-default' as const },
+      groups: [{ id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] }],
+      failures: [],
+    }
+    const call = vi.fn(async () => ({ ok: true as const, value: catalog }))
+    const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle)
+
+    await expect(client.taskAgentModels()).resolves.toEqual(catalog)
+    expect(call).toHaveBeenCalledWith(expect.any(String), 'task-agent-models', {})
+  })
+
   it('routes a card-level Memory Space reconnect with the active scope', async () => {
     const call = vi.fn(async () => ({ ok: true as const, value: { id: 'mem0-body', healthy: true } }))
     const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle, 'session-1', 'workspace-1')

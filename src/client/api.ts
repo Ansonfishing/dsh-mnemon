@@ -33,6 +33,7 @@ import {
   type RuntimeMemoryTarget,
   type SearchRequest,
   type StatusView,
+  type TaskAgentModelCatalog,
   type TurnMemoryActivity,
   type TurnMemoryActivitySnapshot,
   type UpdateMemoryBodyRequest,
@@ -119,6 +120,10 @@ export class MnemonClient {
 
   statusSummary(): Promise<StatusView> {
     return this.call<StatusView>(MNEMON_READ_CHANNEL, 'status-summary', this.scoped()).catch(() => this.status())
+  }
+
+  taskAgentModels(): Promise<TaskAgentModelCatalog> {
+    return this.call(MNEMON_READ_CHANNEL, 'task-agent-models', {})
   }
 
   versions(): Promise<VersionStatus> {

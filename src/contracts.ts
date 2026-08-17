@@ -186,6 +186,11 @@ export interface HostSubagentsService {
   }): Promise<HostSubagentRun>
 }
 
+export interface HostLlmService {
+  listProviders(): Array<{ id: string; name: string }>
+  listModels(provider: string): Promise<Array<{ id: string; name: string; description?: string }>>
+}
+
 export interface HostContextShape {
   tools: { register(definition: ToolDefinition): unknown }
   commands: CommandService

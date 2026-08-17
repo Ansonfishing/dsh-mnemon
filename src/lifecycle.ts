@@ -6,6 +6,7 @@ import type {
   HostAgent,
   HostAgentHandle,
   HostContextShape,
+  HostLlmService,
   HostPreStepDecision,
   HostSessionEvent,
   HostUserMessage,
@@ -18,7 +19,7 @@ import { scoreReviewActivity } from './review-activity.ts'
 import { TurnActivityProjection, type TurnMemoryActivity, type TurnMemoryActivitySnapshot } from './activity.ts'
 import type { RuntimeMemoryController } from './runtime-memory.ts'
 import { registerAgentRuntimeMemoryContext } from './guidance.ts'
-import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot, ReviewActivityScore } from './shared/contracts.ts'
+import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot, ReviewActivityScore, TaskAgentModelCatalog } from './shared/contracts.ts'
 import type { PreparedMemoryPlacement } from './provider-placement.ts'
 
 interface AgentRuntimeSource {
@@ -42,6 +43,11 @@ function modelService(value: unknown): HostDefaultModelService | undefined {
 function presetService(value: unknown): HostAgentPresetService | undefined {
   if (typeof value !== 'object' || value === null || !('resolve' in value) || typeof value.resolve !== 'function' || !('mount' in value) || typeof value.mount !== 'function') return undefined
   return value as HostAgentPresetService
+}
+
+function llmService(value: unknown): HostLlmService | undefined {
+  if (typeof value !== 'object' || value === null || !('listProviders' in value) || typeof value.listProviders !== 'function' || !('listModels' in value) || typeof value.listModels !== 'function') return undefined
+  return value as HostLlmService
 }
 
 export type { TurnMemoryActivity, TurnMemoryActivitySnapshot } from './activity.ts'
@@ -403,6 +409,54 @@ export class MnemonLifecycle {
     }
   }
 
+  /** Provider/model directory used by Settings without requiring a live session. */
+  async taskAgentModels(): Promise<TaskAgentModelCatalog> {
+    const route = this.taskAgentModelRoute('', undefined)
+    let defaultSelection: { provider: string; model: string } | undefined
+    try {
+      const selected = modelService(this.ctx.get('agentDefaultModel'))?.currentSelection()
+      const provider = selected?.provider.trim()
+      const model = selected?.model.trim()
+      if (provider !== undefined && provider !== '' && model !== undefined && model !== '') defaultSelection = { provider, model }
+    } catch {}
+
+    const base = {
+      ...(route === undefined ? {} : { effective: { provider: route.options.provider!, model: route.options.model!, source: route.source } }),
+      ...(defaultSelection === undefined ? {} : { defaultSelection }),
+    }
+    const llm = llmService(this.ctx.get('llm'))
+    if (llm === undefined) {
+      return { ...base, groups: [], failures: [{ id: 'dsh', name: 'DSH', message: 'model directory service is unavailable' }] }
+    }
+
+    let providers: Array<{ id: string; name: string }>
+    try {
+      providers = llm.listProviders()
+    } catch (error) {
+      return { ...base, groups: [], failures: [{ id: 'dsh', name: 'DSH', message: error instanceof Error ? error.message : String(error) }] }
+    }
+    const entries = await Promise.all(providers.map(async provider => {
+      try {
+        const models = await llm.listModels(provider.id)
+        return {
+          kind: 'group' as const,
+          value: {
+            id: provider.id,
+            name: provider.name,
+            models: models.map(model => ({ id: model.id, name: model.name, ...(model.description === undefined ? {} : { description: model.description }) })),
+          },
+        }
+      } catch (error) {
+        return { kind: 'failure' as const, value: { id: provider.id, name: provider.name, message: error instanceof Error ? error.message : String(error) } }
+      }
+    }))
+    return {
+      ...base,
+      groups: entries.flatMap(entry => entry.kind === 'group' && entry.value.models.length > 0 ? [entry.value] : []),
+      failures: entries.flatMap(entry => entry.kind === 'failure' ? [entry.value] : []),
+    }
+  }
+
   private availableAgent(workspaceRoot?: string): HostAgent | undefined {
     const agents = [...this.owners.keys()]
     const normalizedRoot = workspaceRoot?.trim()
@@ -647,17 +701,29 @@ export class MnemonLifecycle {
   }
 
   /** Resolve a complete task route for both status admission and actual creation. */
-  private taskAgentModelOptions(fallbackSessionId: string, workspaceRoot: string | undefined): NonNullable<CreateHostAgentOptions['agentOptions']> | undefined {
+  private taskAgentModelRoute(fallbackSessionId: string, workspaceRoot: string | undefined): { options: NonNullable<CreateHostAgentOptions['agentOptions']>; source: 'fixed' | 'dsh-default' | 'active-agent' } | undefined {
     const fallback = this.ctx.agents.get(fallbackSessionId.trim()) ?? this.availableAgent(workspaceRoot) ?? this.availableAgent()
-    const selected = modelService(this.ctx.get('agentDefaultModel'))?.currentSelection()
-    const provider = selected?.provider.trim() || fallback?.options?.provider?.trim()
-    const model = selected?.model.trim() || fallback?.options?.model?.trim()
-    if (provider === undefined || provider === '' || model === undefined || model === '') return undefined
-    return {
-      provider,
-      model,
-      ...(fallback?.options?.maxTokens === undefined ? {} : { maxTokens: fallback.options.maxTokens }),
+    if (this.config.taskAgentModel.mode === 'fixed') {
+      const provider = this.config.taskAgentModel.provider?.trim()
+      const model = this.config.taskAgentModel.model?.trim()
+      if (provider === undefined || provider === '' || model === undefined || model === '') return undefined
+      return {
+        source: 'fixed',
+        options: { provider, model, ...(fallback?.options?.maxTokens === undefined ? {} : { maxTokens: fallback.options.maxTokens }) },
+      }
     }
+    let selected: { provider: string; model: string } | undefined
+    try { selected = modelService(this.ctx.get('agentDefaultModel'))?.currentSelection() } catch {}
+    const selectedProvider = selected?.provider.trim()
+    const selectedModel = selected?.model.trim()
+    const provider = selectedProvider || fallback?.options?.provider?.trim()
+    const model = selectedModel || fallback?.options?.model?.trim()
+    if (provider === undefined || provider === '' || model === undefined || model === '') return undefined
+    return { source: selectedProvider !== undefined && selectedProvider !== '' && selectedModel !== undefined && selectedModel !== '' ? 'dsh-default' : 'active-agent', options: { provider, model, ...(fallback?.options?.maxTokens === undefined ? {} : { maxTokens: fallback.options.maxTokens }) } }
+  }
+
+  private taskAgentModelOptions(fallbackSessionId: string, workspaceRoot: string | undefined): NonNullable<CreateHostAgentOptions['agentOptions']> | undefined {
+    return this.taskAgentModelRoute(fallbackSessionId, workspaceRoot)?.options
   }
 
   private install(agent: HostAgent, source: LifecycleAgentSnapshot['startSource']): void {

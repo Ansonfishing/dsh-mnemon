@@ -31,10 +31,11 @@ describe('Mnemon settings bridge', () => {
       { op: 'set', path: ['store'], value: 'settings-store' },
       { op: 'set', path: ['idleReviewMs'], value: 45000 },
       { op: 'set', path: ['displayMode'], value: 'buildin' },
+      { op: 'set', path: ['taskAgentModel'], value: { mode: 'fixed', provider: 'deepseek', model: 'deepseek-chat' } },
     ]
     const written = await handler('mutate', { expectedRevision: 2, ops })
     expect(mutate).toHaveBeenCalledWith('mnemon', ops, 2)
-    expect(written).toEqual(expect.objectContaining({ ok: true, value: expect.objectContaining({ revision: 3, user: { store: 'settings-store', idleReviewMs: 45000, displayMode: 'buildin' } }) }))
+    expect(written).toEqual(expect.objectContaining({ ok: true, value: expect.objectContaining({ revision: 3, user: { store: 'settings-store', idleReviewMs: 45000, displayMode: 'buildin', taskAgentModel: { mode: 'fixed', provider: 'deepseek', model: 'deepseek-chat' } } }) }))
   })
 
   it('rejects fields outside the plugin schema', async () => {

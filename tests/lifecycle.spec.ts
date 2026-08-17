@@ -34,6 +34,15 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
   const disposedTaskAgents: string[] = []
   const taskModelRoute = options.taskModelRoute !== false
   const defaultModel = { currentSelection: vi.fn(() => ({ provider: 'deepseek', model: 'deepseek-chat' })) }
+  const llm = {
+    listProviders: vi.fn(() => [
+      { id: 'deepseek', name: 'DeepSeek' },
+      { id: 'openai', name: 'OpenAI' },
+    ]),
+    listModels: vi.fn(async (provider: string) => provider === 'openai'
+      ? [{ id: 'gpt-5', name: 'GPT-5', description: 'General reasoning' }]
+      : [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }]),
+  }
   const agentPresets = {
     resolve: vi.fn(async () => ({ id: 'default' })),
     mount: vi.fn(async () => ({ id: 'default' })),
@@ -107,7 +116,13 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
   })
   const ctx = {
     agents: { get: (id: string) => id === agent.id ? agent : taskAgents.find(candidate => candidate.id === id), roots: () => [agent, ...taskAgents], create: createTaskAgent },
-    get: vi.fn((name: string) => name === 'agentDefaultModel' && taskModelRoute ? defaultModel : name === 'agentPresets' ? agentPresets : undefined),
+    get: vi.fn((name: string) => name === 'agentDefaultModel' && taskModelRoute
+      ? defaultModel
+      : name === 'agentPresets'
+        ? agentPresets
+        : name === 'llm'
+          ? llm
+          : undefined),
     on: vi.fn((name: string, listener: Listener) => {
       rootListeners.set(name, listener)
       return () => rootListeners.delete(name)
@@ -126,7 +141,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     if (listener === undefined) throw new Error('turn-stopping listener missing')
     await listener({ agent, turn, signal: new AbortController().signal })
   }
-  return { agent, agentListeners, events, followup, steer, lifecycle, service, coordinator, createTaskAgent, disposedTaskAgents, defaultModel, agentPresets, preStep, turnStopping, stop }
+  return { agent, agentListeners, events, followup, steer, lifecycle, service, coordinator, createTaskAgent, disposedTaskAgents, defaultModel, llm, agentPresets, preStep, turnStopping, stop }
 }
 
 afterEach(() => vi.useRealTimers())
@@ -178,6 +193,35 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.agentPresets.mount).toHaveBeenCalledTimes(2)
     expect(value.disposedTaskAgents).toHaveLength(2)
     expect(value.lifecycle.snapshot()).toMatchObject({ activeAgents: 1, taskAgentAvailable: true })
+  })
+
+  it('uses a fixed Provider and model for independent task Agents when configured', async () => {
+    const value = fixture(resolveConfig({
+      cliPath: '/fake/mnemon',
+      taskAgentModel: { mode: 'fixed', provider: 'openai', model: 'gpt-5' },
+    }))
+
+    await value.lifecycle.maintainMetadata('', ['project'], '/tmp/workspace-two')
+
+    expect(value.createTaskAgent).toHaveBeenCalledWith(expect.objectContaining({
+      agentOptions: { provider: 'openai', model: 'gpt-5', maxTokens: undefined },
+    }))
+    expect(value.defaultModel.currentSelection).not.toHaveBeenCalled()
+  })
+
+  it('lists model Providers concurrently and reports the effective independent task route', async () => {
+    const value = fixture()
+
+    await expect(value.lifecycle.taskAgentModels()).resolves.toEqual({
+      effective: { provider: 'deepseek', model: 'deepseek-chat', source: 'dsh-default' },
+      defaultSelection: { provider: 'deepseek', model: 'deepseek-chat' },
+      groups: [
+        { id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] },
+        { id: 'openai', name: 'OpenAI', models: [{ id: 'gpt-5', name: 'GPT-5', description: 'General reasoning' }] },
+      ],
+      failures: [],
+    })
+    expect(value.llm.listModels).toHaveBeenCalledTimes(2)
   })
 
   it('runs Agent Query synthesis under a disposable clean root Agent', async () => {

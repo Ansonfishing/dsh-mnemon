@@ -200,19 +200,34 @@ describe('Mnemon RPC', () => {
     expect(service.updateBodyMetadata).toHaveBeenCalledWith(maintained.updates)
   })
 
-  it('routes supervised Tab writeback through an isolated memory subagent', async () => {
+  it('routes supervised Tab writeback through an independent task Agent', async () => {
     const service = fakeService()
     const lifecycle = {
-      supervise: vi.fn(async () => ({ delegated: true, sessionId: 'session-1', runId: 'child-1', provider: 'spawn', summary: 'stored', action: 'stored', memoryBodyIds: ['project'] })),
+      workspaceRoot: vi.fn(() => undefined),
+      superviseTask: vi.fn(async () => ({ delegated: true, sessionId: 'session-1', runId: 'child-1', provider: 'spawn', summary: 'stored', action: 'stored', memoryBodyIds: ['project'] })),
     } as unknown as MnemonLifecycle
     await expect(createWriteHandler(service, lifecycle)('supervise', { sessionId: 'session-1', content: 'A candidate', idempotencyKey: 'message-1' })).resolves.toMatchObject({ ok: true, value: { delegated: true, runId: 'child-1' } })
-    expect(lifecycle.supervise).toHaveBeenCalledWith('session-1', 'A candidate', 'message-1')
+    expect(lifecycle.superviseTask).toHaveBeenCalledWith('session-1', 'A candidate', 'message-1', undefined)
     expect(service.remember).not.toHaveBeenCalled()
+  })
+
+  it('exposes the DSH model catalog for independent task Agent settings', async () => {
+    const service = fakeService()
+    const catalog = {
+      effective: { provider: 'deepseek', model: 'deepseek-chat', source: 'dsh-default' as const },
+      groups: [{ id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] }],
+      failures: [],
+    }
+    const lifecycle = { taskAgentModels: vi.fn(async () => catalog) } as unknown as MnemonLifecycle
+
+    await expect(createReadHandler(service, lifecycle)('task-agent-models', {})).resolves.toEqual({ ok: true, value: catalog })
+    expect(lifecycle.taskAgentModels).toHaveBeenCalledTimes(1)
   })
 
   it('routes sessionless supervised work through a workspace task Agent', async () => {
     const service = fakeService()
     const lifecycle = {
+      workspaceRoot: vi.fn(() => undefined),
       superviseTask: vi.fn(async () => ({ delegated: true, sessionId: 'task-1', runId: 'child-1', provider: 'spawn', summary: 'stored', action: 'stored', memoryBodyIds: ['project'] })),
     } as unknown as MnemonLifecycle
     await expect(createWriteHandler(service, lifecycle)('supervise', { content: 'A workspace candidate' })).resolves.toMatchObject({ ok: true, value: { sessionId: 'task-1' } })
