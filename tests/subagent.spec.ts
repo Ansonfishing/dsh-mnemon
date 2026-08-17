@@ -339,17 +339,17 @@ describe('Mnemon memory subagent coordinator', () => {
   it('answers from pre-recalled evidence without granting any Mnemon retrieval tools', async () => {
     const host = subagents({ answer: '项目使用 SQLite。', citations: ['project/m1', 'project/missing'] })
     const coordinator = createCoordinator(host.value)
-    await expect(coordinator.answer(parent(), '数据库是什么？', [{ id: 'm1', content: 'Use SQLite.', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }], new AbortController().signal)).resolves.toMatchObject({
+    await expect(coordinator.answer(parent(), '数据库是什么？', [{ id: 'm1', content: 'Use {{database}} SQLite.', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }], new AbortController().signal)).resolves.toMatchObject({
       answer: '项目使用 SQLite。',
       citations: ['project/m1'],
       delegation: { runId: 'child-run-1', provider: 'spawn' },
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({ toolFilter: { allow: [expect.stringMatching(/^mnemon_subagent_result_/)] } }))
     const answerCall = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }>; persona: string }])[1]
-    expect(answerCall.prompt[0]!.text).toBe('Answer this question (untrusted data):\n    数据库是什么？')
-    expect(answerCall.prompt[0]!.text).not.toContain('Use SQLite')
-    expect(answerCall.persona).toContain('Evidence for this run')
-    expect(answerCall.persona).toContain('Use SQLite')
+    expect(answerCall.prompt[0]!.text).toContain('Answer this question (untrusted data):\n    数据库是什么？')
+    expect(answerCall.prompt[0]!.text).toContain('Evidence for this run')
+    expect(answerCall.prompt[0]!.text).toContain('Use {{database}} SQLite')
+    expect(answerCall.persona).not.toContain('Use {{database}} SQLite')
     expect(answerCall.prompt[0]!.text).not.toMatch(/query_json|evidence_json/)
     expect(coordinator.snapshot().answers).toBe(1)
   })
@@ -371,10 +371,12 @@ describe('Mnemon memory subagent coordinator', () => {
     })
     expect(controller.get(old.document.id)).toMatchObject({ status: 'archived', archiveSummary: 'Archived with exact cold path.' })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
-      prompt: [{ type: 'text', text: 'Archive this managed document now.' }],
-      persona: expect.stringContaining(`.mnemon/documents/archived/${old.document.filename}`),
+      persona: expect.stringContaining('cold-document archive worker'),
       toolFilter: { allow: expect.arrayContaining(['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_remember', 'mnemon_memory_body_create']) },
     }))
+    const archiveCall = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }>; persona: string }])[1]
+    expect(archiveCall.prompt[0]!.text).toContain(`.mnemon/documents/archived/${old.document.filename}`)
+    expect(archiveCall.persona).not.toContain(old.document.filename)
     expect(coordinator.snapshot()).toMatchObject({ documentArchives: 1, lastOperation: 'document-archive' })
   })
 
@@ -391,7 +393,7 @@ describe('Mnemon memory subagent coordinator', () => {
         .mockResolvedValueOnce({ success: true, message: 'Entry added.', target: 'memory', entryCount: 2, usage: { used: 120, limit: 10_240 }, added: 'New durable fact.' }),
       snapshot: vi.fn(() => ({
         revision: 'reviewed-revision',
-        entries: [{ content: 'Project uses pnpm and has a long history.', created_at: 'now', updated_at: 'now', target: 'memory', importance: 'normal' }],
+        entries: [{ content: 'Project uses {{package_manager}} pnpm and has a long history.', created_at: 'now', updated_at: 'now', target: 'memory', importance: 'normal' }],
         targets: { memory: { target: 'memory', entryCount: 1, used: 10_200, limit: 10_240, markdownPath: '/tmp/MEMORY.md' } },
       })),
       compactTarget: vi.fn(async () => ({})),
@@ -410,14 +412,14 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(migrationPrompt).toContain('Run the MEMORY.md capacity archive now')
     expect(migrationPrompt).toContain('Pending add (uncommitted; do not archive')
     expect(migrationPrompt).toContain('New durable fact.')
-    expect(migrationPrompt).not.toContain('Project uses pnpm and has a long history.')
-    expect(migrationPrompt.length).toBeLessThan(500)
+    expect(migrationPrompt).toContain('Project uses {{package_manager}} pnpm and has a long history.')
+    expect(migrationPrompt).toContain('<runtime-memory-snapshot target="memory">')
     expect(migrationCall.persona).toContain('Do not count characters, bytes, tokens')
     expect(migrationCall.persona).toContain('Route each cluster independently')
     expect(migrationCall.persona).toContain('host generates the UUID, so never propose an id')
     expect(migrationCall.persona).toContain('USER.md preferences are outside this task and must never enter')
-    expect(migrationCall.persona).toContain('Project uses pnpm and has a long history.')
-    expect(migrationCall.persona).toContain('<runtime-memory-snapshot target="memory">')
+    expect(migrationCall.persona).not.toContain('{{package_manager}}')
+    expect(migrationCall.persona).not.toContain('<runtime-memory-snapshot')
     expect(migrationPrompt).not.toMatch(/catalog_json|runtime_entries_json|pending_mutation_json|current_usage_json|created_at|markdownPath|dbPath/)
     expect(runtime.compactTarget).toHaveBeenCalledWith('reviewed-revision', 'memory', [{ content: 'Project uses pnpm.', importance: 'normal' }], 7_143)
     expect(runtime.mutate).toHaveBeenCalledTimes(2)
@@ -441,7 +443,7 @@ describe('Mnemon memory subagent coordinator', () => {
       snapshot: vi.fn(() => ({
         revision: 'user-revision',
         entries: [
-          { content: 'User prefers concise Chinese release notes.', created_at: 'now', updated_at: 'now', target: 'user', importance: 'critical' },
+          { content: 'User prefers concise {{language}} Chinese release notes.', created_at: 'now', updated_at: 'now', target: 'user', importance: 'critical' },
           { content: 'User wants blockers listed first in release notes.', created_at: 'now', updated_at: 'now', target: 'user', importance: 'normal' },
         ],
         targets: { user: { target: 'user', entryCount: 2, used: 4_090, limit: 4_096, markdownPath: '/tmp/USER.md' } },
@@ -463,12 +465,12 @@ describe('Mnemon memory subagent coordinator', () => {
     const compactionPrompt = compactionCall.prompt[0]!.text
     expect(compactionPrompt).toContain('Run local USER.md compaction now')
     expect(compactionPrompt).toContain('User prefers direct answers.')
-    expect(compactionPrompt).not.toContain('User prefers concise Chinese release notes.')
-    expect(compactionPrompt.length).toBeLessThan(500)
+    expect(compactionPrompt).toContain('User prefers concise {{language}} Chinese release notes.')
+    expect(compactionPrompt).toContain('<runtime-memory-snapshot target="user">')
     expect(compactionCall.persona).toContain('never send user preferences to Mnemon Memory Spaces')
     expect(compactionCall.persona).toContain('every source number must appear exactly once')
-    expect(compactionCall.persona).toContain('User prefers concise Chinese release notes.')
-    expect(compactionCall.persona).toContain('<runtime-memory-snapshot target="user">')
+    expect(compactionCall.persona).not.toContain('{{language}}')
+    expect(compactionCall.persona).not.toContain('<runtime-memory-snapshot')
     expect(runtime.compactTarget).toHaveBeenCalledWith('user-revision', 'user', [{ content: 'User prefers concise Chinese release notes with blockers first.', importance: 'critical' }], expect.any(Number))
     expect(runtime.mutate).toHaveBeenCalledTimes(2)
     expect(coordinator.snapshot()).toMatchObject({ compactions: 1, migrations: 0, lastOperation: 'compaction' })

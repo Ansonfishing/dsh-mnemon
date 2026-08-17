@@ -5,7 +5,7 @@ import { registerAgentRuntimeMemoryContext, registerRuntimeMemoryContext, RUNTIM
 import type { RuntimeMemoryController } from '../src/runtime-memory.ts'
 
 describe('runtime memory prompt interpolation', () => {
-  it('keeps the system prompt stable while runtime-memory snapshots change', () => {
+  it('preserves every runtime-memory interpolation shape as literal data', () => {
     const contexts: Array<{ name: string; order: number; text: () => string }> = []
     const variables = new Map<string, () => string>()
     const prompt = {
@@ -16,7 +16,15 @@ describe('runtime memory prompt interpolation', () => {
     const ctx = {
       get: vi.fn((name: string) => name === 'systemPrompt' ? prompt : undefined),
     } as unknown as HostContextShape
-    let memoryText = 'Remember the exact literal {{}} and the active model {{model}}.'
+    let memoryText = [
+      'Empty: {{}}',
+      'Non-ASCII: {{变量}}',
+      'Whitespace: {{ 变量 }}',
+      'Legal and unknown names: {{model}} {{unknown}}',
+      'Adjacent and nested: {{a}}{{b}} {{{nested}}} {{{{}}}}',
+      'Escape name: {{mnemon_runtime_memory_literal_open_braces}}',
+      'Incomplete groups: prefix {{unterminated and stray }}',
+    ].join('\n')
     const controller = {
       contextText: vi.fn(() => memoryText),
     } as unknown as RuntimeMemoryController
@@ -35,10 +43,11 @@ describe('runtime memory prompt interpolation', () => {
 
     const first = assemble()
     expect(() => renderPrompt(first)).not.toThrow()
+    expect(() => renderContextSnapshot(first)).not.toThrow()
     expect(renderPrompt(first)).toBe('Other section uses deepseek.')
     expect(renderContextSnapshot(first)).toBe([
       'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.',
-      'Remember the exact literal {{}} and the active model deepseek.',
+      memoryText,
     ].join('\n\n'))
 
     memoryText = 'Updated workspace memory.'
