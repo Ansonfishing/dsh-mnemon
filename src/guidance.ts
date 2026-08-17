@@ -3,13 +3,14 @@ import type { ResolvedConfig } from './config.ts'
 import type { RuntimeMemoryController } from './runtime-memory.ts'
 
 export const GUIDANCE_SECTION_NAME = 'mnemon:routing'
-export const RUNTIME_MEMORY_SECTION_NAME = 'mnemon:runtime-memory'
+export const RUNTIME_MEMORY_CONTEXT_NAME = 'mnemon:runtime-memory'
 export const ROUTING_GUIDANCE = 'Use memory only by need. For substantial project records, search active Mnemon Documents before deep recall. Call mnemon_recall when durable history may matter or an exact prior detail is missing; never infer a missing historical rule. New explicit reusable facts normally go to mnemon_runtime_memory. A write completes only with a tool receipt.'
 const RUNTIME_MEMORY_EMPTY_BRACES_VARIABLE = 'mnemon_runtime_memory_empty_braces'
 const LITERAL_EMPTY_BRACES = '{{}}'
 
 interface SystemPromptRegistry {
   section?: (value: { name: string; order: number; text: string | (() => string) }) => unknown
+  context?: (value: { name: string; order: number; text: string | (() => string) }) => unknown
   variable?: (name: string, provider: () => string) => unknown
 }
 
@@ -36,12 +37,12 @@ export function registerGuidance(ctx: HostContextShape, config?: Pick<ResolvedCo
   })
 }
 
-/** Inject the latest committed USER.md/MEMORY.md projections on every prompt assembly. */
+/** Project the latest committed USER.md/MEMORY.md as DSH's durable runtime-context snapshot. */
 export function registerRuntimeMemoryContext(ctx: HostContextShape, runtimeMemory: RuntimeMemoryController): void {
   const prompt = systemPrompt(ctx)
   prompt?.variable?.(RUNTIME_MEMORY_EMPTY_BRACES_VARIABLE, () => LITERAL_EMPTY_BRACES)
-  prompt?.section?.({
-    name: RUNTIME_MEMORY_SECTION_NAME,
+  prompt?.context?.({
+    name: RUNTIME_MEMORY_CONTEXT_NAME,
     order: 145,
     text: () => runtimeMemoryPromptText(runtimeMemory),
   })
@@ -49,8 +50,8 @@ export function registerRuntimeMemoryContext(ctx: HostContextShape, runtimeMemor
 
 /** Shadow the global fallback with the current Agent workspace's hot memory. */
 export function registerAgentRuntimeMemoryContext(agent: HostAgent, runtimeMemory: () => RuntimeMemoryController): () => void {
-  const dispose = scopedSystemPrompt(agent)?.section?.({
-    name: RUNTIME_MEMORY_SECTION_NAME,
+  const dispose = scopedSystemPrompt(agent)?.context?.({
+    name: RUNTIME_MEMORY_CONTEXT_NAME,
     order: 145,
     text: () => runtimeMemoryPromptText(runtimeMemory()),
   })
