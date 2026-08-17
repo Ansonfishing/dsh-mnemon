@@ -340,12 +340,16 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
           }
         case 'supervise':
           if (lifecycle === undefined) throw new Error('Mnemon lifecycle integration is unavailable')
-          requireAligned(resolved.route)
-          return success(await lifecycle.supervise(
-            String(payload.sessionId ?? ''),
-            String(payload.content ?? ''),
-            payload.idempotencyKey === undefined ? undefined : String(payload.idempotencyKey),
-          ))
+          {
+            const sessionId = String(payload.sessionId ?? '')
+            const idempotencyKey = payload.idempotencyKey === undefined ? undefined : String(payload.idempotencyKey)
+            const workspaceRoot = resolved.route?.selectedWorkspace?.path
+            if (sessionId.trim() === '' || resolved.explicitWorkspace) {
+              return success(await lifecycle.superviseTask(sessionId, String(payload.content ?? ''), idempotencyKey, workspaceRoot))
+            }
+            requireAligned(resolved.route)
+            return success(await lifecycle.supervise(sessionId, String(payload.content ?? ''), idempotencyKey))
+          }
         case 'document':
           {
             const action = String(payload.action ?? '')

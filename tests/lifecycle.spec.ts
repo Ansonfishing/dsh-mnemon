@@ -360,6 +360,20 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.lifecycle.snapshot('session-1').counters.supervisedRequests).toBe(1)
   })
 
+  it('runs workspace-only memory-tab candidates in a disposable top-level task Agent', async () => {
+    const value = fixture()
+
+    const result = await value.lifecycle.superviseTask('', 'Keep workspace release decisions durable.', undefined, '/tmp/workspace-two')
+
+    expect(result).toMatchObject({ delegated: true, runId: 'write-child' })
+    expect(value.createTaskAgent).toHaveBeenCalledWith(expect.objectContaining({ meta: { cwd: '/tmp/workspace-two' } }))
+    expect(value.coordinator.write).toHaveBeenCalledWith(expect.objectContaining({ session: expect.objectContaining({ header: { cwd: '/tmp/workspace-two' } }) }), 'supervised-writeback', {
+      content: 'Keep workspace release decisions durable.',
+      source: 'explicit Mnemon tab submission',
+    }, expect.anything())
+    expect(value.disposedTaskAgents).toContain(result.sessionId)
+  })
+
   it('deduplicates replayed assistant-message supervision by session and message id', async () => {
     const value = fixture()
 

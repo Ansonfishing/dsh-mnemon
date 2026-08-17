@@ -311,21 +311,28 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_memory_body_create',
-    description: 'Create a new isolated Mnemon Native Memory Space. External provider connections are user-managed in WebUI and must not be invented by an agent. Use only when durable knowledge forms a recurring scope not owned by any existing space; never create one for a temporary task. Supply a topic-specific human name and a precise routing description; the host generates the immutable UUID. After creation, write the qualifying insight with mnemon_remember, which activates it.',
+    description: 'Create a new isolated Memory Space under the user-configured persistence strategy. First inspect mnemon_memory_bodies.persistenceStrategy. In manual mode the host fixes the Provider. In automatic mode select only an eligible configured Provider from that policy and supply a concise reason and confidence; the host validates every hard rule and injects saved connection settings. Never invent credentials or endpoints. Use only for a distinct recurring durable scope, then write the qualifying insight with mnemon_remember, which activates it.',
     parameters: {
       type: 'object',
       properties: {
         name: { type: 'string', description: 'Topic-specific human-readable name that remains meaningful in the directory.' },
         description: { type: 'string', description: 'Precise routing boundary: what durable knowledge belongs here and when it should be recalled.' },
+        providerId: { type: 'string', enum: ['mnemon-native', 'openviking', 'honcho', 'mem0', 'hindsight', 'holographic', 'retaindb', 'byterover', 'supermemory'], description: 'Automatic mode only: one eligible Provider id from persistenceStrategy.' },
+        reason: { type: 'string', description: 'Automatic mode only: concise user-facing reason for this Provider choice.' },
+        confidence: { type: 'string', enum: ['high', 'medium', 'low'], description: 'Automatic mode only: calibrated confidence in the Provider choice.' },
       },
       required: ['name', 'description'],
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    execute: (args: { name: string; description: string }, exec: ToolExecution) => isSubagent(exec.agent)
-      ? runtimeFor(exec).service.createBody(args, exec.signal)
+    execute: (args: { name: string; description: string; providerId?: string; reason?: string; confidence?: string }, exec: ToolExecution) => isSubagent(exec.agent)
+      ? runtimeFor(exec).service.createBodyForPersistence(args, args.providerId === undefined && args.reason === undefined && args.confidence === undefined ? undefined : {
+          providerId: args.providerId ?? '',
+          reason: args.reason ?? '',
+          confidence: args.confidence ?? '',
+        }, exec.signal, { runId: requireAgent(exec).id, provider: 'supervised-writeback' })
       : coordinator.write(requireAgent(exec), 'create-memory-body', args, exec.signal),
-    presentCall: () => ({ card: 'generic', title: 'Create Mnemon Memory Space', kind: 'edit' }),
-    presentResult: () => ({ card: 'generic', title: 'Mnemon Memory Space created' }),
+    presentCall: () => ({ card: 'generic', title: 'Create Memory Space', kind: 'edit' }),
+    presentResult: () => ({ card: 'generic', title: 'Memory Space created' }),
   } as never))
 
   ctx.tools.register(definition({

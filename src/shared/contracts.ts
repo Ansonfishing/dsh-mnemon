@@ -406,6 +406,8 @@ export interface MemoryBodyView extends MemoryBody {
 export interface MemoryBodyCatalog {
   items: MemoryBodyView[]
   providers: MemoryProviderDescriptor[]
+  /** Sanitized policy exposed to memory workers; provider connection values are never included. */
+  persistenceStrategy?: Omit<ResolvedMemoryPersistenceStrategy, 'providerConnections'>
   total: number
   activeCount: number
   directory: string

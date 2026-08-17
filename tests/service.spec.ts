@@ -75,6 +75,57 @@ function fixture(): { service: MnemonService; process: ReturnType<typeof vi.fn<P
 }
 
 describe('MnemonService', () => {
+  it('keeps Agent-created Memory Spaces on the fixed Provider in manual persistence mode', async () => {
+    const config = resolveConfig({ persistenceStrategy: { mode: 'manual', providerId: 'mnemon-native' } })
+    const service = Object.create(MnemonService.prototype) as MnemonService
+    const createBody = vi.fn(async request => ({ id: 'space-1', ...request }))
+    Object.assign(service, { config, createBody })
+
+    await service.createBodyForPersistence({ name: 'Release', description: 'Durable release knowledge.' }, {
+      providerId: 'openviking', reason: 'Model preference must be ignored.', confidence: 'high',
+    })
+
+    expect(createBody).toHaveBeenCalledWith({
+      name: 'Release', description: 'Durable release knowledge.', providerId: 'mnemon-native',
+    }, undefined)
+  })
+
+  it('host-validates an Agent Provider choice against automatic persistence rules', async () => {
+    const config = resolveConfig({
+      persistenceStrategy: {
+        mode: 'automatic',
+        prompt: 'Prefer shared memory.',
+        rules: { allowedProviderIds: ['mnemon-native', 'openviking'], preference: 'shared-first' },
+        providerConnections: { openviking: { targetUri: 'viking://resources/team' } },
+      },
+    })
+    const service = Object.create(MnemonService.prototype) as MnemonService
+    const prepared = {
+      prompt: 'Prefer shared memory.',
+      candidates: [
+        { id: 'mnemon-native' as const, label: 'mnemon', kind: 'local' as const, configured: true, summary: 'Local.', capabilities: { search: true, browse: true, graph: true, entities: true, related: true, remember: true, link: true, forget: true, writeMode: 'exact' as const, deletionMode: 'soft' as const } },
+        { id: 'openviking' as const, label: 'OpenViking', kind: 'remote' as const, configured: true, summary: 'Shared.', capabilities: { search: true, browse: true, graph: false, entities: false, related: false, remember: true, link: false, forget: false, writeMode: 'async-extracting' as const, deletionMode: 'hard' as const } },
+      ],
+      appliedRules: ['allowed:mnemon-native,openviking', 'preference:shared-first'],
+      selectorBrief: 'eligible providers',
+    }
+    const prepareBodyPlacement = vi.fn(() => prepared)
+    const createBody = vi.fn(async (request, _signal, placement) => ({ id: 'space-1', ...request, placement }))
+    Object.assign(service, { config, prepareBodyPlacement, createBody })
+
+    await service.createBodyForPersistence({ name: 'Team', description: 'Shared team knowledge.' }, {
+      providerId: 'openviking', reason: 'This scope must be shared.', confidence: 'high',
+    }, undefined, { runId: 'task-1', provider: 'supervised-writeback' })
+
+    expect(prepareBodyPlacement).toHaveBeenCalledWith(expect.objectContaining({
+      placement: expect.objectContaining({ prompt: 'Prefer shared memory.' }),
+      providerConnections: { openviking: { targetUri: 'viking://resources/team' } },
+    }))
+    expect(createBody).toHaveBeenCalledWith(expect.any(Object), undefined, expect.objectContaining({
+      providerId: 'openviking', decidedBy: 'llm', runId: 'task-1',
+    }))
+  })
+
   it('projects status and reports the effective configuration', async () => {
     const { service, process, dataDir } = fixture()
     const summary = service.statusSummary()

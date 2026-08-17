@@ -10,7 +10,7 @@ import {
   type UpdateMemoryBodyRequest,
 } from './memory-bodies.ts'
 import type { MnemonRunner } from './runner.ts'
-import { prepareMemoryPlacement, type PreparedMemoryPlacement } from './provider-placement.ts'
+import { finalizeLlmPlacement, prepareMemoryPlacement, rulesOnlyPlacement, type LlmMemoryPlacementSelection, type PreparedMemoryPlacement } from './provider-placement.ts'
 import { OpenVikingProvider } from './providers/openviking.ts'
 import { Mem0Provider } from './providers/mem0.ts'
 import { RetainDbProvider } from './providers/retaindb.ts'
@@ -334,6 +334,12 @@ export class MnemonService {
         ...provider,
         serviceConfigured: provider.id === 'mnemon-native' || this.memoryBodies.providerServiceEnabled(provider.id),
       })),
+      persistenceStrategy: {
+        mode: this.config.persistenceStrategy.mode,
+        providerId: this.config.persistenceStrategy.providerId,
+        prompt: this.config.persistenceStrategy.prompt,
+        rules: { ...this.config.persistenceStrategy.rules },
+      },
       total: items.length,
       activeCount: items.filter(body => body.active && body.providerEnabled !== false).length,
       directory: this.memoryBodies.directory,
@@ -773,6 +779,42 @@ export class MnemonService {
   async createBody(request: CreateMemoryBodyRequest, signal?: AbortSignal, placement?: MemoryPlacementDecision): Promise<MemoryBody> {
     this.assertWritable()
     return this.memoryBodies.create(request, signal, placement)
+  }
+
+  /**
+   * Create a Memory Space from the configured distillation policy. The model
+   * may choose only among candidates already filtered by the host; manual mode
+   * ignores model preference and always uses the configured fixed provider.
+   */
+  async createBodyForPersistence(
+    body: { name: string; description: string },
+    selection: LlmMemoryPlacementSelection | undefined,
+    signal?: AbortSignal,
+    delegation: { runId: string; provider: string } = { runId: 'memory-write', provider: 'task-agent' },
+  ): Promise<MemoryBody> {
+    const strategy = this.config.persistenceStrategy
+    if (strategy.mode === 'manual') {
+      const connection = strategy.providerConnections[strategy.providerId]
+      return this.createBody({
+        ...body,
+        providerId: strategy.providerId,
+        ...(strategy.providerId === 'mnemon-native' || connection === undefined ? {} : { connection }),
+      }, signal)
+    }
+
+    const request: CreateMemoryBodyRequest = {
+      ...body,
+      placement: {
+        mode: 'automatic',
+        ...(strategy.prompt === '' ? {} : { prompt: strategy.prompt }),
+        rules: { ...strategy.rules },
+      },
+      ...(Object.keys(strategy.providerConnections).length === 0 ? {} : { providerConnections: strategy.providerConnections }),
+    }
+    const prepared = this.prepareBodyPlacement(request)
+    const decision = rulesOnlyPlacement(prepared)
+      ?? finalizeLlmPlacement(prepared, selection ?? { providerId: '', reason: '', confidence: '' }, delegation)
+    return this.createBody(request, signal, decision)
   }
 
   async updateProviderService(providerId: MemoryBody['provider']['id'], settings: Record<string, string | number | boolean>, clearSecrets: readonly string[] = [], enabled = true, signal?: AbortSignal) {

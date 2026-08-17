@@ -210,6 +210,15 @@ describe('Mnemon RPC', () => {
     expect(service.remember).not.toHaveBeenCalled()
   })
 
+  it('routes sessionless supervised work through a workspace task Agent', async () => {
+    const service = fakeService()
+    const lifecycle = {
+      superviseTask: vi.fn(async () => ({ delegated: true, sessionId: 'task-1', runId: 'child-1', provider: 'spawn', summary: 'stored', action: 'stored', memoryBodyIds: ['project'] })),
+    } as unknown as MnemonLifecycle
+    await expect(createWriteHandler(service, lifecycle)('supervise', { content: 'A workspace candidate' })).resolves.toMatchObject({ ok: true, value: { sessionId: 'task-1' } })
+    expect(lifecycle.superviseTask).toHaveBeenCalledWith('', 'A workspace candidate', undefined, undefined)
+  })
+
   it('routes project Documents reads and controlled mutations through the bound session', async () => {
     const service = fakeService()
     const lifecycle = {
@@ -301,6 +310,7 @@ describe('Mnemon RPC', () => {
     const lifecycle = {
       snapshot: vi.fn(() => ({ enabled: true })),
       supervise: vi.fn(),
+      superviseTask: vi.fn(async () => ({ delegated: true, sessionId: 'task-1', runId: 'child-1' })),
       remember: vi.fn(async () => ({ delegated: true, runId: 'write-1' })),
     } as unknown as MnemonLifecycle
 
@@ -320,11 +330,9 @@ describe('Mnemon RPC', () => {
     await expect(createWriteHandler(runtime, lifecycle)('remember', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Inspect this workspace' })).resolves.toMatchObject({ ok: true })
     expect(selectedService.remember).toHaveBeenCalledWith(expect.objectContaining({ content: 'Inspect this workspace', source: 'user' }))
 
-    await expect(createWriteHandler(runtime, lifecycle)('supervise', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Do not run in the wrong workspace' })).resolves.toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('align the workbench') },
-    })
+    await expect(createWriteHandler(runtime, lifecycle)('supervise', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Run in the selected workspace' })).resolves.toMatchObject({ ok: true })
     expect(lifecycle.supervise).not.toHaveBeenCalled()
+    expect(lifecycle.superviseTask).toHaveBeenCalledWith('session-1', 'Run in the selected workspace', undefined, '/tmp/workspace-two')
 
     route.aligned = true
     route.effectiveRoot = route.selectedRoot

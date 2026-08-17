@@ -468,29 +468,63 @@ export class MnemonLifecycle {
   }
 
   async supervise(sessionId: string, content: string, idempotencyKey?: string, signal = new AbortController().signal): Promise<SupervisedWritebackResult> {
-    if (!this.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
     const normalizedSessionId = sessionId.trim()
-    const normalizedContent = content.trim()
     if (normalizedSessionId === '') throw new Error('current DSH session is unavailable')
+    return this.superviseResolved(
+      normalizedSessionId,
+      normalizedSessionId,
+      content,
+      idempotencyKey,
+      signal,
+      async operation => operation(this.liveAgent(normalizedSessionId)),
+    )
+  }
+
+  /** Run a Web workbench distillation under a fresh top-level task Agent. */
+  async superviseTask(sessionId: string, content: string, idempotencyKey?: string, workspaceRoot?: string, signal = new AbortController().signal): Promise<SupervisedWritebackResult> {
+    const normalizedSessionId = sessionId.trim()
+    const root = workspaceRoot?.trim() || this.workspaceRoot(normalizedSessionId)
+    const scopeKey = root === undefined ? `task:${normalizedSessionId || 'global'}` : `task:${resolve(root)}`
+    return this.superviseResolved(
+      scopeKey,
+      normalizedSessionId,
+      content,
+      idempotencyKey,
+      signal,
+      operation => this.runTaskAgent(normalizedSessionId, root, signal, operation),
+    )
+  }
+
+  private async superviseResolved(
+    replayScope: string,
+    responseSessionId: string,
+    content: string,
+    idempotencyKey: string | undefined,
+    signal: AbortSignal,
+    withAgent: <T>(operation: (agent: HostAgent) => Promise<T>) => Promise<T>,
+  ): Promise<SupervisedWritebackResult> {
+    if (!this.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
+    const normalizedContent = content.trim()
     if (normalizedContent === '') throw new Error('memory candidate is required')
     if (normalizedContent.length > 8000) throw new Error('memory candidate is too long (max 8000 characters)')
     const normalizedKey = idempotencyKey?.trim()
     if (normalizedKey !== undefined && normalizedKey.length > 200) throw new Error('idempotency key is too long (max 200 characters)')
 
     const execute = async (): Promise<SupervisedWritebackResult> => {
-      const agent = this.liveAgent(normalizedSessionId)
-      const owner = this.owners.get(agent)?.lifecycle
-      if (owner === undefined) this.counters.supervisedRequests += 1
-      else owner.markSupervised()
-      const result = await this.coordinator.write(agent, 'supervised-writeback', {
-        content: normalizedContent,
-        source: normalizedKey === undefined || normalizedKey === '' ? 'explicit Mnemon tab submission' : 'explicit assistant memory action',
-      }, signal)
-      return { ...result, sessionId: normalizedSessionId }
+      return withAgent(async agent => {
+        const owner = this.owners.get(agent)?.lifecycle
+        if (owner === undefined) this.counters.supervisedRequests += 1
+        else owner.markSupervised()
+        const result = await this.coordinator.write(agent, 'supervised-writeback', {
+          content: normalizedContent,
+          source: normalizedKey === undefined || normalizedKey === '' ? 'explicit Mnemon tab submission' : 'explicit assistant memory action',
+        }, signal)
+        return { ...result, sessionId: responseSessionId || agent.id }
+      })
     }
 
     if (normalizedKey === undefined || normalizedKey === '') return execute()
-    const replayKey = `${normalizedSessionId}\u0000${normalizedKey}`
+    const replayKey = `${replayScope}\u0000${normalizedKey}`
     const existing = this.supervisedWritebacks.get(replayKey)
     if (existing !== undefined) {
       if (existing.content !== normalizedContent) throw new Error('idempotency key was already used for different content')
