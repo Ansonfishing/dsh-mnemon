@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Three-tier memory system for DeepSeek Harness with nine pluggable providers, smart routing, independent task Agents, WebUI, and headless tools.",
   "keywords": [
     "deepseek-harness",
