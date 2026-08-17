@@ -62,6 +62,10 @@ function isMissingActivationChannel(reason: unknown): boolean {
     && reason.message === `transport failure for ${MNEMON_ACTIVATION_CHANNEL}/body: HTTP 404`
 }
 
+function isMissingPrivateProviderServices(reason: unknown): boolean {
+  return reason instanceof Error && reason.message === 'unknown write endpoint: provider-services'
+}
+
 async function loadTurnActivities(connection: ClientConnectionHandle, sessionId: string | undefined, requiredCursor: number): Promise<TurnMemoryActivitySnapshot> {
   let sessions = turnActivityCache.get(connection)
   if (sessions === undefined) {
@@ -190,7 +194,14 @@ export class MnemonClient {
   }
 
   providerServices(): Promise<MemoryProviderServiceCatalog> {
-    return this.call(MNEMON_READ_CHANNEL, 'provider-services', this.scoped())
+    const payload = this.scoped()
+    return this.call<MemoryProviderServiceCatalog>(MNEMON_WRITE_CHANNEL, 'provider-services', payload).catch(reason => {
+      // Pre-v0.2.2 Hosts exposed this catalog on the read channel. Only a
+      // loopback caller can reach this fallback because every other write-
+      // channel failure, including 403, is preserved.
+      if (!isMissingPrivateProviderServices(reason)) throw reason
+      return this.call(MNEMON_READ_CHANNEL, 'provider-services', payload)
+    })
   }
 
   updateProviderService(request: UpdateMemoryProviderServiceRequest): Promise<MemoryProviderServiceView> {

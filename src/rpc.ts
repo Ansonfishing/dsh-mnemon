@@ -226,7 +226,7 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
         case 'body-directory':
           return success(service.bodyDirectory())
         case 'provider-services':
-          return success(service.memoryBodies.providerServices({ includeSecrets: true }))
+          return success(service.memoryBodies.providerServices())
         case 'list':
           return success(await service.list({
             ...(payload.query === undefined ? {} : { query: String(payload.query) }),
@@ -337,6 +337,9 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
       }
       const resolved = runtimeFor(input, payload, runtimeMemory)
       const { service } = resolved.graph
+      // Stored Provider secrets are configuration-plane data. Reading them is
+      // loopback-only even when semantic writes are disabled.
+      if (endpoint === 'provider-services') return success(service.memoryBodies.providerServices({ includeSecrets: true }))
       if (!service.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
       const selectedWorkspace = resolved.route?.selectedWorkspace
       const documentController = resolved.explicitWorkspace && selectedWorkspace !== undefined

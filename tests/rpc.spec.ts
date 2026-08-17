@@ -73,6 +73,31 @@ describe('Mnemon RPC', () => {
     })
   })
 
+  it('keeps Provider secret values on the loopback channel while preserving a redacted trusted-host catalog', async () => {
+    const service = fakeService()
+    const providerServices = vi.fn((options: { includeSecrets?: boolean } = {}) => ({
+      providers: [],
+      items: [{
+        providerId: 'openviking', configured: true, enabled: true,
+        settings: { endpoint: 'https://memory.example' }, configuredSecrets: ['apiKey'],
+        ...(options.includeSecrets === true ? { secretValues: { apiKey: 'provider-secret' } } : {}),
+      }],
+      generatedAt: 'now',
+    }))
+    service.memoryBodies.providerServices = providerServices as never
+
+    await expect(createReadHandler(service)('provider-services', {})).resolves.toMatchObject({
+      ok: true,
+      value: { items: [expect.not.objectContaining({ secretValues: expect.anything() })] },
+    })
+    await expect(createWriteHandler(service)('provider-services', {})).resolves.toMatchObject({
+      ok: true,
+      value: { items: [expect.objectContaining({ secretValues: { apiKey: 'provider-secret' } })] },
+    })
+    expect(providerServices).toHaveBeenNthCalledWith(1)
+    expect(providerServices).toHaveBeenNthCalledWith(2, { includeSecrets: true })
+  })
+
   it('checks versions on the read channel and keeps explicit updates loopback-only', async () => {
     const versions = {
       currentDshMnemonVersion: '0.1.2',

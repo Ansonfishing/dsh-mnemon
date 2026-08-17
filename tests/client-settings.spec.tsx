@@ -490,7 +490,7 @@ describe('MnemonSettingsCard', () => {
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
     const providerSettings = new Promise<never>(() => {})
     const call = vi.fn((channel: string, endpoint: string) => {
-      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return providerSettings
+      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') return providerSettings
       if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return Promise.resolve({ ok: true as const, value: { root: '/active/.mnemon', scope: 'global' } })
       return Promise.reject(new Error(`unexpected ${channel} ${endpoint}`))
     })
@@ -527,7 +527,7 @@ describe('MnemonSettingsCard', () => {
       fields: [{ key: 'dataPath', label: 'Fact store path', scope: 'service' as const, role: 'global-location' as const, input: 'path' as const, required: false }],
     }
     const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
-      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'holographic', enabled: true, configured: true, settings: { dataPath: '/srv/dsh/holographic.json' }, configuredSecrets: [] }], generatedAt: '2026-08-17T00:00:00.000Z' } }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'holographic', enabled: true, configured: true, settings: { dataPath: '/srv/dsh/holographic.json' }, configuredSecrets: [] }], generatedAt: '2026-08-17T00:00:00.000Z' } }
       if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') {
         const request = payload as { settings: Record<string, string> }
         return { ok: true as const, value: { providerId: 'holographic', enabled: true, configured: true, settings: request.settings, configuredSecrets: [] } }
@@ -596,7 +596,7 @@ describe('MnemonSettingsCard', () => {
       ],
     }
     const call = vi.fn(async (channel: string, endpoint: string) => {
-      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'openviking', enabled: true, configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'], secretValues: { apiKey: 'service-secret' } }], generatedAt: '2026-08-17T00:00:00.000Z' } }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'openviking', enabled: true, configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'], secretValues: { apiKey: 'service-secret' } }], generatedAt: '2026-08-17T00:00:00.000Z' } }
       if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') return { ok: true as const, value: { providerId: 'openviking', enabled: true, configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'], secretValues: { apiKey: 'service-secret' } } }
       if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/workspace/.mnemon', scope: 'workspace' } }
       throw new Error(`unexpected ${channel} ${endpoint}`)
@@ -670,7 +670,7 @@ describe('MnemonSettingsCard', () => {
     }
     let service = { providerId: 'supermemory' as const, enabled: false, configured: false, settings: {}, configuredSecrets: [] as string[] }
     const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
-      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [service], generatedAt: '2026-08-17T00:00:00.000Z' } }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [service], generatedAt: '2026-08-17T00:00:00.000Z' } }
       if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') {
         const request = payload as { enabled: boolean; settings: Record<string, unknown> }
         service = {
