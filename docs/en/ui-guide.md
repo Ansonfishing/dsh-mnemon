@@ -2,161 +2,186 @@
 
 [简体中文](../zh-CN/ui-guide.md) | **English** | [Documentation hub](./README.md)
 
-This guide follows the default `sidebar` presentation and a real user path through Memory System. Screenshots come from the v0.1.6 interface and use the Chinese locale; names, counts, and content vary with your data.
+This guide follows the v0.2.0 default `sidebar` presentation and a real user path. Every new screenshot comes from a live 1600×900 standard-widescreen WebUI; names, counts, and content vary with local data.
 
-## Start with the two display modes
+## Watch the complete interaction first
 
-Choose the entry point and storage location under **Settings → Memory System**:
+[![dsh-mnemon v0.2.0 live Memory System demo poster](../assets/media/dsh-mnemon-memory-system-demo-poster.jpg)](../assets/media/dsh-mnemon-memory-system-demo.mp4)
 
-[![Memory System settings: Sidebar, Buildin, storage, conversation UI, and backup](../assets/screenshots/settings-memory-system.png)](../assets/screenshots/settings-memory-system.png)
+[Play the 1600×900 MP4](../assets/media/dsh-mnemon-memory-system-demo.mp4) · [Open the GIF](../assets/media/dsh-mnemon-memory-system-demo.gif)
 
-| Mode | Best suited for |
-|---|---|
-| **Sidebar** (default) | A dedicated workbench opened from the DSH sidebar, visually aligned with official panels such as Task Board and SSH |
-| **Buildin** | The original conversation-area tab, preserving the previous layout and visuals for established workflows |
+The roughly 55-second recording leaves a clear pause on page transitions, dialogs, button-state changes, and the Agent answer. It scrolls all four primary pages, switches active/archive Documents, applies and clears Provider content filters, opens creation and strategy dialogs, selects multiple AI-metadata targets, changes and restores background model routing, and completes a real read-only Agent Query. Every confirmation that could mutate data stops before submission.
 
-Both modes share functionality, data, and Host services. Only entry and appearance differ. Saving switches live without a browser refresh or duplicate mounts.
+## Interaction model
 
-The same page's **Background task Agent** setting controls AI metadata, Agent Query, memory distillation, and document archiving. **Follow the main route** uses the DSH new-session default; **Choose model provider** selects a complete Provider + Model route that overrides only those independent background tasks.
+Primary pages remain **Status, Runtime, Documents, Memory Spaces**. Memory Spaces adds **Overview, Recall, Content, Entities**, with **Remember** and **Distillation strategy** at the top right.
 
-## Workbench anatomy
+| Visible action | What happens after the click | Independent task Agent? |
+|---|---|---|
+| Refresh status, synchronize now, click a Memory Space card | The Host reads asynchronously; one region spinner or the card's state dot shows progress | No |
+| Direct search, browse Content, inspect Entities | Provider-native read contracts run concurrently and render progressively | No |
+| Agent query | Recall runs first; bounded evidence goes to a clean top-level task Agent | Yes, read-only |
+| Remember / Save to memory | An editable confirmation precedes qualification, deduplication, distillation, routing, and writing | Starts after confirmation |
+| AI metadata | Each space samples quickly and generates independently; one failure remains on its card | Yes, isolated per space |
+| Archive | A searchable cold reference is created before the Host moves the original | Starts after confirmation |
 
-The Sidebar header always answers three questions: which system is open, which storage-location mode is effective, and whether the Host is connected.
+## 1. Status: establish readiness
 
-The body has four primary tabs: **Status, Runtime, Documents, and Memory Spaces**. Memory Spaces adds **Overview, Recall, Content, and Entities** as secondary tabs, with **Remember** as its primary action.
+[![Status for dsh-mnemon, Mnemon Native, and external Providers](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
 
-## 1. Status: establish that the system is ready
+The top Memory Engine area shows only dsh-mnemon. Mnemon Native has its own status bar; its failure does not become a global banner. External Providers appear below with enabled, health, and connection state.
 
-[![Status summary for versions, Runtime, Memory Spaces, Documents, and storage root](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
+The page loads concurrently and progressively. Only one region-level spinner remains while work is pending; returned data appears immediately. Status also summarizes Runtime, Documents, Memory Spaces, storage root, and dsh-mnemon / Mnemon versions.
 
-Status aggregates:
+### Check versions
 
-- installed Mnemon CLI and dsh-mnemon versions;
-- USER / MEMORY Runtime counts;
-- active Memory Spaces and durable-memory counts;
-- active / archived Document counts;
-- the current storage root and concrete Runtime, Documents, and Memory Spaces directories.
+[![Check dsh-mnemon and Mnemon versions](../assets/screenshots/version-check.png)](../assets/screenshots/version-check.png)
 
-If this page reports a failure, avoid Remember or Archive until you follow [Troubleshooting](./operations.md#troubleshooting).
+Checking is read-only. Update actions appear only for supported installation sources with a newer release. Restart `dsh web` after updating dsh-mnemon.
 
-### Check and update versions
+## 2. Runtime: maintain every-turn context
 
-Open the version area for a read-only check:
+[![Runtime capacity, filters, and unified memory cards](../assets/screenshots/runtime-memory.png)](../assets/screenshots/runtime-memory.png)
 
-[![Check and update Mnemon and dsh-mnemon versions](../assets/screenshots/version-check.png)](../assets/screenshots/version-check.png)
+The header summarizes User Profile (`USER.md`) and Working Memory (`MEMORY.md`). A shared card style lists items below. Filter by source, text, category, and importance; clicking the current filter again never breaks the page. Long fields truncate within their own block and reveal the complete value on hover.
 
-Checking never installs automatically. Update appears only when a newer release exists and the installation source is supported. After an update, the interface rechecks both components and refreshes Status automatically. Restart `dsh web` after a dsh-mnemon update to load new plugin code.
+[![Add Runtime Memory](../assets/screenshots/runtime-memory-add.png)](../assets/screenshots/runtime-memory-add.png)
 
-## 2. Runtime: maintain hot memory used every turn
+Runtime items should be compact, independent, and repeatedly useful. Identity, preferences, and explicit collaboration rules belong in User Profile. Project facts, environment, decisions, and tool lessons belong in Working Memory. Temporary progress and raw logs do not.
 
-[![Runtime capacity, scope filters, content filter, and unified list](../assets/screenshots/runtime-memory.png)](../assets/screenshots/runtime-memory.png)
+## 3. Documents: preserve complete project narratives
 
-The top summarizes User Profile (`USER.md`) and Working Memory (`MEMORY.md`); one list below holds both.
+[![Document directory, capacity, and Markdown reader](../assets/screenshots/documents-markdown.png)](../assets/screenshots/documents-markdown.png)
 
-- Filter by All / User Profile / Working Memory.
-- Filter by content with the input on the right.
-- Chips identify source and importance.
-- Edit opens a dialog; Remove enters a destructive flow.
-- Long lists expand progressively through “Show N more.”
+Switch between active and archived directories. Repeatedly clicking the selected entry keeps it selected; it never closes the reader. The right pane preserves title, retrieval description, provenance, revision, hash, size, and full Markdown, and resets to the top when selection changes.
 
-### Add Runtime Memory
+Before active capacity is exhausted, an independent task Agent creates a Mnemon cold reference for the least-recently-used Document. The Host moves the original to archived only after verification. Failure or revision conflict preserves the active original.
 
-[![Add hot memory dialog with content, category, and importance](../assets/screenshots/runtime-memory-add.png)](../assets/screenshots/runtime-memory-add.png)
+[![Create a managed Document](../assets/screenshots/document-create-dialog.png)](../assets/screenshots/document-create-dialog.png)
 
-A Runtime item should be compact, independent, and repeatedly useful. Put identity, preferences, and explicit collaboration requirements in User Profile; put project, environment, decision, and tool lessons in Working Memory. Temporary progress and raw logs do not belong here.
+Title and retrieval description determine discoverability, source path preserves provenance, and the body keeps Markdown structure. Source project files remain read-only; the workbench creates a managed copy.
 
-## 3. Memory Spaces: durable memory and relationships
+## 4. Memory Spaces: one replaceable third tier
 
-### Overview
+### Overview and live snapshot
 
-[![Memory Space catalog, activation, and multi-space relationship graph](../assets/screenshots/overview-memory-graph.png)](../assets/screenshots/overview-memory-graph.png)
+[![Multi-provider Memory Space catalog and live relationship snapshot](../assets/screenshots/overview-memory-graph.png)](../assets/screenshots/overview-memory-graph.png)
 
-Each card leads with its name and routing description. Provider identity sits beside the ID and health state, while the familiar read-activation toggle stays at the top right. Creation adds no new top-level concept: it remains **Create Memory Space**, defaulting to **Choose manually** with **Mnemon Native** (official and prioritized) or one of the eight third-party engines inside the dialog. When the current conversation is available, users may opt into **Smart selection**: data boundary and required capabilities are hard rules, while local/shared preference and a strategy prompt guide an isolated subagent. A model runs only when multiple eligible candidates remain, and credentials never enter its context.
+Each card represents a real space. Provider tags use color without duplicating icons inside tags; `Mnemon Native` appears as `mnemon` in the catalog. Click a card to reconnect only that Provider + ID. During reconnect, its state dot becomes an equal-size spinner; no global synchronization runs.
 
-Native cards retain statistics, Edit, and Delete. Third-party cards show provider identity, local/remote location, Edit, and **Disconnect**. Smart-created cards additionally show whether rules or the Agent decided, plus confidence and a concise reason. Disconnect never deletes provider data.
+The first Overview visit performs one full synchronization. Later refreshes are on demand. **Synchronize now** remains at the top right beside elapsed time since the last full sync.
 
-The **Snapshot visibility** section first states which read surface each Memory Space can actually honor, then the graph aggregates all active spaces. Mnemon Native supplies complete typed relationships; Hindsight and Holographic contribute their supported graphs; providers without graph edges contribute bounded disconnected content projections; query-only providers such as ByteRover wait for an explicit question. The snapshot never fabricates unsupported relationships. Layout, dragging, and reset affect browser presentation only.
+Snapshot visibility declares the read surface each space can actually honor before rendering the combined graph:
+
+- Mnemon Native supplies full typed relationships;
+- Hindsight and Holographic contribute their real graphs;
+- providers without edges contribute content projections only;
+- query-only providers such as ByteRover wait for an explicit query.
+
+The UI never fabricates unsupported relationships, entities, deletion, or browse capability.
+
+### Create a Memory Space manually
+
+[![Create Memory Space with vertical fields and Provider selection](../assets/screenshots/memory-space-create-dialog.png)](../assets/screenshots/memory-space-create-dialog.png)
+
+Clicking Create always asks the user to choose a Provider explicitly. Only services enabled in Settings appear. Provider-specific fields use a vertical layout to avoid alignment drift. The new instance enters catalog, activation, and recall only after creation.
+
+### Distillation strategy: manual or smart
+
+[![Manual and smart Provider placement strategy](../assets/screenshots/distillation-strategy.png)](../assets/screenshots/distillation-strategy.png)
+
+Distillation strategy routes later Agent writes; it does not change manual creation:
+
+- **Manual** uses an explicitly constrained target;
+- **Smart selection** treats data boundary and required capabilities as hard rules, then uses local/shared preference and a prompt as soft policy. A model runs only when several candidates remain eligible.
+
+The receipt keeps decision source, confidence, and reason. Provider credentials never enter model context.
+
+### AI metadata
+
+[![AI metadata across Providers with multi-select isolated tasks](../assets/screenshots/ai-metadata-dialog.png)](../assets/screenshots/ai-metadata-dialog.png)
+
+Select several active spaces. Each task uses that Provider's fastest native query to fetch a small sample, then follows system-prompt length and capability constraints for title and description. Tasks share no state; a failure appears only on its card. The dialog stays open and each card plays a rightward same-tone refresh animation before updating in place.
+
+Generated title and description are local catalog metadata and survive ordinary reconnects. Disabling a Provider clears mapping and metadata. Re-enabling rebuilds them from Provider data, using the closest default only for unmapped fields.
 
 ### Remember
 
-[![Remember dialog with candidate and optional advanced constraints](../assets/screenshots/remember-dialog.png)](../assets/screenshots/remember-dialog.png)
+[![Remember candidate and optional manual constraints](../assets/screenshots/remember-dialog.png)](../assets/screenshots/remember-dialog.png)
 
-Normally, provide only a candidate. On confirmation, a clean independent task Agent decides whether it qualifies, chooses the narrowest space, deduplicates, distills, and writes. Expand advanced options only when a target space, category, or importance must be constrained explicitly.
+Normally, provide only a candidate. Confirmation starts a clean task Agent to qualify, choose the narrowest space, deduplicate, distill, and write. Manual advanced options are for genuinely required target, category, or importance constraints.
 
-### Recall
+### Recall and Agent Query
 
-[![Recall query, category, strategy, raw evidence, and progressive results](../assets/screenshots/recall-agent-answer.png)](../assets/screenshots/recall-agent-answer.png)
+[![Real Agent Query result and multi-provider recall scope](../assets/screenshots/recall-agent-answer.png)](../assets/screenshots/recall-agent-answer.png)
 
-- **Direct recall** returns raw evidence without an answer Agent.
-- **Agent query** retrieves the same evidence, then starts a clean evidence-only task Agent with no Mnemon tools.
-- Category and strategy narrow the search.
-- **Recall scope** reports the provider-native search state for every active searchable Memory Space; one failed connection does not hide other sources.
-- Results retain Memory Space, provider, category, importance, engine-native score, and ID; cross-provider order uses rank fusion.
-- Related, Link, Browse, and Forget appear only when the provider supports their semantics.
+- **Direct search** returns raw evidence without an Agent.
+- **Agent query** uses the same evidence, then starts an evidence-only top-level task Agent.
+- Providers return concurrently; one connection failure never hides other sources.
+- Rank fusion orders providers while retaining engine-native score, ID, space, Provider, and category.
+- Related, Link, Browse, and Forget appear only when genuinely supported.
 
-Focused questions are more reliable than broad keywords.
+Focused questions are usually more reliable than broad keywords.
 
 ### Content and Entities
 
 | Content | Entities |
 |---|---|
-| [![Memory content and filters](../assets/screenshots/memory-content.png)](../assets/screenshots/memory-content.png) | [![Entity lookup and related memories](../assets/screenshots/entities-context.png)](../assets/screenshots/entities-context.png) |
+| [![Memory content, Provider filters, and progressive loading](../assets/screenshots/memory-content.png)](../assets/screenshots/memory-content.png) | [![Real entity indexes and related memory](../assets/screenshots/entities-context.png)](../assets/screenshots/entities-context.png) |
 
-- **Content** calls each provider's read-only browse contract without recall side effects. Source cards distinguish enumerable, query-only, and unavailable surfaces. Supermemory projects both extracted memories and still-browseable ingested documents; ByteRover reads only after a query. Results expose Related, clone-from-item, Copy ID, and Forget only when their real capabilities allow it.
-- **Entities** aggregates frequent names only from real entity indexes—currently Mnemon Native, Hindsight, and Holographic. RetainDB, Supermemory, Mem0, and other providers without an entity index are explicitly unsupported rather than inferred from ordinary text. Selecting or entering an entity then aggregates related facts, decisions, and context.
+Content distinguishes enumerable, query-only, and unavailable surfaces. A Provider tag both applies a filter and clears it when clicked again. Entities aggregates only real indexes—currently Mnemon Native, Hindsight, and Holographic—rather than inferring capability from ordinary text.
 
-Both expose visible / total counts and progressive loading.
+## 5. Settings: services are not Memory Space instances
 
-## 4. Documents: preserve complete project narratives
+[![Memory System settings for display, scope, Provider services, and backup](../assets/screenshots/settings-memory-system.png)](../assets/screenshots/settings-memory-system.png)
 
-[![Document capacity, progressive directory, and dedicated Markdown reader](../assets/screenshots/documents-markdown.png)](../assets/screenshots/documents-markdown.png)
+Settings owns reusable **service configuration** only:
 
-Documents are for designs, investigations, procedures, postmortems, and handoffs. The directory loads progressively; the reader keeps title, retrieval description, source, revision, hash, size, and full Markdown. Selecting a Document resets the reader to the top.
+- every external Provider has its own switch and is off by default;
+- endpoint, API Key, and Provider-specific fields appear only after enabling;
+- API Keys use a conventional password field whose eye button toggles visible/hidden; there is no clear-credential checkbox, dedicated Remove row, or saved-secret caption;
+- Save updates service configuration without waiting for discovery or recall; health belongs on Status and instances belong on Overview;
+- global / workspace / custom tags show effective scope; Providers with the same scope semantics reuse Mnemon's configuration framework.
 
-Before active capacity is exhausted, least-recently-used Documents are cold-indexed in Mnemon and then moved to archived storage. A failure or revision conflict preserves the active original.
+Mnemon-specific custom directory, backup, and migration remain in Mnemon's own expandable area. Custom is an explicit-path global scope.
 
-### Create a Document
+### Background task Agent model route
 
-[![Create managed Document dialog](../assets/screenshots/document-create-dialog.png)](../assets/screenshots/document-create-dialog.png)
+[![Background task Agent follows main route or uses a selected Provider and model](../assets/screenshots/settings-task-agent-routing.png)](../assets/screenshots/settings-task-agent-routing.png)
 
-Title and retrieval description determine future discoverability; source paths preserve provenance; the body retains Markdown structure. Source project files remain read-only—the workbench creates a managed copy.
+**Follow main route** uses DSH's default for a new session. **Choose model provider** stores a complete Provider + Model route. It affects AI metadata, Agent Query, Remember, smart Provider selection, and Document archive only; it never changes the current main conversation model. Reasoning strength depends on both selected Provider capability and DSH route support.
 
-## 5. In-conversation interaction
+Switches, radio options, and eye buttons tolerate repeated clicks—including clicking the already-selected value—without unmounting or blanking the page.
+
+## 6. In-conversation interaction
 
 ### Turn memory
 
-[![Expanded Turn memory with recalls, Document search, and exact tool links](../assets/screenshots/conversation-turn-memory.png)](../assets/screenshots/conversation-turn-memory.png)
-
-The bar appears only on completed turns with memory activity. Expanding lists exact tools; clicking one opens its matching page while retaining the conversation context.
-
-[![Jump from Turn memory to Memory Space Recall](../assets/screenshots/conversation-memory-jump.png)](../assets/screenshots/conversation-memory-jump.png)
+Turn memory appears only on completed turns with memory activity. Expand or collapse it repeatedly. Clicking an exact tool opens its matching Recall, Content, Entities, or Documents page.
 
 ### Save to memory
 
-[![Confirm save to memory and edit the candidate before dispatch](../assets/screenshots/conversation-save-dialog.png)](../assets/screenshots/conversation-save-dialog.png)
+Save to memory sits in the native action strip for finalized replies. The first click only reads that reply and opens an editable dialog. Cancel has no data effect. Only **Confirm and send to independent task Agent** starts distillation.
 
-Save to memory sits in the native action strip for finalized assistant replies. Clicking only opens confirmation and reads that reply. Edit or cancel freely; confirmation starts a clean independent task Agent for the write flow.
+Both conversation controls are on by default and can be changed independently under **Settings → Memory System → Conversation interface**. Saving applies live.
 
-## Workspace mode: separating inspection from execution
-
-Under `storageScope=workspace`, keep two concepts separate:
+## Workspace mode: inspection and execution are distinct
 
 | Concept | Selected by | Affects |
 |---|---|---|
 | **Inspected workspace** | Workbench header selector | Which `<workspace>/.mnemon` the UI displays and maintains manually |
-| **Effective workspace** | Current conversation / Agent cwd | Which root conversation tools, commands, and lifecycle hooks actually use |
+| **Effective workspace** | Current conversation / Agent cwd | Which root conversation tools, commands, and lifecycle hooks use |
 
-You may inspect project B while staying in project A's conversation: the conversation Agent still uses A, while AI metadata, Agent Query, memory distillation, and document archiving create independent task Agents explicitly scoped to B. This also works when no main session is selected. Switching inspection target unmounts old page state before loading the new root.
+You may inspect project B while staying in project A's conversation. The conversation Agent remains on A; AI metadata, Agent Query, Remember, and Document archive launched from the workbench create clean task Agents explicitly scoped to B. This works even when no main session is selected.
 
-`global` and `custom` resolve to one explicit root and need no alignment layer.
+Remote Provider workspaces, users, banks, projects, containers, and URIs are independent namespaces and never change implicitly with the DSH workspace. `global` and `custom` resolve to one explicit root and need no inspection/execution alignment.
 
-## Common interaction rules
+## Common rules
 
-- Solid blue is the primary action; blue outline usually means Edit; red is Remove, Delete, Archive, or Forget; neutral actions are View, Copy, and Cancel.
-- A Memory Space toggle controls only whether dsh-mnemon includes it in read routing; it is not Mnemon CLI's default Store selection. Before deleting Mnemon's default Store, the plugin switches to another existing Memory Space. The last native Store may be inactive but cannot be deleted.
-- Physical deletion of a Mnemon Native space requires dedicated confirmation. Every third-party space has an explicit Disconnect confirmation that leaves provider data untouched. Per-memory Forget follows the provider's declared hard, soft, or unsupported semantics.
-- Saving settings clears stale page state and reloads automatically; no browser refresh is needed.
-- Sidebar primary headings remain stable; secondary headings within Memory Spaces scroll naturally.
-- Buildin preserves its established layout and visuals. Functional concepts still apply, though control positions differ.
+- Solid blue means primary action; blue outline usually means Edit; red is reserved for Delete, Disconnect, Archive, or Forget; neutral actions are View, Copy, and Cancel.
+- A Memory Space toggle controls only whether dsh-mnemon includes it in read routing. It is not the Mnemon CLI default Store.
+- Mnemon Native physical deletion requires confirmation. External spaces use Disconnect and leave Provider data untouched.
+- Pages load by region; a local error never blocks unrelated data or creates a wall of spinners.
+- Buildin preserves its established layout and visuals. The same concepts apply, though control positions differ.
 
-Next: [Getting Started](./getting-started.md) · [Storage model](./storage-model.md) · [Configuration](./configuration.md) · [Operations](./operations.md)
+Next: [Capability map](./capabilities.md) · [Getting Started](./getting-started.md) · [Provider guide](./memory-providers.md) · [Configuration](./configuration.md)

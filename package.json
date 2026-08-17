@@ -1,7 +1,7 @@
 {
   "name": "dsh-mnemon",
-  "version": "0.1.6",
-  "description": "Three-tier persistent memory plugin for DeepSeek Harness (DSH), with prioritized Mnemon Native support and pluggable long-term-memory providers such as OpenViking.",
+  "version": "0.2.0",
+  "description": "Three-tier memory system for DeepSeek Harness with nine pluggable providers, smart routing, independent task Agents, WebUI, and headless tools.",
   "keywords": [
     "deepseek-harness",
     "deepseek-harness-plugin",
@@ -34,7 +34,7 @@
     "semantic-recall",
     "memory-space",
     "workspace-memory",
-    "subagent",
+    "task-agent",
     "knowledge-graph",
     "ai-agent",
     "llm-agent",

@@ -10,11 +10,11 @@
 
 - 一个可以启动的 DSH Web 或 Headless profile；
 - 本地可执行的 `mnemon` CLI；
-- 一个可用于隔离记忆任务的 DSH subagent Provider。
+- 一个能够创建独立任务 Agent 的 DSH 模型路由。
 
 普通语义任务优先使用名为 `spawn` 的 Provider，并要求 `outputSchema`、`toolFilter`、`persona` 与 `depthLimit`。可选的评分后台审查还要求名为 `fork`、且 `inheritsParentContext=true` 的 Provider。缺少 `fork` 不影响确定性页面读取和普通手动操作。
 
-项目当前不声明固定的 DSH / Mnemon 最低版本矩阵。本文与截图以 dsh-mnemon v0.1.6 为基线；升级前先备份，并在隔离目录重复本页验证。
+本文与截图以 dsh-mnemon v0.2.0、DSH 0.1.0-rc.6 和 Mnemon 0.2.3 为推荐基线；升级前先备份，并在隔离目录重复本页验证。
 
 ## 2. 安装 Mnemon
 
@@ -143,20 +143,20 @@ dsh --profile headless "回答前先检查持久化的项目上下文。"
 
 点击保存后会先初始化新运行图，再原子切换 Host；页面自动清理旧状态并重新读取，无需刷新浏览器。切换范围不会自动迁移、合并或删除旧数据。
 
-在工作区模式下，工作台选择器只决定“正在查看哪套数据”；Agent、工具与生命周期实际使用的目录始终跟随当前会话。两者不一致时顶部会提示并提供一键对齐。
+在工作区模式下，对话 Agent、工具与生命周期使用当前会话的实际根；从工作台启动的独立任务 Agent 会显式使用正在查看的工作区，即使没有选中主 session 也一样。两者不一致时顶部会提示并提供一键对齐。
 
 ## 5. 打开 Sidebar 工作台
 
 点击左侧栏“记忆系统”，先查看“状态”：
 
-[![状态页：CLI、版本、运行时、记忆体、档案与存储根](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
+[![状态页：CLI、版本、运行时、档案、记忆体与存储根](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
 
 确认：
 
 - 右上角显示“已连接”；
 - Mnemon 与 dsh-mnemon 能显示当前版本；
 - 存储根与刚才选择的范围一致；
-- Runtime、Memory Spaces 和 Documents 没有错误提示。
+- Runtime、Documents 和 Memory Spaces 没有错误提示。
 
 如果 Mnemon 不可用，macOS/Linux 先运行 `command -v mnemon` 与 `mnemon --version`；Windows PowerShell 运行 `Get-Command mnemon` 与 `Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"`。更多症状见[故障排查](./operations.md#故障排查)。
 
@@ -173,7 +173,7 @@ dsh --profile headless "回答前先检查持久化的项目上下文。"
 
 空存储根的第一个记忆体会使用 Mnemon 原生 `default` Store ID，但仍显示你填写的名称与说明；激活开关只影响 DSH。
 
-智能选择先由 Host 强制执行候选白名单、数据边界和能力要求。只剩一个候选时直接按规则确定；仍有多个候选时，隔离子 Agent 才会参考软偏好与策略 Prompt。Provider 凭据不会进入模型上下文，最终卡片会保留选择来源、理由与置信度。
+智能选择先由 Host 强制执行候选白名单、数据边界和能力要求。只剩一个候选时直接按规则确定；仍有多个候选时，独立任务 Agent 才会参考软偏好与策略 Prompt。Provider 凭据不会进入模型上下文，最终卡片会保留选择来源、理由与置信度。
 
 连接外部服务或 CLI 前先阅读[长期记忆 Provider](./memory-providers.md)。
 
@@ -204,8 +204,6 @@ dsh --profile headless "回答前先检查持久化的项目上下文。"
 - 若本轮调用了记忆工具，回复下方会出现“本回合记忆”；
 - 展开后可以看到具体工具名，并点击跳到对应页面；
 - “存入记忆”会先打开可编辑确认弹窗，取消不会写入。
-
-[![本回合记忆与工具跳转](../assets/screenshots/conversation-turn-memory.png)](../assets/screenshots/conversation-turn-memory.png)
 
 普通聊天不应强制召回。当前请求、现有源文件和实时工具结果应优先于历史内容。
 

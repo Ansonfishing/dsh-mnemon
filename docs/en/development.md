@@ -123,14 +123,16 @@ Capacity limits, CLI timeouts, revision conflicts, and Host restarts should be v
 Public UI screenshots live under `docs/assets/screenshots/`, shared by both language editions. Language-specific architecture diagrams live under `docs/assets/diagrams/zh-CN/` and `docs/assets/diagrams/en/`. When layout, primary copy, or defaults change:
 
 1. Use a real DSH Web profile, but first check that the frame contains no token, credential, or private personal data.
-2. Limit capture to inspection, filtering, expansion, and opening dialogs. When showing a write flow, stop before final confirmation.
-3. Replace screenshots with the same responsibility instead of accumulating versioned filenames. Add an asset only for a new user task.
-4. Refresh the README poster, GIF / MP4 demo, and both `ui-guide.md` files.
-5. Confirm PNG / JPEG extensions match actual encoding and that text is readable at original resolution.
-6. Remove unreferenced assets, stale Buildin layouts, and obsolete terminology.
-7. Run link/image checks, then open both READMEs and UI guides manually.
+2. Use 1600×900 standard widescreen for primary screenshots and video; narrow viewports are no longer release hero assets.
+3. Record complete downward and upward page scrolling, plus filter, repeated-click, toggle, expand, dialog, and exact-navigation button states.
+4. Stop writes, component updates, and settings changes before final confirmation. A read-only Agent Query over public test data may run for real, including its wait and result states.
+5. Replace screenshots with the same responsibility instead of accumulating versioned filenames. Add an asset only for a new user task.
+6. Refresh the README poster, GIF / MP4 demo, and both `ui-guide.md` files.
+7. Confirm PNG / JPEG extensions match actual encoding and that text is readable at original resolution.
+8. Remove unreferenced assets, stale Buildin layouts, and obsolete terminology.
+9. Run link/image checks, then open both READMEs and UI guides manually.
 
-README demo assets are `docs/assets/media/dsh-mnemon-memory-system-demo.*`. The demo should cover Status, Runtime, Memory Spaces, Documents, and in-conversation confirmation without actually submitting memory, updating components, or changing settings through automation.
+README demo assets are `docs/assets/media/dsh-mnemon-memory-system-demo.*`. The demo should cover Status, Runtime, Documents, Memory Spaces, Provider and dialog interactions with full vertical scrolling and key button-state changes. Automation must not submit memory, update components, or save settings, but it may complete a safe read-only Agent Query.
 
 ## Modifying Subagent Schemas
 

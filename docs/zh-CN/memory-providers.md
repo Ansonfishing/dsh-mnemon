@@ -45,7 +45,7 @@ DSH 的“工作区”模式不会统一重写所有 Provider 命名空间。Mne
 
 1. Host 先强制执行数据边界与必需能力；
 2. 只剩一个合格 Provider 时，由规则确定性选择；
-3. 有多个合格候选时，隔离的 DSH 子 Agent 结合路由说明、软偏好和用户策略 Prompt 判断；
+3. 有多个合格候选时，独立任务 Agent 结合路由说明、软偏好和用户策略 Prompt 判断；
 4. Host 再验证结果属于合格集合，并保存选择来源、理由、置信度与候选 ID。
 
 连接凭据永远不会进入 selector Prompt。`local-only` 会在模型选择前排除全部远程 Provider。Mnemon Native 始终保留为官方本地候选。

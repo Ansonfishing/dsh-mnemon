@@ -10,11 +10,11 @@ You need:
 
 - a DSH Web or Headless profile that starts successfully;
 - a locally executable `mnemon` CLI;
-- a DSH subagent provider for isolated memory tasks.
+- a DSH model route capable of creating independent task Agents.
 
 Regular semantic work prefers a provider named `spawn` with `outputSchema`, `toolFilter`, `persona`, and `depthLimit`. Optional score-based background review additionally requires a provider named `fork` with `inheritsParentContext=true`. Missing `fork` does not block deterministic pages or regular manual actions.
 
-The project does not declare a fixed minimum DSH / Mnemon matrix. This guide and its screenshots target dsh-mnemon v0.1.6. Back up and repeat this verification against an isolated root before upgrading.
+This guide and its screenshots use dsh-mnemon v0.2.0, DSH 0.1.0-rc.6, and Mnemon 0.2.3 as the recommended baseline. Back up and repeat this verification against an isolated root before upgrading.
 
 ## 2. Install Mnemon
 
@@ -143,20 +143,20 @@ Open **Settings → Memory System**:
 
 Save initializes a candidate runtime graph before atomically switching the Host. The page clears stale state and reloads automatically—no browser refresh is needed. Changing scope never migrates, merges, or deletes old data.
 
-In Workspace mode, the workbench selector changes only what data is being inspected. Agents, tools, and lifecycle hooks always use the current conversation's effective root. The header reports a mismatch and offers one-click alignment.
+In Workspace mode, conversation Agents, tools, and lifecycle hooks use the current conversation's effective root. Independent task Agents launched by the workbench use the inspected workspace explicitly, including when no main session is selected. The header reports a mismatch and offers one-click alignment.
 
 ## 5. Open the Sidebar workbench
 
 Click **Memory System** in the sidebar, then start on **Status**:
 
-[![Status with CLI, versions, Runtime, Memory Spaces, Documents, and storage root](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
+[![Status with CLI, versions, Runtime, Documents, Memory Spaces, and storage root](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
 
 Confirm that:
 
 - the top right says Connected;
 - Mnemon and dsh-mnemon show installed versions;
 - the storage root matches your chosen scope;
-- Runtime, Memory Spaces, and Documents report no errors.
+- Runtime, Documents, and Memory Spaces report no errors.
 
 If Mnemon is unavailable, run `command -v mnemon` and `mnemon --version` on macOS/Linux, or `Get-Command mnemon` and `Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"` on Windows PowerShell. See [Troubleshooting](./operations.md#troubleshooting) for other symptoms.
 
@@ -173,7 +173,7 @@ If Mnemon is unavailable, run `command -v mnemon` and `mnemon --version` on macO
 
 In an empty storage root, the first Memory Space uses Mnemon's native `default` Store ID while keeping the name and description you supplied. Its activation toggle affects DSH only.
 
-Smart selection first has the Host enforce the provider allowlist, data boundary, and required capabilities. One remaining candidate is selected deterministically; only an ambiguous eligible set reaches an isolated subagent, which considers the soft preference and strategy prompt. Provider credentials never enter model context, and the resulting card retains the source, reason, and confidence.
+Smart selection first has the Host enforce the provider allowlist, data boundary, and required capabilities. One remaining candidate is selected deterministically; only an ambiguous eligible set reaches an independent task Agent, which considers the soft preference and strategy prompt. Provider credentials never enter model context, and the resulting card retains the source, reason, and confidence.
 
 See [Long-term memory providers](./memory-providers.md) before connecting an external service or CLI.
 
@@ -204,8 +204,6 @@ Ask a question that genuinely depends on history and allow the Agent to decide w
 - Turn memory appears below the reply if the turn used memory tools.
 - Expanding shows exact tools and links to their pages.
 - Save to memory opens an editable confirmation; canceling performs no write.
-
-[![Turn memory and exact tool navigation](../assets/screenshots/conversation-turn-memory.png)](../assets/screenshots/conversation-turn-memory.png)
 
 Ordinary conversation should not force recall. Current requests, repository files, and live tool results outrank historical content.
 

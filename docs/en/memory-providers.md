@@ -45,7 +45,7 @@ Smart placement builds an allowlist from the candidates selected by the user:
 
 1. The Host enforces data boundary and required-capability rules.
 2. If one eligible provider remains, rules select it deterministically.
-3. If several remain, an isolated DSH subagent considers the routing description, soft preference, and user-authored strategy prompt.
+3. If several remain, an independent task Agent considers the routing description, soft preference, and user-authored strategy prompt.
 4. The Host validates the returned provider against the eligible set and persists the decision, reason, confidence, and candidate IDs.
 
 Connection secrets never enter the selector prompt. `local-only` excludes every remote provider before model selection. Mnemon Native remains present as the official local candidate.
