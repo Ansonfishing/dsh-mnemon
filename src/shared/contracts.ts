@@ -1,6 +1,7 @@
 import type { ConnectionHandle as DshClientConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 
 export const MNEMON_READ_CHANNEL = '/dsh-mnemon-read'
+export const MNEMON_ACTIVATION_CHANNEL = '/dsh-mnemon-activation'
 export const MNEMON_WRITE_CHANNEL = '/dsh-mnemon-write'
 export const MNEMON_PACK_CHANNEL = '/dsh-mnemon-pack'
 export const MNEMON_SETTINGS_CHANNEL = '/dsh-mnemon-settings'
@@ -19,8 +20,8 @@ export type RpcResult<T = JsonValue> =
   | { ok: true; value: T }
   | { ok: false; error: RpcError }
 
-/** Public DSH browser RPC face; the plugin intentionally consumes no other connection state. */
-export type ClientConnectionHandle = Pick<DshClientConnectionHandle, 'rpc'>
+/** Public DSH browser RPC face plus the transport boundary needed to gate local-only writes. */
+export type ClientConnectionHandle = Pick<DshClientConnectionHandle, 'rpc'> & Partial<Pick<DshClientConnectionHandle, 'isLoopback'>>
 
 export interface ClientSettingsSnapshot<T> {
   status: 'loading' | 'ready' | 'unavailable'

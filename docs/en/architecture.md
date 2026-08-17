@@ -122,7 +122,7 @@ browser component
   -> local CLI or managed files
 ```
 
-Read channels require `trusted-host`; memory write channels and settings channels require `loopback`. When `writeEnabled=false`, the Host does not register memory write channels.
+Read channels and the activation-only Memory Space control require `trusted-host`; broader memory write channels and settings channels require `loopback`. The activation handler accepts only an exact body ID and Boolean state. Provider credential values travel only through the private loopback service catalog; the trusted-host catalog is redacted. Browser components also derive local-write capability from the connection boundary and disable broader controls before transport. When `writeEnabled=false`, every mutation handler rejects the request at the Host boundary.
 
 ## Internationalization
 

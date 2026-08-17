@@ -401,7 +401,7 @@ function ReadSourcePanel(props: {
 }
 
 /** Sidebar mirrors the SSH panel's flat tab model; Buildin keeps the grouped navigation unchanged. */
-function WorkspaceNavigation(props: { page: Page; onSelect: (page: Page) => void; activeBodies: number; bodyCount: number; catalogKnown: boolean; writeEnabled: boolean }): JSX.Element {
+function WorkspaceNavigation(props: { page: Page; onSelect: (page: Page) => void; activeBodies: number; bodyCount: number; catalogKnown: boolean; activationEnabled: boolean; writeEnabled: boolean }): JSX.Element {
   const t = useT()
   const appearance = useMnemonViewAppearance()
   return (
@@ -416,19 +416,19 @@ function WorkspaceNavigation(props: { page: Page; onSelect: (page: Page) => void
         : <nav className={appearanceClass(css.nav, appearance.classes.nav)} aria-label={t('nav.aria')}>
           {PAGE_NAV.map((group, groupIndex) => <Fragment key={group.aria}><div className={appearanceClass(css.navGroup, appearance.classes.navGroup)} role="group" aria-label={t(group.aria)}>{group.entries.map(item => <button key={item.id} type="button" aria-current={props.page === item.id ? 'page' : undefined} onClick={() => props.onSelect(item.id)}>{appearance.showNavigationGlyphs && <span className={css.navGlyph} aria-hidden="true">{item.glyph}</span>}<span><strong>{t(item.label)}</strong>{appearance.showNavigationDetails && <small>{t(item.detail)}</small>}</span></button>)}</div>{appearance.showNavigationDividers && groupIndex < PAGE_NAV.length - 1 && <span className={css.navGroupDivider} aria-hidden="true" />}</Fragment>)}
         </nav>}
-      {appearance.showSpaceSummary && <div className={css.spaceSummary}><span>{t('sidebar.activeSpaces')}</span><code>{props.catalogKnown ? `${props.activeBodies} / ${props.bodyCount}` : '— / —'}</code><small>{props.writeEnabled ? t('common.agentSupervised') : t('common.readOnly')}</small></div>}
+      {appearance.showSpaceSummary && <div className={css.spaceSummary}><span>{t('sidebar.activeSpaces')}</span><code>{props.catalogKnown ? `${props.activeBodies} / ${props.bodyCount}` : '— / —'}</code><small>{props.writeEnabled ? t('common.agentSupervised') : props.activationEnabled ? t('common.activationOnly') : t('common.readOnly')}</small></div>}
     </div>
   )
 }
 
 /** Memory tools become a focused second-level tab set on the Sidebar surface. */
-function MemoryNavigation(props: { page: Page; writeEnabled: boolean; onSelect: (page: SidebarMemoryPage) => void; onRemember: () => void; onStrategy: () => void }): JSX.Element | null {
+function MemoryNavigation(props: { page: Page; activationEnabled: boolean; writeEnabled: boolean; onSelect: (page: SidebarMemoryPage) => void; onRemember: () => void; onStrategy: () => void }): JSX.Element | null {
   const t = useT()
   const appearance = useMnemonViewAppearance()
   if (appearance.surface !== 'sidebar' || !isMemoryPage(props.page)) return null
   return (
     <section className={appearance.classes.memoryWorkspace}>
-      <PageHeader title={t('nav.bodies')} description={t('overview.description')} action={<div className={css.memoryHeaderActions}><button type="button" className={appearanceClass(css.primaryButton, appearance.classes.memoryWriteButton)} disabled={!props.writeEnabled} onClick={props.onRemember}>{t('nav.rememberAction')}</button><button type="button" className={css.secondaryButton} onClick={props.onStrategy}>{t('strategy.action')}</button></div>} />
+      <PageHeader title={t('nav.bodies')} description={t('overview.description')} meta={props.writeEnabled ? t('common.agentSupervised') : props.activationEnabled ? t('common.activationOnly') : t('common.readOnly')} action={<div className={css.memoryHeaderActions}><button type="button" className={appearanceClass(css.primaryButton, appearance.classes.memoryWriteButton)} disabled={!props.writeEnabled} onClick={props.onRemember}>{t('nav.rememberAction')}</button><button type="button" className={css.secondaryButton} onClick={props.onStrategy}>{t('strategy.action')}</button></div>} />
       <div className={appearance.classes.memoryNavigation}>
         <div className={appearance.classes.memoryTabs} role="tablist" aria-label={t('nav.memory.aria')}>
           {MEMORY_PAGE_TABS.map(item => {
@@ -997,7 +997,7 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
   )
 }
 
-function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClient; revision: number; writeEnabled: boolean; agentAvailable: boolean; fallbackBodies: MemoryBodyView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onAgentRefresh: () => void; onBodyReconnect: (body: MemoryBodyView) => void; onBodyMetadata: (updates: readonly MemoryBodyMetadataUpdate[]) => void; onExplore: (query: string) => void }): JSX.Element {
+function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClient; revision: number; activationEnabled: boolean; writeEnabled: boolean; agentAvailable: boolean; fallbackBodies: MemoryBodyView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onAgentRefresh: () => void; onBodyReconnect: (body: MemoryBodyView) => void; onBodyMetadata: (updates: readonly MemoryBodyMetadataUpdate[]) => void; onExplore: (query: string) => void }): JSX.Element {
   const t = useT()
   const locale = useLocale()
   const appearance = useMnemonViewAppearance()
@@ -1299,7 +1299,7 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
     </section>
     <div className={appearanceClass(css.bodyEditActions, css.bodyCreateActions)}><button type="button" className={css.ghostButton} disabled={creating} onClick={() => setCreatingBodyOpen(false)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={creating || bodyName.trim() === '' || bodyDescription.trim() === '' || !providerDraftComplete(selectedProvider, providerDrafts[bodyProviderId])}>{creating ? t('overview.creating') : t('overview.createAction')}</button></div>
   </form>
-  const bodyToggle = (body: MemoryBodyView) => <button type="button" className={css.bodySwitch} role="switch" aria-checked={body.active} aria-label={t('overview.toggleAria', { name: body.name })} disabled={!props.writeEnabled || changing === body.id || deletingBody === body.id} onClick={() => void toggle(body)}><span className={css.bodySwitchTrack} aria-hidden="true"><i /></span><span>{changing === body.id ? t('overview.toggling') : body.active ? t('common.active') : t('common.inactive')}</span></button>
+  const bodyToggle = (body: MemoryBodyView) => <button type="button" className={css.bodySwitch} role="switch" aria-checked={body.active} aria-label={t('overview.toggleAria', { name: body.name })} disabled={!props.activationEnabled || changing === body.id || deletingBody === body.id} onClick={() => void toggle(body)}><span className={css.bodySwitchTrack} aria-hidden="true"><i /></span><span>{changing === body.id ? t('overview.toggling') : body.active ? t('common.active') : t('common.inactive')}</span></button>
   const bodyEditActionClass = appearanceClass(css.ghostButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemEditAction))
   const bodyDeleteActionClass = appearanceClass(css.dangerButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemDangerAction))
   return (
@@ -2133,7 +2133,7 @@ function dshInstallLabel(t: MnemonTranslate, component: VersionComponentStatus):
   return t('versions.packageLocation')
 }
 
-function VersionDialog(props: { client: MnemonClient; onClose: () => void; onRefreshStatus: () => void }): JSX.Element {
+function VersionDialog(props: { client: MnemonClient; writeEnabled: boolean; onClose: () => void; onRefreshStatus: () => void }): JSX.Element {
   const t = useT()
   const [snapshot, setSnapshot] = useState<VersionStatus | null>(null)
   const [checking, setChecking] = useState(true)
@@ -2174,7 +2174,7 @@ function VersionDialog(props: { client: MnemonClient; onClose: () => void; onRef
       {error !== null && <div className={css.versionError} role="alert"><strong>{t('versions.failed')}</strong><p>{error}</p></div>}
       {result !== null && <div className={css.versionResult} role="status"><strong>{result.updated ? t('versions.updated', { name: result.component === 'mnemon' ? 'Mnemon CLI' : 'dsh-mnemon' }) : t('versions.alreadyCurrent')}</strong>{result.restartRequired && <p>{t('versions.restartRequired')}</p>}</div>}
       {snapshot !== null && <div className={css.versionList}>{snapshot.components.map(component => {
-        const canUpdate = component.outdated && component.updateSupported && component.checkError === undefined
+        const canUpdate = props.writeEnabled && component.outdated && component.updateSupported && component.checkError === undefined
         const state = component.checkError !== undefined ? t('versions.unknown') : component.outdated ? t('versions.available') : t('versions.current')
         return <article key={component.id} data-outdated={component.outdated || undefined}>
           <header><div><strong>{component.name}</strong><span>{versionModeLabel(t, component.installMode)}</span></div><em>{state}</em></header>
@@ -2189,7 +2189,7 @@ function VersionDialog(props: { client: MnemonClient; onClose: () => void; onRef
   </SidebarModal>
 }
 
-function StatusPage(props: { client: MnemonClient; status: StatusView | null; loading: boolean; onRefresh: () => void }): JSX.Element {
+function StatusPage(props: { client: MnemonClient; status: StatusView | null; loading: boolean; writeEnabled: boolean; onRefresh: () => void }): JSX.Element {
   const t = useT()
   const [versionsOpen, setVersionsOpen] = useState(false)
   const status = props.status
@@ -2217,7 +2217,7 @@ function StatusPage(props: { client: MnemonClient; status: StatusView | null; lo
       <div className={css.asyncStatusBlock}>{status !== null && <NativeProviderHealth status={status} />}</div>
       <div className={css.asyncStatusBlock}>{status?.providerServices !== undefined && <ProviderHealth services={status.providerServices.filter(service => service.providerId !== 'mnemon-native')} />}</div>
       <div className={css.asyncStatusBlock}><StorageDomains catalog={storage} selected={selectedScope} selectedKind={selectedScopeKind} /></div>
-      {versionsOpen && <VersionDialog client={props.client} onClose={() => setVersionsOpen(false)} onRefreshStatus={props.onRefresh} />}
+      {versionsOpen && <VersionDialog client={props.client} writeEnabled={props.writeEnabled} onClose={() => setVersionsOpen(false)} onRefreshStatus={props.onRefresh} />}
     </div>
   )
 }
@@ -2468,7 +2468,8 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     else { setRememberSeed(insight.content); selectPage('remember') }
   }, [appearance.surface, openRemember, selectPage])
   const refreshAll = () => { setRevision(value => value + 1); void loadStatus() }
-  const writeEnabled = status?.writeEnabled === true
+  const activationEnabled = status?.writeEnabled === true
+  const writeEnabled = activationEnabled && connection.isLoopback !== false
   const stats = status?.stats
   const catalogKnown = status?.memoryBodies !== undefined
   const memoryBodies = useMemo(() => (status?.memoryBodies ?? []).map(normalizeMemoryBody), [status])
@@ -2512,17 +2513,17 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       {(statusError !== null || status?.healthy === false) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
       {appearance.surface === 'buildin' && workspaceDiverged && <div className={css.workspaceMismatch} role="status"><div><strong>{t('workspace.mismatchTitle')}</strong><span>{t('workspace.mismatchDescription')}</span><div><code>{t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}</code><code>{t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}</code></div></div>{canAlignWorkspace && <button type="button" className={css.secondaryButton} onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button>}</div>}
       <div className={css.workspace}>
-        <WorkspaceNavigation page={page} onSelect={selectPrimaryPage} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} writeEnabled={writeEnabled} />
-        <MemoryNavigation page={page} writeEnabled={writeEnabled} onSelect={selectPage} onRemember={() => openRemember()} onStrategy={() => setStrategyOpen(true)} />
+        <WorkspaceNavigation page={page} onSelect={selectPrimaryPage} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} activationEnabled={activationEnabled} writeEnabled={writeEnabled} />
+        <MemoryNavigation page={page} activationEnabled={activationEnabled} writeEnabled={writeEnabled} onSelect={selectPage} onRemember={() => openRemember()} onStrategy={() => setStrategyOpen(true)} />
         <section key={viewContextKey} className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={!isMemoryPage(page) ? '' : undefined}>
-          {page === 'overview' && <OverviewPage client={client} metadataClient={taskClient} revision={revision} writeEnabled={writeEnabled} agentAvailable={taskAgentAvailable} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onAgentRefresh={() => void loadStatus()} onBodyReconnect={bodyReconnected} onBodyMetadata={bodyMetadataUpdated} onExplore={explore} />}
+          {page === 'overview' && <OverviewPage client={client} metadataClient={taskClient} revision={revision} activationEnabled={activationEnabled} writeEnabled={writeEnabled} agentAvailable={taskAgentAvailable} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onAgentRefresh={() => void loadStatus()} onBodyReconnect={bodyReconnected} onBodyMetadata={bodyMetadataUpdated} onExplore={explore} />}
           {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}
           {page === 'documents' && <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} />}
           {page === 'explore' && <ExplorePage client={client} agentClient={taskClient} agentAvailable={taskAgentAvailable} status={status} seed={searchSeed} writeEnabled={writeEnabled} onForget={forget} />}
           {page === 'entities' && <EntitiesPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onExplore={explore} />}
           {page === 'remember' && appearance.surface === 'buildin' && <RememberPage client={taskClient} agentAvailable={taskAgentAvailable} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} />}
           {page === 'list' && <ListPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onClone={clone} onExplore={explore} />}
-          {page === 'status' && <StatusPage client={client} status={status} loading={statusLoading} onRefresh={() => void loadStatus()} />}
+          {page === 'status' && <StatusPage client={client} status={status} loading={statusLoading} writeEnabled={writeEnabled} onRefresh={() => void loadStatus()} />}
         </section>
         {appearance.surface === 'sidebar' && rememberOpen && <RememberPage client={taskClient} agentAvailable={taskAgentAvailable} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} onClose={() => setRememberOpen(false)} onComplete={() => setRememberOpen(false)} />}
         {appearance.surface === 'sidebar' && strategyOpen && <PersistenceStrategyDialog client={taskClient} settingsScope={settingsScope} config={settingsSnapshot.value} writable={settingsSnapshot.writable} agentAvailable={taskAgentAvailable} onClose={() => setStrategyOpen(false)} />}

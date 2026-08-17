@@ -58,7 +58,7 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
     setSubmitting(submitActiveRef.current)
     const client = new MnemonClient(connection, sessionId)
     client.status()
-      .then(status => { if (alive && requestVersionRef.current === requestVersion) setWriteEnabled(status.writeEnabled) })
+      .then(status => { if (alive && requestVersionRef.current === requestVersion) setWriteEnabled(status.writeEnabled && connection.isLoopback !== false) })
       .catch(() => { if (alive && requestVersionRef.current === requestVersion) setWriteEnabled(false) })
     client.assistantMessageText(messageId)
       .then(result => {

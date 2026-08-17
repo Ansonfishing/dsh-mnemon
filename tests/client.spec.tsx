@@ -20,7 +20,7 @@ describe('MnemonView', () => {
     unsetPath: async () => {},
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean } = {}) {
+  function createConnection(options: { isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -280,6 +280,12 @@ describe('MnemonView', () => {
       if (endpoint === 'supervise') return { ok: true, value: { delegated: true, sessionId: 'session-1', runId: 'child-1', provider: 'spawn', summary: '已提炼并写入项目交付约束。', action: 'stored', memoryBodyIds: ['project'] } }
       if (endpoint === 'remember') return { ok: true, value: { delegated: true, runId: 'child-2', provider: 'spawn', summary: '已按高级约束写入。', action: 'stored', memoryBodyIds: ['project'] } }
       if (endpoint === 'forget') return { ok: true, value: { action: 'forgotten' } }
+      if (endpoint === 'body') {
+        const target = payload?.memoryBodyId === secondaryBody.id ? secondaryBody : body
+        target.active = Boolean(payload?.active)
+        if (target === secondaryBody) secondaryActive = target.active
+        return { ok: true, value: { ...target } }
+      }
       if (endpoint === 'body-update') {
         const target = payload?.memoryBodyId === secondaryBody.id ? secondaryBody : body
         if (payload?.name !== undefined) target.name = String(payload.name)
@@ -294,7 +300,7 @@ describe('MnemonView', () => {
       if (endpoint === 'body-create') return { ok: true, value: { ...body, id: 'new-body', name: String(payload?.name ?? '') } }
       return { ok: false, error: { code: 'unexpected', message: endpoint } }
     })
-    return { connection: { rpc: { call } } as unknown as ClientConnectionHandle, call }
+    return { connection: { rpc: { call }, ...(options.isLoopback === undefined ? {} : { isLoopback: options.isLoopback }) } as unknown as ClientConnectionHandle, call }
   }
 
   it('shows the live graph and all eight Mnemon workspaces', async () => {
@@ -413,8 +419,8 @@ describe('MnemonView', () => {
     expect(within(nativeStatus).getByText('项目记忆体: Mnemon Store 无法打开')).toBeTruthy()
   })
 
-  it('activates an additional memory space without crashing the live graph', async () => {
-    const { connection } = createConnection({ withInactiveBody: true })
+  it('activates an additional memory space through the trusted-host route without crashing the live graph', async () => {
+    const { connection, call } = createConnection({ withInactiveBody: true })
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
@@ -424,10 +430,40 @@ describe('MnemonView', () => {
     fireEvent.click(toggle)
 
     await waitFor(() => expect(screen.getByRole('switch', { name: '偏好记忆体读取开关' }).getAttribute('aria-checked')).toBe('true'))
+    expect(call).toHaveBeenCalledWith('/dsh-mnemon-activation', 'body', { memoryBodyId: 'preferences', active: true, sessionId: 'session-1' })
+    expect(call).not.toHaveBeenCalledWith('/dsh-mnemon-write', 'body-update', expect.objectContaining({ memoryBodyId: 'preferences', active: true }))
     expect(screen.getByRole('button', { name: /偏好: 用户偏好简洁中文回答/ })).toBeTruthy()
     expect(screen.getByRole('img', { name: /Mnemon 实时记忆图谱，7 个元素/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: '记忆体: 偏好记忆体' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '实体: DSH' })).toBeTruthy()
+  })
+
+  it('keeps only activation controls writable on a remote trusted-host connection', async () => {
+    const { connection, call } = createConnection({ isLoopback: false, withInactiveBody: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '检查版本' }))
+    const versions = screen.getByRole('dialog', { name: '检查与更新版本' })
+    await waitFor(() => expect(within(versions).getByText('Mnemon CLI')).toBeTruthy())
+    expect(within(versions).queryByRole('button', { name: '更新' })).toBeNull()
+    fireEvent.click(within(versions).getAllByRole('button', { name: '取消' }).at(-1)!)
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    expect(screen.getByText('仅可切换激活状态')).toBeTruthy()
+    await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
+    expect((screen.getByRole('button', { name: '沉淀记忆' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByRole('button', { name: '创建记忆体' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'AI 维护元信息' })).toBeNull()
+    expect((screen.getByRole('button', { name: '编辑项目记忆体' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: '删除项目记忆体' }) as HTMLButtonElement).disabled).toBe(true)
+
+    const toggle = screen.getByRole('switch', { name: '偏好记忆体读取开关' }) as HTMLButtonElement
+    expect(toggle.disabled).toBe(false)
+    fireEvent.click(toggle)
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'))
+    expect(call).toHaveBeenCalledWith('/dsh-mnemon-activation', 'body', { memoryBodyId: 'preferences', active: true, sessionId: 'session-1' })
+    expect(call.mock.calls.some(([channel]) => channel === '/dsh-mnemon-write')).toBe(false)
   })
 
   it('keeps overview, recall, content, and entities aligned with each provider read contract', async () => {

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveConfig } from '../src/config.ts'
 import type { HostConnectionHandle, HostRpcHandler } from '../src/contracts.ts'
 import type { MnemonLifecycle } from '../src/lifecycle.ts'
-import { createPackHandler, createReadHandler, createWriteHandler, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL, registerRpc } from '../src/rpc.ts'
+import { createActivationHandler, createPackHandler, createReadHandler, createWriteHandler, MNEMON_ACTIVATION_CHANNEL, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL, registerRpc } from '../src/rpc.ts'
 import type { RuntimeMemoryController } from '../src/runtime-memory.ts'
 import { MnemonService } from '../src/service.ts'
 import type { MnemonPackManager } from '../src/pack.ts'
@@ -73,6 +73,31 @@ describe('Mnemon RPC', () => {
     })
   })
 
+  it('keeps Provider secret values on the loopback channel while preserving a redacted trusted-host catalog', async () => {
+    const service = fakeService()
+    const providerServices = vi.fn((options: { includeSecrets?: boolean } = {}) => ({
+      providers: [],
+      items: [{
+        providerId: 'openviking', configured: true, enabled: true,
+        settings: { endpoint: 'https://memory.example' }, configuredSecrets: ['apiKey'],
+        ...(options.includeSecrets === true ? { secretValues: { apiKey: 'provider-secret' } } : {}),
+      }],
+      generatedAt: 'now',
+    }))
+    service.memoryBodies.providerServices = providerServices as never
+
+    await expect(createReadHandler(service)('provider-services', {})).resolves.toMatchObject({
+      ok: true,
+      value: { items: [expect.not.objectContaining({ secretValues: expect.anything() })] },
+    })
+    await expect(createWriteHandler(service)('provider-services', {})).resolves.toMatchObject({
+      ok: true,
+      value: { items: [expect.objectContaining({ secretValues: { apiKey: 'provider-secret' } })] },
+    })
+    expect(providerServices).toHaveBeenNthCalledWith(1)
+    expect(providerServices).toHaveBeenNthCalledWith(2, { includeSecrets: true })
+  })
+
   it('checks versions on the read channel and keeps explicit updates loopback-only', async () => {
     const versions = {
       currentDshMnemonVersion: '0.1.2',
@@ -123,6 +148,39 @@ describe('Mnemon RPC', () => {
     const service = fakeService()
     await expect(createWriteHandler(service)('body-delete', { memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { id: 'project' } })
     expect(service.deleteBody).toHaveBeenCalledWith('project')
+  })
+
+  it('allows only activation state through the trusted-host control boundary', async () => {
+    const service = fakeService()
+    const handler = createActivationHandler(service)
+
+    await expect(handler('body', { memoryBodyId: ' project ', active: true, sessionId: 'session-1' })).resolves.toMatchObject({
+      ok: true,
+      value: { id: 'project', active: true },
+    })
+    expect(service.updateBody).toHaveBeenCalledWith('project', { active: true })
+
+    await expect(handler('body', { memoryBodyId: 'project', active: true, name: 'renamed' })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'bad-request', message: 'unsupported activation fields: name' },
+    })
+    await expect(handler('body', { memoryBodyId: 'project', active: 'true' })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'bad-request', message: 'active must be a boolean' },
+    })
+    await expect(handler('body-update', { memoryBodyId: 'project', active: true })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'bad-request', message: 'unknown activation endpoint: body-update' },
+    })
+  })
+
+  it('keeps trusted-host activation disabled in read-only mode', async () => {
+    const service = fakeService(false)
+    await expect(createActivationHandler(service)('body', { memoryBodyId: 'project', active: true })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'internal', message: 'dsh-mnemon is configured read-only (writeEnabled: false)' },
+    })
+    expect(service.updateBody).not.toHaveBeenCalled()
   })
 
   it('reconnects one Memory Space through the loopback write channel', async () => {
@@ -438,6 +496,7 @@ describe('Mnemon RPC', () => {
     const connection = { rpc: { handle } } as unknown as HostConnectionHandle
     registerRpc(connection, fakeService())
     expect(handle).toHaveBeenCalledWith(MNEMON_READ_CHANNEL, expect.any(Function), { authority: 'trusted-host' })
+    expect(handle).toHaveBeenCalledWith(MNEMON_ACTIVATION_CHANNEL, expect.any(Function), { authority: 'trusted-host' })
     expect(handle).toHaveBeenCalledWith(MNEMON_WRITE_CHANNEL, expect.any(Function), { authority: 'loopback' })
   })
 
@@ -471,7 +530,7 @@ describe('Mnemon RPC', () => {
   it('keeps the live write channel stable but rejects it in read-only mode', async () => {
     const handle = vi.fn()
     registerRpc({ rpc: { handle } } as unknown as HostConnectionHandle, fakeService(false))
-    expect(handle).toHaveBeenCalledTimes(2)
+    expect(handle).toHaveBeenCalledTimes(3)
     const writeHandler = handle.mock.calls.find(([channel]) => channel === MNEMON_WRITE_CHANNEL)?.[1] as HostRpcHandler
     await expect(writeHandler('remember', { content: 'blocked' })).resolves.toMatchObject({ ok: false, error: { code: 'internal' } })
   })

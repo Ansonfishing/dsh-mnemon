@@ -58,7 +58,7 @@ The UI offers safe merge, not “overwrite everything”:
 - Identical Document ID + hash is skipped; conflicting content receives a new ID.
 - Identical Memory Space ID + database is skipped; conflicting content receives a new ID.
 
-Import is governed by `writeEnabled` and is rejected in read-only deployments. A ZIP contains private memory—encrypt it, restrict access, and rehearse recovery. Provider credentials live in `state/memory-providers.json` with mode `0600`; they are excluded from ZIP and never returned to the browser. Protect the entire `state/` directory in the offline snapshot below if connections must be backed up.
+Import is governed by `writeEnabled` and is rejected in read-only deployments. A ZIP contains private memory—encrypt it, restrict access, and rehearse recovery. Provider credentials live in `state/memory-providers.json` with mode `0600`; they are excluded from ZIP. Saved values are returned only to the loopback settings editor, never through the trusted-host read channel. Protect the entire `state/` directory in the offline snapshot below if connections must be backed up.
 
 ### Recovery rehearsal
 
@@ -117,7 +117,9 @@ Recommended migration: export from the old scope → switch and confirm the new 
 
 ### Web and model
 
-- Read RPC is `trusted-host`; write, settings, and backup RPC are `loopback`.
+- Read RPC and the activation-only Memory Space control are `trusted-host`; broader write, settings, and backup RPC are `loopback`.
+- The trusted-host Provider catalog is redacted. Credential values are available only from the private loopback settings endpoint.
+- Remote WebUI sessions pre-gate local-only controls; activation remains enabled without allowing edit, delete, reconnect, durable writes, updates, settings, or backups to reach transport.
 - The WebUI neither reads SQLite, starts processes, calls remote providers, nor supplies arbitrary update commands; provider network access remains inside the Host.
 - Workers use persona, tool allowlists, structured output, and `maxDepth: 1`.
 - Queries, candidates, Document bodies, and historical memory are treated as untrusted data.
@@ -149,7 +151,7 @@ Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md), not a
 | ZIP export reports WAL busy | Wait for Memory Space writes to settle; do not bypass the uncheckpointed-WAL guard |
 | ZIP import checksum/schema failure | The backup is damaged or incompatible; preserve the current root and never unzip over it manually |
 | No Update button | Already current, remote check failed, or the source is link/manual; follow panel guidance |
-| Remote page reads but cannot write | Write, settings, and backup RPC enforce loopback by design |
+| Remote page can toggle a Memory Space but cannot perform another write | Only activation is exposed to `trusted-host`; metadata, Provider connections, durable writes, settings, and backups remain loopback-only by design |
 
 ## Known limitations
 
