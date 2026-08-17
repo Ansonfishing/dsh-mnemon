@@ -74,6 +74,8 @@ export interface Config {
     turnBar?: boolean
     saveAction?: boolean
   }
+  /** Provider policy used when an Agent must create a new Memory Space while distilling memory. */
+  persistenceStrategy?: MemoryPersistenceStrategy
 }
 
 export interface InteractionConfig {
@@ -101,6 +103,7 @@ export interface ResolvedConfig {
     turnBar: boolean
     saveAction: boolean
   }
+  persistenceStrategy: ResolvedMemoryPersistenceStrategy
 }
 
 export interface ResolvedInteractionConfig {
@@ -145,6 +148,31 @@ export interface MemoryPlacementRules {
   dataBoundary?: 'allow-remote' | 'local-only'
   requiredCapabilities?: MemoryPlacementCapability[]
   preference?: MemoryPlacementPreference
+}
+
+/** Persistent policy for provider selection during Agent-supervised memory distillation. */
+export interface MemoryPersistenceStrategy {
+  mode?: 'manual' | 'automatic'
+  /** Fixed provider in manual mode. */
+  providerId?: MemoryProviderId
+  /** User-authored guidance used only after hard rules have filtered automatic candidates. */
+  prompt?: string
+  rules?: MemoryPlacementRules
+  /** Memory-level connection values for providers that may be selected by the policy. */
+  providerConnections?: Partial<Record<MemoryProviderId, MemoryProviderConnection>>
+}
+
+export interface ResolvedMemoryPersistenceStrategy {
+  mode: 'manual' | 'automatic'
+  providerId: MemoryProviderId
+  prompt: string
+  rules: {
+    allowedProviderIds: MemoryProviderId[]
+    dataBoundary: 'allow-remote' | 'local-only'
+    requiredCapabilities: MemoryPlacementCapability[]
+    preference: MemoryPlacementPreference
+  }
+  providerConnections: Partial<Record<MemoryProviderId, MemoryProviderConnection>>
 }
 
 export interface AutomaticMemoryPlacementRequest {

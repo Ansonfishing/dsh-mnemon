@@ -5,6 +5,11 @@ import type {
   Config as SharedConfig,
   CustomPackConfig as SharedCustomPackConfig,
   InteractionConfig as SharedInteractionConfig,
+  MemoryPersistenceStrategy,
+  MemoryPlacementCapability,
+  MemoryPlacementPreference,
+  MemoryProviderConnection,
+  MemoryProviderId,
   ResolvedConfig as SharedResolvedConfig,
   ResolvedInteractionConfig as SharedResolvedInteractionConfig,
 } from './shared/contracts.ts'
@@ -19,6 +24,23 @@ export type ResolvedInteractionConfig = SharedResolvedInteractionConfig
 export const InteractionConfig: z<InteractionConfig> = z.object({
   turnBar: z.boolean().default(true),
   saveAction: z.boolean().default(true),
+})
+
+const MEMORY_PROVIDER_IDS = ['mnemon-native', 'openviking', 'honcho', 'mem0', 'hindsight', 'holographic', 'retaindb', 'byterover', 'supermemory'] as const
+const MEMORY_PLACEMENT_CAPABILITIES = ['graph', 'entities', 'related', 'exact-write', 'link', 'forget'] as const
+
+const MemoryProviderConnectionSchema: z<MemoryProviderConnection> = z.dict(z.union([z.string(), z.number(), z.boolean()]))
+const MemoryPersistenceStrategySchema: z<MemoryPersistenceStrategy> = z.object({
+  mode: z.union(['manual', 'automatic'] as const),
+  providerId: z.union(MEMORY_PROVIDER_IDS),
+  prompt: z.string(),
+  rules: z.object({
+    allowedProviderIds: z.array(z.union(MEMORY_PROVIDER_IDS)),
+    dataBoundary: z.union(['allow-remote', 'local-only'] as const),
+    requiredCapabilities: z.array(z.union(MEMORY_PLACEMENT_CAPABILITIES)),
+    preference: z.union(['balanced', 'local-first', 'shared-first'] as const),
+  }),
+  providerConnections: z.dict(MemoryProviderConnectionSchema),
 })
 
 export const Config: z<Config> = z.object({
@@ -50,6 +72,7 @@ export const Config: z<Config> = z.object({
     turnBar: z.boolean().default(true),
     saveAction: z.boolean().default(true),
   }).default({ toolviews: false, turnBar: true, saveAction: true }),
+  persistenceStrategy: MemoryPersistenceStrategySchema,
 })
 
 export function resolveInteractionConfig(config: InteractionConfig = {}): ResolvedInteractionConfig {
@@ -97,6 +120,45 @@ function resolveCustomPacks(value: CustomPackConfig[] | undefined, legacyDataDir
   return packs
 }
 
+const MEMORY_PROVIDER_ID_SET = new Set<string>(MEMORY_PROVIDER_IDS)
+const MEMORY_PLACEMENT_CAPABILITY_SET = new Set<string>(MEMORY_PLACEMENT_CAPABILITIES)
+const MEMORY_PLACEMENT_PREFERENCE_SET = new Set<string>(['balanced', 'local-first', 'shared-first'])
+
+function resolvePersistenceStrategy(value: MemoryPersistenceStrategy | undefined): SharedResolvedConfig['persistenceStrategy'] {
+  const mode = value?.mode ?? 'manual'
+  if (mode !== 'manual' && mode !== 'automatic') throw new Error(`dsh-mnemon: unsupported persistence strategy mode: ${String(mode)}`)
+  const providerId = value?.providerId ?? 'mnemon-native'
+  if (!MEMORY_PROVIDER_ID_SET.has(providerId)) throw new Error(`dsh-mnemon: unsupported persistence strategy provider: ${String(providerId)}`)
+  const prompt = value?.prompt?.trim() ?? ''
+  if (prompt.length > 4000) throw new Error('dsh-mnemon: persistence strategy prompt is too long (max 4000 characters)')
+  const allowedProviderIds = [...new Set(value?.rules?.allowedProviderIds ?? ['mnemon-native'])]
+  if (allowedProviderIds.length === 0) throw new Error('dsh-mnemon: persistence strategy requires at least one allowed provider')
+  for (const id of allowedProviderIds) if (!MEMORY_PROVIDER_ID_SET.has(id)) throw new Error(`dsh-mnemon: unsupported persistence strategy provider: ${String(id)}`)
+  const dataBoundary = value?.rules?.dataBoundary ?? 'allow-remote'
+  if (dataBoundary !== 'allow-remote' && dataBoundary !== 'local-only') throw new Error(`dsh-mnemon: unsupported persistence data boundary: ${String(dataBoundary)}`)
+  const requiredCapabilities = [...new Set(value?.rules?.requiredCapabilities ?? [])]
+  for (const capability of requiredCapabilities) if (!MEMORY_PLACEMENT_CAPABILITY_SET.has(capability)) throw new Error(`dsh-mnemon: unsupported persistence capability: ${String(capability)}`)
+  const preference = value?.rules?.preference ?? 'balanced'
+  if (!MEMORY_PLACEMENT_PREFERENCE_SET.has(preference)) throw new Error(`dsh-mnemon: unsupported persistence preference: ${String(preference)}`)
+  const providerConnections = Object.fromEntries(Object.entries(value?.providerConnections ?? {}).flatMap(([id, connection]) => {
+    if (!MEMORY_PROVIDER_ID_SET.has(id) || connection === undefined) return []
+    const normalized = Object.fromEntries(Object.entries(connection).filter((entry): entry is [string, string | number | boolean] => ['string', 'number', 'boolean'].includes(typeof entry[1])))
+    return [[id, normalized]]
+  })) as Partial<Record<MemoryProviderId, MemoryProviderConnection>>
+  return {
+    mode,
+    providerId,
+    prompt,
+    rules: {
+      allowedProviderIds: allowedProviderIds as MemoryProviderId[],
+      dataBoundary,
+      requiredCapabilities: requiredCapabilities as MemoryPlacementCapability[],
+      preference: preference as MemoryPlacementPreference,
+    },
+    providerConnections,
+  }
+}
+
 export function resolveConfig(config: Config = {}): ResolvedConfig {
   const cliPath = optionalText(config.cliPath)
   const legacyDataDir = optionalText(config.dataDir)
@@ -134,5 +196,6 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
       turnBar: config.conversationInteraction?.turnBar ?? true,
       saveAction: config.conversationInteraction?.saveAction ?? true,
     },
+    persistenceStrategy: resolvePersistenceStrategy(config.persistenceStrategy),
   }
 }

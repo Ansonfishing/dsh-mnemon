@@ -20,6 +20,45 @@ describe('Mnemon config and resolution', () => {
       tabEnabled: true,
       writeEnabled: true,
       conversationInteraction: { turnBar: true, saveAction: true },
+      persistenceStrategy: {
+        mode: 'manual',
+        providerId: 'mnemon-native',
+        prompt: '',
+        rules: {
+          allowedProviderIds: ['mnemon-native'],
+          dataBoundary: 'allow-remote',
+          requiredCapabilities: [],
+          preference: 'balanced',
+        },
+        providerConnections: {},
+      },
+    })
+  })
+
+  it('resolves a bounded automatic persistence strategy without changing its provider connections', () => {
+    expect(resolveConfig({
+      persistenceStrategy: {
+        mode: 'automatic',
+        prompt: 'Prefer shared project memory.',
+        rules: {
+          allowedProviderIds: ['mnemon-native', 'openviking', 'openviking'],
+          dataBoundary: 'allow-remote',
+          requiredCapabilities: ['graph'],
+          preference: 'shared-first',
+        },
+        providerConnections: { openviking: { targetUri: 'viking://resources/team' } },
+      },
+    }).persistenceStrategy).toEqual({
+      mode: 'automatic',
+      providerId: 'mnemon-native',
+      prompt: 'Prefer shared project memory.',
+      rules: {
+        allowedProviderIds: ['mnemon-native', 'openviking'],
+        dataBoundary: 'allow-remote',
+        requiredCapabilities: ['graph'],
+        preference: 'shared-first',
+      },
+      providerConnections: { openviking: { targetUri: 'viking://resources/team' } },
     })
   })
 
