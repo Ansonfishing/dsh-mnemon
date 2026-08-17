@@ -22,6 +22,13 @@ export interface ProviderSearchResult {
   hint?: string
 }
 
+export interface ProviderScoreSemantics {
+  /** Provider promises a finite relevance score in 0..1 where larger is better. */
+  kind: 'normalized-relevance'
+}
+
+export const NORMALIZED_RELEVANCE_SCORE: ProviderScoreSemantics = Object.freeze({ kind: 'normalized-relevance' })
+
 /** One provider-owned namespace projected into DSH as a Memory Space. */
 export interface ProviderMemorySpace {
   /** Stable identifier owned by the provider, never a DSH-generated title. */
@@ -37,6 +44,7 @@ export interface ProviderMemorySpace {
  */
 export interface MemoryProviderAdapter {
   readonly id: MemoryBody['provider']['id']
+  readonly scoreSemantics?: ProviderScoreSemantics
   /** Enumerate the complete set of namespaces visible to this service connection. */
   discover?(connection: MemoryProviderConnection, signal?: AbortSignal): Promise<ProviderMemorySpace[]>
   /** Drop a short-lived health result before an explicit user reconnect. */

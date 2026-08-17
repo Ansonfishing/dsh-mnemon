@@ -20,7 +20,16 @@ import { ByteRoverProvider } from './providers/byterover.ts'
 import { HonchoProvider } from './providers/honcho.ts'
 import { HindsightProvider } from './providers/hindsight.ts'
 import { MEMORY_PROVIDER_CATALOG, memoryProviderDescriptor } from './providers/catalog.ts'
-import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderSearchResult } from './providers/provider.ts'
+import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus, type ProviderSearchResult } from './providers/provider.ts'
+import {
+  applyRecallQualityPolicy,
+  prepareRecallQualityPolicy,
+  recallQualityPolicies,
+  type RecallQualityCandidate,
+  type RecallQualityPolicy,
+  type RecallQualityPolicyContext,
+  type RecallQualityPolicyRegistry,
+} from './recall-quality/index.ts'
 import {
   CATEGORIES,
   EDGE_TYPES,
@@ -45,6 +54,7 @@ import {
   type MemoryReadSource,
   type MemoryReadStatus,
   type RememberRequest,
+  type RecallQualityStats,
   type SearchRequest,
   type Source,
   type StatusView,
@@ -66,6 +76,7 @@ export type {
   MemoryListRequest,
   MemoryListView,
   MemoryReadSource,
+  RecallQualityStats,
   RememberRequest,
   SearchRequest,
   Source,
@@ -249,12 +260,20 @@ function commaList(values: string[] | undefined, label: string, limit: number): 
 export class MnemonService {
   readonly memoryBodies: MemoryBodyRegistry
   private readonly providers: Map<MemoryBody['provider']['id'], MemoryProviderAdapter>
+  private readonly recallQualityPolicy: RecallQualityPolicy
   private bodiesInFlight: Promise<MemoryBodyCatalog> | undefined
 
-  constructor(readonly runner: MnemonRunner, readonly config: ResolvedConfig, memoryBodies?: MemoryBodyRegistry) {
+  constructor(
+    readonly runner: MnemonRunner,
+    readonly config: ResolvedConfig,
+    memoryBodies?: MemoryBodyRegistry,
+    recallQualityPolicyRegistry: RecallQualityPolicyRegistry = recallQualityPolicies,
+  ) {
     this.memoryBodies = memoryBodies ?? new MemoryBodyRegistry(runner)
+    this.recallQualityPolicy = recallQualityPolicyRegistry.resolve(config.recallQuality.policy)
     const nativeProvider: MemoryProviderAdapter = {
       id: 'mnemon-native',
+      scoreSemantics: NORMALIZED_RELEVANCE_SCORE,
       status: (body, signal) => this.nativeBodyStatus(body, signal),
       search: (body, request, signal) => this.nativeSearch(body, request, signal),
       graph: (body, signal) => this.nativeGraph(body, signal),
@@ -379,6 +398,7 @@ export class MnemonService {
       writeEnabled: this.config.writeEnabled,
       timeoutMs: this.config.timeoutMs,
       defaultRecallLimit: this.config.defaultRecallLimit,
+      recallQuality: this.config.recallQuality,
       memoryBodyDirectory: catalog.directory,
       memoryBodies: catalog.items,
       providerServices,
@@ -432,6 +452,7 @@ export class MnemonService {
       writeEnabled: this.config.writeEnabled,
       timeoutMs: this.config.timeoutMs,
       defaultRecallLimit: this.config.defaultRecallLimit,
+      recallQuality: this.config.recallQuality,
       memoryBodyDirectory: catalog.directory,
       memoryBodies: catalog.items,
       providerServices,
@@ -490,6 +511,8 @@ export class MnemonService {
   async search(request: SearchRequest, signal?: AbortSignal): Promise<{ query: string; mode: string; results: Insight[]; hint?: string; sources: MemoryReadSource[] }> {
     const query = required(request.query, 'query', 2000)
     const limit = boundedInteger(request.limit, this.config.defaultRecallLimit, 1, 50)
+    const qualityContext: RecallQualityPolicyContext = { requestedLimit: limit, config: this.config.recallQuality }
+    const preparedPolicy = prepareRecallQualityPolicy(this.recallQualityPolicy, qualityContext)
     const mode = allowed(request.mode, ['smart', 'keyword', 'basic'] as const, 'mode') ?? 'smart'
     const category = allowed(request.category, CATEGORIES, 'category')
     const source = allowed(request.source, SOURCES, 'source')
@@ -498,7 +521,7 @@ export class MnemonService {
     const normalizedRequest: SearchRequest = {
       query,
       mode,
-      limit,
+      limit: preparedPolicy.candidateLimit,
       ...(category === undefined ? {} : { category }),
       ...(source === undefined ? {} : { source }),
       ...(intent === undefined ? {} : { intent }),
@@ -527,22 +550,55 @@ export class MnemonService {
         }
       }
     }))
-    const results: Array<Insight & { providerRank: number; bodyOrder: number }> = []
+    const candidates: RecallQualityCandidate[] = []
     const hints: string[] = []
     for (const [bodyOrder, { body, result }] of batches.entries()) {
-      results.push(...result.results.map((entry, index) => ({ ...this.annotate(entry, body), providerRank: index + 1, bodyOrder })))
+      const scoreSemantics = this.providerFor(body).scoreSemantics
+      candidates.push(...result.results.map((entry, index) => ({
+        insight: this.annotate(entry, body),
+        memoryBodyId: body.id,
+        providerId: body.provider.id,
+        providerRank: index + 1,
+        bodyOrder,
+        ...(scoreSemantics === undefined ? {} : { scoreSemantics }),
+      })))
       if (result.hint !== undefined) hints.push(`${body.name}: ${result.hint}`)
     }
     const heterogeneous = new Set(bodies.map(body => body.provider.id)).size > 1
-    if (heterogeneous) for (const result of results) result.federatedScore = 1 / (60 + result.providerRank)
-    results.sort((left, right) => heterogeneous
-      ? (right.federatedScore ?? 0) - (left.federatedScore ?? 0) || left.bodyOrder - right.bodyOrder
-      : (right.score ?? 0) - (left.score ?? 0))
+    if (heterogeneous) for (const candidate of candidates) candidate.insight.federatedScore = 1 / (60 + candidate.providerRank)
+    candidates.sort((left, right) => heterogeneous
+      ? (right.insight.federatedScore ?? 0) - (left.insight.federatedScore ?? 0) || left.bodyOrder - right.bodyOrder
+      : (right.insight.score ?? 0) - (left.insight.score ?? 0))
+    const quality = applyRecallQualityPolicy(preparedPolicy, candidates, qualityContext)
+    const qualityStats = (memoryBodyId: string): RecallQualityStats => {
+      const evaluated = quality.evaluated.filter(candidate => candidate.candidate.memoryBodyId === memoryBodyId)
+      const selected = quality.selected.filter(candidate => candidate.candidate.memoryBodyId === memoryBodyId)
+      return {
+        policyId: quality.policyId,
+        ...(quality.fallbackFrom === undefined ? {} : { fallbackFrom: quality.fallbackFrom }),
+        fetched: evaluated.length,
+        retained: evaluated.filter(candidate => candidate.decision.action === 'keep').length,
+        selected: selected.length,
+        droppedLowScore: evaluated.filter(candidate => candidate.decision.action === 'drop' && candidate.decision.reason === 'low-score').length,
+        droppedNonPositiveScore: evaluated.filter(candidate => candidate.decision.action === 'drop' && candidate.decision.reason === 'non-positive-score').length,
+        droppedInvalidScore: evaluated.filter(candidate => candidate.decision.action === 'drop' && candidate.decision.reason === 'invalid-score').length,
+        unscored: evaluated.filter(candidate => candidate.decision.reason === 'unscored').length,
+        unscaled: evaluated.filter(candidate => candidate.decision.reason === 'unscaled-score').length,
+      }
+    }
     return {
       query,
       mode,
-      results: results.slice(0, limit).map(({ providerRank: _providerRank, bodyOrder: _bodyOrder, ...entry }) => entry),
-      sources: batches.map(batch => batch.source),
+      results: quality.selected.map(({ candidate, decision }) => ({
+        ...candidate.insight,
+        relevanceTier: decision.tier,
+        ...(decision.normalizedScore === undefined ? {} : { normalizedScore: decision.normalizedScore }),
+      })),
+      sources: batches.map(batch => {
+        const stats = qualityStats(batch.body.id)
+        if (batch.source.status === 'unavailable' || batch.source.status === 'unsupported') return { ...batch.source, quality: stats }
+        return { ...batch.source, status: stats.retained === 0 ? 'empty' : 'ready', itemCount: stats.retained, quality: stats }
+      }),
       ...(hints.length === 0 ? {} : { hint: hints.join('\n') }),
     }
   }

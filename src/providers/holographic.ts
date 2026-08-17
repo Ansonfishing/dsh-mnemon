@@ -13,7 +13,7 @@ import type {
   RememberRequest,
   SearchRequest,
 } from '../shared/contracts.ts'
-import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderMemorySpace, ProviderSearchResult } from './provider.ts'
+import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus, type ProviderMemorySpace, type ProviderSearchResult } from './provider.ts'
 
 interface HolographicFact {
   id: string
@@ -80,6 +80,7 @@ function insight(fact: HolographicFact, score?: number): Insight {
 
 export class HolographicProvider implements MemoryProviderAdapter {
   readonly id = 'holographic' as const
+  readonly scoreSemantics = NORMALIZED_RELEVANCE_SCORE
 
   constructor(private readonly memoryBodies: MemoryBodyRegistry) {}
 

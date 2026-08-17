@@ -17,6 +17,21 @@ import { MnemonPackManager } from './pack.ts'
 import { VersionUpdateManager } from './version-updates.ts'
 import type { HostWorkspaceRegistry } from './contracts.ts'
 
+export {
+  BALANCED_RECALL_QUALITY_POLICY,
+  EXHAUSTIVE_RECALL_QUALITY_POLICY,
+  RecallQualityPolicyRegistry,
+  STRICT_RECALL_QUALITY_POLICY,
+  recallQualityPolicies,
+  registerRecallQualityPolicy,
+} from './recall-quality/index.ts'
+export type {
+  RecallQualityCandidate,
+  RecallQualityDecision,
+  RecallQualityPolicy,
+  RecallQualityPolicyContext,
+} from './recall-quality/index.ts'
+
 export const name = 'dsh-mnemon'
 // workspaceRegistry belongs to the Web profile. Core tools, lifecycle hooks,
 // and per-Agent cwd routing must also mount in profiles such as Headless.

@@ -10,7 +10,7 @@ import {
   jsonString,
   type HttpProviderOptions,
 } from './http.ts'
-import type { MemoryProviderAdapter, ProviderBodyStatus, ProviderMemorySpace, ProviderSearchResult } from './provider.ts'
+import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus, type ProviderMemorySpace, type ProviderSearchResult } from './provider.ts'
 
 function category(item: Record<string, unknown>): string {
   const categories = jsonArray(item.categories).filter((value): value is string => typeof value === 'string')
@@ -38,6 +38,7 @@ function insight(value: unknown): Insight | undefined {
 
 export class Mem0Provider extends HttpMemoryProvider implements MemoryProviderAdapter {
   readonly id = 'mem0' as const
+  readonly scoreSemantics = NORMALIZED_RELEVANCE_SCORE
 
   constructor(memoryBodies: MemoryBodyRegistry, options: HttpProviderOptions = {}) {
     super(memoryBodies, options)

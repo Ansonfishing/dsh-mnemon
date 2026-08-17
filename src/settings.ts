@@ -44,6 +44,7 @@ function object(value: unknown): Record<string, unknown> {
 
 const MUTABLE_FIELDS = [
   'storageScope', 'cliPath', 'dataDir', 'customPackId', 'customPacks', 'store', 'timeoutMs', 'defaultRecallLimit',
+  'recallQuality',
   'routingGuidance', 'lifecycleEnabled', 'recallMode', 'writebackMode', 'idleReviewMs',
   'displayMode', 'tabEnabled', 'writeEnabled', 'taskAgentModel',
 ]
