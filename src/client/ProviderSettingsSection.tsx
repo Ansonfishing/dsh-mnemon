@@ -10,6 +10,7 @@ import type {
 import { MnemonClient } from './api.ts'
 import { GlobalLocationSetting } from './GlobalLocationSetting.tsx'
 import css from './MnemonSettingsCard.module.css'
+import { useRequestVersion } from './use-request-version.ts'
 import type { MnemonKey, MnemonTranslate } from './locales.ts'
 import { ProviderIcon } from './ProviderIcon.tsx'
 
@@ -383,21 +384,25 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JS
   const [catalog, setCatalog] = useState<MemoryProviderServiceCatalog>(() => initialCatalog ?? EMPTY_PROVIDER_CATALOG)
   const [loading, setLoading] = useState(client !== null && initialCatalog === undefined)
   const [failed, setFailed] = useState<string | null>(null)
+  const loadRequests = useRequestVersion()
 
   const load = useCallback(async (quiet = false) => {
     if (client === null) return
+    const request = loadRequests.begin()
     if (!quiet) setLoading(true)
     setFailed(null)
     try {
       const next = await client.providerServices()
+      if (!loadRequests.isCurrent(request)) return
       cacheCatalog(props.connection, routeKey, next)
       setCatalog(next)
     } catch (reason) {
+      if (!loadRequests.isCurrent(request)) return
       setFailed(message(reason))
     } finally {
-      if (!quiet) setLoading(false)
+      if (!quiet && loadRequests.isCurrent(request)) setLoading(false)
     }
-  }, [client, props.connection, routeKey])
+  }, [client, loadRequests, props.connection, routeKey])
 
   useEffect(() => {
     const cached = cachedCatalog(props.connection, routeKey)

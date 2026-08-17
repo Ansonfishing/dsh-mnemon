@@ -45,6 +45,7 @@ import { MnemonClient } from './api.ts'
 import { translateZh, type MnemonKey, type MnemonTranslate } from './locales.ts'
 import { MnemonLogo } from './MnemonLogo.tsx'
 import { ProviderIcon } from './ProviderIcon.tsx'
+import { useRequestVersion } from './use-request-version.ts'
 import {
   appearanceClass,
   MnemonViewAppearanceProvider,
@@ -1950,8 +1951,10 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
   const [description, setDescription] = useState('')
   const [content, setContent] = useState('')
   const [sources, setSources] = useState('')
+  const displayRequests = useRequestVersion()
 
   const display = useCallback(async (nextQuery: string, nextStatus: 'active' | 'archived') => {
+    const request = displayRequests.begin()
     setLoading(true); setError(null); setVisibleLimit(pageSize)
     try {
       const current = await props.client.documents()
@@ -1959,15 +1962,17 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
         ? current.documents
         : (await props.client.searchDocuments(nextQuery, nextStatus === 'archived')).results
       const filtered = records.filter(record => record.status === nextStatus)
+      if (!displayRequests.isCurrent(request)) return
       setSnapshot(current)
       setItems(filtered)
       setSelectedId(previous => previous !== null && filtered.some(record => record.id === previous) ? previous : filtered[0]?.id ?? null)
     } catch (reason) {
+      if (!displayRequests.isCurrent(request)) return
       setError(message(reason)); setSnapshot(null); setItems([]); setSelectedId(null)
     } finally {
-      setLoading(false)
+      if (displayRequests.isCurrent(request)) setLoading(false)
     }
-  }, [pageSize, props.client])
+  }, [displayRequests, pageSize, props.client])
 
   useEffect(() => { void display(query, status) }, [display, props.revision, status])
   useEffect(() => {

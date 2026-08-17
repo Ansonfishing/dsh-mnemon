@@ -5,10 +5,57 @@ import { MnemonSettingsCard } from '../src/client/MnemonSettingsCard.tsx'
 import { translateEn } from '../src/client/locales.ts'
 import type { ClientConnectionHandle, ClientSettingsScope } from '../src/contracts.ts'
 import type { Config, InteractionConfig } from '../src/config.ts'
+import { MEMORY_PROVIDER_CATALOG } from '../src/providers/catalog.ts'
 
 afterEach(cleanup)
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>(next => { resolve = next })
+  return { promise, resolve }
+}
+
 describe('MnemonSettingsCard', () => {
+  it('ignores a Provider catalog response from the previously selected workspace', async () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'workspace' as const },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      getSnapshot: () => snapshot,
+      subscribe: () => () => {},
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config>
+    const provider = MEMORY_PROVIDER_CATALOG.find(candidate => candidate.id === 'openviking')!
+    const catalog = (endpoint: string) => ({
+      ok: true as const,
+      value: {
+        providers: [provider],
+        items: [{ providerId: 'openviking' as const, enabled: true, configured: true, settings: { endpoint }, configuredSecrets: [] }],
+        generatedAt: '2026-08-17T00:00:00.000Z',
+      },
+    })
+    const firstWorkspace = deferred<ReturnType<typeof catalog>>()
+    const call = vi.fn(async (channel: string, endpoint: string, payload?: { workspaceId?: string }) => {
+      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') {
+        return payload?.workspaceId === 'workspace-1' ? firstWorkspace.promise : catalog('https://workspace-2.example')
+      }
+      if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/workspace/.mnemon', scope: 'workspace' as const } }
+      throw new Error(`unexpected ${channel} ${endpoint}`)
+    })
+    const connection = { rpc: { call } } as ClientConnectionHandle
+    const view = render(<MnemonSettingsCard scope={scope} connection={connection} workspaceId="workspace-1" workspaceLabel="One" />)
+
+    view.rerender(<MnemonSettingsCard scope={scope} connection={connection} workspaceId="workspace-2" workspaceLabel="Two" />)
+    await screen.findByText('OpenViking')
+    fireEvent.click(screen.getByText('OpenViking'))
+    await waitFor(() => expect((screen.getByLabelText('服务地址') as HTMLInputElement).value).toBe('https://workspace-2.example'))
+
+    await act(async () => { firstWorkspace.resolve(catalog('https://workspace-1.example')); await firstWorkspace.promise })
+    expect((screen.getByLabelText('服务地址') as HTMLInputElement).value).toBe('https://workspace-2.example')
+  })
+
   it('uses the Host settings grant instead of transport locality on a trusted remote connection', async () => {
     const snapshot = {
       status: 'ready' as const,
