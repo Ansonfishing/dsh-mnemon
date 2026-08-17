@@ -130,7 +130,7 @@ Web 的“直接检索”返回原始证据；“Agent 查询”先取得相同�
 - CLI 通过参数数组启动，`shell=false`；输出、超时与取消有界。
 - Runtime 与 Documents 使用进程内队列、跨实例锁、临时文件与 rename。
 - Runtime revision 阻止过期压缩覆盖；Document revision 阻止移动已更新原文。
-- 独立任务 Agent 与内部受限 worker 使用 persona、工具白名单、结构化输出和深度限制。
+- 独立任务 Agent 与内部受限 worker 使用 persona、工具白名单、经过 schema 校验的一次性结果工具和深度限制。
 - WebUI 不直接读取 SQLite，不从浏览器传入任意更新命令。
 - 插件不存储模型凭据，但当前也没有确定性的秘密扫描器。
 

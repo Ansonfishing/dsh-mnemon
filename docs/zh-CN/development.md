@@ -136,14 +136,14 @@ README 演示资源位于 `docs/assets/media/dsh-mnemon-memory-system-demo.*`。
 
 ## 修改 subagent schema
 
-DSH structured output 只支持一个紧凑 JSON Schema 子集：
+Mnemon 的一次性结果工具采用 DSH 工具参数支持的紧凑 JSON Schema 子集：
 
 ```text
 type, oneOf, properties, required, additionalProperties,
 items, enum, const, and annotation keywords
 ```
 
-不要加入 `maxItems` 等不受支持关键字。`assertDshOutputSchema()` 会在启动 worker 前递归拒绝未知 schema 键；结果数量等限制由 persona 和 Host parser 双重实现。
+不要加入 `maxItems` 等不受支持关键字。`assertDshOutputSchema()` 会在注册结果工具前递归拒绝未知 schema 键；结果数量等限制由 persona 和 Host parser 双重实现。
 
 ## 修改存储格式
 

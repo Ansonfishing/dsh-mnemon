@@ -50,7 +50,7 @@ MnemonService searches selected Store(s)
 normalize and attach memoryBodyId / memoryBodyName
           |
           v
-structured output, Host caps results at 12
+一次性结果工具，Host 校验 schema 并将结果限制为 12 条
           |
           v
 Root Agent receives evidence, not the raw routing trace

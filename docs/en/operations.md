@@ -121,7 +121,7 @@ Recommended migration: export from the old scope → switch and confirm the new 
 - The trusted-host read-side Provider catalog is redacted. Saved credential values are returned only through the management channel after its configured authority check succeeds.
 - The WebUI follows the Host's settings capability result instead of inferring authority from transport locality. Activation and read-only card health refresh remain available through trusted-host channels; an unavailable settings channel renders an explicit diagnostic rather than an empty page.
 - The WebUI neither reads SQLite, starts processes, calls remote providers, nor supplies arbitrary update commands; provider network access remains inside the Host.
-- Workers use persona, tool allowlists, structured output, and `maxDepth: 1`.
+- Workers use persona, tool allowlists, schema-validated one-run result tools, and `maxDepth: 1`.
 - Queries, candidates, Document bodies, and historical memory are treated as untrusted data.
 
 These boundaries are not a secret scanner. There is no deterministic credential detection; never submit keys, tokens, private keys, or raw sensitive logs.

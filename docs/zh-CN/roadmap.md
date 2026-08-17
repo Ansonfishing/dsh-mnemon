@@ -21,7 +21,7 @@ Roadmap 记录当前实现之外的工作，不是已交付能力承诺。优先
 - [ ] **修复与重建工具**：检测损坏 JSON、缺失投影、孤儿 Document、缺失 DB 和 registry/磁盘不一致。
 - [ ] **schema migration**：为 Runtime、Documents index 和 Memory Space registry 增加显式升级与回滚策略。
 - [ ] **兼容矩阵**：记录并自动测试支持的 DSH、Mnemon CLI、Node 和数据格式组合。
-- [ ] **Cordis / DSH 能力契约测试**：围绕服务注入、热重载与 dispose、延迟注册工具建立宿主集成测试；特别验证结构化输出工具不会因 `toolFilter` 隔离而从子 Agent 作用域消失，并以 [issue #14](https://github.com/omdsh-dev/dsh-mnemon/issues/14) / [PR #17](https://github.com/omdsh-dev/dsh-mnemon/pull/17) 作为回归场景。插件仍保留最小工具权限，不在缺乏宿主契约时通过移除过滤来规避。
+- [ ] **Cordis / DSH 能力契约测试**：围绕服务注入、热重载与 dispose、延迟注册工具建立宿主集成测试；特别验证 Mnemon 经过 schema 校验的一次性结果工具在子 Agent 中保持可达，同时 `toolFilter` 仍隐藏所有未列入白名单的能力，并以 [issue #14](https://github.com/omdsh-dev/dsh-mnemon/issues/14) / [PR #17](https://github.com/omdsh-dev/dsh-mnemon/pull/17) 作为回归场景。
 - [ ] **显式宿主能力声明**：由 Cordis / DSH 提供可写性、受信任控制面、目录选择和结构化输出等权威能力，逐步替代插件根据 loopback、服务名或传输位置推断权限的做法。
 - [ ] **明确 Documents workspace ownership**：在共享 storage scope 中记录来源工作区或提供可配置隔离策略。
 

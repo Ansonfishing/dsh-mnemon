@@ -12,7 +12,7 @@ You need:
 - a locally executable `mnemon` CLI;
 - a DSH model route capable of creating independent task Agents.
 
-Regular semantic work prefers a provider named `spawn` with `outputSchema`, `toolFilter`, `persona`, and `depthLimit`. Optional score-based background review additionally requires a provider named `fork` with `inheritsParentContext=true`. Missing `fork` does not block deterministic pages or regular manual actions.
+Regular semantic work prefers a provider named `spawn` with `toolFilter`, `persona`, and `depthLimit`. Mnemon supplies a schema-validated, one-run result tool instead of depending on the Provider's `outputSchema` path. Optional score-based background review additionally requires a provider named `fork` with `inheritsParentContext=true`. Missing `fork` does not block deterministic pages or regular manual actions.
 
 This guide and its screenshots use dsh-mnemon v0.2.0, DSH 0.1.0-rc.6, and Mnemon 0.2.3 as the recommended baseline. Back up and repeat this verification against an isolated root before upgrading.
 

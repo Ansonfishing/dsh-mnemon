@@ -50,7 +50,7 @@ MnemonService searches selected Store(s)
 normalize and attach memoryBodyId / memoryBodyName
           |
           v
-structured output, Host caps results at 12
+one-run result tool, Host validates schema and caps results at 12
           |
           v
 Root Agent receives evidence, not the raw routing trace
