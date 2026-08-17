@@ -10,11 +10,11 @@ You need:
 
 - a DSH Web or Headless profile that starts successfully;
 - a locally executable `mnemon` CLI;
-- a DSH subagent provider for isolated memory tasks.
+- a DSH model route capable of creating independent task Agents.
 
 Regular semantic work prefers a provider named `spawn` with `outputSchema`, `toolFilter`, `persona`, and `depthLimit`. Optional score-based background review additionally requires a provider named `fork` with `inheritsParentContext=true`. Missing `fork` does not block deterministic pages or regular manual actions.
 
-The project does not declare a fixed minimum DSH / Mnemon matrix. This guide and its screenshots target dsh-mnemon v0.1.6. Back up and repeat this verification against an isolated root before upgrading.
+This guide and its screenshots use dsh-mnemon v0.2.0, DSH 0.1.0-rc.6, and Mnemon 0.2.3 as the recommended baseline. Back up and repeat this verification against an isolated root before upgrading.
 
 ## 2. Install Mnemon
 
@@ -173,7 +173,7 @@ If Mnemon is unavailable, run `command -v mnemon` and `mnemon --version` on macO
 
 In an empty storage root, the first Memory Space uses Mnemon's native `default` Store ID while keeping the name and description you supplied. Its activation toggle affects DSH only.
 
-Smart selection first has the Host enforce the provider allowlist, data boundary, and required capabilities. One remaining candidate is selected deterministically; only an ambiguous eligible set reaches an isolated subagent, which considers the soft preference and strategy prompt. Provider credentials never enter model context, and the resulting card retains the source, reason, and confidence.
+Smart selection first has the Host enforce the provider allowlist, data boundary, and required capabilities. One remaining candidate is selected deterministically; only an ambiguous eligible set reaches an independent task Agent, which considers the soft preference and strategy prompt. Provider credentials never enter model context, and the resulting card retains the source, reason, and confidence.
 
 See [Long-term memory providers](./memory-providers.md) before connecting an external service or CLI.
 

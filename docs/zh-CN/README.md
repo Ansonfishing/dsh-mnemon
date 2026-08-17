@@ -6,14 +6,16 @@
 
 ## 新用户路径
 
-1. [快速开始](./getting-started.md)：安装 Mnemon 与插件，选择存储范围，完成第一次验证。
-2. [Sidebar 与对话交互指南](./ui-guide.md)：认识状态、运行时、记忆体、档案和对话内入口。
-3. [项目介绍](./project-overview.md)：理解三层模型、跨 Agent 共享边界、读写边界与完整流转。
+1. [能力地图](./capabilities.md)：用 30 秒理解三层记忆、九种 Provider，以及哪些点击会启动独立任务 Agent。
+2. [快速开始](./getting-started.md)：安装 Mnemon 与插件，选择存储范围，完成第一次验证。
+3. [Sidebar 与对话交互指南](./ui-guide.md)：认识状态、运行时、档案、记忆体和对话内入口。
+4. [项目介绍](./project-overview.md)：理解三层模型、跨 Agent 共享边界、读写边界与完整流转。
 
 ## 按任务查找
 
 | 我想要…… | 文档 |
 |---|---|
+| 一次看懂 v0.2.0 的完整能力范围 | [能力地图](./capabilities.md) · [v0.2.0 升级说明](./releases/v0.2.0.md) |
 | 决定一条信息应放在哪一层 | [存储与三层记忆模型](./storage-model.md) |
 | 选择、配置或比较记忆体 Provider | [长期记忆 Provider](./memory-providers.md) |
 | 让 DSH 与其他 Mnemon-enabled Agent 共享长期记忆 | [项目介绍：跨 Agent 共享边界](./project-overview.md#跨-agent-共享边界) · [配置参考：共享范围](./configuration.md#选择跨-agent-共享范围) |
@@ -43,7 +45,7 @@
 
 ## 文档边界
 
-- 用户文档以 v0.1.6 的 Sidebar 默认体验为主，同时说明 Buildin 兼容形态。
+- 用户文档以 v0.2.0 的 Sidebar 默认体验为主，同时说明 Buildin 兼容形态。
 - 架构图表达稳定执行边界，不是实时监控面板；实时数量与版本以“状态”页为准。
 - RPC 是 Host 与插件客户端之间的内部协议，不承诺稳定外部 API。
 - 当前没有正式固定的 DSH / Mnemon 版本矩阵；升级前应备份并在隔离目录验证。

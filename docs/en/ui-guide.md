@@ -2,7 +2,7 @@
 
 [简体中文](../zh-CN/ui-guide.md) | **English** | [Documentation hub](./README.md)
 
-This guide follows the default `sidebar` presentation and a real user path through Memory System. Screenshots come from the v0.1.6 interface and use the Chinese locale; names, counts, and content vary with your data.
+This guide follows the default `sidebar` presentation and a real user path through Memory System. Screenshots come from the v0.2.0 interface at a standard widescreen viewport and use the Chinese locale; names, counts, and content vary with your data.
 
 ## Start with the two display modes
 
@@ -71,7 +71,7 @@ A Runtime item should be compact, independent, and repeatedly useful. Put identi
 
 [![Memory Space catalog, activation, and multi-space relationship graph](../assets/screenshots/overview-memory-graph.png)](../assets/screenshots/overview-memory-graph.png)
 
-Each card leads with its name and routing description. Provider identity sits beside the ID and health state, while the familiar read-activation toggle stays at the top right. Creation adds no new top-level concept: it remains **Create Memory Space**, defaulting to **Choose manually** with **Mnemon Native** (official and prioritized) or one of the eight third-party engines inside the dialog. When the current conversation is available, users may opt into **Smart selection**: data boundary and required capabilities are hard rules, while local/shared preference and a strategy prompt guide an isolated subagent. A model runs only when multiple eligible candidates remain, and credentials never enter its context.
+Each card leads with its name and routing description. Provider identity sits beside the ID and health state, while the familiar read-activation toggle stays at the top right. Creation adds no new top-level concept: it remains **Create Memory Space**, defaulting to **Choose manually** with **Mnemon** (official and prioritized) or one of the eight third-party engines inside the dialog. The distillation strategy can use **Smart selection**: data boundary and required capabilities are hard rules, while local/shared preference and a strategy prompt guide an independent task Agent. A model runs only when multiple eligible candidates remain, and credentials never enter its context.
 
 Native cards retain statistics, Edit, and Delete. Third-party cards show provider identity, local/remote location, Edit, and **Disconnect**. Smart-created cards additionally show whether rules or the Agent decided, plus confidence and a concise reason. Disconnect never deletes provider data.
 

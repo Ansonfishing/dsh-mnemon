@@ -8,7 +8,7 @@ This page is an integration reference. For daily use, start with the [Sidebar an
 
 | Entry | Default | Description |
 |---|---:|---|
-| Sidebar | Yes | Dedicated Memory System workbench with Status, Runtime, Memory Spaces, and Documents |
+| Sidebar | Yes | Dedicated Memory System workbench with Status, Runtime, Documents, and Memory Spaces |
 | Buildin | No | Original `conversation.view` tab with established visuals |
 | Turn memory | Yes | Memory-tool summary for a completed turn, with exact page links |
 | Save to memory | Yes | Action beside finalized assistant replies; confirmation invokes supervised writing |
@@ -22,7 +22,7 @@ Sidebar and Buildin are live, mutually exclusive mounts that share functionality
 | Capability | Web | Headless |
 |---|---:|---:|
 | Runtime context and lifecycle guidance | Yes | Yes |
-| Model tools and supervised subagents | Yes | Yes |
+| Model tools and independent task Agents | Yes | Yes |
 | Agent-cwd routing for `workspace` scope | Yes | Yes |
 | Sidebar / Buildin / conversation actions | Yes | No |
 | Host-to-client RPC | Yes | No |

@@ -10,11 +10,11 @@
 
 - 一个可以启动的 DSH Web 或 Headless profile；
 - 本地可执行的 `mnemon` CLI；
-- 一个可用于隔离记忆任务的 DSH subagent Provider。
+- 一个能够创建独立任务 Agent 的 DSH 模型路由。
 
 普通语义任务优先使用名为 `spawn` 的 Provider，并要求 `outputSchema`、`toolFilter`、`persona` 与 `depthLimit`。可选的评分后台审查还要求名为 `fork`、且 `inheritsParentContext=true` 的 Provider。缺少 `fork` 不影响确定性页面读取和普通手动操作。
 
-项目当前不声明固定的 DSH / Mnemon 最低版本矩阵。本文与截图以 dsh-mnemon v0.1.6 为基线；升级前先备份，并在隔离目录重复本页验证。
+本文与截图以 dsh-mnemon v0.2.0、DSH 0.1.0-rc.6 和 Mnemon 0.2.3 为推荐基线；升级前先备份，并在隔离目录重复本页验证。
 
 ## 2. 安装 Mnemon
 
@@ -173,7 +173,7 @@ dsh --profile headless "回答前先检查持久化的项目上下文。"
 
 空存储根的第一个记忆体会使用 Mnemon 原生 `default` Store ID，但仍显示你填写的名称与说明；激活开关只影响 DSH。
 
-智能选择先由 Host 强制执行候选白名单、数据边界和能力要求。只剩一个候选时直接按规则确定；仍有多个候选时，隔离子 Agent 才会参考软偏好与策略 Prompt。Provider 凭据不会进入模型上下文，最终卡片会保留选择来源、理由与置信度。
+智能选择先由 Host 强制执行候选白名单、数据边界和能力要求。只剩一个候选时直接按规则确定；仍有多个候选时，独立任务 Agent 才会参考软偏好与策略 Prompt。Provider 凭据不会进入模型上下文，最终卡片会保留选择来源、理由与置信度。
 
 连接外部服务或 CLI 前先阅读[长期记忆 Provider](./memory-providers.md)。
 

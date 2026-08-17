@@ -6,14 +6,16 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 
 ## New-user path
 
-1. [Getting Started](./getting-started.md): install Mnemon and the plugin, choose storage, and complete first-run verification.
-2. [Sidebar and conversation UI guide](./ui-guide.md): learn Status, Runtime, Memory Spaces, Documents, and in-conversation entry points.
-3. [Project overview](./project-overview.md): understand the three-tier model, cross-agent sharing boundary, read/write boundaries, and complete flow.
+1. [Capability map](./capabilities.md): understand the three tiers, nine Providers, and which clicks start independent task Agents in 30 seconds.
+2. [Getting Started](./getting-started.md): install Mnemon and the plugin, choose storage, and complete first-run verification.
+3. [Sidebar and conversation UI guide](./ui-guide.md): learn Status, Runtime, Documents, Memory Spaces, and in-conversation entry points.
+4. [Project overview](./project-overview.md): understand the three-tier model, cross-agent sharing boundary, read/write boundaries, and complete flow.
 
 ## Find a task
 
 | I want to… | Document |
 |---|---|
+| Grasp the complete v0.2.0 scope at once | [Capability map](./capabilities.md) · [v0.2.0 upgrade notes](./releases/v0.2.0.md) |
 | Decide which tier should retain something | [Storage and the three-tier model](./storage-model.md) |
 | Choose, configure, or compare a Memory Space provider | [Long-term memory providers](./memory-providers.md) |
 | Share durable memory between DSH and other Mnemon-enabled agents | [Project overview: Cross-agent sharing](./project-overview.md#cross-agent-sharing-boundary) · [Configuration: Sharing scope](./configuration.md#choose-a-cross-agent-sharing-scope) |
@@ -43,7 +45,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 
 ## Documentation boundaries
 
-- User documentation targets the v0.1.6 Sidebar-default experience while covering the compatible Buildin presentation.
+- User documentation targets the v0.2.0 Sidebar-default experience while covering the compatible Buildin presentation.
 - Architecture diagrams describe stable execution boundaries, not live monitoring. Use Status for current counts and versions.
 - RPC is an internal Host-to-client protocol, not a promised stable external API.
 - There is no formal fixed DSH / Mnemon version matrix yet. Back up and validate in an isolated root before upgrading.
