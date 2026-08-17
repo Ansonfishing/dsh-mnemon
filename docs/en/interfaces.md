@@ -130,6 +130,18 @@ authority: trusted-host
 
 ### Write channel
 
+Memory Space activation has a narrower `trusted-host` control plane:
+
+```text
+channel:   /dsh-mnemon-activation
+authority: trusted-host
+endpoint:  body
+```
+
+`body` accepts only `memoryBodyId`, a Boolean `active`, and the normal session/workspace routing fields. It controls participation in DSH reads and routing without accepting metadata, Provider connection, credential, deletion, or durable-memory mutations. Read-only mode rejects it at the Host boundary.
+
+All broader mutations remain on the write channel:
+
 ```text
 channel:   /dsh-mnemon-write
 authority: loopback
@@ -144,7 +156,7 @@ authority: loopback
 | `body-create` / `body-update` / `body-delete` | Create/connect, edit, or confirm Native deletion / remote disconnection |
 | `version-update` | Update a named component with Host-fixed commands and arguments |
 
-With `writeEnabled=false`, the channel remains registered but mutations are rejected at the Host boundary.
+With `writeEnabled=false`, both activation control and the write channel remain registered but mutations are rejected at the Host boundary.
 
 ### Backup channel
 

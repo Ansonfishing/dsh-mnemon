@@ -122,7 +122,7 @@ browser component
   -> local CLI or managed files
 ```
 
-读通道要求 `trusted-host`，记忆写通道和设置通道要求 `loopback`。`writeEnabled=false` 时 Host 不注册记忆写通道。
+读通道与仅含记忆体激活的控制通道要求 `trusted-host`，更宽泛的记忆写通道和设置通道要求 `loopback`。激活处理器只接受精确的记忆体 ID 与布尔状态。`writeEnabled=false` 时所有 mutation 处理器都会在 Host 边界拒绝请求。
 
 ## 国际化
 

@@ -117,7 +117,7 @@ Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"
 
 ### Web 与模型
 
-- 读 RPC 为 `trusted-host`；写、设置与备份 RPC 为 `loopback`。
+- 读 RPC 与仅含记忆体激活的控制通道为 `trusted-host`；更宽泛的写、设置与备份 RPC 为 `loopback`。
 - WebUI 不直接读取 SQLite、启动进程、调用远程 Provider 或指定任意更新命令；Provider 网络访问只发生在 Host。
 - worker 使用 persona、工具白名单、结构化输出与 `maxDepth: 1`。
 - 查询、候选、档案正文与历史记忆全部按不可信数据处理。
@@ -149,7 +149,7 @@ Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"
 | ZIP 导出提示 WAL busy | 等待 Memory Space 写入完成并重试；不要绕过未 checkpoint WAL 检查 |
 | ZIP 导入 checksum / schema 失败 | 备份损坏或格式不兼容；保留当前根，不要手工解压覆盖 |
 | 更新按钮不出现 | 当前已是最新、远程检查失败，或安装来源是 link / 手工模式；按面板提示沿原方式更新 |
-| 远程页面能读不能写 | 写、设置与备份 RPC 强制 loopback，这是权限设计 |
+| 远程页面能切换记忆体，但不能执行其他写操作 | 只有激活控制开放给 `trusted-host`；元信息、Provider 连接、持久写入、设置与备份按设计保持 loopback-only |
 
 ## 已知限制
 

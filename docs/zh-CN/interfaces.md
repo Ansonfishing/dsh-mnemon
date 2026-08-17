@@ -130,6 +130,18 @@ authority: trusted-host
 
 ### 写通道
 
+记忆体激活使用权限更窄、可供远程受信 Host 使用的控制面：
+
+```text
+channel:   /dsh-mnemon-activation
+authority: trusted-host
+endpoint:  body
+```
+
+`body` 只接受 `memoryBodyId`、布尔值 `active` 和常规 session / workspace 路由字段。它只控制记忆体是否参与 DSH 读取与路由，不接受元信息、Provider 连接、凭据、删除或持久记忆 mutation。只读模式会在 Host 边界拒绝。
+
+其余更宽泛的 mutation 仍使用写通道：
+
 ```text
 channel:   /dsh-mnemon-write
 authority: loopback
@@ -144,7 +156,7 @@ authority: loopback
 | `body-create` / `body-update` / `body-delete` | 记忆体创建/连接、编辑，以及确认后的 Native 删除或远程断开 |
 | `version-update` | 更新明确组件；Host 固定命令与参数 |
 
-`writeEnabled=false` 时通道仍稳定注册，但所有 mutation 在 Host 边界拒绝。
+`writeEnabled=false` 时激活控制与写通道仍稳定注册，但所有 mutation 都在 Host 边界拒绝。
 
 ### 备份通道
 
