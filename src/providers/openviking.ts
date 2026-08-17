@@ -45,7 +45,7 @@ function number(value: unknown): number | undefined {
 }
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
-  if (signal?.aborted === true) return Promise.reject(signal.reason)
+  if (signal?.aborted === true) return Promise.reject(signal.reason ?? new Error('OpenViking request aborted'))
   return new Promise((resolve, reject) => {
     const aborted = () => { clearTimeout(timer); reject(signal?.reason ?? new Error('OpenViking request aborted')) }
     const timer = setTimeout(() => {
@@ -278,6 +278,7 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
   }
 
   private async requestConnection(connection: MemoryProviderConnection | OpenVikingBodyConnection, path: string, init: RequestInit = {}, options: OpenVikingRequestOptions = {}): Promise<unknown> {
+    options.signal?.throwIfAborted()
     const controller = new AbortController()
     const relay = () => controller.abort(options.signal?.reason)
     options.signal?.addEventListener('abort', relay, { once: true })
