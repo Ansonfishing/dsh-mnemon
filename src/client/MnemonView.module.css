@@ -126,6 +126,8 @@
 .pageHeader p { max-width: 72ch; margin: 0; color: var(--mn-muted); font-size: 12px; line-height: 1.65; }
 .pageHeaderMeta { display: flex; flex: 0 0 auto; align-items: center; gap: 9px; }
 .pageHeaderMeta > code { padding: 6px 8px; border: 1px solid var(--mn-line); border-radius: 7px; color: var(--mn-faint); background: var(--mn-layer-1); font: 600 9px/1 var(--mn-code); letter-spacing: .06em; }
+.memoryHeaderActions { display: flex; align-items: center; gap: 7px; }
+.memoryHeaderActions > button { white-space: nowrap; }
 .pageSpinner { display: grid; width: 24px; height: 24px; flex: 0 0 auto; place-items: center; border: 1px solid color-mix(in srgb, var(--mn-accent) 18%, var(--mn-line)); border-radius: 7px; color: var(--mn-accent); background: var(--mn-layer-1); }
 .pageSpinner > i { width: 11px; height: 11px; border: 1.5px solid color-mix(in srgb, currentColor 24%, transparent); border-top-color: currentColor; border-radius: 50%; animation: mnemon-spin .72s linear infinite; }
 
@@ -251,6 +253,9 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 .createIdentityGrid > label { align-content: start; }
 .createIdentityGrid textarea { min-height: 70px; }
 .bodyCreateActions { align-items: center; border-top: 1px solid var(--mn-line); padding-top: 12px; }
+.strategyForm { gap: 14px; padding-top: 0; }
+.strategyLoading { position: relative; display: flex; min-height: 88px; align-items: center; justify-content: center; border: 1px dashed var(--mn-line); border-radius: 10px; color: var(--mn-muted); font-size: 10px; }
+.strategyLoading .sectionSpinner { top: 9px; right: 9px; }
 .placementMode { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 0; padding: 0; border: 0; }
 .placementMode legend { margin-bottom: 5px; color: var(--mn-muted); font-size: 10px; }
 .placementMode label { position: relative; display: grid; min-width: 0; grid-template-columns: 16px minmax(0, 1fr); align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--mn-line); border-radius: 9px; cursor: pointer; background: color-mix(in srgb, var(--mn-layer-2) 62%, transparent); }
@@ -922,6 +927,8 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
   .pageHeaderMeta { align-items: stretch; flex-wrap: wrap; }
   .pageHeaderMeta > code { display: flex; min-height: 34px; align-items: center; }
   .pageHeaderMeta > button { flex: 1; }
+  .memoryHeaderActions { width: 100%; }
+  .memoryHeaderActions > button { flex: 1; }
   .emptyState { min-height: 190px; flex-direction: column; gap: 14px; padding: 24px 18px; text-align: center; }
   .emptyGlyph { width: 62px; height: 62px; }
   .documentDetail > header, .documentDanger, .supervisedHeading, .cardTop { align-items: flex-start; flex-direction: column; }

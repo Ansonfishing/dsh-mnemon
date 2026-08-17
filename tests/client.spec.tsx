@@ -888,14 +888,23 @@ describe('MnemonView', () => {
     }))
   })
 
-  it('lets rules and a strategy prompt drive automatic provider selection without changing the manual default', async () => {
+  it('keeps manual creation explicit and saves automatic Provider selection as a distillation strategy', async () => {
     const { connection, call } = createConnection({ withInactiveBody: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+    const setPath = vi.fn(async () => {})
+    const strategySettingsScope = { ...settingsScope, setPath }
+    render(<MnemonView connection={connection} settingsScope={strategySettingsScope} sessionId="session-1" surface="sidebar" />)
 
     fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
     await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: '创建记忆体' }))
-    const dialog = screen.getByRole('dialog', { name: '创建记忆体' })
+    const createDialog = screen.getByRole('dialog', { name: '创建记忆体' })
+    expect(within(createDialog).queryByRole('radio', { name: /智能选择/ })).toBeNull()
+    expect(within(createDialog).getByText(/明确的手动创建/)).toBeTruthy()
+    fireEvent.click(within(createDialog).getAllByRole('button', { name: '取消' }).at(-1)!)
+
+    fireEvent.click(screen.getByRole('button', { name: '沉淀策略' }))
+    const dialog = screen.getByRole('dialog', { name: '沉淀策略' })
+    await waitFor(() => expect(within(dialog).getByRole('radio', { name: /智能选择/ })).toBeTruthy())
     expect((within(dialog).getByRole('radio', { name: /手动指定/ }) as HTMLInputElement).checked).toBe(true)
     fireEvent.click(within(dialog).getByRole('radio', { name: /智能选择/ }))
     fireEvent.change(within(dialog).getByRole('textbox', { name: '策略 Prompt（可选）' }), { target: { value: '这是团队知识；满足精确写入后优先共享。' } })
@@ -906,31 +915,25 @@ describe('MnemonView', () => {
     fireEvent.click(openVikingCandidate)
     expect(exactWrite.closest('label')?.hasAttribute('data-selected')).toBe(true)
     expect(openVikingCandidate.closest('label')?.hasAttribute('data-selected')).toBe(true)
-    fireEvent.change(within(dialog).getByRole('textbox', { name: '新记忆体名称' }), { target: { value: '团队产品知识' } })
-    fireEvent.change(within(dialog).getByRole('textbox', { name: '新记忆体描述' }), { target: { value: '团队共享的产品约束与决策。' } })
     fireEvent.change(within(dialog).getByRole('textbox', { name: '记忆范围 URI' }), { target: { value: 'viking://user/team/memories' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: '创建' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存策略' }))
 
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: '创建记忆体' })).toBeNull())
-    const bodyCreateCall = call.mock.calls.find(([, endpoint]) => endpoint === 'body-create')
-    expect(bodyCreateCall?.[2]).toMatchObject({
-      name: '团队产品知识',
-      placement: {
-        mode: 'automatic',
-        prompt: '这是团队知识；满足精确写入后优先共享。',
-        rules: {
-          allowedProviderIds: ['mnemon-native', 'openviking'],
-          dataBoundary: 'allow-remote',
-          preference: 'shared-first',
-          requiredCapabilities: ['exact-write'],
-        },
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '沉淀策略' })).toBeNull())
+    expect(setPath).toHaveBeenCalledWith(['persistenceStrategy'], {
+      mode: 'automatic',
+      providerId: 'mnemon-native',
+      prompt: '这是团队知识；满足精确写入后优先共享。',
+      rules: {
+        allowedProviderIds: ['mnemon-native', 'openviking'],
+        dataBoundary: 'allow-remote',
+        preference: 'shared-first',
+        requiredCapabilities: ['exact-write'],
       },
       providerConnections: {
         openviking: expect.objectContaining({ targetUri: 'viking://user/team/memories' }),
       },
-      sessionId: 'session-1',
     })
-    expect(bodyCreateCall?.[2]).not.toHaveProperty('providerId')
+    expect(call.mock.calls.some(([, endpoint]) => endpoint === 'body-create')).toBe(false)
   })
 
   it('shows every third-party engine under the existing Memory Space flow', async () => {
@@ -963,8 +966,9 @@ describe('MnemonView', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
     await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
-    fireEvent.click(screen.getByRole('button', { name: '创建记忆体' }))
-    const dialog = screen.getByRole('dialog', { name: '创建记忆体' })
+    fireEvent.click(screen.getByRole('button', { name: '沉淀策略' }))
+    const dialog = screen.getByRole('dialog', { name: '沉淀策略' })
+    await waitFor(() => expect(within(dialog).getByRole('radio', { name: /智能选择/ })).toBeTruthy())
     fireEvent.click(within(dialog).getByRole('radio', { name: /智能选择/ }))
     fireEvent.change(within(dialog).getByRole('combobox', { name: '数据边界' }), { target: { value: 'local-only' } })
 
@@ -1287,10 +1291,7 @@ describe('MnemonView', () => {
     fireEvent.click(screen.getByRole('button', { name: '调度子 Agent 判断并沉淀' }))
 
     await waitFor(() => expect(screen.getByText(/记忆子 Agent 已完成处理/)).toBeTruthy())
-    expect(call).toHaveBeenCalledWith(expect.anything(), 'supervise', {
-      sessionId: 'session-1',
-      content: '项目发布前必须通过真实 WebUI 验证。',
-    })
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'supervise', { content: '项目发布前必须通过真实 WebUI 验证。' })
     expect(call).not.toHaveBeenCalledWith(expect.anything(), 'remember', expect.anything())
   })
 

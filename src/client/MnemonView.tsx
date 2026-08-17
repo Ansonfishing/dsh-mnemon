@@ -162,6 +162,49 @@ function providerDraftComplete(provider: MemoryProviderDescriptor | undefined, c
   return provider.serviceConfigured !== false && memoryProviderFields(provider).every(field => !field.required || String(connection?.[field.key] ?? '').trim() !== '')
 }
 
+function providerSummary(t: MnemonTranslate, provider: MemoryProviderDescriptor): string {
+  return t(`overview.providerSummary.${provider.id}` as MnemonKey)
+}
+
+function providerFieldLabel(t: MnemonTranslate, provider: MemoryProviderDescriptor, field: MemoryProviderConfigField): string {
+  const labels: Record<string, MnemonKey> = {
+    endpoint: 'overview.providerEndpoint', apiKey: 'overview.providerApiKey', targetUri: 'overview.providerTargetUri', account: 'overview.providerAccount', user: 'overview.providerUser', actorPeerId: 'overview.providerActorPeer',
+    workspace: 'overview.providerField.workspace', userId: 'overview.providerField.userId', agentId: 'overview.providerField.agentId', mode: 'overview.providerField.mode', rerank: 'overview.providerField.rerank',
+    bankId: 'overview.providerField.bankId', budget: 'overview.providerField.budget', dataPath: 'overview.providerField.dataPath', defaultTrust: 'overview.providerField.defaultTrust', minTrust: 'overview.providerField.minTrust',
+    project: 'overview.providerField.project', cliPath: 'overview.providerField.cliPath', workingDirectory: 'overview.providerField.workingDirectory', containerTag: 'overview.providerField.containerTag', searchMode: 'overview.providerField.searchMode',
+  }
+  return labels[field.key] === undefined ? field.label : t(labels[field.key]!)
+}
+
+/** Shared memory-level Provider form used by manual creation, editing, and distillation policy. */
+function ProviderMemoryFields(props: {
+  provider: MemoryProviderDescriptor
+  connection: MemoryProviderConnection
+  onChange: (key: string, value: string | number | boolean) => void
+  body?: MemoryBodyView
+  clearSecrets?: string[]
+  onClearSecretsChange?: (keys: string[]) => void
+}): JSX.Element {
+  const t = useT()
+  return <div className={css.providerFields} data-provider={props.provider.id}>
+    <div className={css.providerFieldHeading}><div className={css.providerFieldIdentity}><ProviderIcon providerId={props.provider.id} className={css.providerFieldIcon} /><div><strong>{props.provider.label}</strong><small>{providerSummary(t, props.provider)}</small></div></div><span>{props.provider.kind === 'local' ? t('overview.providerKindLocal') : t('overview.providerKindRemote')} · {t(`overview.workspaceBinding.${props.provider.workspaceBinding}`)}</span></div>
+    <div className={css.providerAdvancedGrid}>{memoryProviderFields(props.provider).map(field => {
+      const label = providerFieldLabel(t, props.provider, field)
+      const value = props.connection[field.key] ?? ''
+      const savedSecret = props.body?.provider.configuredSecrets.includes(field.key) === true
+      const clearingSecret = props.clearSecrets?.includes(field.key) === true
+      const required = field.required && (!savedSecret || clearingSecret)
+      const input = field.input === 'boolean'
+        ? <input aria-label={label} type="checkbox" checked={Boolean(value)} onChange={event => props.onChange(field.key, event.target.checked)} />
+        : field.input === 'select'
+          ? <select aria-label={label} value={String(value)} required={required} onChange={event => props.onChange(field.key, event.target.value)}>{field.options?.map(option => <option key={option.value} value={option.value}>{t(`overview.providerOption.${option.value}` as MnemonKey)}</option>)}</select>
+          : <input aria-label={label} type={field.input === 'secret' ? 'password' : field.input === 'number' ? 'number' : field.input === 'url' ? 'url' : 'text'} value={String(value)} required={required} autoComplete={field.input === 'secret' ? 'new-password' : undefined} placeholder={savedSecret ? t('overview.providerApiKeyKeep') : field.placeholder ?? (field.input === 'secret' ? t('overview.providerApiKeyOptional') : undefined)} maxLength={field.input === 'secret' ? 8000 : 2000} step={field.input === 'number' ? 'any' : undefined} onChange={event => props.onChange(field.key, event.target.value)} />
+      return <div key={field.key} className={css.providerFieldControl}><label>{label}{input}</label>{props.body !== undefined && field.input === 'secret' && savedSecret && props.onClearSecretsChange !== undefined && <label className={css.providerSecretClear}><input type="checkbox" checked={clearingSecret} onChange={event => props.onClearSecretsChange!(event.target.checked ? [...new Set([...(props.clearSecrets ?? []), field.key])] : (props.clearSecrets ?? []).filter(key => key !== field.key))} />{t('overview.providerSecretClear')}</label>}</div>
+    })}</div>
+    <small className={css.providerWriteHint}>{props.provider.capabilities.writeMode === 'exact' ? t('overview.providerWriteExact') : t('overview.providerWriteAsync')} · {props.provider.capabilities.graph ? t('overview.providerGraphReady') : t('overview.providerSearchReady')}</small>
+  </div>
+}
+
 type NavEntry = { id: Page; label: MnemonKey; detail: MnemonKey; glyph: string }
 type NavGroup = { aria: MnemonKey; entries: NavEntry[] }
 
@@ -379,13 +422,13 @@ function WorkspaceNavigation(props: { page: Page; onSelect: (page: Page) => void
 }
 
 /** Memory tools become a focused second-level tab set on the Sidebar surface. */
-function MemoryNavigation(props: { page: Page; writeEnabled: boolean; onSelect: (page: SidebarMemoryPage) => void; onRemember: () => void }): JSX.Element | null {
+function MemoryNavigation(props: { page: Page; writeEnabled: boolean; onSelect: (page: SidebarMemoryPage) => void; onRemember: () => void; onStrategy: () => void }): JSX.Element | null {
   const t = useT()
   const appearance = useMnemonViewAppearance()
   if (appearance.surface !== 'sidebar' || !isMemoryPage(props.page)) return null
   return (
     <section className={appearance.classes.memoryWorkspace}>
-      <PageHeader title={t('nav.bodies')} description={t('overview.description')} action={<button type="button" className={appearanceClass(css.primaryButton, appearance.classes.memoryWriteButton)} disabled={!props.writeEnabled} onClick={props.onRemember}>{t('nav.rememberAction')}</button>} />
+      <PageHeader title={t('nav.bodies')} description={t('overview.description')} action={<div className={css.memoryHeaderActions}><button type="button" className={appearanceClass(css.primaryButton, appearance.classes.memoryWriteButton)} disabled={!props.writeEnabled} onClick={props.onRemember}>{t('nav.rememberAction')}</button><button type="button" className={css.secondaryButton} onClick={props.onStrategy}>{t('strategy.action')}</button></div>} />
       <div className={appearance.classes.memoryNavigation}>
         <div className={appearance.classes.memoryTabs} role="tablist" aria-label={t('nav.memory.aria')}>
           {MEMORY_PAGE_TABS.map(item => {
@@ -971,12 +1014,6 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
   const [creatingBodyOpen, setCreatingBodyOpen] = useState(false)
   const [bodyName, setBodyName] = useState('')
   const [bodyDescription, setBodyDescription] = useState('')
-  const [placementMode, setPlacementMode] = useState<MemoryPlacementMode>('manual')
-  const [placementPrompt, setPlacementPrompt] = useState('')
-  const [placementDataBoundary, setPlacementDataBoundary] = useState<'allow-remote' | 'local-only'>('allow-remote')
-  const [placementPreference, setPlacementPreference] = useState<MemoryPlacementPreference>('balanced')
-  const [requiredCapabilities, setRequiredCapabilities] = useState<MemoryPlacementCapability[]>([])
-  const [automaticProviderIds, setAutomaticProviderIds] = useState<MemoryProviderId[]>([])
   const [bodyProviderId, setBodyProviderId] = useState<MemoryProviderId>('mnemon-native')
   const [providerDrafts, setProviderDrafts] = useState<ProviderDrafts>({})
   const [catalogUnavailable, setCatalogUnavailable] = useState(false)
@@ -1132,36 +1169,16 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
     event.preventDefault()
     const providers = catalog?.providers ?? []
     const manualProvider = providers.find(provider => provider.id === bodyProviderId)
-    const allowedProviderIds = ['mnemon-native' as const, ...automaticProviderIds]
-    const externalAutomaticIds = automaticProviderIds.filter(id => id !== 'mnemon-native')
-    const connections = Object.fromEntries(externalAutomaticIds.map(id => [id, providerDrafts[id] ?? {}])) as Partial<Record<MemoryProviderId, MemoryProviderConnection>>
-    const configurationValid = placementMode === 'manual'
-      ? providerDraftComplete(manualProvider, providerDrafts[bodyProviderId])
-      : externalAutomaticIds.every(id => providerDraftComplete(providers.find(provider => provider.id === id), providerDrafts[id]))
-    if (bodyName.trim() === '' || bodyDescription.trim() === '' || !configurationValid || (placementMode === 'automatic' && !props.agentAvailable)) return
+    if (bodyName.trim() === '' || bodyDescription.trim() === '' || !providerDraftComplete(manualProvider, providerDrafts[bodyProviderId])) return
     setCreating(true); setError(null)
     try {
       await props.client.createBody({
         name: bodyName,
         description: bodyDescription,
-        ...(placementMode === 'manual' ? {
-          providerId: bodyProviderId,
-          ...(bodyProviderId === 'mnemon-native' ? {} : { connection: providerDrafts[bodyProviderId] ?? {} }),
-        } : {
-          placement: {
-            mode: 'automatic',
-            ...(placementPrompt.trim() === '' ? {} : { prompt: placementPrompt }),
-            rules: {
-              allowedProviderIds,
-              dataBoundary: placementDataBoundary,
-              preference: placementPreference,
-              ...(requiredCapabilities.length === 0 ? {} : { requiredCapabilities }),
-            },
-          },
-          ...(externalAutomaticIds.length === 0 ? {} : { providerConnections: connections }),
-        }),
+        providerId: bodyProviderId,
+        ...(bodyProviderId === 'mnemon-native' ? {} : { connection: providerDrafts[bodyProviderId] ?? {} }),
       })
-      setBodyName(''); setBodyDescription(''); setBodyProviderId('mnemon-native'); setPlacementPrompt(''); setRequiredCapabilities([]); setAutomaticProviderIds([])
+      setBodyName(''); setBodyDescription(''); setBodyProviderId('mnemon-native')
       setProviderDrafts(current => Object.fromEntries(providers.map(provider => [provider.id, Object.fromEntries(Object.entries(current[provider.id] ?? {}).map(([key, value]) => [key, provider.fields.some(field => field.key === key && field.input === 'secret') ? '' : value]))])))
       if (appearance.surface === 'sidebar') setCreatingBodyOpen(false)
       await load(true)
@@ -1251,48 +1268,12 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
   const selectedProvider = providers.find(provider => provider.id === bodyProviderId)
   const nativeBodyCount = catalog?.items.filter(body => body.provider.id === 'mnemon-native').length ?? 0
   const canDeleteBody = (body: MemoryBodyView): boolean => body.provider.id !== 'mnemon-native' || nativeBodyCount > 1
-  const toggleRequiredCapability = (capability: MemoryPlacementCapability) => setRequiredCapabilities(current => current.includes(capability) ? current.filter(value => value !== capability) : [...current, capability])
   const updateProviderDraft = (providerId: MemoryProviderId, key: string, value: string | number | boolean) => setProviderDrafts(current => ({ ...current, [providerId]: { ...(current[providerId] ?? {}), [key]: value } }))
-  const toggleAutomaticProvider = (providerId: MemoryProviderId, selected: boolean) => setAutomaticProviderIds(current => selected ? [...new Set([...current, providerId])] : current.filter(id => id !== providerId))
-  const providerSummary = (provider: MemoryProviderDescriptor): string => t(`overview.providerSummary.${provider.id}` as MnemonKey)
-  const fieldLabel = (provider: MemoryProviderDescriptor, field: MemoryProviderConfigField): string => {
-    const labels: Record<string, MnemonKey> = {
-      endpoint: 'overview.providerEndpoint', apiKey: 'overview.providerApiKey', targetUri: 'overview.providerTargetUri', account: 'overview.providerAccount', user: 'overview.providerUser', actorPeerId: 'overview.providerActorPeer',
-      workspace: 'overview.providerField.workspace', userId: 'overview.providerField.userId', agentId: 'overview.providerField.agentId', mode: 'overview.providerField.mode', rerank: 'overview.providerField.rerank',
-      bankId: 'overview.providerField.bankId', budget: 'overview.providerField.budget', dataPath: 'overview.providerField.dataPath', defaultTrust: 'overview.providerField.defaultTrust', minTrust: 'overview.providerField.minTrust',
-      project: 'overview.providerField.project', cliPath: 'overview.providerField.cliPath', workingDirectory: 'overview.providerField.workingDirectory', containerTag: 'overview.providerField.containerTag', searchMode: 'overview.providerField.searchMode',
-    }
-    if (labels[field.key] !== undefined) return t(labels[field.key]!)
-    return field.label
-  }
-  const optionLabel = (value: string): string => t(`overview.providerOption.${value}` as MnemonKey)
-  const providerFields = (
-    provider: MemoryProviderDescriptor,
-    connection: MemoryProviderConnection,
-    update: (key: string, value: string | number | boolean) => void,
-    body?: MemoryBodyView,
-  ) => <div className={css.providerFields} data-provider={provider.id}>
-    <div className={css.providerFieldHeading}><div className={css.providerFieldIdentity}><ProviderIcon providerId={provider.id} className={css.providerFieldIcon} /><div><strong>{provider.label}</strong><small>{providerSummary(provider)}</small></div></div><span>{provider.kind === 'local' ? t('overview.providerKindLocal') : t('overview.providerKindRemote')} · {t(`overview.workspaceBinding.${provider.workspaceBinding}`)}</span></div>
-    <div className={css.providerAdvancedGrid}>{memoryProviderFields(provider).map(field => {
-      const label = fieldLabel(provider, field)
-      const value = connection[field.key] ?? ''
-      const savedSecret = body?.provider.configuredSecrets.includes(field.key) === true
-      const clearingSecret = editClearSecrets.includes(field.key)
-      const required = field.required && (!savedSecret || clearingSecret)
-      const input = field.input === 'boolean'
-        ? <input aria-label={label} type="checkbox" checked={Boolean(value)} onChange={event => update(field.key, event.target.checked)} />
-        : field.input === 'select'
-          ? <select aria-label={label} value={String(value)} required={required} onChange={event => update(field.key, event.target.value)}>{field.options?.map(option => <option key={option.value} value={option.value}>{optionLabel(option.value)}</option>)}</select>
-          : <input aria-label={label} type={field.input === 'secret' ? 'password' : field.input === 'number' ? 'number' : field.input === 'url' ? 'url' : 'text'} value={String(value)} required={required} autoComplete={field.input === 'secret' ? 'new-password' : undefined} placeholder={savedSecret ? t('overview.providerApiKeyKeep') : field.placeholder ?? (field.input === 'secret' ? t('overview.providerApiKeyOptional') : undefined)} maxLength={field.input === 'secret' ? 8000 : 2000} step={field.input === 'number' ? 'any' : undefined} onChange={event => update(field.key, event.target.value)} />
-      return <div key={field.key} className={css.providerFieldControl}><label>{label}{input}</label>{body !== undefined && field.input === 'secret' && savedSecret && <label className={css.providerSecretClear}><input type="checkbox" checked={clearingSecret} onChange={event => setEditClearSecrets(current => event.target.checked ? [...new Set([...current, field.key])] : current.filter(key => key !== field.key))} />{t('overview.providerSecretClear')}</label>}</div>
-    })}</div>
-    <small className={css.providerWriteHint}>{provider.capabilities.writeMode === 'exact' ? t('overview.providerWriteExact') : t('overview.providerWriteAsync')} · {provider.capabilities.graph ? t('overview.providerGraphReady') : t('overview.providerSearchReady')}</small>
-  </div>
   const placementReceipt = (body: MemoryBodyView) => body.placement === undefined ? null : <div className={css.placementReceipt} title={body.placement.reason}><span aria-hidden="true">✦</span><div><strong>{t(body.placement.decidedBy === 'llm' ? 'overview.placementByLlm' : 'overview.placementByRules')}</strong><small>{t('overview.placementConfidence', { confidence: t(`overview.confidence.${body.placement.confidence}`) })}</small><p>{body.placement.reason}</p></div></div>
   const bodyEditForm = (body: MemoryBodyView) => <form className={css.bodyEdit} onSubmit={event => void saveEdit(event, body)}>
     <label>{t('overview.editName')}<input aria-label={t('overview.editName')} value={editName} onChange={event => setEditName(event.target.value)} maxLength={100} required /></label>
     <label>{t('overview.editDescription')}<textarea aria-label={t('overview.editDescription')} value={editDescription} onChange={event => setEditDescription(event.target.value)} rows={4} maxLength={1000} /></label>
-    {body.provider.id !== 'mnemon-native' && (() => { const descriptor = providers.find(provider => provider.id === body.provider.id); return descriptor === undefined ? null : providerFields(descriptor, editConnection, (key, value) => setEditConnection(current => ({ ...current, [key]: value })), body) })()}
+    {body.provider.id !== 'mnemon-native' && (() => { const descriptor = providers.find(provider => provider.id === body.provider.id); return descriptor === undefined ? null : <ProviderMemoryFields provider={descriptor} connection={editConnection} onChange={(key, value) => setEditConnection(current => ({ ...current, [key]: value }))} body={body} clearSecrets={editClearSecrets} onClearSecretsChange={setEditClearSecrets} /> })()}
     <div className={css.bodyEditActions}>{appearance.surface === 'sidebar' && <button type="button" className={css.ghostButton} disabled={savingBody === body.id} onClick={() => setEditingBody(null)}>{t('common.cancel')}</button>}<button type="submit" className={css.primaryButton} disabled={savingBody === body.id || editName.trim() === ''}>{savingBody === body.id ? t('overview.savingBody') : t('overview.saveBody')}</button>{appearance.surface === 'buildin' && <button type="button" className={css.ghostButton} onClick={() => setEditingBody(null)}>{t('common.cancel')}</button>}</div>
   </form>
   const bodyCreateForm = <form className={appearanceClass(css.bodyEdit, css.bodyCreateForm)} onSubmit={event => void create(event)}>
@@ -1305,42 +1286,18 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
     </section>
     <section className={css.createSection}>
       <div className={css.createSectionHeading}><span>02</span><div><strong>{t('overview.createPlacementTitle')}</strong><small>{t('overview.createPlacementHint')}</small></div></div>
-      <fieldset className={css.placementMode}><legend>{t('overview.placementMode')}</legend>
-        <label data-selected={placementMode === 'manual' || undefined}><input type="radio" name="placement-mode" value="manual" checked={placementMode === 'manual'} onChange={() => setPlacementMode('manual')} /><i className={css.choiceControl} data-kind="radio" aria-hidden="true" /><span><strong>{t('overview.placementManual')}</strong><small>{t('overview.placementManualHint')}</small></span></label>
-        <label data-selected={placementMode === 'automatic' || undefined} data-disabled={!props.agentAvailable || undefined}><input type="radio" name="placement-mode" value="automatic" checked={placementMode === 'automatic'} disabled={!props.agentAvailable} onChange={() => setPlacementMode('automatic')} /><i className={css.choiceControl} data-kind="radio" aria-hidden="true" /><span><strong>{t('overview.placementAutomatic')} <em>{t('overview.recommended')}</em></strong><small>{props.agentAvailable ? t('overview.placementAutomaticHint') : t('overview.placementUnavailable')}</small></span></label>
-      </fieldset>
-      {placementMode === 'manual' && <>
-        <fieldset className={css.providerChoice}><legend>{t('overview.providerLabel')}</legend>{providers.map(provider => {
-          const serviceMissing = provider.id !== 'mnemon-native' && provider.serviceConfigured === false
-          return <label key={provider.id} data-selected={bodyProviderId === provider.id || undefined} data-native={provider.id === 'mnemon-native' || undefined} data-disabled={serviceMissing || undefined}>
-            <input type="radio" name="memory-provider" value={provider.id} checked={bodyProviderId === provider.id} disabled={serviceMissing} onChange={() => setBodyProviderId(provider.id)} />
-            <ProviderIcon providerId={provider.id} className={css.providerChoiceIcon} />
-            <span><strong>{provider.label}{provider.id === 'mnemon-native' && <em>{t('overview.nativeOfficial')}</em>}</strong><small>{serviceMissing ? t('overview.providerServiceRequired') : `${t(`overview.workspaceBinding.${provider.workspaceBinding}`)} · ${providerSummary(provider)}`}</small></span>
-            <i className={css.choiceControl} data-kind="radio" aria-hidden="true" />
-          </label>
-        })}</fieldset>
-        {selectedProvider !== undefined && selectedProvider.id !== 'mnemon-native' && providerFields(selectedProvider, providerDrafts[selectedProvider.id] ?? {}, (key, value) => updateProviderDraft(selectedProvider.id, key, value))}
-      </>}
-      {placementMode === 'automatic' && <section className={css.placementPolicy} aria-label={t('overview.placementPolicy')}>
-        <div className={css.placementPolicyHeading}><div><strong>{t('overview.placementPolicy')}</strong><small>{t('overview.placementPolicyHint')}</small></div><span>{t('overview.agentDecision')}</span></div>
-        <label>{t('overview.placementPrompt')}<textarea aria-label={t('overview.placementPrompt')} value={placementPrompt} onChange={event => setPlacementPrompt(event.target.value)} placeholder={t('overview.placementPromptPlaceholder')} rows={3} maxLength={4000} /></label>
-        <div className={css.placementRuleGrid}><label>{t('overview.dataBoundary')}<select aria-label={t('overview.dataBoundary')} value={placementDataBoundary} onChange={event => { const value = event.target.value as 'allow-remote' | 'local-only'; setPlacementDataBoundary(value); if (value === 'local-only') setAutomaticProviderIds(current => current.filter(id => providers.find(provider => provider.id === id)?.kind === 'local')) }}><option value="allow-remote">{t('overview.dataBoundaryRemote')}</option><option value="local-only">{t('overview.dataBoundaryLocal')}</option></select></label><label>{t('overview.preference')}<select aria-label={t('overview.preference')} value={placementPreference} onChange={event => setPlacementPreference(event.target.value as MemoryPlacementPreference)}><option value="balanced">{t('overview.preferenceBalanced')}</option><option value="local-first">{t('overview.preferenceLocal')}</option><option value="shared-first">{t('overview.preferenceShared')}</option></select></label></div>
-        <fieldset className={css.capabilityRules}><legend>{t('overview.requiredCapabilities')}</legend>{(['graph', 'exact-write', 'forget'] as const).map(capability => {
-          const selected = requiredCapabilities.includes(capability)
-          return <label key={capability} data-selected={selected || undefined}><input type="checkbox" checked={selected} onChange={() => toggleRequiredCapability(capability)} /><i className={css.choiceControl} data-kind="check" aria-hidden="true" /><span>{t(`overview.capability.${capability}`)}</span></label>
-        })}</fieldset>
-        <div className={css.placementCandidates}>
-          <span data-selected="true"><ProviderIcon providerId="mnemon-native" className={css.candidateIcon} /><span><strong>mnemon</strong><small>{t('overview.candidateNativeReady')}</small></span><i className={css.choiceControl} data-kind="check" aria-hidden="true" /></span>
-          {providers.filter(provider => provider.id !== 'mnemon-native').map(provider => {
-            const disabled = provider.serviceConfigured === false || (placementDataBoundary === 'local-only' && provider.kind === 'remote')
-            const selected = automaticProviderIds.includes(provider.id)
-            return <label key={provider.id} data-selected={selected || undefined} data-disabled={disabled || undefined}><input type="checkbox" checked={selected} disabled={disabled} onChange={event => toggleAutomaticProvider(provider.id, event.target.checked)} /><ProviderIcon providerId={provider.id} className={css.candidateIcon} /><span><strong>{provider.label}</strong><small>{provider.serviceConfigured === false ? t('overview.providerServiceRequired') : provider.kind === 'local' ? t('overview.candidateLocal') : t('overview.candidateRemote')}</small></span><i className={css.choiceControl} data-kind="check" aria-hidden="true" /></label>
-          })}
-        </div>
-        {automaticProviderIds.map(id => { const provider = providers.find(candidate => candidate.id === id); return provider === undefined || provider.id === 'mnemon-native' ? null : <Fragment key={id}>{providerFields(provider, providerDrafts[id] ?? {}, (key, value) => updateProviderDraft(id, key, value))}</Fragment> })}
-      </section>}
+      <fieldset className={css.providerChoice}><legend>{t('overview.providerLabel')}</legend>{providers.map(provider => {
+        const serviceMissing = provider.id !== 'mnemon-native' && provider.serviceConfigured === false
+        return <label key={provider.id} data-selected={bodyProviderId === provider.id || undefined} data-native={provider.id === 'mnemon-native' || undefined} data-disabled={serviceMissing || undefined}>
+          <input type="radio" name="memory-provider" value={provider.id} checked={bodyProviderId === provider.id} disabled={serviceMissing} onChange={() => setBodyProviderId(provider.id)} />
+          <ProviderIcon providerId={provider.id} className={css.providerChoiceIcon} />
+          <span><strong>{provider.label}{provider.id === 'mnemon-native' && <em>{t('overview.nativeOfficial')}</em>}</strong><small>{serviceMissing ? t('overview.providerServiceRequired') : `${t(`overview.workspaceBinding.${provider.workspaceBinding}`)} · ${providerSummary(t, provider)}`}</small></span>
+          <i className={css.choiceControl} data-kind="radio" aria-hidden="true" />
+        </label>
+      })}</fieldset>
+      {selectedProvider !== undefined && selectedProvider.id !== 'mnemon-native' && <ProviderMemoryFields provider={selectedProvider} connection={providerDrafts[selectedProvider.id] ?? {}} onChange={(key, value) => updateProviderDraft(selectedProvider.id, key, value)} />}
     </section>
-    <div className={appearanceClass(css.bodyEditActions, css.bodyCreateActions)}><button type="button" className={css.ghostButton} disabled={creating} onClick={() => setCreatingBodyOpen(false)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={creating || bodyName.trim() === '' || bodyDescription.trim() === '' || (placementMode === 'automatic' && !props.agentAvailable) || (placementMode === 'manual' ? !providerDraftComplete(selectedProvider, providerDrafts[bodyProviderId]) : automaticProviderIds.some(id => !providerDraftComplete(providers.find(provider => provider.id === id), providerDrafts[id])))}>{creating ? t('overview.creating') : t('overview.createAction')}</button></div>
+    <div className={appearanceClass(css.bodyEditActions, css.bodyCreateActions)}><button type="button" className={css.ghostButton} disabled={creating} onClick={() => setCreatingBodyOpen(false)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={creating || bodyName.trim() === '' || bodyDescription.trim() === '' || !providerDraftComplete(selectedProvider, providerDrafts[bodyProviderId])}>{creating ? t('overview.creating') : t('overview.createAction')}</button></div>
   </form>
   const bodyToggle = (body: MemoryBodyView) => <button type="button" className={css.bodySwitch} role="switch" aria-checked={body.active} aria-label={t('overview.toggleAria', { name: body.name })} disabled={!props.writeEnabled || changing === body.id || deletingBody === body.id} onClick={() => void toggle(body)}><span className={css.bodySwitchTrack} aria-hidden="true"><i /></span><span>{changing === body.id ? t('overview.toggling') : body.active ? t('common.active') : t('common.inactive')}</span></button>
   const bodyEditActionClass = appearanceClass(css.ghostButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemEditAction))
@@ -1741,7 +1698,121 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
   )
 }
 
-function RememberPage(props: { client: MnemonClient; sessionId: string | undefined; memoryBodies: MemoryBodyView[]; writeEnabled: boolean; seed: string; onMutate: () => void; onClose?: () => void; onComplete?: () => void }): JSX.Element {
+function PersistenceStrategyDialog(props: {
+  client: MnemonClient
+  settingsScope: ClientSettingsScope<Config>
+  config: Config | undefined
+  writable: boolean
+  agentAvailable: boolean
+  onClose: () => void
+}): JSX.Element {
+  const t = useT()
+  const configured = props.config?.persistenceStrategy
+  const [mode, setMode] = useState<MemoryPlacementMode>(configured?.mode ?? 'manual')
+  const [providerId, setProviderId] = useState<MemoryProviderId>(configured?.providerId ?? 'mnemon-native')
+  const [prompt, setPrompt] = useState(configured?.prompt ?? '')
+  const [dataBoundary, setDataBoundary] = useState<'allow-remote' | 'local-only'>(configured?.rules?.dataBoundary ?? 'allow-remote')
+  const [preference, setPreference] = useState<MemoryPlacementPreference>(configured?.rules?.preference ?? 'balanced')
+  const [requiredCapabilities, setRequiredCapabilities] = useState<MemoryPlacementCapability[]>(configured?.rules?.requiredCapabilities ?? [])
+  const [automaticProviderIds, setAutomaticProviderIds] = useState<MemoryProviderId[]>(configured?.rules?.allowedProviderIds ?? ['mnemon-native'])
+  const [providerDrafts, setProviderDrafts] = useState<ProviderDrafts>(configured?.providerConnections ?? {})
+  const [providers, setProviders] = useState<MemoryProviderDescriptor[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let current = true
+    void props.client.bodyDirectory().then(catalog => {
+      if (!current) return
+      const next = Array.isArray(catalog.providers) && catalog.providers.length > 0 ? catalog.providers : LEGACY_PROVIDER_CATALOG
+      setProviders(next)
+      setProviderDrafts(previous => mergeProviderDefaults(next, previous))
+      setProviderId(currentProviderId => next.some(provider => provider.id === currentProviderId && (provider.id === 'mnemon-native' || provider.serviceConfigured !== false)) ? currentProviderId : 'mnemon-native')
+    }).catch(reason => { if (current) setError(message(reason)) }).finally(() => { if (current) setLoading(false) })
+    return () => { current = false }
+  }, [props.client])
+
+  const selectedProvider = providers.find(provider => provider.id === providerId)
+  const selectedAutomaticProviders = automaticProviderIds.map(id => providers.find(provider => provider.id === id)).filter((provider): provider is MemoryProviderDescriptor => provider !== undefined)
+  const selectedProvidersValid = mode === 'manual'
+    ? providerDraftComplete(selectedProvider, providerDrafts[providerId])
+    : automaticProviderIds.length > 0 && selectedAutomaticProviders.length === automaticProviderIds.length && selectedAutomaticProviders.every(provider => providerDraftComplete(provider, providerDrafts[provider.id]))
+  const updateDraft = (id: MemoryProviderId, key: string, value: string | number | boolean) => setProviderDrafts(current => ({ ...current, [id]: { ...(current[id] ?? {}), [key]: value } }))
+  const toggleCapability = (capability: MemoryPlacementCapability) => setRequiredCapabilities(current => current.includes(capability) ? current.filter(value => value !== capability) : [...current, capability])
+  const toggleProvider = (id: MemoryProviderId, selected: boolean) => setAutomaticProviderIds(current => selected ? [...new Set([...current, id])] : current.filter(value => value !== id))
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault()
+    if (loading || saving || !props.writable || !selectedProvidersValid) return
+    const selectedIds = mode === 'manual' ? [providerId] : automaticProviderIds
+    const connections = Object.fromEntries(selectedIds.filter(id => id !== 'mnemon-native').map(id => [id, providerDrafts[id] ?? {}])) as ProviderDrafts
+    setSaving(true); setError(null)
+    try {
+      await props.settingsScope.setPath(['persistenceStrategy'], {
+        mode,
+        providerId,
+        prompt,
+        rules: {
+          allowedProviderIds: automaticProviderIds,
+          dataBoundary,
+          requiredCapabilities,
+          preference,
+        },
+        providerConnections: connections,
+      })
+      props.onClose()
+    } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
+  }
+
+  return <SidebarModal title={t('strategy.title')} description={t('strategy.description')} busy={saving} wide onClose={props.onClose}>
+    <form className={appearanceClass(css.bodyEdit, css.strategyForm)} onSubmit={event => void save(event)}>
+      {loading && <div className={css.strategyLoading}><SectionSpinner label={t('strategy.loading')} /><span>{t('strategy.loading')}</span></div>}
+      {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
+      {!loading && <>
+        <section className={css.createSection}>
+          <div className={css.createSectionHeading}><span>01</span><div><strong>{t('strategy.modeTitle')}</strong><small>{t('strategy.modeHint')}</small></div></div>
+          <fieldset className={css.placementMode}><legend>{t('overview.placementMode')}</legend>
+            <label data-selected={mode === 'manual' || undefined}><input type="radio" name="persistence-mode" value="manual" checked={mode === 'manual'} onChange={() => setMode('manual')} /><i className={css.choiceControl} data-kind="radio" aria-hidden="true" /><span><strong>{t('overview.placementManual')}</strong><small>{t('strategy.manualHint')}</small></span></label>
+            <label data-selected={mode === 'automatic' || undefined}><input type="radio" name="persistence-mode" value="automatic" checked={mode === 'automatic'} onChange={() => setMode('automatic')} /><i className={css.choiceControl} data-kind="radio" aria-hidden="true" /><span><strong>{t('overview.placementAutomatic')} <em>{t('overview.recommended')}</em></strong><small>{t('strategy.automaticHint')}</small></span></label>
+          </fieldset>
+        </section>
+        <section className={css.createSection}>
+          <div className={css.createSectionHeading}><span>02</span><div><strong>{t(mode === 'manual' ? 'strategy.manualTitle' : 'strategy.automaticTitle')}</strong><small>{t(mode === 'manual' ? 'strategy.manualDescription' : 'strategy.automaticDescription')}</small></div></div>
+          {mode === 'manual' ? <>
+            <fieldset className={css.providerChoice}><legend>{t('overview.providerLabel')}</legend>{providers.map(provider => {
+              const disabled = provider.id !== 'mnemon-native' && provider.serviceConfigured === false
+              return <label key={provider.id} data-selected={providerId === provider.id || undefined} data-native={provider.id === 'mnemon-native' || undefined} data-disabled={disabled || undefined}>
+                <input type="radio" name="strategy-provider" value={provider.id} checked={providerId === provider.id} disabled={disabled} onChange={() => setProviderId(provider.id)} />
+                <ProviderIcon providerId={provider.id} className={css.providerChoiceIcon} />
+                <span><strong>{provider.label}{provider.id === 'mnemon-native' && <em>{t('overview.nativeOfficial')}</em>}</strong><small>{disabled ? t('overview.providerServiceRequired') : `${t(`overview.workspaceBinding.${provider.workspaceBinding}`)} · ${providerSummary(t, provider)}`}</small></span>
+                <i className={css.choiceControl} data-kind="radio" aria-hidden="true" />
+              </label>
+            })}</fieldset>
+            {selectedProvider !== undefined && selectedProvider.id !== 'mnemon-native' && <ProviderMemoryFields provider={selectedProvider} connection={providerDrafts[selectedProvider.id] ?? {}} onChange={(key, value) => updateDraft(selectedProvider.id, key, value)} />}
+          </> : <section className={css.placementPolicy} aria-label={t('overview.placementPolicy')}>
+            <div className={css.placementPolicyHeading}><div><strong>{t('overview.placementPolicy')}</strong><small>{t('overview.placementPolicyHint')}</small></div><span>{props.agentAvailable ? t('strategy.taskAgentReady') : t('strategy.taskAgentUnavailable')}</span></div>
+            <label>{t('overview.placementPrompt')}<textarea aria-label={t('overview.placementPrompt')} value={prompt} onChange={event => setPrompt(event.target.value)} placeholder={t('overview.placementPromptPlaceholder')} rows={3} maxLength={4000} /></label>
+            <div className={css.placementRuleGrid}><label>{t('overview.dataBoundary')}<select aria-label={t('overview.dataBoundary')} value={dataBoundary} onChange={event => { const value = event.target.value as 'allow-remote' | 'local-only'; setDataBoundary(value); if (value === 'local-only') setAutomaticProviderIds(current => current.filter(id => providers.find(provider => provider.id === id)?.kind === 'local')) }}><option value="allow-remote">{t('overview.dataBoundaryRemote')}</option><option value="local-only">{t('overview.dataBoundaryLocal')}</option></select></label><label>{t('overview.preference')}<select aria-label={t('overview.preference')} value={preference} onChange={event => setPreference(event.target.value as MemoryPlacementPreference)}><option value="balanced">{t('overview.preferenceBalanced')}</option><option value="local-first">{t('overview.preferenceLocal')}</option><option value="shared-first">{t('overview.preferenceShared')}</option></select></label></div>
+            <fieldset className={css.capabilityRules}><legend>{t('overview.requiredCapabilities')}</legend>{(['graph', 'exact-write', 'forget'] as const).map(capability => {
+              const selected = requiredCapabilities.includes(capability)
+              return <label key={capability} data-selected={selected || undefined}><input type="checkbox" checked={selected} onChange={() => toggleCapability(capability)} /><i className={css.choiceControl} data-kind="check" aria-hidden="true" /><span>{t(`overview.capability.${capability}`)}</span></label>
+            })}</fieldset>
+            <div className={css.placementCandidates}>{providers.map(provider => {
+              const disabled = provider.serviceConfigured === false || (dataBoundary === 'local-only' && provider.kind === 'remote')
+              const selected = automaticProviderIds.includes(provider.id)
+              return <label key={provider.id} data-selected={selected || undefined} data-disabled={disabled || undefined}><input type="checkbox" checked={selected} disabled={disabled} onChange={event => toggleProvider(provider.id, event.target.checked)} /><ProviderIcon providerId={provider.id} className={css.candidateIcon} /><span><strong>{provider.label}</strong><small>{provider.serviceConfigured === false ? t('overview.providerServiceRequired') : provider.id === 'mnemon-native' ? t('overview.candidateNativeReady') : provider.kind === 'local' ? t('overview.candidateLocal') : t('overview.candidateRemote')}</small></span><i className={css.choiceControl} data-kind="check" aria-hidden="true" /></label>
+            })}</div>
+            {automaticProviderIds.map(id => { const provider = providers.find(candidate => candidate.id === id); return provider === undefined || provider.id === 'mnemon-native' ? null : <ProviderMemoryFields key={id} provider={provider} connection={providerDrafts[id] ?? {}} onChange={(key, value) => updateDraft(id, key, value)} /> })}
+          </section>}
+        </section>
+      </>}
+      <div className={appearanceClass(css.bodyEditActions, css.bodyCreateActions)}><button type="button" className={css.ghostButton} disabled={saving} onClick={props.onClose}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={loading || saving || !props.writable || !selectedProvidersValid}>{saving ? t('strategy.saving') : t('strategy.save')}</button></div>
+    </form>
+  </SidebarModal>
+}
+
+function RememberPage(props: { client: MnemonClient; agentAvailable: boolean; memoryBodies: MemoryBodyView[]; writeEnabled: boolean; seed: string; onMutate: () => void; onClose?: () => void; onComplete?: () => void }): JSX.Element {
   const t = useT()
   const [content, setContent] = useState(props.seed)
   const [category, setCategory] = useState<Category>('general')
@@ -1760,7 +1831,7 @@ function RememberPage(props: { client: MnemonClient; sessionId: string | undefin
 
   const supervise = async (event: FormEvent) => {
     event.preventDefault()
-    if (content.trim() === '' || props.sessionId === undefined) return
+    if (content.trim() === '' || !props.agentAvailable) return
     setSupervising(true); setResult(null)
     try {
       const response = await props.client.supervise(content)
@@ -1787,16 +1858,16 @@ function RememberPage(props: { client: MnemonClient; sessionId: string | undefin
 
   const composer = <section className={css.supervisedComposer}>
     <form className={css.supervisedForm} onSubmit={event => void supervise(event)}>
-      <div className={css.supervisedHeading}><div><h3>{t('remember.delegateTitle')}</h3></div><span className={props.sessionId === undefined ? css.sessionMissing : css.sessionReady}>{props.sessionId === undefined ? t('remember.noSession') : t('remember.ready')}</span></div>
+      <div className={css.supervisedHeading}><div><h3>{t('remember.delegateTitle')}</h3></div><span className={!props.agentAvailable ? css.sessionMissing : css.sessionReady}>{!props.agentAvailable ? t('remember.noTaskAgent') : t('remember.taskAgentReady')}</span></div>
       <label className={css.fieldWide}>{t('remember.candidate')}<textarea aria-label={t('remember.candidateAria')} value={content} onChange={event => setContent(event.target.value)} maxLength={8000} rows={8} placeholder={t('remember.placeholder')} /></label>
-      {props.sessionId === undefined && <p className={css.sessionHint}>{t('remember.sessionHint')}</p>}
-      <div className={css.formActions}>{props.onClose !== undefined && <button type="button" className={css.ghostButton} disabled={supervising || saving} onClick={props.onClose}>{t('common.cancel')}</button>}<button type="submit" className={css.primaryButton} disabled={supervising || content.trim() === '' || props.sessionId === undefined}>{supervising ? t('remember.processing') : t('remember.action')}</button>{result !== null && <span role="status">{result}</span>}</div>
+      {!props.agentAvailable && <p className={css.sessionHint}>{t('remember.taskAgentHint')}</p>}
+      <div className={css.formActions}>{props.onClose !== undefined && <button type="button" className={css.ghostButton} disabled={supervising || saving} onClick={props.onClose}>{t('common.cancel')}</button>}<button type="submit" className={css.primaryButton} disabled={supervising || content.trim() === '' || !props.agentAvailable}>{supervising ? t('remember.processing') : t('remember.action')}</button>{result !== null && <span role="status">{result}</span>}</div>
     </form>
     <details className={css.advancedWrite}>
       <summary><span><strong>{t('remember.advanced')}</strong><small>{t('remember.advancedHint')}</small></span><span>{t('remember.expand')}</span></summary>
       <form className={css.manualForm} onSubmit={event => void manualSave(event)}>
         <div className={css.formGrid}><label className={css.fieldWide}>{t('remember.target')}<select aria-label={t('remember.target')} value={memoryBodyId} onChange={event => setMemoryBodyId(event.target.value)}>{props.memoryBodies.map(body => <option key={body.id} value={body.id}>{body.name} · {body.provider.label}{body.active ? ` · ${t('common.active')}` : ''}</option>)}</select>{selectedMemoryBody?.provider.capabilities.writeMode === 'async-extracting' && <small className={css.providerWriteHint}>{t('remember.asyncProviderHint')}</small>}</label><label>{t('common.category')}<select value={category} onChange={event => setCategory(event.target.value as Category)}>{CATEGORIES.map(value => <option key={value} value={value}>{categoryLabel(t, value)}</option>)}</select></label><label>{t('common.importanceLabel')}<select value={importance} onChange={event => setImportance(Number(event.target.value))}>{[1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value} / 5</option>)}</select></label><label className={css.fieldWide}>{t('remember.entities')}<input value={entities} onChange={event => setEntities(event.target.value)} placeholder="SQLite, DSH" /></label><label className={css.fieldWide}>{t('remember.tags')}<input value={tags} onChange={event => setTags(event.target.value)} placeholder="architecture, local-first" /></label></div>
-        <div className={css.manualActions}><p>{t('remember.advancedText')}</p><button type="submit" className={css.secondaryButton} disabled={saving || content.trim() === '' || props.sessionId === undefined || memoryBodyId === ''}>{saving ? t('remember.saving') : t('remember.advancedAction')}</button></div>
+        <div className={css.manualActions}><p>{t('remember.advancedText')}</p><button type="submit" className={css.secondaryButton} disabled={saving || content.trim() === '' || memoryBodyId === ''}>{saving ? t('remember.saving') : t('remember.advancedAction')}</button></div>
       </form>
     </details>
   </section>
@@ -2286,17 +2357,19 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const statusLoading = currentStatusState.loading
   const statusError = currentStatusState.error
   const metadataSessionId = status?.lifecycle?.current?.sessionId
-  const metadataClient = useMemo(() => new MnemonClient(connection, undefined, workspaceId), [connection, workspaceId])
+  const taskClient = useMemo(() => new MnemonClient(connection, undefined, workspaceId), [connection, workspaceId])
   const statusRequest = useRef(0)
   const [revision, setRevision] = useState(0)
   const [searchSeed, setSearchSeed] = useState('')
   const [rememberSeed, setRememberSeed] = useState('')
   const [rememberOpen, setRememberOpen] = useState(false)
+  const [strategyOpen, setStrategyOpen] = useState(false)
 
   // A newly inspected workspace must never inherit visible cards, open editors,
   // search seeds, or scroll position from the previous workspace.
   useLayoutEffect(() => {
     setRememberOpen(false)
+    setStrategyOpen(false)
     setRememberSeed('')
     setSearchSeed('')
   }, [viewContextKey])
@@ -2398,7 +2471,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const storageModeText = storageScopeLabel(t, storageMode)
   const showWorkspacePicker = storageMode === 'workspace' && workspaceSelection !== undefined && workspaceSelection.options.length > 0
   const workspaceDiverged = workspaceContext?.mode === 'workspace' && !workspaceContext.aligned
-  const metadataTaskAvailable = status?.lifecycle?.taskAgentAvailable === true
+  const taskAgentAvailable = status?.lifecycle?.taskAgentAvailable === true
     || (status?.lifecycle?.taskAgentAvailable === undefined && metadataSessionId !== undefined && status?.lifecycle?.sessionAvailable === true && !workspaceDiverged)
   const canAlignWorkspace = workspaceDiverged && workspaceSelection?.effectiveWorkspaceId !== undefined
   const workspaceDifference = workspaceContext === undefined
@@ -2433,18 +2506,19 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       {appearance.surface === 'buildin' && workspaceDiverged && <div className={css.workspaceMismatch} role="status"><div><strong>{t('workspace.mismatchTitle')}</strong><span>{t('workspace.mismatchDescription')}</span><div><code>{t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}</code><code>{t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}</code></div></div>{canAlignWorkspace && <button type="button" className={css.secondaryButton} onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button>}</div>}
       <div className={css.workspace}>
         <WorkspaceNavigation page={page} onSelect={selectPrimaryPage} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} writeEnabled={writeEnabled} />
-        <MemoryNavigation page={page} writeEnabled={writeEnabled} onSelect={selectPage} onRemember={() => openRemember()} />
+        <MemoryNavigation page={page} writeEnabled={writeEnabled} onSelect={selectPage} onRemember={() => openRemember()} onStrategy={() => setStrategyOpen(true)} />
         <section key={viewContextKey} className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={!isMemoryPage(page) ? '' : undefined}>
-          {page === 'overview' && <OverviewPage client={client} metadataClient={metadataClient} revision={revision} writeEnabled={writeEnabled} agentAvailable={metadataTaskAvailable} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onAgentRefresh={() => void loadStatus()} onBodyReconnect={bodyReconnected} onBodyMetadata={bodyMetadataUpdated} onExplore={explore} />}
+          {page === 'overview' && <OverviewPage client={client} metadataClient={taskClient} revision={revision} writeEnabled={writeEnabled} agentAvailable={taskAgentAvailable} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onAgentRefresh={() => void loadStatus()} onBodyReconnect={bodyReconnected} onBodyMetadata={bodyMetadataUpdated} onExplore={explore} />}
           {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}
           {page === 'documents' && <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} />}
           {page === 'explore' && <ExplorePage client={client} status={status} seed={searchSeed} writeEnabled={writeEnabled} onForget={forget} />}
           {page === 'entities' && <EntitiesPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onExplore={explore} />}
-          {page === 'remember' && appearance.surface === 'buildin' && <RememberPage client={client} sessionId={sessionId} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} />}
+          {page === 'remember' && appearance.surface === 'buildin' && <RememberPage client={taskClient} agentAvailable={taskAgentAvailable} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} />}
           {page === 'list' && <ListPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onClone={clone} onExplore={explore} />}
           {page === 'status' && <StatusPage client={client} status={status} loading={statusLoading} onRefresh={() => void loadStatus()} />}
         </section>
-        {appearance.surface === 'sidebar' && rememberOpen && <RememberPage client={client} sessionId={sessionId} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} onClose={() => setRememberOpen(false)} onComplete={() => setRememberOpen(false)} />}
+        {appearance.surface === 'sidebar' && rememberOpen && <RememberPage client={taskClient} agentAvailable={taskAgentAvailable} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} onClose={() => setRememberOpen(false)} onComplete={() => setRememberOpen(false)} />}
+        {appearance.surface === 'sidebar' && strategyOpen && <PersistenceStrategyDialog client={taskClient} settingsScope={settingsScope} config={settingsSnapshot.value} writable={settingsSnapshot.writable} agentAvailable={taskAgentAvailable} onClose={() => setStrategyOpen(false)} />}
       </div>
     </main>
   )
