@@ -394,7 +394,9 @@ export class MnemonLifecycle {
       idleReviewMs: this.config.idleReviewMs,
       activeAgents: this.owners.size,
       sessionAvailable: agent !== undefined,
-      taskAgentAvailable: this.ctx.agents.create !== undefined || agent !== undefined,
+      taskAgentAvailable: this.ctx.agents.create === undefined
+        ? agent !== undefined
+        : this.taskAgentModelOptions(requestedId ?? '', workspaceRoot) !== undefined,
       counters: { ...this.counters },
       subagents: this.coordinator.snapshot(),
       ...(owner === undefined ? {} : { current: owner.snapshot() }),
@@ -622,19 +624,8 @@ export class MnemonLifecycle {
     fallbackSessionId: string,
     workspaceRoot: string | undefined,
   ): Promise<Pick<CreateHostAgentOptions, 'meta' | 'agentOptions' | 'setup'>> {
-    const fallback = this.ctx.agents.get(fallbackSessionId.trim()) ?? this.availableAgent(workspaceRoot) ?? this.availableAgent()
-    const selected = modelService(this.ctx.get('agentDefaultModel'))?.currentSelection()
-    const provider = selected?.provider.trim() || fallback?.options?.provider?.trim()
-    const model = selected?.model.trim() || fallback?.options?.model?.trim()
-    if (provider === undefined || provider === '' || model === undefined || model === '') {
-      throw new Error('no default provider/model is available for a clean task Agent')
-    }
-
-    const agentOptions = {
-      provider,
-      model,
-      ...(fallback?.options?.maxTokens === undefined ? {} : { maxTokens: fallback.options.maxTokens }),
-    }
+    const agentOptions = this.taskAgentModelOptions(fallbackSessionId, workspaceRoot)
+    if (agentOptions === undefined) throw new Error('no default provider/model is available for a clean task Agent')
     const cwd = workspaceRoot?.trim()
     const presets = presetService(this.ctx.get('agentPresets'))
     if (presets === undefined) {
@@ -652,6 +643,20 @@ export class MnemonLifecycle {
       },
       agentOptions,
       setup: async agentCtx => { await presets.mount(agentCtx, presetId) },
+    }
+  }
+
+  /** Resolve a complete task route for both status admission and actual creation. */
+  private taskAgentModelOptions(fallbackSessionId: string, workspaceRoot: string | undefined): NonNullable<CreateHostAgentOptions['agentOptions']> | undefined {
+    const fallback = this.ctx.agents.get(fallbackSessionId.trim()) ?? this.availableAgent(workspaceRoot) ?? this.availableAgent()
+    const selected = modelService(this.ctx.get('agentDefaultModel'))?.currentSelection()
+    const provider = selected?.provider.trim() || fallback?.options?.provider?.trim()
+    const model = selected?.model.trim() || fallback?.options?.model?.trim()
+    if (provider === undefined || provider === '' || model === undefined || model === '') return undefined
+    return {
+      provider,
+      model,
+      ...(fallback?.options?.maxTokens === undefined ? {} : { maxTokens: fallback.options.maxTokens }),
     }
   }
 

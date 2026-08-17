@@ -24,7 +24,7 @@ function userMessage(text = 'Continue the project'): HostUserMessage {
   }
 }
 
-function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
+function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: { taskModelRoute?: boolean } = {}) {
   const agentListeners = new Map<string, Listener>()
   const rootListeners = new Map<string, Listener>()
   const events: HostSessionEvent[] = []
@@ -32,6 +32,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
   const steer = vi.fn()
   const taskAgents: HostAgent[] = []
   const disposedTaskAgents: string[] = []
+  const taskModelRoute = options.taskModelRoute !== false
   const defaultModel = { currentSelection: vi.fn(() => ({ provider: 'deepseek', model: 'deepseek-chat' })) }
   const agentPresets = {
     resolve: vi.fn(async () => ({ id: 'default' })),
@@ -50,7 +51,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
   const agent = {
     id: 'session-1',
     status: 'idle',
-    options: { provider: 'deepseek', model: 'deepseek-chat' },
+    ...(taskModelRoute ? { options: { provider: 'deepseek', model: 'deepseek-chat' } } : {}),
     session: { events },
     ctx: agentCtx,
     followup,
@@ -106,7 +107,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
   })
   const ctx = {
     agents: { get: (id: string) => id === agent.id ? agent : taskAgents.find(candidate => candidate.id === id), roots: () => [agent, ...taskAgents], create: createTaskAgent },
-    get: vi.fn((name: string) => name === 'agentDefaultModel' ? defaultModel : name === 'agentPresets' ? agentPresets : undefined),
+    get: vi.fn((name: string) => name === 'agentDefaultModel' && taskModelRoute ? defaultModel : name === 'agentPresets' ? agentPresets : undefined),
     on: vi.fn((name: string, listener: Listener) => {
       rootListeners.set(name, listener)
       return () => rootListeners.delete(name)
@@ -144,6 +145,14 @@ describe('Mnemon DSH lifecycle integration', () => {
       sessionAvailable: true,
       current: { sessionId: 'session-1' },
     })
+  })
+
+  it('does not advertise task Agent actions when creation has no usable model route', async () => {
+    const value = fixture(resolveConfig({ cliPath: '/fake/mnemon' }), { taskModelRoute: false })
+
+    expect(value.lifecycle.snapshot()).toMatchObject({ sessionAvailable: true, taskAgentAvailable: false })
+    await expect(value.lifecycle.maintainMetadata('', ['project'], '/tmp/workspace-two')).rejects.toThrow('no default provider/model')
+    expect(value.createTaskAgent).not.toHaveBeenCalled()
   })
 
   it('runs standalone maintenance under a disposable clean root Agent scoped to the selected workspace', async () => {
