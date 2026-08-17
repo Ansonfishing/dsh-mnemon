@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">
-    <img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon v0.2.0 记忆系统与 Provider 状态概览" width="1180">
+    <img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/c5adc0185a3d250f74b0de332fa49be9aa4009fe/docs/assets/media/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon v0.2.0 多记忆体实时快照与 Provider 可观察范围" width="1180">
   </a>
 </p>
 
