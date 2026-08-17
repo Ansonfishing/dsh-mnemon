@@ -186,7 +186,8 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const activeScope = coreDraft(coreSnapshot.value).storageScope === 'workspace' ? 'workspace' : 'global'
   const error = validation(t, draft)
   const loading = coreSnapshot.status === 'loading' || interactionSnapshot.status === 'loading'
-  const writable = coreSnapshot.writable && interactionSnapshot.writable
+  const localWrites = connection?.isLoopback !== false
+  const writable = localWrites && coreSnapshot.writable && interactionSnapshot.writable
 
   if (coreSnapshot.status === 'unavailable' && interactionSnapshot.status === 'unavailable') return null
 
@@ -244,8 +245,8 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
     }
   }
 
-  const coreDisabled = loading || saving || !coreSnapshot.writable
-  const interactionDisabled = loading || saving || !interactionSnapshot.writable
+  const coreDisabled = loading || saving || !localWrites || !coreSnapshot.writable
+  const interactionDisabled = loading || saving || !localWrites || !interactionSnapshot.writable
   const scopeChanging = dirty.has('storageScope') || dirty.has('dataDir')
   return (
     <section className={css.page} aria-label={t('config.aria')} aria-busy={saving || loading}>

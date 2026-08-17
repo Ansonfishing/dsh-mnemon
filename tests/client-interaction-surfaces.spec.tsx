@@ -119,4 +119,22 @@ describe('conversation interaction surfaces', () => {
     await waitFor(() => expect((screen.getByRole('button', { name: 'saveAction.submit' }) as HTMLButtonElement).disabled).toBe(false))
     expect(screen.queryByText('saveAction.result')).toBeNull()
   })
+
+  it('keeps supervised message writes read-only on a remote trusted-host connection', async () => {
+    const rpcCall = vi.fn(async (_channel: string, endpoint: string) => {
+      if (endpoint === 'status') return { ok: true as const, value: { writeEnabled: true } }
+      if (endpoint === 'assistant-message') return { ok: true as const, value: { messageId: 'message-1', text: 'A durable project decision.' } }
+      throw new Error(`unexpected endpoint: ${endpoint}`)
+    })
+    const connection = { rpc: { call: rpcCall }, isLoopback: false } as ClientConnectionHandle
+
+    render(<MnemonSaveAction messageId="message-1" sessionId="session-a" connection={connection} t={translate as never} />)
+    fireEvent.click(screen.getByRole('button', { name: 'saveAction.button' }))
+
+    const submit = await screen.findByRole('button', { name: 'saveAction.submit' }) as HTMLButtonElement
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('saveAction.readOnly'))
+    expect(submit.disabled).toBe(true)
+    fireEvent.click(submit)
+    expect(rpcCall.mock.calls.some(([, endpoint]) => endpoint === 'supervise')).toBe(false)
+  })
 })

@@ -377,7 +377,7 @@ function ProviderPanel(props: {
 }
 
 export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JSX.Element {
-  const client = useMemo(() => props.connection === undefined ? null : new MnemonClient(props.connection, props.sessionId, props.workspaceId), [props.connection, props.sessionId, props.workspaceId])
+  const client = useMemo(() => props.connection === undefined || props.connection.isLoopback === false ? null : new MnemonClient(props.connection, props.sessionId, props.workspaceId), [props.connection, props.sessionId, props.workspaceId])
   const routeKey = catalogRouteKey(props.sessionId, props.workspaceId)
   const initialCatalog = cachedCatalog(props.connection, routeKey)
   const [catalog, setCatalog] = useState<MemoryProviderServiceCatalog>(() => initialCatalog ?? EMPTY_PROVIDER_CATALOG)

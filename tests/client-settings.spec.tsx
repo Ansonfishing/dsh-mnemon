@@ -9,6 +9,37 @@ import type { Config, InteractionConfig } from '../src/config.ts'
 afterEach(cleanup)
 
 describe('MnemonSettingsCard', () => {
+  it('pre-gates local-only settings and private services on a remote trusted-host connection', async () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}), mutate: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+    const call = vi.fn(async (channel: string, endpoint: string) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') return {
+        ok: true as const,
+        value: { effective: { provider: 'deepseek', model: 'deepseek-chat', source: 'dsh-default' as const }, groups: [], failures: [] },
+      }
+      throw new Error(`unexpected ${channel} ${endpoint}`)
+    })
+    const connection = { rpc: { call }, isLoopback: false } as ClientConnectionHandle
+
+    render(<MnemonSettingsCard scope={scope} connection={connection} />)
+
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'task-agent-models', { includeCatalog: false }))
+    expect((screen.getByRole('radio', { name: 'Sidebar' }) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByRole('radio', { name: '跟随主链路' }) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('当前部署的插件设置为只读。')).toBeTruthy()
+    expect(call.mock.calls.some(([, endpoint]) => endpoint === 'provider-services' || endpoint === 'target')).toBe(false)
+  })
+
   it('inherits the new-session route by default and persists an explicit Provider plus model', async () => {
     const mutate = vi.fn(async () => {})
     const snapshot = {
