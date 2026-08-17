@@ -366,7 +366,7 @@ describe('MnemonView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /沉淀 LLM 监督写回/ }))
     expect(screen.getByRole('heading', { name: '沉淀记忆' })).toBeTruthy()
-    expect(screen.getByText('记忆子 Agent 会完成什么')).toBeTruthy()
+    expect(screen.getByText('独立任务 Agent 会完成什么')).toBeTruthy()
     expect(screen.getByText('人工高级选项')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: /内容 浏览与维护/ }))
@@ -660,7 +660,7 @@ describe('MnemonView', () => {
     expect(screen.queryByRole('dialog', { name: '编辑活跃档案' })).toBeNull()
     fireEvent.click(within(documentReader).getByRole('button', { name: '归档' }))
     const documentArchiveDialog = screen.getByRole('dialog', { name: '确认建立 Mnemon 索引并迁移这份档案？' })
-    expect(within(documentArchiveDialog).getByText(/受限子 Agent 写入可检索的 Mnemon 摘要/)).toBeTruthy()
+    expect(within(documentArchiveDialog).getByText(/受限的独立任务 Agent 写入可检索的 Mnemon 摘要/)).toBeTruthy()
     const documentArchiveCancel = within(documentArchiveDialog).getAllByRole('button', { name: '取消' }).at(-1)
     if (documentArchiveCancel === undefined) throw new Error('document archive cancel button missing')
     fireEvent.click(documentArchiveCancel)
@@ -1291,9 +1291,9 @@ describe('MnemonView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /沉淀 LLM 监督写回/ }))
     fireEvent.change(screen.getByRole('textbox', { name: '待沉淀内容' }), { target: { value: '项目发布前必须通过真实 WebUI 验证。' } })
-    fireEvent.click(screen.getByRole('button', { name: '调度子 Agent 判断并沉淀' }))
+    fireEvent.click(screen.getByRole('button', { name: '调度独立任务 Agent 判断并沉淀' }))
 
-    await waitFor(() => expect(screen.getByText(/记忆子 Agent 已完成处理/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/独立任务 Agent 已完成处理/)).toBeTruthy())
     expect(call).toHaveBeenCalledWith(expect.anything(), 'supervise', { content: '项目发布前必须通过真实 WebUI 验证。' })
     expect(call).not.toHaveBeenCalledWith(expect.anything(), 'remember', expect.anything())
   })

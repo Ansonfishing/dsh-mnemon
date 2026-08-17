@@ -1209,7 +1209,7 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
     for (const id of selectedIds) {
       void props.metadataClient.maintainBodyMetadata([id]).then(result => {
         const update = result.updates.find(candidate => candidate.memoryBodyId === id)
-        if (update === undefined) throw new Error(`metadata subagent omitted Memory Space ${id}`)
+        if (update === undefined) throw new Error(`metadata task Agent omitted Memory Space ${id}`)
         setCatalog(current => current === null ? current : {
           ...current,
           items: current.items.map(body => body.id === id ? { ...body, name: update.title, description: update.description } : body),

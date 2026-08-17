@@ -69,6 +69,6 @@ describe('/mnemon command', () => {
       config: { writeEnabled: true, defaultRecallLimit: 10 },
     } as unknown as MnemonService
     const result = await createMnemonCommand(service, coordinator()).handler(invocation('remember 一条稳定记忆'))
-    expect(result).toEqual({ kind: 'success', text: 'Mnemon 子 Agent 已处理：stored · 记忆体 project' })
+    expect(result).toEqual({ kind: 'success', text: 'Mnemon 记忆 Agent 已处理：stored · 记忆体 project' })
   })
 })
