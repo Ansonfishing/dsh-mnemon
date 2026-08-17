@@ -280,6 +280,12 @@ describe('MnemonView', () => {
       if (endpoint === 'supervise') return { ok: true, value: { delegated: true, sessionId: 'session-1', runId: 'child-1', provider: 'spawn', summary: '已提炼并写入项目交付约束。', action: 'stored', memoryBodyIds: ['project'] } }
       if (endpoint === 'remember') return { ok: true, value: { delegated: true, runId: 'child-2', provider: 'spawn', summary: '已按高级约束写入。', action: 'stored', memoryBodyIds: ['project'] } }
       if (endpoint === 'forget') return { ok: true, value: { action: 'forgotten' } }
+      if (endpoint === 'body') {
+        const target = payload?.memoryBodyId === secondaryBody.id ? secondaryBody : body
+        target.active = Boolean(payload?.active)
+        if (target === secondaryBody) secondaryActive = target.active
+        return { ok: true, value: { ...target } }
+      }
       if (endpoint === 'body-update') {
         const target = payload?.memoryBodyId === secondaryBody.id ? secondaryBody : body
         if (payload?.name !== undefined) target.name = String(payload.name)
@@ -413,8 +419,8 @@ describe('MnemonView', () => {
     expect(within(nativeStatus).getByText('项目记忆体: Mnemon Store 无法打开')).toBeTruthy()
   })
 
-  it('activates an additional memory space without crashing the live graph', async () => {
-    const { connection } = createConnection({ withInactiveBody: true })
+  it('activates an additional memory space through the trusted-host route without crashing the live graph', async () => {
+    const { connection, call } = createConnection({ withInactiveBody: true })
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
@@ -424,6 +430,8 @@ describe('MnemonView', () => {
     fireEvent.click(toggle)
 
     await waitFor(() => expect(screen.getByRole('switch', { name: '偏好记忆体读取开关' }).getAttribute('aria-checked')).toBe('true'))
+    expect(call).toHaveBeenCalledWith('/dsh-mnemon-activation', 'body', { memoryBodyId: 'preferences', active: true, sessionId: 'session-1' })
+    expect(call).not.toHaveBeenCalledWith('/dsh-mnemon-write', 'body-update', expect.objectContaining({ memoryBodyId: 'preferences', active: true }))
     expect(screen.getByRole('button', { name: /偏好: 用户偏好简洁中文回答/ })).toBeTruthy()
     expect(screen.getByRole('img', { name: /Mnemon 实时记忆图谱，7 个元素/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: '记忆体: 偏好记忆体' })).toBeTruthy()

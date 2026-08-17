@@ -101,4 +101,38 @@ describe('MnemonClient turn activity batching', () => {
       memoryBodyId: 'mem0-body', sessionId: 'session-1', workspaceId: 'workspace-1',
     })
   })
+
+  it('routes activation through the narrow trusted-host channel while keeping metadata loopback-only', async () => {
+    const call = vi.fn(async () => ({ ok: true as const, value: { id: 'project', active: true } }))
+    const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle, 'session-1', 'workspace-1')
+
+    await client.updateBody('project', { active: true })
+    expect(call).toHaveBeenLastCalledWith('/dsh-mnemon-activation', 'body', {
+      memoryBodyId: 'project', active: true, sessionId: 'session-1', workspaceId: 'workspace-1',
+    })
+
+    await client.updateBody('project', { name: 'Project decisions', description: 'Stable decisions.' })
+    expect(call).toHaveBeenLastCalledWith('/dsh-mnemon-write', 'body-update', {
+      memoryBodyId: 'project', name: 'Project decisions', description: 'Stable decisions.', sessionId: 'session-1', workspaceId: 'workspace-1',
+    })
+  })
+
+  it('falls back to the legacy write route only when an older Host lacks the activation channel', async () => {
+    const call = vi.fn(async (channel: string) => {
+      if (channel === '/dsh-mnemon-activation') throw new Error('transport failure for /dsh-mnemon-activation/body: HTTP 404')
+      return { ok: true as const, value: { id: 'project', active: true } }
+    })
+    const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle)
+
+    await client.updateBody('project', { active: true })
+    expect(call.mock.calls).toEqual([
+      ['/dsh-mnemon-activation', 'body', { memoryBodyId: 'project', active: true }],
+      ['/dsh-mnemon-write', 'body-update', { memoryBodyId: 'project', active: true }],
+    ])
+
+    call.mockReset()
+    call.mockRejectedValue(new Error('transport failure for /dsh-mnemon-activation/body: HTTP 403'))
+    await expect(client.updateBody('project', { active: false })).rejects.toThrow('HTTP 403')
+    expect(call).toHaveBeenCalledTimes(1)
+  })
 })

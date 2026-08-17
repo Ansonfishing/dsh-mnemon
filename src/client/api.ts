@@ -1,4 +1,5 @@
 import {
+  MNEMON_ACTIVATION_CHANNEL,
   MNEMON_PACK_CHANNEL,
   MNEMON_READ_CHANNEL,
   MNEMON_WRITE_CHANNEL,
@@ -50,6 +51,16 @@ interface TurnActivityCacheEntry {
 }
 
 const turnActivityCache = new WeakMap<ClientConnectionHandle, Map<string, TurnActivityCacheEntry>>()
+
+function isActivationOnly(request: UpdateMemoryBodyRequest): request is UpdateMemoryBodyRequest & { active: boolean } {
+  return typeof request.active === 'boolean'
+    && Object.entries(request).every(([field, value]) => field === 'active' || value === undefined)
+}
+
+function isMissingActivationChannel(reason: unknown): boolean {
+  return reason instanceof Error
+    && reason.message === `transport failure for ${MNEMON_ACTIVATION_CHANNEL}/body: HTTP 404`
+}
 
 async function loadTurnActivities(connection: ClientConnectionHandle, sessionId: string | undefined, requiredCursor: number): Promise<TurnMemoryActivitySnapshot> {
   let sessions = turnActivityCache.get(connection)
@@ -241,7 +252,15 @@ export class MnemonClient {
   }
 
   updateBody(memoryBodyId: string, request: UpdateMemoryBodyRequest): Promise<MemoryBody> {
-    return this.call(MNEMON_WRITE_CHANNEL, 'body-update', this.scoped({ memoryBodyId, ...request }))
+    if (!isActivationOnly(request)) return this.call(MNEMON_WRITE_CHANNEL, 'body-update', this.scoped({ memoryBodyId, ...request }))
+    const payload = this.scoped({ memoryBodyId, active: request.active })
+    return this.call<MemoryBody>(MNEMON_ACTIVATION_CHANNEL, 'body', payload).catch(reason => {
+      // A rolling client-first upgrade can briefly talk to a pre-v0.2.2 Host.
+      // Fall back only when that Host has no activation route; never retry a
+      // 403 or a business rejection through the broader write boundary.
+      if (!isMissingActivationChannel(reason)) throw reason
+      return this.call(MNEMON_WRITE_CHANNEL, 'body-update', payload)
+    })
   }
 
   reconnectBody(memoryBodyId: string): Promise<MemoryBodyView> {
