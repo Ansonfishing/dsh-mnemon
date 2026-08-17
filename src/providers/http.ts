@@ -96,6 +96,7 @@ export abstract class HttpMemoryProvider {
     const label = memoryProviderDescriptor(this.id).label
     if (endpoint === '') throw new Error(`${label} endpoint is not configured`)
     if (!path.startsWith('/')) throw new Error(`${label} request path must be absolute`)
+    options.signal?.throwIfAborted()
     const controller = new AbortController()
     const relay = () => controller.abort(options.signal?.reason)
     options.signal?.addEventListener('abort', relay, { once: true })

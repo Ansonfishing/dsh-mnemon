@@ -39,6 +39,16 @@ function response(payload: unknown, status = 200): Response {
 }
 
 describe('third-party remote memory providers', () => {
+  it('does not start generic Provider HTTP requests after cancellation', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+    const controller = new AbortController()
+    controller.abort(new Error('navigation cancelled'))
+    const honcho = await providerBody('honcho', { endpoint: 'https://honcho.example', workspace: 'old', userId: 'user', agentId: 'agent' })
+
+    await expect(new HonchoProvider(honcho.registry, { fetch: fetchMock }).discover({ endpoint: 'https://honcho.example' }, controller.signal)).rejects.toThrow('navigation cancelled')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('discovers provider-native namespaces and maps their upstream titles and descriptions', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       const path = new URL(String(url)).pathname

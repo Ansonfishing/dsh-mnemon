@@ -21,6 +21,8 @@ Roadmap 记录当前实现之外的工作，不是已交付能力承诺。优先
 - [ ] **修复与重建工具**：检测损坏 JSON、缺失投影、孤儿 Document、缺失 DB 和 registry/磁盘不一致。
 - [ ] **schema migration**：为 Runtime、Documents index 和 Memory Space registry 增加显式升级与回滚策略。
 - [ ] **兼容矩阵**：记录并自动测试支持的 DSH、Mnemon CLI、Node 和数据格式组合。
+- [ ] **Cordis / DSH 能力契约测试**：围绕服务注入、热重载与 dispose、延迟注册工具建立宿主集成测试；特别验证结构化输出工具不会因 `toolFilter` 隔离而从子 Agent 作用域消失，并以 [issue #14](https://github.com/omdsh-dev/dsh-mnemon/issues/14) / [PR #17](https://github.com/omdsh-dev/dsh-mnemon/pull/17) 作为回归场景。插件仍保留最小工具权限，不在缺乏宿主契约时通过移除过滤来规避。
+- [ ] **显式宿主能力声明**：由 Cordis / DSH 提供可写性、受信任控制面、目录选择和结构化输出等权威能力，逐步替代插件根据 loopback、服务名或传输位置推断权限的做法。
 - [ ] **明确 Documents workspace ownership**：在共享 storage scope 中记录来源工作区或提供可配置隔离策略。
 
 ## P2：可观测性、体验与发布工程
@@ -29,6 +31,7 @@ Roadmap 记录当前实现之外的工作，不是已交付能力承诺。优先
 - [ ] **切换到 DSH 通用目录选择器**（等待 [dsh-external/issues#603](https://github.com/dsh-external/issues/issues/603)）：当前自定义存储暂用手动填写 Host 路径，以避开远端 `browse` 部署无法调用 `native` picker 的问题；DSH 暴露插件可复用的 directory-picker 服务后，改用由能力提供方统一选择 native / browse 的流程，并仅在必要时保留手动输入作为兜底。
 - [ ] **完整国际化**：覆盖命令、工具卡、Host 错误、兼容默认元数据和确认文案。
 - [ ] **多记忆体 E2E**：覆盖自动建空间、跨空间召回、一次迁移分流、多种边、合并和受控 forget。
+- [ ] **URL 子路径部署矩阵**：为 `/prefix/` 下的 DSH 外壳、静态资源、插件资源、RPC/API 和 WebSocket 建立真实反代 E2E；dsh-mnemon 客户端继续只通过宿主 `connection` 通信，宿主则需提供统一 base URL，避免根路径资源导致“页面可开、插件请求失败”的半可用状态。
 - [ ] **容量与故障注入**：真实触发 USER/MEMORY 边界、Document LRU、revision 冲突、CLI 超时和 Host 中途重启。
 - [ ] **文档一致性检查**：相对链接、外链、双语文件镜像、配置键和代码块一致性进入 CI。
 - [ ] **发布收口**：稳定版本号、变更日志、升级/卸载/数据保留指南、artifact 校验和最小支持策略。

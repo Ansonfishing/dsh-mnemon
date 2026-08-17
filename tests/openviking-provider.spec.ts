@@ -49,6 +49,16 @@ function ok(result: unknown): Response {
 }
 
 describe('OpenVikingProvider', () => {
+  it('does not start discovery after cancellation', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+    const controller = new AbortController()
+    controller.abort(new Error('workspace changed'))
+    const { provider } = await bodyAndRegistry(fetchMock)
+
+    await expect(provider.discover({ endpoint: 'https://memory.example.com', apiKey: 'private-key', account: 'acme' }, controller.signal)).rejects.toThrow('workspace changed')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('discovers every registered user namespace in the configured account', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       expect(new URL(String(url)).pathname).toBe('/api/v1/admin/accounts/acme/users')
