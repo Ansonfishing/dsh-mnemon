@@ -131,7 +131,8 @@ function resolvePersistenceStrategy(value: MemoryPersistenceStrategy | undefined
   if (!MEMORY_PROVIDER_ID_SET.has(providerId)) throw new Error(`dsh-mnemon: unsupported persistence strategy provider: ${String(providerId)}`)
   const prompt = value?.prompt?.trim() ?? ''
   if (prompt.length > 4000) throw new Error('dsh-mnemon: persistence strategy prompt is too long (max 4000 characters)')
-  const allowedProviderIds = [...new Set(value?.rules?.allowedProviderIds ?? ['mnemon-native'])]
+  const configuredProviderIds = value?.rules?.allowedProviderIds
+  const allowedProviderIds = [...new Set(configuredProviderIds === undefined || (configuredProviderIds.length === 0 && mode === 'manual') ? ['mnemon-native'] : configuredProviderIds)]
   if (allowedProviderIds.length === 0) throw new Error('dsh-mnemon: persistence strategy requires at least one allowed provider')
   for (const id of allowedProviderIds) if (!MEMORY_PROVIDER_ID_SET.has(id)) throw new Error(`dsh-mnemon: unsupported persistence strategy provider: ${String(id)}`)
   const dataBoundary = value?.rules?.dataBoundary ?? 'allow-remote'

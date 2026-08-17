@@ -62,6 +62,13 @@ describe('Mnemon config and resolution', () => {
     })
   })
 
+  it('migrates the settings schema empty candidate list to the conservative manual default', () => {
+    expect(resolveConfig({ persistenceStrategy: { mode: 'manual', rules: { allowedProviderIds: [] } } }).persistenceStrategy.rules.allowedProviderIds)
+      .toEqual(['mnemon-native'])
+    expect(() => resolveConfig({ persistenceStrategy: { mode: 'automatic', rules: { allowedProviderIds: [] } } }))
+      .toThrow('at least one allowed provider')
+  })
+
   it('keeps explicit conversation-surface opt-outs', () => {
     expect(resolveConfig({ conversationInteraction: { turnBar: false, saveAction: false } }).conversationInteraction)
       .toMatchObject({ turnBar: false, saveAction: false })
