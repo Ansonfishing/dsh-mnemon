@@ -5,8 +5,8 @@ import type { RuntimeMemoryController } from './runtime-memory.ts'
 export const GUIDANCE_SECTION_NAME = 'mnemon:routing'
 export const RUNTIME_MEMORY_CONTEXT_NAME = 'mnemon:runtime-memory'
 export const ROUTING_GUIDANCE = 'Use memory only by need. For substantial project records, search active Mnemon Documents before deep recall. Call mnemon_recall when durable history may matter or an exact prior detail is missing; never infer a missing historical rule. New explicit reusable facts normally go to mnemon_runtime_memory. A write completes only with a tool receipt.'
-const RUNTIME_MEMORY_EMPTY_BRACES_VARIABLE = 'mnemon_runtime_memory_empty_braces'
-const LITERAL_EMPTY_BRACES = '{{}}'
+const RUNTIME_MEMORY_LITERAL_OPEN_BRACES_VARIABLE = 'mnemon_runtime_memory_literal_open_braces'
+const LITERAL_OPEN_BRACES = '{{'
 
 interface SystemPromptRegistry {
   section?: (value: { name: string; order: number; text: string | (() => string) }) => unknown
@@ -24,8 +24,8 @@ function scopedSystemPrompt(agent: HostAgent): SystemPromptRegistry | undefined 
 
 function runtimeMemoryPromptText(runtimeMemory: RuntimeMemoryController): string {
   return runtimeMemory.contextText().replaceAll(
-    LITERAL_EMPTY_BRACES,
-    `{{${RUNTIME_MEMORY_EMPTY_BRACES_VARIABLE}}}`,
+    LITERAL_OPEN_BRACES,
+    `{{${RUNTIME_MEMORY_LITERAL_OPEN_BRACES_VARIABLE}}}`,
   )
 }
 
@@ -40,7 +40,9 @@ export function registerGuidance(ctx: HostContextShape, config?: Pick<ResolvedCo
 /** Project the latest committed USER.md/MEMORY.md as DSH's durable runtime-context snapshot. */
 export function registerRuntimeMemoryContext(ctx: HostContextShape, runtimeMemory: RuntimeMemoryController): void {
   const prompt = systemPrompt(ctx)
-  prompt?.variable?.(RUNTIME_MEMORY_EMPTY_BRACES_VARIABLE, () => LITERAL_EMPTY_BRACES)
+  // Runtime Memory is quoted user data, so every interpolation opener must be
+  // restored through a non-recursive variable substitution instead of parsed.
+  prompt?.variable?.(RUNTIME_MEMORY_LITERAL_OPEN_BRACES_VARIABLE, () => LITERAL_OPEN_BRACES)
   prompt?.context?.({
     name: RUNTIME_MEMORY_CONTEXT_NAME,
     order: 145,
