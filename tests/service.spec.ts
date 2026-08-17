@@ -17,6 +17,7 @@ var edges = new vis.DataSet([{from:"m1",to:"m2",label:"backbone",color:{color:"#
 const temporaryDirectories: string[] = []
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 
@@ -74,8 +75,62 @@ function fixture(): { service: MnemonService; process: ReturnType<typeof vi.fn<P
 }
 
 describe('MnemonService', () => {
+  it('keeps Agent-created Memory Spaces on the fixed Provider in manual persistence mode', async () => {
+    const config = resolveConfig({ persistenceStrategy: { mode: 'manual', providerId: 'mnemon-native' } })
+    const service = Object.create(MnemonService.prototype) as MnemonService
+    const createBody = vi.fn(async request => ({ id: 'space-1', ...request }))
+    Object.assign(service, { config, createBody })
+
+    await service.createBodyForPersistence({ name: 'Release', description: 'Durable release knowledge.' }, {
+      providerId: 'openviking', reason: 'Model preference must be ignored.', confidence: 'high',
+    })
+
+    expect(createBody).toHaveBeenCalledWith({
+      name: 'Release', description: 'Durable release knowledge.', providerId: 'mnemon-native',
+    }, undefined)
+  })
+
+  it('host-validates an Agent Provider choice against automatic persistence rules', async () => {
+    const config = resolveConfig({
+      persistenceStrategy: {
+        mode: 'automatic',
+        prompt: 'Prefer shared memory.',
+        rules: { allowedProviderIds: ['mnemon-native', 'openviking'], preference: 'shared-first' },
+        providerConnections: { openviking: { targetUri: 'viking://resources/team' } },
+      },
+    })
+    const service = Object.create(MnemonService.prototype) as MnemonService
+    const prepared = {
+      prompt: 'Prefer shared memory.',
+      candidates: [
+        { id: 'mnemon-native' as const, label: 'mnemon', kind: 'local' as const, configured: true, summary: 'Local.', capabilities: { search: true, browse: true, graph: true, entities: true, related: true, remember: true, link: true, forget: true, writeMode: 'exact' as const, deletionMode: 'soft' as const } },
+        { id: 'openviking' as const, label: 'OpenViking', kind: 'remote' as const, configured: true, summary: 'Shared.', capabilities: { search: true, browse: true, graph: false, entities: false, related: false, remember: true, link: false, forget: false, writeMode: 'async-extracting' as const, deletionMode: 'hard' as const } },
+      ],
+      appliedRules: ['allowed:mnemon-native,openviking', 'preference:shared-first'],
+      selectorBrief: 'eligible providers',
+    }
+    const prepareBodyPlacement = vi.fn(() => prepared)
+    const createBody = vi.fn(async (request, _signal, placement) => ({ id: 'space-1', ...request, placement }))
+    Object.assign(service, { config, prepareBodyPlacement, createBody })
+
+    await service.createBodyForPersistence({ name: 'Team', description: 'Shared team knowledge.' }, {
+      providerId: 'openviking', reason: 'This scope must be shared.', confidence: 'high',
+    }, undefined, { runId: 'task-1', provider: 'supervised-writeback' })
+
+    expect(prepareBodyPlacement).toHaveBeenCalledWith(expect.objectContaining({
+      placement: expect.objectContaining({ prompt: 'Prefer shared memory.' }),
+      providerConnections: { openviking: { targetUri: 'viking://resources/team' } },
+    }))
+    expect(createBody).toHaveBeenCalledWith(expect.any(Object), undefined, expect.objectContaining({
+      providerId: 'openviking', decidedBy: 'llm', runId: 'task-1',
+    }))
+  })
+
   it('projects status and reports the effective configuration', async () => {
     const { service, process, dataDir } = fixture()
+    const summary = service.statusSummary()
+    expect(summary).toMatchObject({ healthy: true, store: 'work', memoryBodies: [expect.objectContaining({ id: 'work', statusLoading: true })] })
+    expect(process).not.toHaveBeenCalled()
     const status = await service.status()
     expect(status).toMatchObject({
       healthy: true,
@@ -92,6 +147,15 @@ describe('MnemonService', () => {
     expect(process).toHaveBeenCalledWith('/fake/mnemon', ['--version'], expect.anything())
   })
 
+  it('coalesces simultaneous Memory Space health snapshots', async () => {
+    const { service, process } = fixture()
+
+    const [first, second] = await Promise.all([service.bodies(), service.bodies()])
+
+    expect(first).toEqual(second)
+    expect(process.mock.calls.filter(([, args]) => args.includes('status'))).toHaveLength(1)
+  })
+
   it('allows every Memory Space to be inactive for DSH without changing the Mnemon default Store', async () => {
     const { service } = fixture()
     service.updateBody('work', { active: false })
@@ -102,10 +166,105 @@ describe('MnemonService', () => {
     expect(status.memoryBodies).toEqual([expect.objectContaining({ id: 'work', active: false, mnemonDefault: true })])
   })
 
+  it('reports enabled provider health and removes its local Memory Space projections when disabled', async () => {
+    const { service } = fixture()
+    const provider = {
+      id: 'openviking' as const,
+      status: vi.fn(async () => ({ healthy: true })),
+      search: vi.fn(async () => ({ results: [] })),
+      graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
+      list: vi.fn(async () => []),
+      remember: vi.fn(async () => ({ action: 'stored' })),
+    }
+    ;(service as unknown as { providers: Map<string, typeof provider> }).providers.set('openviking', provider)
+    const body = await service.createBody({
+      name: 'Team memory', description: 'Shared provider memory.', active: true, providerId: 'openviking',
+      connection: { endpoint: 'http://127.0.0.1:1933', targetUri: 'viking://user/team/memories' },
+    })
+
+    await expect(service.status()).resolves.toMatchObject({
+      providerServices: expect.arrayContaining([expect.objectContaining({
+        providerId: 'openviking', enabled: true, configured: true, status: 'healthy', memoryBodyCount: 1, activeMemoryBodyCount: 1,
+      })]),
+    })
+
+    service.memoryBodies.updateProviderService('openviking', {}, [], false)
+    await expect(service.status()).resolves.toMatchObject({
+      providerServices: expect.arrayContaining([expect.objectContaining({
+        providerId: 'openviking', enabled: false, configured: true, status: 'disabled', memoryBodyCount: 0, activeMemoryBodyCount: 0,
+      })]),
+    })
+    expect(service.memoryBodies.list()).toEqual([expect.objectContaining({ provider: { id: 'mnemon-native', label: 'mnemon', kind: 'local', location: expect.any(String), apiKeyConfigured: false, settings: {}, configuredSecrets: [], capabilities: expect.any(Object) } })])
+    await expect(service.search({ query: 'anything', memoryBodyIds: [body.id] })).rejects.toThrow('unknown memory body')
+  })
+
+  it('discovers provider-owned Memory Spaces before enabling the service', async () => {
+    const { service } = fixture()
+    const provider = {
+      id: 'hindsight' as const,
+      discover: vi.fn()
+        .mockResolvedValueOnce([
+          { externalId: 'bank-1', name: 'Product bank', description: 'Mapped from Hindsight.', connection: { bankId: 'bank-1', budget: 'mid' } },
+          { externalId: 'bank-2', name: 'Engineering bank', description: 'A second provider-owned namespace.', connection: { bankId: 'bank-2', budget: 'low' } },
+        ]),
+      status: vi.fn(async () => ({ healthy: true })),
+      search: vi.fn(async () => ({ results: [] })),
+      graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
+      list: vi.fn(async () => []),
+      remember: vi.fn(async () => ({ action: 'stored' })),
+    }
+    ;(service as unknown as { providers: Map<string, typeof provider> }).providers.set('hindsight', provider)
+
+    await expect(service.updateProviderService('hindsight', { endpoint: 'http://127.0.0.1:18889', apiKey: 'secret' })).resolves.toMatchObject({ enabled: true, configured: true })
+    expect(provider.discover).toHaveBeenCalledWith(expect.objectContaining({ endpoint: 'http://127.0.0.1:18889', apiKey: 'secret' }), undefined)
+    expect(service.memoryBodies.list()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Product bank', description: 'Mapped from Hindsight.', active: true, provider: expect.objectContaining({ id: 'hindsight' }) }),
+    ]))
+    const body = service.memoryBodies.list().find(item => item.provider.id === 'hindsight')!
+    service.updateBodyMetadata([{ memoryBodyId: body.id, title: '产品长期洞察', description: 'AI 维护的产品范围、用户反馈与关键取舍。' }])
+    await expect(service.reconnectBody(body.id)).resolves.toMatchObject({
+      id: body.id,
+      name: '产品长期洞察',
+      description: 'AI 维护的产品范围、用户反馈与关键取舍。',
+      provider: expect.objectContaining({ settings: expect.objectContaining({ bankId: 'bank-1', budget: 'mid' }) }),
+      healthy: true,
+    })
+    expect(provider.discover).toHaveBeenCalledOnce()
+    expect(provider.status).toHaveBeenCalledOnce()
+    expect(provider.status).toHaveBeenCalledWith(expect.objectContaining({ id: body.id, provider: expect.objectContaining({ settings: expect.objectContaining({ bankId: 'bank-1' }) }) }), undefined)
+  })
+
+  it('keeps the previous provider projection untouched when reconnect discovery fails', async () => {
+    const { service } = fixture()
+    const provider = {
+      id: 'hindsight' as const,
+      discover: vi.fn()
+        .mockResolvedValueOnce([{ externalId: 'bank-1', name: 'Product bank', description: 'Mapped from Hindsight.', connection: { bankId: 'bank-1', budget: 'mid' } }])
+        .mockRejectedValueOnce(new Error('connection refused')),
+      status: vi.fn(async () => ({ healthy: true })),
+      search: vi.fn(async () => ({ results: [] })),
+      graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
+      list: vi.fn(async () => []),
+      remember: vi.fn(async () => ({ action: 'stored' })),
+    }
+    ;(service as unknown as { providers: Map<string, typeof provider> }).providers.set('hindsight', provider)
+
+    await service.updateProviderService('hindsight', { endpoint: 'http://127.0.0.1:18889', apiKey: 'old-secret' })
+    const before = service.memoryBodies.list()
+    await expect(service.updateProviderService('hindsight', { endpoint: 'http://127.0.0.1:19999', apiKey: 'new-secret' })).rejects.toThrow('connection refused')
+
+    expect(service.memoryBodies.list()).toEqual(before)
+    expect(service.memoryBodies.providerConnection(before.find(body => body.provider.id === 'hindsight')!.id)).toMatchObject({
+      endpoint: 'http://127.0.0.1:18889',
+      apiKey: 'old-secret',
+    })
+  })
+
   it('uses graph recall by default and normalizes compact results', async () => {
     const { service, process, dataDir } = fixture()
     const result = await service.search({ query: ' database choice ' })
-    expect(result.results).toEqual([expect.objectContaining({ id: 'm1', score: 0.91, confidence: 'high' })])
+    expect(result.results).toEqual([expect.objectContaining({ id: 'm1', score: 0.91, confidence: 'high', memoryCapabilities: expect.objectContaining({ related: true, forget: true }) })])
+    expect(result.sources).toEqual([expect.objectContaining({ memoryBodyId: 'work', mode: 'search', status: 'ready', itemCount: 1 })])
     expect(process).toHaveBeenCalledWith(
       '/fake/mnemon',
       ['--data-dir', dataDir, '--store', 'work', 'recall', 'database choice', '--limit', '7'],
@@ -121,6 +280,7 @@ describe('MnemonService', () => {
       expect.objectContaining({ id: 'm1', category: 'decision', entities: ['SQLite'], tags: ['storage'] }),
     ])
     expect(graph.edges).toEqual([expect.objectContaining({ sourceId: 'work:m1', targetId: 'work:m2', type: 'temporal', label: 'backbone' })])
+    expect(graph.sources).toEqual([expect.objectContaining({ memoryBodyId: 'work', mode: 'graph', status: 'ready', itemCount: 2, edgeCount: 1 })])
     expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['viz', '--format', 'html']), expect.anything())
     expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--readonly', 'recall', '', '--basic']), expect.anything())
   })
@@ -130,13 +290,59 @@ describe('MnemonService', () => {
     await expect(service.list({ query: 'sqlite', category: 'decision' })).resolves.toMatchObject({
       total: 1,
       items: [{ id: 'm1', content: 'Use SQLite for local-first storage.', category: 'decision', color: '#e74c3c' }],
+      sources: [{ memoryBodyId: 'work', mode: 'enumerable', status: 'ready', itemCount: 1 }],
     })
     expect(process.mock.calls.filter(([, args]) => args.includes('recall')).every(([, args]) => args.includes('--readonly'))).toBe(true)
   })
 
+  it('samples Native metadata through one bounded readonly basic recall', async () => {
+    const { service, process } = fixture()
+
+    await expect(service.metadataSample('work')).resolves.toMatchObject({
+      memoryBodyId: 'work',
+      providerId: 'mnemon-native',
+      method: 'native-basic',
+      evidence: [{ content: 'Use SQLite for local-first storage.' }, { content: 'Four graph memory' }],
+    })
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining([
+      '--readonly', 'recall', '', '--basic', '--limit', '6',
+    ]), expect.anything())
+  })
+
+  it('uses a single native search request when Provider browse would fan out', async () => {
+    const { service } = fixture()
+    const provider = {
+      id: 'openviking' as const,
+      status: vi.fn(async () => ({ healthy: true })),
+      search: vi.fn(async () => ({ results: [{ id: 'memory-1', content: 'Team release gates and rollback decisions.', category: 'decision', entities: ['Release'] }] })),
+      graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
+      list: vi.fn(async () => []),
+      remember: vi.fn(async () => ({ action: 'stored' })),
+    }
+    ;(service as unknown as { providers: Map<string, typeof provider> }).providers.set('openviking', provider)
+    const body = await service.createBody({
+      name: 'Team memory', description: 'Shared provider memory.', active: true, providerId: 'openviking',
+      connection: { endpoint: 'http://127.0.0.1:1933', targetUri: 'viking://user/team/memories' },
+    })
+
+    await expect(service.metadataSample(body.id)).resolves.toMatchObject({
+      providerId: 'openviking', method: 'search', evidence: [{ content: 'Team release gates and rollback decisions.' }],
+    })
+    expect(provider.search).toHaveBeenCalledWith(body, {
+      query: 'Shared provider memory.',
+      mode: 'basic',
+      limit: 6,
+    }, undefined)
+    expect(provider.list).not.toHaveBeenCalled()
+  })
+
   it('exposes top entities and recalls one entity on demand', async () => {
     const { service, process } = fixture()
-    await expect(service.entities()).resolves.toMatchObject({ items: [{ entity: 'SQLite', count: 2 }], insights: [] })
+    await expect(service.entities()).resolves.toMatchObject({
+      items: [{ entity: 'SQLite', count: 2 }],
+      insights: [],
+      sources: [{ memoryBodyId: 'work', mode: 'entities', status: 'ready', itemCount: 1 }],
+    })
     await expect(service.entities('SQLite', 5)).resolves.toMatchObject({ selected: 'SQLite', insights: [{ id: 'm1' }] })
     expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--intent', 'ENTITY', '--limit', '5']), expect.anything())
   })
@@ -208,6 +414,73 @@ describe('MnemonService', () => {
     await expect(service.deleteBody(research.id)).resolves.toMatchObject({ id: research.id })
     expect(service.memoryBodies.list().some(body => body.id === research.id)).toBe(false)
     expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['--store', research.id, 'store', 'remove', research.id]), expect.anything())
+  })
+
+  it('fuses heterogeneous provider ranks without comparing raw scores and isolates provider failures', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      status: 'success',
+      result: { memories: [{ uri: 'viking://user/team/memories/preferences/concise.md', overview: 'Prefer concise answers.', score: 99 }] },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { service } = fixture()
+    await service.createBody({
+      name: '团队 OpenViking', description: '团队共享的远程长期记忆。', active: true, providerId: 'openviking',
+      openViking: { endpoint: 'https://memory.example.com', targetUri: 'viking://user/team/memories' },
+    })
+
+    const result = await service.search({ query: 'answer style' })
+
+    expect(result.results).toHaveLength(2)
+    expect(result.results.map(item => item.memoryProviderId)).toEqual(['mnemon-native', 'openviking'])
+    expect(result.results.map(item => item.score)).toEqual([0.91, 99])
+    expect(result.results[0]!.federatedScore).toBe(result.results[1]!.federatedScore)
+    expect(result.sources).toEqual([
+      expect.objectContaining({ memoryBodyId: 'work', mode: 'search', status: 'ready' }),
+      expect.objectContaining({ providerId: 'openviking', mode: 'search', status: 'ready' }),
+    ])
+
+    fetchMock.mockRejectedValueOnce(new Error('remote offline'))
+    await expect(service.search({ query: 'fallback' })).resolves.toMatchObject({
+      results: [expect.objectContaining({ memoryProviderId: 'mnemon-native' })],
+      hint: expect.stringContaining('团队 OpenViking: unavailable: remote offline'),
+      sources: expect.arrayContaining([expect.objectContaining({ providerId: 'openviking', status: 'unavailable' })]),
+    })
+  })
+
+  it('reports query-only providers without pretending they expose an enumerable content list', async () => {
+    const { service } = fixture()
+    const provider = {
+      id: 'byterover' as const,
+      status: vi.fn(async () => ({ healthy: true })),
+      search: vi.fn(async () => ({ results: [{ id: 'brv:architecture', content: 'Architecture decisions are curated before compression.', category: 'context' }] })),
+      graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
+      list: vi.fn(async () => []),
+      remember: vi.fn(async () => ({ action: 'stored' })),
+    }
+    ;(service as unknown as { providers: Map<string, typeof provider> }).providers.set('byterover', provider)
+    const body = await service.createBody({
+      name: 'ByteRover Knowledge', description: 'Query-oriented coding context.', active: true, providerId: 'byterover',
+      connection: { cliPath: 'brv', workingDirectory: '/tmp/dsh-mnemon-bytrover' },
+    })
+
+    await expect(service.list({ memoryBodyIds: [body.id] })).resolves.toMatchObject({
+      items: [],
+      sources: [{ mode: 'query-only', status: 'query-required', itemCount: 0 }],
+    })
+    await expect(service.list({ query: 'architecture', memoryBodyIds: [body.id] })).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: 'brv:architecture', memoryProviderId: 'byterover' })],
+      sources: [{ mode: 'query-only', status: 'ready', itemCount: 1 }],
+    })
+    expect(provider.list).not.toHaveBeenCalled()
+    expect(provider.search).toHaveBeenCalledWith(body, expect.objectContaining({ query: 'architecture' }), undefined)
+
+    provider.search.mockClear()
+    await expect(service.metadataSample(body.id)).resolves.toMatchObject({ providerId: 'byterover', method: 'search' })
+    expect(provider.search).toHaveBeenCalledWith(body, {
+      query: 'Query-oriented coding context.',
+      mode: 'basic',
+      limit: 6,
+    }, undefined)
   })
 
   it('rejects explicit reads from an inactive memory body', async () => {

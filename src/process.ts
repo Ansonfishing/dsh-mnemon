@@ -7,9 +7,12 @@ export interface ProcessResult {
 }
 
 export interface ProcessOptions {
-  signal?: AbortSignal
+  signal?: AbortSignal | undefined
   timeoutMs: number
   maxOutputBytes?: number
+  cwd?: string | undefined
+  env?: NodeJS.ProcessEnv | undefined
+  label?: string | undefined
 }
 
 export type ProcessRunner = (
@@ -22,7 +25,14 @@ const DEFAULT_MAX_OUTPUT_BYTES = 2 * 1024 * 1024
 
 /** Spawn without a shell, with bounded output and cooperative cancellation. */
 export const runProcess: ProcessRunner = (command, args, options) => new Promise((resolve, reject) => {
-  const child = spawn(command, [...args], { stdio: ['ignore', 'pipe', 'pipe'], shell: false, windowsHide: true })
+  const label = options.label ?? 'mnemon'
+  const child = spawn(command, [...args], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: false,
+    windowsHide: true,
+    ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+    ...(options.env === undefined ? {} : { env: options.env }),
+  })
   const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
   let stdout = ''
   let stderr = ''
@@ -48,13 +58,13 @@ export const runProcess: ProcessRunner = (command, args, options) => new Promise
   }
   const abort = (): void => {
     stop()
-    finish(new Error(`mnemon command aborted: ${String(options.signal?.reason ?? 'cancelled')}`))
+    finish(new Error(`${label} command aborted: ${String(options.signal?.reason ?? 'cancelled')}`))
   }
   const append = (target: 'stdout' | 'stderr', chunk: Buffer): void => {
     outputBytes += chunk.byteLength
     if (outputBytes > maxOutputBytes) {
       stop()
-      finish(new Error(`mnemon output exceeded ${maxOutputBytes} bytes`))
+      finish(new Error(`${label} output exceeded ${maxOutputBytes} bytes`))
       return
     }
     if (target === 'stdout') stdout += chunk.toString('utf8')
@@ -64,13 +74,13 @@ export const runProcess: ProcessRunner = (command, args, options) => new Promise
   child.stdout.on('data', (chunk: Buffer) => { append('stdout', chunk) })
   child.stderr.on('data', (chunk: Buffer) => { append('stderr', chunk) })
   child.on('error', (error) => {
-    finish(new Error(`failed to launch mnemon (${JSON.stringify(command)}): ${error.message}`))
+    finish(new Error(`failed to launch ${label} (${JSON.stringify(command)}): ${error.message}`))
   })
   child.on('close', (exitCode) => { finish(null, { stdout, stderr, exitCode }) })
 
   const timeout = setTimeout(() => {
     stop()
-    finish(new Error(`mnemon did not respond within ${options.timeoutMs}ms`))
+    finish(new Error(`${label} did not respond within ${options.timeoutMs}ms`))
   }, options.timeoutMs)
   if (options.signal?.aborted === true) abort()
   else options.signal?.addEventListener('abort', abort, { once: true })

@@ -74,6 +74,47 @@ export interface Config {
     turnBar?: boolean
     saveAction?: boolean
   }
+  /** Provider policy used when an Agent must create a new Memory Space while distilling memory. */
+  persistenceStrategy?: MemoryPersistenceStrategy
+  /** Model route used by clean, session-independent maintenance Agents. */
+  taskAgentModel?: TaskAgentModelConfig
+}
+
+export interface TaskAgentModelConfig {
+  mode?: 'inherit' | 'fixed'
+  provider?: string
+  model?: string
+}
+
+export interface ResolvedTaskAgentModelConfig {
+  mode: 'inherit' | 'fixed'
+  provider?: string
+  model?: string
+}
+
+export interface TaskAgentModelCatalogModel {
+  id: string
+  name: string
+  description?: string
+}
+
+export interface TaskAgentModelCatalogGroup {
+  id: string
+  name: string
+  models: TaskAgentModelCatalogModel[]
+}
+
+export interface TaskAgentModelCatalogFailure {
+  id: string
+  name: string
+  message: string
+}
+
+export interface TaskAgentModelCatalog {
+  effective?: { provider: string; model: string; source: 'fixed' | 'dsh-default' | 'active-agent' }
+  defaultSelection?: { provider: string; model: string }
+  groups: TaskAgentModelCatalogGroup[]
+  failures: TaskAgentModelCatalogFailure[]
 }
 
 export interface InteractionConfig {
@@ -101,11 +142,182 @@ export interface ResolvedConfig {
     turnBar: boolean
     saveAction: boolean
   }
+  persistenceStrategy: ResolvedMemoryPersistenceStrategy
+  taskAgentModel: ResolvedTaskAgentModelConfig
 }
 
 export interface ResolvedInteractionConfig {
   turnBar: boolean
   saveAction: boolean
+}
+
+export type MemoryProviderId =
+  | 'mnemon-native'
+  | 'openviking'
+  | 'honcho'
+  | 'mem0'
+  | 'hindsight'
+  | 'holographic'
+  | 'retaindb'
+  | 'byterover'
+  | 'supermemory'
+
+export type MemoryProviderConnectionValue = string | number | boolean
+export type MemoryProviderConnection = Record<string, MemoryProviderConnectionValue>
+
+export interface MemoryProviderConfigField {
+  key: string
+  label: string
+  /** Service fields are configured once in Settings; memory fields belong to each Memory Space. */
+  scope: 'service' | 'memory'
+  /** A reusable local data location presented with the same default/custom scope UI as Mnemon Native. */
+  role?: 'global-location'
+  input: 'text' | 'url' | 'secret' | 'number' | 'boolean' | 'select' | 'path'
+  required: boolean
+  defaultValue?: MemoryProviderConnectionValue
+  placeholder?: string
+  help?: string
+  options?: Array<{ value: string; label: string }>
+}
+
+export type MemoryPlacementCapability = 'graph' | 'entities' | 'related' | 'exact-write' | 'link' | 'forget'
+export type MemoryPlacementPreference = 'balanced' | 'local-first' | 'shared-first'
+
+export interface MemoryPlacementRules {
+  allowedProviderIds?: MemoryProviderId[]
+  dataBoundary?: 'allow-remote' | 'local-only'
+  requiredCapabilities?: MemoryPlacementCapability[]
+  preference?: MemoryPlacementPreference
+}
+
+/** Persistent policy for provider selection during Agent-supervised memory distillation. */
+export interface MemoryPersistenceStrategy {
+  mode?: 'manual' | 'automatic'
+  /** Fixed provider in manual mode. */
+  providerId?: MemoryProviderId
+  /** User-authored guidance used only after hard rules have filtered automatic candidates. */
+  prompt?: string
+  rules?: MemoryPlacementRules
+  /** Memory-level connection values for providers that may be selected by the policy. */
+  providerConnections?: Partial<Record<MemoryProviderId, MemoryProviderConnection>>
+}
+
+export interface ResolvedMemoryPersistenceStrategy {
+  mode: 'manual' | 'automatic'
+  providerId: MemoryProviderId
+  prompt: string
+  rules: {
+    allowedProviderIds: MemoryProviderId[]
+    dataBoundary: 'allow-remote' | 'local-only'
+    requiredCapabilities: MemoryPlacementCapability[]
+    preference: MemoryPlacementPreference
+  }
+  providerConnections: Partial<Record<MemoryProviderId, MemoryProviderConnection>>
+}
+
+export interface AutomaticMemoryPlacementRequest {
+  mode: 'automatic'
+  /** User-authored routing guidance. Hard rules above always take precedence. */
+  prompt?: string
+  rules?: MemoryPlacementRules
+}
+
+export interface MemoryPlacementDecision {
+  mode: 'automatic'
+  providerId: MemoryProviderId
+  decidedBy: 'rules' | 'llm'
+  reason: string
+  confidence: 'high' | 'medium' | 'low'
+  candidateProviderIds: MemoryProviderId[]
+  appliedRules: string[]
+  decidedAt: string
+  runId?: string
+  subagentProvider?: string
+}
+
+export interface MemoryProviderCapabilities {
+  search: boolean
+  browse: boolean
+  graph: boolean
+  entities: boolean
+  related: boolean
+  remember: boolean
+  link: boolean
+  forget: boolean
+  writeMode: 'exact' | 'async-extracting'
+  deletionMode: 'soft' | 'hard' | 'unsupported'
+}
+
+export interface MemoryProviderDescriptor {
+  id: MemoryProviderId
+  label: string
+  kind: 'local' | 'remote'
+  /** How the provider data scope reacts when DSH switches workspaces. */
+  workspaceBinding: 'automatic' | 'optional-override' | 'provider-global'
+  summary: string
+  origin: 'native' | 'third-party'
+  capabilities: MemoryProviderCapabilities
+  fields: MemoryProviderConfigField[]
+  /** Runtime projection: whether this scope has a usable saved service configuration. */
+  serviceConfigured?: boolean
+}
+
+export interface MemoryProviderServiceView {
+  providerId: MemoryProviderId
+  enabled: boolean
+  configured: boolean
+  settings: MemoryProviderConnection
+  configuredSecrets: string[]
+  /** Present only on the settings RPC so its password inputs can use native reveal/hide behavior. */
+  secretValues?: MemoryProviderConnection
+}
+
+export interface MemoryProviderServiceCatalog {
+  providers: MemoryProviderDescriptor[]
+  items: MemoryProviderServiceView[]
+  generatedAt: string
+}
+
+export interface UpdateMemoryProviderServiceRequest {
+  providerId: MemoryProviderId
+  settings: MemoryProviderConnection
+  enabled?: boolean
+  clearSecrets?: string[]
+}
+
+export interface MemoryProviderRuntimeStatus {
+  providerId: MemoryProviderId
+  label: string
+  enabled: boolean
+  configured: boolean
+  status: 'disabled' | 'idle' | 'healthy' | 'unhealthy'
+  memoryBodyCount: number
+  activeMemoryBodyCount: number
+  error?: string
+}
+
+export interface MemoryBodyProvider {
+  id: MemoryProviderId
+  label: string
+  kind: 'local' | 'remote'
+  location: string
+  targetUri?: string
+  account?: string
+  user?: string
+  actorPeerId?: string
+  apiKeyConfigured: boolean
+  settings: MemoryProviderConnection
+  configuredSecrets: string[]
+  capabilities: MemoryProviderCapabilities
+}
+
+export interface OpenVikingBodyConnection {
+  endpoint: string
+  targetUri: string
+  apiKey?: string
+  account?: string
+  user?: string
+  actorPeerId?: string
 }
 
 export interface MemoryBody {
@@ -114,6 +326,8 @@ export interface MemoryBody {
   description: string
   active: boolean
   dbPath: string
+  provider: MemoryBodyProvider
+  placement?: MemoryPlacementDecision
   createdAt: string
   updatedAt: string
 }
@@ -122,12 +336,35 @@ export interface CreateMemoryBodyRequest {
   name: string
   description: string
   active?: boolean
+  providerId?: MemoryProviderId
+  connection?: MemoryProviderConnection
+  /** Candidate-specific settings used only while resolving automatic placement. */
+  providerConnections?: Partial<Record<MemoryProviderId, MemoryProviderConnection>>
+  openViking?: OpenVikingBodyConnection
+  placement?: AutomaticMemoryPlacementRequest
 }
 
 export interface UpdateMemoryBodyRequest {
   name?: string
   description?: string
   active?: boolean
+  connection?: MemoryProviderConnection
+  clearSecrets?: string[]
+  openViking?: Partial<OpenVikingBodyConnection> & { clearApiKey?: boolean }
+}
+
+export interface MemoryBodyMetadataUpdate {
+  memoryBodyId: string
+  title: string
+  description: string
+}
+
+export interface MemoryBodyMetadataMaintenanceResult {
+  delegated: true
+  runId: string
+  provider: string
+  summary: string
+  updates: MemoryBodyMetadataUpdate[]
 }
 
 export type Category = 'preference' | 'decision' | 'fact' | 'insight' | 'context' | 'general'
@@ -148,6 +385,8 @@ export interface Insight {
   entities?: string[]
   source?: string
   score?: number
+  /** Comparable rank score only when results were fused across providers. */
+  federatedScore?: number
   confidence?: string
   intent?: string
   matchedVia?: string
@@ -156,6 +395,10 @@ export interface Insight {
   edgeType?: string
   memoryBodyId?: string
   memoryBodyName?: string
+  memoryProviderId?: MemoryProviderId
+  /** Owning Provider capabilities at read time; safe to expose to clients. */
+  memoryCapabilities?: MemoryProviderCapabilities
+  externalUri?: string
 }
 
 export interface SearchRequest {
@@ -191,13 +434,20 @@ export interface MemoryBodyStats {
 export interface MemoryBodyView extends MemoryBody {
   /** True when Mnemon's persisted active-file selection points to this Store. */
   mnemonDefault: boolean
+  /** False when an external provider is disabled while its Memory Space registration remains preserved. */
+  providerEnabled?: boolean
   healthy: boolean
+  /** A fast directory response is visible while provider health resolves independently. */
+  statusLoading?: boolean
   error?: string
   stats?: MemoryBodyStats
 }
 
 export interface MemoryBodyCatalog {
   items: MemoryBodyView[]
+  providers: MemoryProviderDescriptor[]
+  /** Sanitized policy exposed to memory workers; provider connection values are never included. */
+  persistenceStrategy?: Omit<ResolvedMemoryPersistenceStrategy, 'providerConnections'>
   total: number
   activeCount: number
   directory: string
@@ -226,6 +476,31 @@ export interface MemoryGraphSnapshot {
   edges: MemoryGraphEdge[]
   generatedAt: string
   memoryBodies?: Array<Pick<MemoryBody, 'id' | 'name' | 'active'>>
+  /** Per-space observation state for capability-aware overview rendering. */
+  sources?: MemoryReadSource[]
+}
+
+export type MemoryReadMode = 'search' | 'graph' | 'projection' | 'enumerable' | 'query-only' | 'entities' | 'unsupported'
+export type MemoryReadStatus = 'ready' | 'empty' | 'query-required' | 'unsupported' | 'unavailable'
+
+/**
+ * One provider-backed Memory Space participating in a read surface.
+ *
+ * The mode describes what the provider can truthfully expose; status describes
+ * the result of this particular read. Keeping those dimensions separate lets
+ * the UI distinguish an empty graph from a flat projection, a query-only
+ * engine, and an unavailable connection.
+ */
+export interface MemoryReadSource {
+  memoryBodyId: string
+  memoryBodyName: string
+  providerId: MemoryProviderId
+  providerLabel: string
+  mode: MemoryReadMode
+  status: MemoryReadStatus
+  itemCount: number
+  edgeCount?: number
+  hint?: string
 }
 
 export interface MemoryListRequest {
@@ -239,12 +514,16 @@ export interface MemoryListView {
   items: MemoryGraphNode[]
   total: number
   generatedAt: string
+  /** Omitted only when talking to a pre-provider-aware Host. */
+  sources?: MemoryReadSource[]
 }
 
 export interface EntityView {
   items: Array<{ entity: string; count: number }>
   insights: Insight[]
   selected?: string
+  /** Omitted only when talking to a pre-provider-aware Host. */
+  sources?: MemoryReadSource[]
 }
 
 export type DocumentStatus = 'active' | 'archived'
@@ -444,12 +723,14 @@ export interface SubagentCounters {
   writes: number
   answers: number
   reviews: number
+  placements: number
   migrations: number
   compactions: number
   documentArchives: number
+  metadataMaintenances: number
   failures: number
   lastRunId?: string
-  lastOperation?: 'recall' | 'write' | 'review' | 'migration' | 'compaction' | 'document-archive'
+  lastOperation?: 'recall' | 'write' | 'review' | 'placement' | 'migration' | 'compaction' | 'document-archive' | 'metadata-maintenance'
   lastAt?: string
 }
 
@@ -489,6 +770,8 @@ export interface LifecycleSnapshot {
   idleReviewMs: number
   activeAgents: number
   sessionAvailable: boolean
+  /** A session-independent task Agent can be created for WebUI maintenance. */
+  taskAgentAvailable: boolean
   counters: LifecycleCounters
   subagents: SubagentCounters
   current?: LifecycleAgentSnapshot
@@ -511,6 +794,7 @@ export interface StatusView {
   defaultRecallLimit: number
   memoryBodyDirectory: string
   memoryBodies: MemoryBodyView[]
+  providerServices?: MemoryProviderRuntimeStatus[]
   lifecycle?: LifecycleSnapshot
   documents?: DocumentSnapshot
   storage?: StorageScopeCatalog

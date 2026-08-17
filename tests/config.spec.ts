@@ -20,7 +20,63 @@ describe('Mnemon config and resolution', () => {
       tabEnabled: true,
       writeEnabled: true,
       conversationInteraction: { turnBar: true, saveAction: true },
+      persistenceStrategy: {
+        mode: 'manual',
+        providerId: 'mnemon-native',
+        prompt: '',
+        rules: {
+          allowedProviderIds: ['mnemon-native'],
+          dataBoundary: 'allow-remote',
+          requiredCapabilities: [],
+          preference: 'balanced',
+        },
+        providerConnections: {},
+      },
+      taskAgentModel: { mode: 'inherit' },
     })
+  })
+
+  it('inherits the DSH new-session model by default and validates fixed task routes', () => {
+    expect(resolveConfig({}).taskAgentModel).toEqual({ mode: 'inherit' })
+    expect(resolveConfig({
+      taskAgentModel: { mode: 'fixed', provider: ' deepseek ', model: ' deepseek-chat ' },
+    }).taskAgentModel).toEqual({ mode: 'fixed', provider: 'deepseek', model: 'deepseek-chat' })
+    expect(() => resolveConfig({ taskAgentModel: { mode: 'fixed', provider: 'deepseek' } }))
+      .toThrow('provider and model')
+  })
+
+  it('resolves a bounded automatic persistence strategy without changing its provider connections', () => {
+    expect(resolveConfig({
+      persistenceStrategy: {
+        mode: 'automatic',
+        prompt: 'Prefer shared project memory.',
+        rules: {
+          allowedProviderIds: ['mnemon-native', 'openviking', 'openviking'],
+          dataBoundary: 'allow-remote',
+          requiredCapabilities: ['graph'],
+          preference: 'shared-first',
+        },
+        providerConnections: { openviking: { targetUri: 'viking://resources/team' } },
+      },
+    }).persistenceStrategy).toEqual({
+      mode: 'automatic',
+      providerId: 'mnemon-native',
+      prompt: 'Prefer shared project memory.',
+      rules: {
+        allowedProviderIds: ['mnemon-native', 'openviking'],
+        dataBoundary: 'allow-remote',
+        requiredCapabilities: ['graph'],
+        preference: 'shared-first',
+      },
+      providerConnections: { openviking: { targetUri: 'viking://resources/team' } },
+    })
+  })
+
+  it('migrates the settings schema empty candidate list to the conservative manual default', () => {
+    expect(resolveConfig({ persistenceStrategy: { mode: 'manual', rules: { allowedProviderIds: [] } } }).persistenceStrategy.rules.allowedProviderIds)
+      .toEqual(['mnemon-native'])
+    expect(() => resolveConfig({ persistenceStrategy: { mode: 'automatic', rules: { allowedProviderIds: [] } } }))
+      .toThrow('at least one allowed provider')
   })
 
   it('keeps explicit conversation-surface opt-outs', () => {

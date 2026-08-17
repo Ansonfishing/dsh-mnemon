@@ -45,7 +45,7 @@ The Host fixes update commands and arguments. The browser cannot supply either; 
 
 **Settings → Memory System → Backup and migration** operates on the **currently effective root**:
 
-- **Export ZIP** includes Runtime, Documents, and every Memory Space.
+- **Export ZIP** includes Runtime, Documents, and every Mnemon Native Memory Space. Third-party connections, local external stores, and remote data are excluded.
 - **Import ZIP** previews, validates, then merges into the effective root.
 - Packs include `manifest.json`, SHA-256 inventory, and component summaries.
 - Export/import hold component locks; a Memory Space with an uncheckpointed WAL is rejected.
@@ -58,7 +58,7 @@ The UI offers safe merge, not “overwrite everything”:
 - Identical Document ID + hash is skipped; conflicting content receives a new ID.
 - Identical Memory Space ID + database is skipped; conflicting content receives a new ID.
 
-Import is governed by `writeEnabled` and is rejected in read-only deployments. A ZIP contains private memory—encrypt it, restrict access, and rehearse recovery.
+Import is governed by `writeEnabled` and is rejected in read-only deployments. A ZIP contains private memory—encrypt it, restrict access, and rehearse recovery. Provider credentials live in `state/memory-providers.json` with mode `0600`; they are excluded from ZIP and never returned to the browser. Protect the entire `state/` directory in the offline snapshot below if connections must be backed up.
 
 ### Recovery rehearsal
 
@@ -118,7 +118,7 @@ Recommended migration: export from the old scope → switch and confirm the new 
 ### Web and model
 
 - Read RPC is `trusted-host`; write, settings, and backup RPC are `loopback`.
-- The WebUI neither reads SQLite directly, starts processes, nor supplies arbitrary update commands.
+- The WebUI neither reads SQLite, starts processes, calls remote providers, nor supplies arbitrary update commands; provider network access remains inside the Host.
 - Workers use persona, tool allowlists, structured output, and `maxDepth: 1`.
 - Queries, candidates, Document bodies, and historical memory are treated as untrusted data.
 

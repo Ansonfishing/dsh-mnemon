@@ -1,7 +1,12 @@
+import { randomUUID } from 'node:crypto'
+import { resolve } from 'node:path'
 import type { ResolvedConfig } from './config.ts'
 import type {
+  CreateHostAgentOptions,
   HostAgent,
+  HostAgentHandle,
   HostContextShape,
+  HostLlmService,
   HostPreStepDecision,
   HostSessionEvent,
   HostUserMessage,
@@ -14,10 +19,35 @@ import { scoreReviewActivity } from './review-activity.ts'
 import { TurnActivityProjection, type TurnMemoryActivity, type TurnMemoryActivitySnapshot } from './activity.ts'
 import type { RuntimeMemoryController } from './runtime-memory.ts'
 import { registerAgentRuntimeMemoryContext } from './guidance.ts'
-import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot, ReviewActivityScore } from './shared/contracts.ts'
+import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot, ReviewActivityScore, TaskAgentModelCatalog } from './shared/contracts.ts'
+import type { PreparedMemoryPlacement } from './provider-placement.ts'
 
 interface AgentRuntimeSource {
   forAgent(agent: HostAgent): { runtimeMemory: RuntimeMemoryController }
+}
+
+interface HostDefaultModelService {
+  currentSelection(): { provider: string; model: string }
+}
+
+interface HostAgentPresetService {
+  resolve(id?: string): Promise<{ id: string }>
+  mount(agentCtx: HostAgent['ctx'], id?: string): Promise<unknown>
+}
+
+function modelService(value: unknown): HostDefaultModelService | undefined {
+  if (typeof value !== 'object' || value === null || !('currentSelection' in value) || typeof value.currentSelection !== 'function') return undefined
+  return value as HostDefaultModelService
+}
+
+function presetService(value: unknown): HostAgentPresetService | undefined {
+  if (typeof value !== 'object' || value === null || !('resolve' in value) || typeof value.resolve !== 'function' || !('mount' in value) || typeof value.mount !== 'function') return undefined
+  return value as HostAgentPresetService
+}
+
+function llmService(value: unknown): HostLlmService | undefined {
+  if (typeof value !== 'object' || value === null || !('listProviders' in value) || typeof value.listProviders !== 'function' || !('listModels' in value) || typeof value.listModels !== 'function') return undefined
+  return value as HostLlmService
 }
 
 export type { TurnMemoryActivity, TurnMemoryActivitySnapshot } from './activity.ts'
@@ -336,6 +366,8 @@ class MnemonAgentLifecycle {
 export class MnemonLifecycle {
   private readonly owners = new Map<HostAgent, { lifecycle: MnemonAgentLifecycle; dispose: () => unknown }>()
   private readonly counters: LifecycleCounters = { primes: 0, recallCues: 0, writebackCues: 0, supervisedRequests: 0, failures: 0 }
+  /** Creation ids reserved before DSH publishes clean task-root Agents. */
+  private readonly taskAgentIds = new Set<string>()
   /** Bounded process-local replay fence for finalized-message write actions. */
   private readonly supervisedWritebacks = new Map<string, { content: string; result: Promise<SupervisedWritebackResult> }>()
 
@@ -356,8 +388,10 @@ export class MnemonLifecycle {
     }
   }
 
-  snapshot(sessionId?: string): LifecycleSnapshot {
-    const agent = sessionId === undefined ? undefined : this.ctx.agents.get(sessionId)
+  snapshot(sessionId?: string, workspaceRoot?: string): LifecycleSnapshot {
+    const requestedId = sessionId?.trim()
+    const requested = requestedId === undefined || requestedId === '' ? undefined : this.ctx.agents.get(requestedId)
+    const agent = requested !== undefined && this.owners.has(requested) ? requested : this.availableAgent(workspaceRoot)
     const owner = agent === undefined ? undefined : this.owners.get(agent)?.lifecycle
     return {
       enabled: this.config.lifecycleEnabled,
@@ -366,10 +400,78 @@ export class MnemonLifecycle {
       idleReviewMs: this.config.idleReviewMs,
       activeAgents: this.owners.size,
       sessionAvailable: agent !== undefined,
+      taskAgentAvailable: this.ctx.agents.create === undefined
+        ? agent !== undefined
+        : this.taskAgentModelOptions(requestedId ?? '', workspaceRoot) !== undefined,
       counters: { ...this.counters },
       subagents: this.coordinator.snapshot(),
       ...(owner === undefined ? {} : { current: owner.snapshot() }),
     }
+  }
+
+  /** Provider/model directory used by Settings without requiring a live session. */
+  async taskAgentModels(includeCatalog = true): Promise<TaskAgentModelCatalog> {
+    const route = this.taskAgentModelRoute('', undefined)
+    let defaultSelection: { provider: string; model: string } | undefined
+    try {
+      const selected = modelService(this.ctx.get('agentDefaultModel'))?.currentSelection()
+      const provider = selected?.provider.trim()
+      const model = selected?.model.trim()
+      if (provider !== undefined && provider !== '' && model !== undefined && model !== '') defaultSelection = { provider, model }
+    } catch {}
+
+    const base = {
+      ...(route === undefined ? {} : { effective: { provider: route.options.provider!, model: route.options.model!, source: route.source } }),
+      ...(defaultSelection === undefined ? {} : { defaultSelection }),
+    }
+    if (!includeCatalog) return { ...base, groups: [], failures: [] }
+    const llm = llmService(this.ctx.get('llm'))
+    if (llm === undefined) {
+      return { ...base, groups: [], failures: [{ id: 'dsh', name: 'DSH', message: 'model directory service is unavailable' }] }
+    }
+
+    let providers: Array<{ id: string; name: string }>
+    try {
+      providers = llm.listProviders()
+    } catch (error) {
+      return { ...base, groups: [], failures: [{ id: 'dsh', name: 'DSH', message: error instanceof Error ? error.message : String(error) }] }
+    }
+    const entries = await Promise.all(providers.map(async provider => {
+      try {
+        let timeout: ReturnType<typeof setTimeout> | undefined
+        const models = await Promise.race([
+          llm.listModels(provider.id),
+          new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('model directory timed out after 3 seconds')), 3_000) }),
+        ]).finally(() => { if (timeout !== undefined) clearTimeout(timeout) })
+        return {
+          kind: 'group' as const,
+          value: {
+            id: provider.id,
+            name: provider.name,
+            models: models.map(model => ({ id: model.id, name: model.name, ...(model.description === undefined ? {} : { description: model.description }) })),
+          },
+        }
+      } catch (error) {
+        return { kind: 'failure' as const, value: { id: provider.id, name: provider.name, message: error instanceof Error ? error.message : String(error) } }
+      }
+    }))
+    return {
+      ...base,
+      groups: entries.flatMap(entry => entry.kind === 'group' && entry.value.models.length > 0 ? [entry.value] : []),
+      failures: entries.flatMap(entry => entry.kind === 'failure' ? [entry.value] : []),
+    }
+  }
+
+  private availableAgent(workspaceRoot?: string): HostAgent | undefined {
+    const agents = [...this.owners.keys()]
+    const normalizedRoot = workspaceRoot?.trim()
+    if (normalizedRoot === undefined || normalizedRoot === '') return agents.find(agent => agent.status === 'idle') ?? agents[0]
+    const expected = resolve(normalizedRoot)
+    const matching = agents.filter(agent => {
+      const cwd = agent.session.header?.cwd?.trim()
+      return cwd !== undefined && cwd !== '' && resolve(cwd) === expected
+    })
+    return matching.find(agent => agent.status === 'idle') ?? matching[0]
   }
 
   workspaceRoot(sessionId?: string): string | undefined {
@@ -403,6 +505,12 @@ export class MnemonLifecycle {
     return this.coordinator.answer(this.liveAgent(sessionId), query, evidence, signal)
   }
 
+  /** Synthesize a Web Agent Query without borrowing a conversation Agent or its history. */
+  answerTask(sessionId: string, query: string, evidence: Insight[], workspaceRoot?: string, signal = new AbortController().signal) {
+    const root = workspaceRoot?.trim() || this.workspaceRoot(sessionId)
+    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.answer(agent, query, evidence, signal))
+  }
+
   remember(sessionId: string, request: RememberRequest, signal = new AbortController().signal) {
     return this.coordinator.remember(this.liveAgent(sessionId), request, signal)
   }
@@ -427,38 +535,83 @@ export class MnemonLifecycle {
     return this.coordinator.document(this.liveAgent(sessionId), request, signal)
   }
 
-  archiveDocument(sessionId: string, id: string, signal = new AbortController().signal) {
-    return this.coordinator.archiveDocument(this.liveAgent(sessionId), id, signal)
+  archiveDocument(sessionId: string, id: string, workspaceRoot?: string, signal = new AbortController().signal) {
+    const root = workspaceRoot?.trim() || this.workspaceRoot(sessionId)
+    if (root === undefined || root.trim() === '') throw new Error('a selected DSH workspace is required to archive a Mnemon Document')
+    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.archiveDocument(agent, id, signal))
   }
 
   mutate(sessionId: string, operation: string, request: unknown, signal = new AbortController().signal) {
     return this.coordinator.write(this.liveAgent(sessionId), operation, request, signal)
   }
 
+  placeProvider(sessionId: string, body: { name: string; description: string }, prepared: PreparedMemoryPlacement, signal = new AbortController().signal) {
+    return this.coordinator.placeProvider(this.liveAgent(sessionId), body, prepared, signal)
+  }
+
+  maintainMetadata(sessionId: string, memoryBodyIds: readonly string[], workspaceRoot?: string, signal = new AbortController().signal) {
+    const root = workspaceRoot?.trim() || this.workspaceRoot(sessionId)
+    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.maintainMetadata(agent, memoryBodyIds, signal))
+  }
+
   async supervise(sessionId: string, content: string, idempotencyKey?: string, signal = new AbortController().signal): Promise<SupervisedWritebackResult> {
-    if (!this.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
     const normalizedSessionId = sessionId.trim()
-    const normalizedContent = content.trim()
     if (normalizedSessionId === '') throw new Error('current DSH session is unavailable')
+    return this.superviseResolved(
+      normalizedSessionId,
+      normalizedSessionId,
+      content,
+      idempotencyKey,
+      signal,
+      async operation => operation(this.liveAgent(normalizedSessionId)),
+    )
+  }
+
+  /** Run a Web workbench distillation under a fresh top-level task Agent. */
+  async superviseTask(sessionId: string, content: string, idempotencyKey?: string, workspaceRoot?: string, signal = new AbortController().signal): Promise<SupervisedWritebackResult> {
+    const normalizedSessionId = sessionId.trim()
+    const root = workspaceRoot?.trim() || this.workspaceRoot(normalizedSessionId)
+    const scopeKey = root === undefined ? `task:${normalizedSessionId || 'global'}` : `task:${resolve(root)}`
+    return this.superviseResolved(
+      scopeKey,
+      normalizedSessionId,
+      content,
+      idempotencyKey,
+      signal,
+      operation => this.runTaskAgent(normalizedSessionId, root, signal, operation),
+    )
+  }
+
+  private async superviseResolved(
+    replayScope: string,
+    responseSessionId: string,
+    content: string,
+    idempotencyKey: string | undefined,
+    signal: AbortSignal,
+    withAgent: <T>(operation: (agent: HostAgent) => Promise<T>) => Promise<T>,
+  ): Promise<SupervisedWritebackResult> {
+    if (!this.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
+    const normalizedContent = content.trim()
     if (normalizedContent === '') throw new Error('memory candidate is required')
     if (normalizedContent.length > 8000) throw new Error('memory candidate is too long (max 8000 characters)')
     const normalizedKey = idempotencyKey?.trim()
     if (normalizedKey !== undefined && normalizedKey.length > 200) throw new Error('idempotency key is too long (max 200 characters)')
 
     const execute = async (): Promise<SupervisedWritebackResult> => {
-      const agent = this.liveAgent(normalizedSessionId)
-      const owner = this.owners.get(agent)?.lifecycle
-      if (owner === undefined) this.counters.supervisedRequests += 1
-      else owner.markSupervised()
-      const result = await this.coordinator.write(agent, 'supervised-writeback', {
-        content: normalizedContent,
-        source: normalizedKey === undefined || normalizedKey === '' ? 'explicit Mnemon tab submission' : 'explicit assistant memory action',
-      }, signal)
-      return { ...result, sessionId: normalizedSessionId }
+      return withAgent(async agent => {
+        const owner = this.owners.get(agent)?.lifecycle
+        if (owner === undefined) this.counters.supervisedRequests += 1
+        else owner.markSupervised()
+        const result = await this.coordinator.write(agent, 'supervised-writeback', {
+          content: normalizedContent,
+          source: normalizedKey === undefined || normalizedKey === '' ? 'explicit Mnemon tab submission' : 'explicit assistant memory action',
+        }, signal)
+        return { ...result, sessionId: responseSessionId || agent.id }
+      })
     }
 
     if (normalizedKey === undefined || normalizedKey === '') return execute()
-    const replayKey = `${normalizedSessionId}\u0000${normalizedKey}`
+    const replayKey = `${replayScope}\u0000${normalizedKey}`
     const existing = this.supervisedWritebacks.get(replayKey)
     if (existing !== undefined) {
       if (existing.content !== normalizedContent) throw new Error('idempotency key was already used for different content')
@@ -484,8 +637,102 @@ export class MnemonLifecycle {
     return agent
   }
 
+  /**
+   * Run session-independent maintenance under a fresh top-level Agent. Its cwd
+   * is the explicit Web workbench scope, so LiveMnemonRuntime resolves the same
+   * workspace graph without borrowing conversation history or ownership.
+   */
+  private async runTaskAgent<T>(
+    fallbackSessionId: string,
+    workspaceRoot: string | undefined,
+    signal: AbortSignal,
+    operation: (agent: HostAgent) => Promise<T>,
+  ): Promise<T> {
+    const create = this.ctx.agents.create?.bind(this.ctx.agents)
+    if (create === undefined) {
+      const fallback = workspaceRoot === undefined ? this.ctx.agents.get(fallbackSessionId.trim()) ?? this.availableAgent() : this.availableAgent(workspaceRoot)
+      if (fallback === undefined) throw new Error('current DSH host cannot create a task Agent and no matching live Agent is available')
+      return operation(fallback)
+    }
+
+    const sessionId = randomUUID()
+    this.taskAgentIds.add(sessionId)
+    let handle: HostAgentHandle | undefined
+    let failure: unknown
+    try {
+      const creation = await this.taskAgentCreation(fallbackSessionId, workspaceRoot)
+      handle = await create({
+        sessionId,
+        ...creation,
+        signal,
+      })
+      return await operation(handle.agent)
+    } catch (error) {
+      failure = error
+      throw error
+    } finally {
+      if (handle !== undefined) {
+        try { await handle.dispose() } catch (error) { if (failure === undefined) throw error }
+      }
+      this.taskAgentIds.delete(sessionId)
+    }
+  }
+
+  /** Resolve the same model route and preset composition as an ordinary fresh DSH Agent. */
+  private async taskAgentCreation(
+    fallbackSessionId: string,
+    workspaceRoot: string | undefined,
+  ): Promise<Pick<CreateHostAgentOptions, 'meta' | 'agentOptions' | 'setup'>> {
+    const agentOptions = this.taskAgentModelOptions(fallbackSessionId, workspaceRoot)
+    if (agentOptions === undefined) throw new Error('no default provider/model is available for a clean task Agent')
+    const cwd = workspaceRoot?.trim()
+    const presets = presetService(this.ctx.get('agentPresets'))
+    if (presets === undefined) {
+      return {
+        ...(cwd === undefined || cwd === '' ? {} : { meta: { cwd: resolve(cwd) } }),
+        agentOptions,
+      }
+    }
+
+    const presetId = (await presets.resolve()).id
+    return {
+      meta: {
+        ...(cwd === undefined || cwd === '' ? {} : { cwd: resolve(cwd) }),
+        agentPreset: presetId,
+      },
+      agentOptions,
+      setup: async agentCtx => { await presets.mount(agentCtx, presetId) },
+    }
+  }
+
+  /** Resolve a complete task route for both status admission and actual creation. */
+  private taskAgentModelRoute(fallbackSessionId: string, workspaceRoot: string | undefined): { options: NonNullable<CreateHostAgentOptions['agentOptions']>; source: 'fixed' | 'dsh-default' | 'active-agent' } | undefined {
+    const fallback = this.ctx.agents.get(fallbackSessionId.trim()) ?? this.availableAgent(workspaceRoot) ?? this.availableAgent()
+    if (this.config.taskAgentModel.mode === 'fixed') {
+      const provider = this.config.taskAgentModel.provider?.trim()
+      const model = this.config.taskAgentModel.model?.trim()
+      if (provider === undefined || provider === '' || model === undefined || model === '') return undefined
+      return {
+        source: 'fixed',
+        options: { provider, model, ...(fallback?.options?.maxTokens === undefined ? {} : { maxTokens: fallback.options.maxTokens }) },
+      }
+    }
+    let selected: { provider: string; model: string } | undefined
+    try { selected = modelService(this.ctx.get('agentDefaultModel'))?.currentSelection() } catch {}
+    const selectedProvider = selected?.provider.trim()
+    const selectedModel = selected?.model.trim()
+    const provider = selectedProvider || fallback?.options?.provider?.trim()
+    const model = selectedModel || fallback?.options?.model?.trim()
+    if (provider === undefined || provider === '' || model === undefined || model === '') return undefined
+    return { source: selectedProvider !== undefined && selectedProvider !== '' && selectedModel !== undefined && selectedModel !== '' ? 'dsh-default' : 'active-agent', options: { provider, model, ...(fallback?.options?.maxTokens === undefined ? {} : { maxTokens: fallback.options.maxTokens }) } }
+  }
+
+  private taskAgentModelOptions(fallbackSessionId: string, workspaceRoot: string | undefined): NonNullable<CreateHostAgentOptions['agentOptions']> | undefined {
+    return this.taskAgentModelRoute(fallbackSessionId, workspaceRoot)?.options
+  }
+
   private install(agent: HostAgent, source: LifecycleAgentSnapshot['startSource']): void {
-    if (this.owners.has(agent) || !this.ctx.agents.roots().includes(agent)) return
+    if (this.taskAgentIds.has(agent.id) || this.owners.has(agent) || !this.ctx.agents.roots().includes(agent)) return
     const lifecycle = new MnemonAgentLifecycle(agent, this.coordinator, this.config, this.counters, source)
     let dispose: () => unknown
     dispose = agent.ctx.effect(() => {

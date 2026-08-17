@@ -4,19 +4,27 @@
 
 ## Positioning
 
-`dsh-mnemon` is an integration and supervision layer between DSH and Mnemon, not a new database engine:
+`dsh-mnemon` is an integration and supervision layer between DSH and replaceable long-term-memory providers, not a new database engine:
 
 - DSH provides the root Agent, lifecycle events, subagent providers, tools, commands, settings, and Web extension points;
 - the plugin provides the control plane for three knowledge layers, routing policies, transactional barriers, and UI;
-- the local `mnemon` CLI provides named Stores, SQLite persistence, four graph types, recall, relationships, and soft deletion, and defines the durable-data boundary shared with other Mnemon-enabled agents.
+- Mnemon Native uses the local `mnemon` CLI for named Stores, SQLite, four graph types, relationships, and soft deletion and remains the official prioritized implementation; eight third-party adapters provide Host-controlled HTTP, local-file, or CLI data planes.
 
 ## Component Diagram
 
 [![dsh-mnemon runtime architecture](../assets/diagrams/en/project-architecture.svg)](../assets/diagrams/en/project-architecture.svg)
 
-Solid lines show deterministic data or control paths; purple dashed lines show LLM-supervised paths. Runtime Memory and Documents use managed files directly. Only Memory Spaces call the local Mnemon CLI through `MnemonRunner`. Click the image to open the original SVG.
+Solid lines show deterministic data or control paths; purple dashed lines show LLM-supervised paths. Runtime Memory and Documents use managed files directly. Memory Spaces first pass through `MemoryProviderAdapter`, then enter the selected provider data plane. The current diagram emphasizes the default Native path. Click the image to open the original SVG.
 
-Cross-agent interoperability therefore applies only to Memory Spaces in the diagram: agents share durable memories and relations inside Mnemon Stores, not DSH conversation context, Runtime projections, or the Documents control plane. The plugin never pushes data to another agent; participants share by aligning their local Mnemon root and Store.
+Cross-agent interoperability therefore applies only to the third tier: Mnemon Native shares by aligning a local root and Store, while external engines share through their own provider scope. None automatically shares DSH conversation context, Runtime projections, or Documents.
+
+### Third-tier provider contract
+
+`MemoryProviderAdapter` keeps catalog, lifecycle, and user operations in dsh-mnemon's control plane while delegating provider discovery plus `status / search / graph projection / browse / remember / related / link / forget` to data-plane adapters. Discovery is authoritative: a successful provider save atomically replaces that provider's local namespace mappings and maps upstream titles/descriptions; a failed discovery leaves the prior configuration untouched. Capability declarations are a shared hard boundary for UI, agents, and Host: unsupported actions are hidden and rejected. The complete current matrix is maintained in [Long-term memory providers](./memory-providers.md).
+
+Cross-provider search runs concurrently, with one failure reduced to a Memory-Space-scoped hint. Heterogeneous raw scores are never compared directly; results use reciprocal-rank fusion over each provider's returned order. New adapters reuse this contract without changing the upper-layer Memory Space semantics.
+
+Creation-time provider placement is separate from recall routing. The Host first narrows candidates by configured state, allowlist, data boundary, and required capabilities. One candidate resolves deterministically; multiple candidates send only a redacted capability brief, the Memory Space purpose, and the user's strategy to a tool-free `spawn` worker. The Host validates the structured selection against the eligible set before instantiating the provider, then persists rules, reason, confidence, and worker audit metadata. Endpoints, API keys, and identity headers remain Host-only.
 
 ## Host Composition Root
 
@@ -57,13 +65,17 @@ root Agent calls mnemon_recall
   -> structured evidence returns to root Agent
 ```
 
-Long-term semantic writes, relationships, soft deletion, and Memory Space creation, updates, and merges use the same pattern. Ordinary Runtime Memory and Document mutations first pass through the coordinator but are usually committed directly by the deterministic control layer; only capacity maintenance or archiving requires an additional worker.
+Long-term semantic writes, relationships, deletion, and Memory Space creation or updates use the same supervision pattern, while the deterministic service first checks the target provider's capabilities. Mnemon Native remains the complete reference implementation; external adapters expose only their exact, async, graph, browse, related, and deletion semantics. Ordinary Runtime Memory and Document mutations remain deterministic.
 
-Physical Memory Space deletion is a separate deterministic destructive action. The WebUI must show a second confirmation, then invoke native Mnemon `store remove` through the loopback write RPC; the directory registration is removed only after the CLI deletion succeeds.
+Memory Space removal is a separate dangerous action. Mnemon Native invokes `store remove` after confirmation and removes registration only after success. Every third-party provider uses **Disconnect** semantics: it removes local connection metadata and never deletes provider memory.
 
-## Two Types of Subagent
+## Independent Task Agents and Internal Workers
 
-### `spawn`
+AI metadata, Agent Query, memory distillation, and document archiving initiated by the Web workbench first create a new top-level task Agent. It borrows no conversation history, binds its cwd explicitly to the selected workbench workspace, composes the default DSH preset, and is disposed after completion. Its model route follows the DSH new-session default unless `taskAgentModel` pins a complete Provider + Model.
+
+The top-level task Agent is the user-visible execution unit. The `spawn` / `fork` providers below are bounded internal workers. When semantic judgment is needed, the task Agent may still dispatch a worker, which inherits its parent task Agent's model route. UI copy therefore says **independent task Agent**, while diagnostics and architecture retain worker / subagent terminology.
+
+### `spawn` worker
 
 `spawn` uses a new isolated context. For each task type, the plugin supplies:
 
@@ -75,7 +87,7 @@ Physical Memory Space deletion is a separate deterministic destructive action. T
 
 It is used for recall, long-term semantic writes, evidence-bound answers, hot-memory maintenance, and Document archiving.
 
-### `fork`
+### `fork` worker
 
 Scored background review requires a provider named `fork` with `inheritsParentContext=true`. It inherits only a completed parent checkpoint and determines whether to maintain hot memory or at most one Project Document. It is not a continuation of the user's task, and it does not inject review reasoning into the main conversation.
 
@@ -128,6 +140,7 @@ Command output, tool-card titles, persisted compatibility-default Memory Space n
 | `src/runner.ts` | CLI discovery, arguments, serialization, and JSON parsing |
 | `src/service.ts` | Application facade for long-term memory |
 | `src/memory-bodies.ts` | Memory Space catalog metadata |
+| `src/providers/*` | Third-tier provider contract, catalog, native routing, and external adapters |
 | `src/runtime-memory.ts` | Hot-memory source of truth and projections |
 | `src/documents.ts` | Documents control plane |
 | `src/subagent.ts` | Worker orchestration and capacity transactions |

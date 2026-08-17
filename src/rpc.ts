@@ -7,11 +7,23 @@ import type { MnemonPackManager } from './pack.ts'
 import type { LiveMnemonRuntime, MnemonRuntimeGraph } from './live-runtime.ts'
 import { VersionUpdateManager, type VersionComponentId } from './version-updates.ts'
 import { MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from './channels.ts'
+import { isMemoryProviderId } from './providers/catalog.ts'
+import type {
+  CreateMemoryBodyRequest,
+  MemoryPlacementCapability,
+  MemoryProviderConnection,
+  MemoryProviderId,
+  UpdateMemoryBodyRequest,
+} from './shared/contracts.ts'
 export { MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from './channels.ts'
 
 type RuntimeInput = MnemonService | LiveMnemonRuntime
 
 function isRoutedRuntime(value: RuntimeInput): value is LiveMnemonRuntime {
+  return 'route' in value && typeof value.route === 'function'
+}
+
+function isRoutedPackInput(value: MnemonPackManager | LiveMnemonRuntime): value is LiveMnemonRuntime {
   return 'route' in value && typeof value.route === 'function'
 }
 
@@ -60,6 +72,30 @@ function object(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
+function providerConnection(value: unknown): MemoryProviderConnection | undefined {
+  if (value === undefined) return undefined
+  const input = object(value)
+  const connection: MemoryProviderConnection = {}
+  for (const [key, setting] of Object.entries(input)) {
+    if (typeof setting !== 'string' && typeof setting !== 'number' && typeof setting !== 'boolean') {
+      throw new Error(`provider connection setting ${key} must be a string, number, or boolean`)
+    }
+    connection[key] = setting
+  }
+  return connection
+}
+
+function providerConnections(value: unknown): CreateMemoryBodyRequest['providerConnections'] | undefined {
+  if (value === undefined) return undefined
+  const input = object(value)
+  return Object.fromEntries(Object.entries(input).map(([providerId, settings]) => {
+    if (!isMemoryProviderId(providerId)) throw new Error(`unsupported memory provider: ${providerId}`)
+    const parsed = providerConnection(settings)
+    if (parsed === undefined) throw new Error(`provider connection is missing for ${providerId}`)
+    return [providerId, parsed]
+  })) as CreateMemoryBodyRequest['providerConnections']
+}
+
 function success(value: unknown): RpcResult<unknown> {
   return { ok: true, value }
 }
@@ -87,6 +123,10 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
         if (versions === undefined) throw new Error('version checks are unavailable')
         return success(await versions.check())
       }
+      if (endpoint === 'task-agent-models') {
+        if (lifecycle === undefined) throw new Error('Mnemon task Agent model directory is unavailable without lifecycle integration')
+        return success(await lifecycle.taskAgentModels(payload.includeCatalog !== false))
+      }
       const resolved = runtimeFor(input, payload, runtimeMemory, storage)
       const { service } = resolved.graph
       const selectedWorkspace = resolved.route?.selectedWorkspace
@@ -110,7 +150,9 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
             ...await service.status(),
             ...(versions === undefined ? {} : { dshMnemonVersion: versions.currentDshMnemonVersion }),
             ...(lifecycle === undefined ? {} : {
-              lifecycle: lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId)),
+              lifecycle: service.config.storageScope === 'workspace'
+                ? lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId), selectedWorkspace?.path)
+                : lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId)),
             }),
             ...(documents === undefined ? {} : { documents }),
             ...(resolved.graph.storage === undefined ? {} : { storage: resolved.graph.storage.catalog(selectedWorkspace?.path ?? lifecycle?.workspaceRoot(sessionId)) }),
@@ -125,6 +167,37 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
               },
             }),
           })
+          }
+        case 'status-summary':
+          {
+            const sessionId = payload.sessionId === undefined ? '' : String(payload.sessionId).trim()
+            let documents
+            if (documentController !== undefined) {
+              try { documents = documentController.snapshot() } catch {}
+            } else if (lifecycle !== undefined && sessionId !== '') {
+              try { documents = lifecycle.documents(sessionId) } catch {}
+            }
+            return success({
+              ...service.statusSummary(),
+              ...(versions === undefined ? {} : { dshMnemonVersion: versions.currentDshMnemonVersion }),
+              ...(lifecycle === undefined ? {} : {
+                lifecycle: service.config.storageScope === 'workspace'
+                  ? lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId), selectedWorkspace?.path)
+                  : lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId)),
+              }),
+              ...(documents === undefined ? {} : { documents }),
+              ...(resolved.graph.storage === undefined ? {} : { storage: resolved.graph.storage.catalog(selectedWorkspace?.path ?? lifecycle?.workspaceRoot(sessionId)) }),
+              ...(resolved.route === undefined ? {} : {
+                workspaceContext: {
+                  mode: service.config.storageScope,
+                  selectedRoot: resolved.route.selectedRoot,
+                  effectiveRoot: resolved.route.effectiveRoot,
+                  aligned: resolved.route.aligned,
+                  ...(resolved.route.selectedWorkspace === undefined ? {} : { selectedWorkspace: resolved.route.selectedWorkspace }),
+                  ...(resolved.route.effectiveWorkspace === undefined ? {} : { effectiveWorkspace: resolved.route.effectiveWorkspace }),
+                },
+              }),
+            })
           }
         case 'documents':
           if (documentController !== undefined) return success(documentController.snapshot())
@@ -150,6 +223,10 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
           return success(await service.graph(undefined, Array.isArray(payload.memoryBodyIds) ? payload.memoryBodyIds.map(String) : undefined))
         case 'bodies':
           return success(await service.bodies())
+        case 'body-directory':
+          return success(service.bodyDirectory())
+        case 'provider-services':
+          return success(service.memoryBodies.providerServices({ includeSecrets: true }))
         case 'list':
           return success(await service.list({
             ...(payload.query === undefined ? {} : { query: String(payload.query) }),
@@ -189,7 +266,12 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
               ...(Array.isArray(payload.memoryBodyIds) ? { memoryBodyIds: payload.memoryBodyIds.map(String) } : {}),
             }
             const recalled = await service.search(request)
-            const answer = await lifecycle.answer(String(payload.sessionId ?? ''), request.query, recalled.results)
+            const answer = await lifecycle.answerTask(
+              String(payload.sessionId ?? ''),
+              request.query,
+              recalled.results,
+              service.config.storageScope === 'workspace' ? selectedWorkspace?.path : undefined,
+            )
             return success({ ...recalled, ...answer })
           }
         case 'related':
@@ -235,6 +317,21 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
       const inspectionDiverged = resolved.explicitWorkspace && resolved.route?.aligned === false
       const alignedSession = resolved.explicitWorkspace && resolved.route?.aligned === true && resolved.route.effectiveWorkspace !== undefined
       switch (endpoint) {
+        case 'provider-service-update':
+          {
+            const providerId = String(payload.providerId ?? '')
+            if (!isMemoryProviderId(providerId) || providerId === 'mnemon-native') throw new Error(`unsupported provider service: ${providerId}`)
+            const settings = providerConnection(payload.settings)
+            if (settings === undefined) throw new Error('provider service settings are required')
+            const clearSecrets = payload.clearSecrets === undefined
+              ? []
+              : Array.isArray(payload.clearSecrets)
+                ? payload.clearSecrets.map(String)
+                : (() => { throw new Error('clearSecrets must be an array') })()
+            const enabled = payload.enabled === undefined ? true : payload.enabled === true
+            const updated = await service.updateProviderService(providerId, settings, clearSecrets, enabled)
+            return success(service.memoryBodies.providerServices({ includeSecrets: true }).items.find(item => item.providerId === providerId) ?? updated)
+          }
         case 'runtime-memory':
           if (resolved.graph.runtimeMemory === undefined) throw new Error('runtime memory is unavailable')
           {
@@ -252,12 +349,12 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
           }
         case 'supervise':
           if (lifecycle === undefined) throw new Error('Mnemon lifecycle integration is unavailable')
-          requireAligned(resolved.route)
-          return success(await lifecycle.supervise(
-            String(payload.sessionId ?? ''),
-            String(payload.content ?? ''),
-            payload.idempotencyKey === undefined ? undefined : String(payload.idempotencyKey),
-          ))
+          {
+            const sessionId = String(payload.sessionId ?? '')
+            const idempotencyKey = payload.idempotencyKey === undefined ? undefined : String(payload.idempotencyKey)
+            const workspaceRoot = resolved.route?.selectedWorkspace?.path ?? lifecycle.workspaceRoot(sessionId)
+            return success(await lifecycle.superviseTask(sessionId, String(payload.content ?? ''), idempotencyKey, workspaceRoot))
+          }
         case 'document':
           {
             const action = String(payload.action ?? '')
@@ -283,8 +380,8 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
               }))
             }
             if (lifecycle === undefined) throw new Error('Mnemon Documents require lifecycle integration')
+            if (action === 'archive') return success(await lifecycle.archiveDocument(sessionId, String(payload.id ?? ''), selectedWorkspace?.path))
             if (resolved.explicitWorkspace) requireAligned(resolved.route)
-            if (action === 'archive') return success(await lifecycle.archiveDocument(sessionId, String(payload.id ?? '')))
             if (action === 'create') return success(await lifecycle.mutateDocument(sessionId, {
               action: 'create',
               title: String(payload.title ?? ''),
@@ -328,17 +425,101 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
             ? await service.forget(String(payload.id ?? ''), undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
             : await lifecycle.mutate(String(payload.sessionId ?? ''), 'forget', { id: String(payload.id ?? ''), ...(payload.memoryBodyId === undefined ? {} : { memoryBodyId: String(payload.memoryBodyId) }) }))
         case 'body-create':
-          return success(await service.createBody({
-            name: String(payload.name ?? ''),
-            description: String(payload.description ?? ''),
-            ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
-          }))
+          {
+            const connection = providerConnection(payload.connection)
+            const connections = providerConnections(payload.providerConnections)
+            const openViking = payload.openViking === undefined ? undefined : object(payload.openViking)
+            const placement = payload.placement === undefined ? undefined : object(payload.placement)
+            const placementRules = placement?.rules === undefined ? undefined : object(placement.rules)
+            if (placement !== undefined && placement.mode !== 'automatic') throw new Error(`unsupported provider placement mode: ${String(placement.mode)}`)
+            const request: CreateMemoryBodyRequest = {
+              name: String(payload.name ?? ''),
+              description: String(payload.description ?? ''),
+              ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
+              ...(payload.providerId === undefined ? {} : { providerId: String(payload.providerId) as MemoryProviderId }),
+              ...(connection === undefined ? {} : { connection }),
+              ...(connections === undefined ? {} : { providerConnections: connections }),
+              ...(openViking === undefined ? {} : {
+                openViking: {
+                  endpoint: String(openViking.endpoint ?? ''),
+                  targetUri: String(openViking.targetUri ?? ''),
+                  ...(openViking.apiKey === undefined ? {} : { apiKey: String(openViking.apiKey) }),
+                  ...(openViking.account === undefined ? {} : { account: String(openViking.account) }),
+                  ...(openViking.user === undefined ? {} : { user: String(openViking.user) }),
+                  ...(openViking.actorPeerId === undefined ? {} : { actorPeerId: String(openViking.actorPeerId) }),
+                },
+              }),
+              ...(placement === undefined ? {} : {
+                placement: {
+                  mode: 'automatic',
+                  ...(placement.prompt === undefined ? {} : { prompt: String(placement.prompt) }),
+                  ...(placementRules === undefined ? {} : {
+                    rules: {
+                      ...(Array.isArray(placementRules.allowedProviderIds) ? { allowedProviderIds: placementRules.allowedProviderIds.map(String) as MemoryProviderId[] } : {}),
+                      ...(placementRules.dataBoundary === undefined ? {} : { dataBoundary: String(placementRules.dataBoundary) as 'allow-remote' | 'local-only' }),
+                      ...(Array.isArray(placementRules.requiredCapabilities) ? { requiredCapabilities: placementRules.requiredCapabilities.map(String) as MemoryPlacementCapability[] } : {}),
+                      ...(placementRules.preference === undefined ? {} : { preference: String(placementRules.preference) as 'balanced' | 'local-first' | 'shared-first' }),
+                    },
+                  }),
+                },
+              }),
+            }
+            if (request.placement === undefined) return success(await service.createBody(request))
+            if (lifecycle === undefined) throw new Error('automatic provider placement requires Mnemon lifecycle integration')
+            requireAligned(resolved.route)
+            const prepared = service.prepareBodyPlacement(request)
+            const decision = await lifecycle.placeProvider(String(payload.sessionId ?? ''), {
+              name: request.name,
+              description: request.description,
+            }, prepared)
+            return success(await service.createBody(request, undefined, decision))
+          }
         case 'body-update':
-          return success(service.updateBody(String(payload.memoryBodyId ?? ''), {
-            ...(payload.name === undefined ? {} : { name: String(payload.name) }),
-            ...(payload.description === undefined ? {} : { description: String(payload.description) }),
-            ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
-          }))
+          {
+            const connection = providerConnection(payload.connection)
+            const openViking = payload.openViking === undefined ? undefined : object(payload.openViking)
+            const request: UpdateMemoryBodyRequest = {
+              ...(payload.name === undefined ? {} : { name: String(payload.name) }),
+              ...(payload.description === undefined ? {} : { description: String(payload.description) }),
+              ...(payload.active === undefined ? {} : { active: Boolean(payload.active) }),
+              ...(connection === undefined ? {} : { connection }),
+              ...(payload.clearSecrets === undefined
+                ? {}
+                : Array.isArray(payload.clearSecrets)
+                  ? { clearSecrets: payload.clearSecrets.map(String) }
+                  : (() => { throw new Error('clearSecrets must be an array') })()),
+              ...(openViking === undefined ? {} : {
+                openViking: {
+                  ...(openViking.endpoint === undefined ? {} : { endpoint: String(openViking.endpoint) }),
+                  ...(openViking.targetUri === undefined ? {} : { targetUri: String(openViking.targetUri) }),
+                  ...(openViking.apiKey === undefined ? {} : { apiKey: String(openViking.apiKey) }),
+                  ...(openViking.account === undefined ? {} : { account: String(openViking.account) }),
+                  ...(openViking.user === undefined ? {} : { user: String(openViking.user) }),
+                  ...(openViking.actorPeerId === undefined ? {} : { actorPeerId: String(openViking.actorPeerId) }),
+                  ...(openViking.clearApiKey === undefined ? {} : { clearApiKey: Boolean(openViking.clearApiKey) }),
+                },
+              }),
+            }
+            return success(service.updateBody(String(payload.memoryBodyId ?? ''), request))
+          }
+        case 'body-metadata-maintain':
+          {
+            if (lifecycle === undefined) throw new Error('AI metadata maintenance requires Mnemon lifecycle integration')
+            if (!Array.isArray(payload.memoryBodyIds)) throw new Error('memoryBodyIds must be an array')
+            const memoryBodyIds = [...new Set(payload.memoryBodyIds.map(String).map(id => id.trim()).filter(Boolean))]
+            if (memoryBodyIds.length === 0 || memoryBodyIds.length > 20) throw new Error('metadata maintenance requires 1 through 20 Memory Spaces')
+            const directory = service.bodyDirectory()
+            for (const id of memoryBodyIds) {
+              const body = directory.items.find(item => item.id === id)
+              if (body === undefined) throw new Error(`unknown memory body: ${id}`)
+              if (!body.active || body.providerEnabled === false) throw new Error(`metadata maintenance requires an active Memory Space: ${id}`)
+            }
+            const maintained = await lifecycle.maintainMetadata(String(payload.sessionId ?? ''), memoryBodyIds, selectedWorkspace?.path)
+            service.updateBodyMetadata(maintained.updates)
+            return success(maintained)
+          }
+        case 'body-reconnect':
+          return success(await service.reconnectBody(String(payload.memoryBodyId ?? '')))
         case 'body-delete':
           return success(await service.deleteBody(String(payload.memoryBodyId ?? '')))
         default:
@@ -351,10 +532,13 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
 }
 
 /** Backup payloads contain private memory and therefore remain loopback-only. */
-export function createPackHandler(manager: MnemonPackManager, writeEnabled: boolean | (() => boolean) = true): HostRpcHandler {
+export function createPackHandler(input: MnemonPackManager | LiveMnemonRuntime, writeEnabled: boolean | (() => boolean) = true): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
       const payload = object(rawPayload)
+      const manager = isRoutedPackInput(input)
+        ? input.route(requestedScope(payload)).graph.packs
+        : input
       if (endpoint === 'target') return success(manager.target())
       if (endpoint === 'export') return success(await manager.exportPack('full'))
       if (endpoint === 'inspect') return success(manager.inspectPack(String(payload.base64 ?? ''), payload.fileName === undefined ? undefined : String(payload.fileName)))
@@ -375,7 +559,7 @@ export function registerRpc(connection: HostConnectionHandle, input: RuntimeInpu
   const versionManager = versions ?? new VersionUpdateManager({ mnemonCliPath: () => findVersionCli(input) })
   connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(input, lifecycle, runtimeMemory, storage, versionManager), { authority: 'trusted-host' })
   connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(input, lifecycle, runtimeMemory, versionManager), { authority: 'loopback' })
-  const packManager = isRoutedRuntime(input) ? input.packs : packs
+  const packManager = isRoutedRuntime(input) ? input : packs
   const config = input.config
   if (packManager !== undefined) connection.rpc.handle(MNEMON_PACK_CHANNEL, createPackHandler(packManager, () => config.writeEnabled), { authority: 'loopback' })
 }

@@ -6,6 +6,7 @@ import type { HostAgent, HostContextShape, HostSubagentsService, ToolDefinition 
 import { DocumentManager } from '../src/documents.ts'
 import type { MnemonService } from '../src/service.ts'
 import { assertDshOutputSchema, MnemonSubagentCoordinator } from '../src/subagent.ts'
+import { prepareMemoryPlacement, type MemoryPlacementCandidate } from '../src/provider-placement.ts'
 import { registerTools } from '../src/tools.ts'
 import { RuntimeMemoryCapacityError, type RuntimeMemoryController } from '../src/runtime-memory.ts'
 
@@ -35,6 +36,15 @@ function service(): MnemonService {
       generatedAt: 'now',
     })),
     search: vi.fn(async request => ({ query: request.query, mode: 'smart', results: [{ id: 'm1', content: 'SQLite', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }] })),
+    metadataSample: vi.fn(async (memoryBodyId: string) => ({
+      memoryBodyId,
+      name: memoryBodyId === 'release' ? 'Release' : 'Product',
+      description: memoryBodyId === 'release' ? 'Release gates and rollback notes.' : 'Product scope and decisions.',
+      providerId: 'mnemon-native',
+      providerLabel: 'mnemon',
+      method: 'native-basic',
+      evidence: [{ content: memoryBodyId === 'release' ? 'Use staged rollout and a rollback gate.' : 'The product keeps durable architecture decisions.', category: 'decision', entities: ['DSH'] }],
+    })),
     related: vi.fn(async () => []),
     status: vi.fn(async () => ({ healthy: true })),
     remember: vi.fn(async () => ({ action: 'added' })),
@@ -46,9 +56,9 @@ function service(): MnemonService {
   } as unknown as MnemonService
 }
 
-function subagents(structured: unknown, stopReason = 'completed', providers = ['spawn']) {
+function subagents(structured: unknown, stopReason = 'completed', providers = ['spawn'], localAgent?: HostAgent) {
   const dispose = vi.fn(async () => {})
-  const start = vi.fn(async () => ({ id: 'child-run-1', result: Promise.resolve({ output: [], structured, stopReason }), dispose }))
+  const start = vi.fn(async () => ({ id: 'child-run-1', result: Promise.resolve({ output: [], structured, stopReason }), dispose, ...(localAgent === undefined ? {} : { localAgent }) }))
   const value = {
     list: vi.fn(() => providers),
     getProvider: vi.fn((name: string) => providers.includes(name) ? { capabilities, inheritsParentContext: name === 'fork' } : undefined),
@@ -109,6 +119,80 @@ describe('Mnemon memory subagent coordinator', () => {
       toolFilter: { allow: expect.arrayContaining(['mnemon_recall', 'mnemon_remember', 'mnemon_memory_body_create', 'mnemon_memory_body_merge']) },
     }))
     expect((host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }> }])[1].prompt[0]!.text).not.toMatch(/catalog_json|request_json|dbPath/)
+  })
+
+  it('selects a provider in a tool-free child and keeps user policy out of the persona', async () => {
+    const host = subagents({
+      providerId: 'openviking',
+      reason: 'A shared remote scope matches this team knowledge body.',
+      confidence: 'high',
+    })
+    const coordinator = new MnemonSubagentCoordinator(host.value)
+    const placementCandidates: MemoryPlacementCandidate[] = [
+      {
+        id: 'mnemon-native', label: 'Mnemon Native', kind: 'local', configured: true, summary: 'Local exact memory.',
+        capabilities: { search: true, browse: true, graph: true, entities: true, related: true, remember: true, link: true, forget: true, writeMode: 'exact', deletionMode: 'soft' },
+      },
+      {
+        id: 'openviking', label: 'OpenViking', kind: 'remote', configured: true, summary: 'Shared extracting memory.',
+        capabilities: { search: true, browse: true, graph: false, entities: false, related: false, remember: true, link: false, forget: false, writeMode: 'async-extracting', deletionMode: 'hard' },
+      },
+    ]
+    const prepared = prepareMemoryPlacement({ mode: 'automatic', prompt: '团队知识优先 OpenViking。' }, placementCandidates)
+
+    await expect(coordinator.placeProvider(parent(), {
+      name: '团队发布经验',
+      description: '跨成员共享发布门禁与回滚经验。',
+    }, prepared, new AbortController().signal)).resolves.toMatchObject({
+      providerId: 'openviking',
+      decidedBy: 'llm',
+      runId: 'child-run-1',
+    })
+
+    expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
+      toolFilter: { allow: [] },
+      maxDepth: 1,
+      persona: expect.stringContaining('host-filtered eligible list'),
+    }))
+    const request = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }>; persona: string }])[1]
+    expect(request.prompt[0]!.text).toContain('团队知识优先 OpenViking。')
+    expect(request.persona).not.toContain('团队知识优先 OpenViking。')
+    expect(request.persona).not.toMatch(/api.?key|endpoint|secret/iu)
+    expect(coordinator.snapshot()).toMatchObject({ placements: 1, lastOperation: 'placement' })
+  })
+
+  it('curates metadata in a read-only child and validates exact selected-space coverage', async () => {
+    const host = subagents({
+      summary: 'Updated both scopes.',
+      updates: [
+        { memoryBodyId: 'product', title: '产品决策', description: '记录稳定的产品范围、取舍与依据，在规划和复盘产品方向时召回。' },
+        { memoryBodyId: 'release', title: '发布运行手册', description: '沉淀发布门禁、部署约束和回滚经验，在准备上线或处理故障时召回。' },
+      ],
+    })
+    const memoryService = service()
+    const runtime = { forAgent: vi.fn(() => ({ service: memoryService })) } as never
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtime)
+
+    await expect(coordinator.maintainMetadata(parent(), ['product', 'release'], new AbortController().signal)).resolves.toMatchObject({
+      delegated: true,
+      runId: 'child-run-1',
+      updates: [{ memoryBodyId: 'product', title: '产品决策' }, { memoryBodyId: 'release', title: '发布运行手册' }],
+    })
+    expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
+      toolFilter: { allow: [] },
+      agentOptions: { maxTokens: 4_096 },
+      persona: expect.stringContaining('fastest bounded metadata-sampling path'),
+    }))
+    expect(memoryService.metadataSample).toHaveBeenCalledWith('product', expect.any(AbortSignal))
+    expect(memoryService.metadataSample).toHaveBeenCalledWith('release', expect.any(AbortSignal))
+    const metadataCall = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }> }])[1]
+    expect(metadataCall.prompt[0]!.text).toContain('sampling method: native-basic')
+    expect(metadataCall.prompt[0]!.text).toContain('The product keeps durable architecture decisions.')
+    expect(metadataCall.prompt[0]!.text).not.toMatch(/dbPath|endpoint|api.?key/iu)
+    expect(coordinator.snapshot()).toMatchObject({ metadataMaintenances: 1, lastOperation: 'metadata-maintenance' })
+
+    const incomplete = subagents({ summary: 'Only one.', updates: [{ memoryBodyId: 'product', title: '产品决策', description: '记录稳定的产品范围与取舍，在规划和复盘产品方向时召回。' }] })
+    await expect(new MnemonSubagentCoordinator(incomplete.value, runtime).maintainMetadata(parent(), ['product', 'release'], new AbortController().signal)).rejects.toThrow('omitted')
   })
 
   it('reviews a completed full-context checkpoint through fork with a maintenance-only tool set', async () => {
@@ -291,9 +375,13 @@ describe('Mnemon memory subagent coordinator', () => {
   })
 
   it('disposes failed child runs and reports a hard error instead of falling back to direct memory access', async () => {
-    const host = subagents(undefined, 'error')
+    const failedChild = {
+      ...parent('subagent'),
+      session: { header: { origin: 'subagent' as const }, events: [{ type: 'turn/end', data: { reason: { kind: 'error', error: { code: 'MODEL_ROUTE', message: 'provider rejected sk-secret123456' } } } }] },
+    }
+    const host = subagents(undefined, 'error', ['spawn'], failedChild)
     const coordinator = new MnemonSubagentCoordinator(host.value)
-    await expect(coordinator.recall(parent(), { query: 'x' }, new AbortController().signal)).rejects.toThrow('stopped with error')
+    await expect(coordinator.recall(parent(), { query: 'x' }, new AbortController().signal)).rejects.toThrow('stopped with error: MODEL_ROUTE: provider rejected [redacted]')
     expect(host.dispose).toHaveBeenCalledOnce()
     expect(coordinator.snapshot().failures).toBe(1)
   })

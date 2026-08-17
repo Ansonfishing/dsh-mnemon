@@ -12,7 +12,7 @@ $DSH_HOME/settings.yaml
 
 The default is commonly `~/.dsh/settings.yaml`. All current settings are marked `live`; after Save, the Host initializes a candidate runtime graph and then switches to it atomically.
 
-The Web settings page edits `displayMode`, `storageScope`, and `dataDir`, plus the Turn memory and Save-to-memory switches under `mnemon-ui`. The same page also imports or exports a ZIP for the effective root. Other advanced settings must be changed directly in YAML.
+The Web settings page edits `displayMode`, `storageScope`, `dataDir`, the background task Agent model route, and the Turn memory and Save-to-memory switches under `mnemon-ui`. Global and Workspace define the scope of the complete three-tier system. Mnemon Native owns its Custom data location and ZIP backup/migration controls. Each external provider has a collapsible service configuration for reusable endpoints, credentials, or executables. Enabling or saving it discovers the provider's existing namespaces and maps them into Memory Spaces → Overview; disabling it removes those local mappings without deleting provider data. Other advanced settings must be changed directly in YAML.
 
 ## Complete Example
 
@@ -32,6 +32,10 @@ mnemon:
   idleReviewMs: 30000
   tabEnabled: true
   writeEnabled: true
+  taskAgentModel:
+    mode: inherit # inherit | fixed
+    # provider: deepseek # required for fixed
+    # model: deepseek-chat # required for fixed
 ```
 
 ## Options
@@ -52,6 +56,7 @@ mnemon:
 | `idleReviewMs` | `30000` | 5000–600000 ms | Required continuous idle time after the threshold is reached |
 | `tabEnabled` | `true` | boolean | Whether to mount the Web entry selected by `displayMode`; Host RPC, commands, and Agent tools remain registered when off |
 | `writeEnabled` | `true` | boolean | Whether to expose semantic write tools, write RPC, and write commands |
+| `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed` | Model route for independent task Agents used by AI metadata, Agent Query, memory distillation, and document archiving; `fixed` requires both `provider` and `model` |
 | `mnemon-ui.turnBar` | `true` | boolean | Turn-tail memory activity bar; on by default, **applies live after saving** |
 | `mnemon-ui.saveAction` | `true` | boolean | “Save to memory” icon and confirmation on finalized assistant replies; on by default, **applies live after saving** |
 
@@ -75,7 +80,7 @@ Agent / tool / lifecycle: resolve(currentSession.header.cwd, ".mnemon")
 Web workbench inspection: resolve(workspaceRegistry.get(selectedWorkspaceId).path, ".mnemon")
 ```
 
-Each DSH workspace owns an independent three-tier memory root. Agents, model tools, commands, and lifecycle hooks route by the current session cwd and are unaffected by the Web workbench's inspection target. The workbench can select only Host-registered workspaces, never an arbitrary path. When inspection and execution differ, the header shows both paths and offers one-click alignment with the current session. Agent-backed actions are rejected while misaligned to prevent writes to the wrong project.
+Each DSH workspace owns an independent three-tier memory root. Conversation Agents, model tools, commands, and lifecycle hooks route by the current session cwd. Independent task Agents launched from the Web workbench instead use the selected Host-registered workspace explicitly; the browser can never submit an arbitrary path. AI metadata, Agent Query, memory distillation, and document archiving therefore target the workspace selected at the top left even when no main session is selected.
 
 Headless has no `workspaceRegistry`; its fresh session cwd is the directory from which `dsh --profile headless ...` was launched, so `workspace` resolves directly to `<invocation cwd>/.mnemon`.
 
@@ -97,7 +102,9 @@ mnemon:
 | Share one explicit data root | `custom` | Every participant configures the same absolute directory for isolation and backup |
 | Share only inside one project | `workspace` | Every participant aligns its Mnemon root to that project's `<workspace>/.mnemon` |
 
-Only the Mnemon durable tier under `data/<store>/mnemon.db` has native cross-agent interoperability. Runtime, Documents, DSH activation state, and UI metadata remain managed by dsh-mnemon.
+Mnemon Native interoperates with other Mnemon-enabled agents through `data/<store>/mnemon.db`; third-party engines interoperate through their configured provider scope. Runtime, Documents, DSH activation state, and UI metadata remain managed by dsh-mnemon. See [Long-term memory providers](./memory-providers.md).
+
+External service settings, Memory Space scope settings, and secrets are stored in `state/memory-providers.json` under the selected scope root, not in `settings.yaml`. Multiple Memory Spaces reuse one provider service configuration; the Host merges both layers only at runtime. The Mnemon Native ZIP contains only Runtime, Documents, and native Memory Spaces; external service data, credentials, and local third-party stores are excluded.
 
 ## CLI Discovery Precedence
 
@@ -127,6 +134,20 @@ config.store
 ```
 
 After the Memory Space directory has been established, long-term semantic operations use explicit Memory Space IDs and do not rely on the global active Store for routing.
+
+## Background Task Agent Model Route
+
+AI metadata, Agent Query, workbench/conversation memory distillation, and document archiving create a clean independent top-level task Agent. It uses the selected workspace as its cwd, works even when no main Agent session is selected, and is disposed after the task finishes.
+
+The default `inherit` mode first uses the DSH Provider / Model selected for new sessions, then falls back to a complete route from the current available main Agent. Choosing **Choose model provider** in Settings stores a complete Provider + Model and overrides only Mnemon background tasks; it does not change the conversation Agent. When semantic judgment requires a bounded worker inside that task Agent, the worker inherits the task Agent route.
+
+```yaml
+mnemon:
+  taskAgentModel:
+    mode: fixed
+    provider: deepseek
+    model: deepseek-chat
+```
 
 ## Provider Requirements
 

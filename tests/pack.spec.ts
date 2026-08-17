@@ -1,10 +1,11 @@
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { strToU8, unzipSync, zipSync } from 'fflate'
 import { resolveConfig } from '../src/config.ts'
 import { DocumentController } from '../src/documents.ts'
+import { MemoryBodyRegistry } from '../src/memory-bodies.ts'
 import { MnemonPackManager, MNEMON_PACK_FORMAT, MNEMON_PACK_MIME } from '../src/pack.ts'
 import { createRunner } from '../src/runner.ts'
 import { RuntimeMemoryController } from '../src/runtime-memory.ts'
@@ -87,6 +88,23 @@ describe('Mnemon Pack', () => {
       expect(exported.manifest).toMatchObject({ scope, components: [scope] })
       expect(Object.keys(files).filter(path => path.startsWith('payload/')).every(path => path.startsWith(`payload/${scope === 'memory-spaces' ? 'data' : scope}/`))).toBe(true)
     }
+  })
+
+  it('keeps remote provider connections and credentials outside Mnemon Packs', async () => {
+    const source = await fixture('pack-provider-boundary', 22)
+    const registry = new MemoryBodyRegistry(source.runner, true, now)
+    await registry.create({
+      name: 'Remote team memory', description: 'Shared remote memory.', providerId: 'openviking',
+      openViking: { endpoint: 'https://memory.example.com', targetUri: 'viking://user/team/memories', apiKey: 'must-not-enter-pack' },
+    })
+
+    const exported = await source.manager.exportPack('memory-spaces')
+    const archive = Buffer.from(exported.base64, 'base64')
+    const files = unzipSync(archive)
+
+    expect(archive.includes(Buffer.from('must-not-enter-pack'))).toBe(false)
+    expect(Object.keys(files).some(path => path.includes('memory-providers'))).toBe(false)
+    expect(existsSync(registry.providerRegistryPath)).toBe(true)
   })
 
   it('rejects checksum tampering, unsafe paths, and malformed transport data', async () => {

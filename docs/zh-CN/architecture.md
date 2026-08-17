@@ -4,19 +4,27 @@
 
 ## 定位
 
-`dsh-mnemon` 是 DSH 与 Mnemon 之间的集成和监督层，不是新的数据库引擎：
+`dsh-mnemon` 是 DSH 与可替换长期记忆 Provider 之间的集成和监督层，不是新的数据库引擎：
 
 - DSH 提供主 Agent、生命周期事件、subagent provider、工具、命令、设置和 Web 扩展点；
 - 插件提供三层知识控制面、路由策略、事务屏障和 UI；
-- 本地 `mnemon` CLI 提供命名 Store、SQLite 持久化、四类图、召回、关系和软删除，并形成与其他 Mnemon-enabled Agent 共享长期记忆的数据边界。
+- Mnemon Native 通过本地 `mnemon` CLI 提供命名 Store、SQLite、四类图、关系和软删除，是官方优先实现；8 个三方适配器提供由 Host 控制的 HTTP、本地文件或 CLI 数据面。
 
 ## 组件图
 
 [![dsh-mnemon 运行时架构](../assets/diagrams/zh-CN/project-architecture.svg)](../assets/diagrams/zh-CN/project-architecture.svg)
 
-图中实线表示确定性数据或控制路径，紫色虚线表示 LLM 监督路径。Runtime Memory 和 Documents 直接使用受管文件；只有 Memory Spaces 通过 `MnemonRunner` 调用本地 Mnemon CLI。点击图片可以查看原始 SVG。
+图中实线表示确定性数据或控制路径，紫色虚线表示 LLM 监督路径。Runtime Memory 和 Documents 直接使用受管文件；Memory Spaces 先经过 `MemoryProviderAdapter`，再进入选中的 Provider 数据面。现有图主要绘制默认的 Native 路径。点击图片可以查看原始 SVG。
 
-因此跨 Agent 互操作只发生在图中的 Memory Spaces：共享的是 Mnemon Store 内的长期记忆与关系，不是 DSH 的会话上下文、Runtime 投影或 Documents 控制面。插件不会把数据主动推送到其他 Agent；参与方通过对齐本地 Mnemon 根和 Store 来共享。
+因此跨 Agent 互操作只发生在第三层：Mnemon Native 通过对齐本地根和 Store 共享，三方引擎通过各自 Provider 作用域共享；任何 Provider 都不会自动共享 DSH 会话、Runtime 投影或 Documents。
+
+### 第三层 Provider 契约
+
+`MemoryProviderAdapter` 把目录、生命周期和用户操作保持在 dsh-mnemon 控制面，把 `status / search / graph projection / browse / remember / related / link / forget` 交给数据面适配器。能力声明是 UI、Agent 和服务端共同使用的硬边界，不支持的操作会被隐藏并在 Host 拒绝。完整当前矩阵见[长期记忆 Provider](./memory-providers.md)。
+
+跨 Provider 检索并发执行，单个失败只生成带记忆体名称的 hint；异构原始分数不直接比较，而是按各 Provider 返回次序做 reciprocal-rank 融合。新适配器复用同一契约，不改变上层“记忆体”语义。
+
+创建时的 Provider placement 与召回路由是两个独立阶段。placement 先在 Host 内按已配置状态、允许列表、数据边界和必需能力裁剪候选；只剩一个候选时确定性落定，多个候选时才把脱敏后的能力摘要、记忆体用途和用户策略交给无工具权限的 `spawn` worker。Host 会再次校验结构化结果必须来自合格候选，再实例化 Provider，并把规则、理由、置信度和 worker 审计信息写入记忆体元数据。endpoint、API Key 与身份头始终留在 Host。
 
 ## Host 组合根
 
@@ -57,13 +65,17 @@ root Agent calls mnemon_recall
   -> structured evidence returns to root Agent
 ```
 
-长期语义写入、关系、软删除以及记忆体创建/更新/合并采用相同模式。运行时记忆和 Documents 的普通变更先经过 coordinator，但通常由确定性控制层直接提交；只有容量维护或归档需要额外 worker。
+长期语义写入、关系、删除以及记忆体创建/更新采用相同监督模式，但确定性服务会先校验目标 Provider 的能力。Mnemon Native 仍是完整参考实现；三方适配器只开放各自能兑现的精确/异步写入、图谱、浏览、关联与删除语义。运行时记忆和 Documents 的普通变更仍由确定性控制层提交。
 
-记忆体目录的物理删除是单独的确定性危险操作：WebUI 必须先展示二次确认，随后经 loopback 写 RPC 调用 Mnemon 原生 `store remove`；只有 CLI 删除成功后才移除目录登记。
+记忆体目录的移除是独立危险操作：Mnemon Native 经确认后调用 `store remove`，成功才移除登记；所有三方 Provider 都使用“断开”语义，只删除本地连接元数据，绝不删除 Provider 记忆。
 
-## 两类子 Agent
+## 独立任务 Agent 与内部 Worker
 
-### `spawn`
+Web 工作台发起的 AI 元信息、Agent 查询、记忆沉淀和档案归档先创建一个新的顶层任务 Agent。这个 Agent 不借用对话历史，cwd 明确绑定工作台选中的工作区，并组合 DSH 的默认 preset；任务完成后立即释放。它的模型路由默认跟随 DSH 新会话默认值，也可以用 `taskAgentModel` 固定完整 Provider + Model。
+
+顶层任务 Agent 是用户可感知的执行单元；下述 `spawn` / `fork` 是插件内部受限 Worker Provider。任务 Agent 需要语义判断时仍会调度 bounded worker，worker 继承其父任务 Agent 的模型路由。因此，界面统一使用“独立任务 Agent”，而诊断与架构文档保留 worker / subagent 术语。
+
+### `spawn` worker
 
 `spawn` 使用新的隔离上下文。插件为每类任务提供：
 
@@ -75,7 +87,7 @@ root Agent calls mnemon_recall
 
 它用于召回、长期语义写入、证据限定问答、热记忆整理和 Document 归档。
 
-### `fork`
+### `fork` worker
 
 评分后台审查必须使用名为 `fork` 且 `inheritsParentContext=true` 的 provider。它只继承已经完成的父 checkpoint，用于判断是否需要维护热记忆或最多一份项目档案。它不是用户任务的延续，也不会把审查推理注入主对话。
 
@@ -128,6 +140,7 @@ browser component
 | `src/runner.ts` | CLI 发现、参数、序列化和 JSON 解析 |
 | `src/service.ts` | 长期记忆应用门面 |
 | `src/memory-bodies.ts` | Memory Space 目录元数据 |
+| `src/providers/*` | 第三层 Provider 契约、目录、原生路由与三方适配器 |
 | `src/runtime-memory.ts` | 热记忆事实源与投影 |
 | `src/documents.ts` | Documents 控制面 |
 | `src/subagent.ts` | worker 编排与容量事务 |

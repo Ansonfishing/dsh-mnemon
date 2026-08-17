@@ -112,7 +112,7 @@ export interface HostAgent {
   status: 'idle' | 'running'
   options?: { provider?: string; model?: string; maxTokens?: number }
   session: {
-    header?: { origin?: 'subagent'; delegationDepth?: number; cwd?: string }
+    header?: { origin?: 'subagent'; delegationDepth?: number; cwd?: string; agentPreset?: string }
     events: readonly HostSessionEvent[]
   }
   ctx: HostAgentContext
@@ -121,9 +121,24 @@ export interface HostAgent {
   inject(message: HostUserMessage): void
 }
 
+export interface HostAgentHandle {
+  agent: HostAgent
+  dispose(): Promise<void>
+}
+
+export interface CreateHostAgentOptions {
+  sessionId: string
+  meta?: { cwd?: string; agentPreset?: string }
+  agentOptions?: { provider?: string; model?: string; maxTokens?: number }
+  signal?: AbortSignal
+  setup?: (agentCtx: HostAgentContext) => unknown | Promise<unknown>
+}
+
 export interface HostAgentsService {
   get(id: string): HostAgent | undefined
   roots(): HostAgent[]
+  /** DSH rc.6+ factory for an owned, clean top-level Agent. */
+  create?(options: CreateHostAgentOptions): Promise<HostAgentHandle>
 }
 
 export interface HostWorkspace {
@@ -169,6 +184,11 @@ export interface HostSubagentsService {
     toolFilter?: { allow?: string[]; deny?: string[] }
     persona?: string
   }): Promise<HostSubagentRun>
+}
+
+export interface HostLlmService {
+  listProviders(): Array<{ id: string; name: string }>
+  listModels(provider: string): Promise<Array<{ id: string; name: string; description?: string }>>
 }
 
 export interface HostContextShape {

@@ -37,9 +37,9 @@ Headless receives the full model-tool surface. Its task argument is submitted as
 | Tool | Purpose | Root Agent path |
 |---|---|---|
 | `mnemon_status` | Aggregated CLI, configuration, storage, and directory status | Direct service |
-| `mnemon_memory_bodies` | Read Memory Space directory and statistics | Direct service |
-| `mnemon_recall` | Recall from one or more active spaces | `spawn` recall worker |
-| `mnemon_related` | Traverse from a known ID | `spawn` related worker; Root defaults to two hops |
+| `mnemon_memory_bodies` | Read catalog, provider capabilities, health, and available statistics | Direct service |
+| `mnemon_recall` | Recall from active providers with heterogeneous rank fusion | `spawn` recall worker |
+| `mnemon_related` | Traverse only when `capabilities.related=true` | `spawn` related worker; Root defaults to two hops |
 | `mnemon_document_search` | Deterministically search managed Documents | Documents control layer |
 
 “Read only” means managed bodies and durable semantics do not change. `mnemon_document_search` still updates `lastAccessedAt` for LRU ordering, so feature read-only is not disk read-only.
@@ -50,12 +50,12 @@ Headless receives the full model-tool surface. Its task argument is submitted as
 |---|---|---|
 | `mnemon_runtime_memory` | `add` / `replace` / `remove` hot memory | Deterministic control; add overflow may start a worker |
 | `mnemon_document_manage` | Create, update, or archive a Document | Create/update deterministic; archive uses a worker |
-| `mnemon_remember` | Retain one durable insight | `spawn` write worker |
-| `mnemon_link` | Create a typed relationship | `spawn` write worker |
-| `mnemon_forget` | Soft-delete an exact ID | `spawn` write worker |
-| `mnemon_memory_body_create` | Create an independent Memory Space | `spawn` write worker |
+| `mnemon_remember` | Retain one insight under provider semantics and wait for a settled receipt | `spawn` write worker |
+| `mnemon_link` | Create a typed relationship where the provider supports it | `spawn` write worker |
+| `mnemon_forget` | Delete an exact ID where the provider supports it | `spawn` write worker |
+| `mnemon_memory_body_create` | Let an Agent create a Mnemon Native space; third-party connections remain user-managed in WebUI | `spawn` write worker |
 | `mnemon_memory_body_update` | Update name, description, or active state | `spawn` write worker |
-| `mnemon_memory_body_merge` | Non-destructive import merge | `spawn` write worker |
+| `mnemon_memory_body_merge` | Non-destructively merge Mnemon Native spaces | `spawn` write worker |
 
 When a worker invokes the same tool name, it reaches the service directly and is not delegated recursively.
 
@@ -92,7 +92,7 @@ When a worker invokes the same tool name, it reaches the service directly and is
 | `conversation.chat.turnTail` | chain | `turn-activity` summarizes `mnemon_*` calls from completed turns; open turns and turns without activity render nothing |
 | `conversation.chat.assistant-actions` | list, `id=mnemon-save` | `assistant-message` reads finalized text; `supervise` runs only after confirmation |
 
-Both are additive and replace no official DSH rendering. The assistant-message candidate is editable and long replies are bounded by the UI preview limit. Persistence is complete only after a memory-subagent receipt.
+Both are additive and replace no official DSH rendering. The assistant-message candidate is editable and long replies are bounded by the UI preview limit. Confirmation starts an independent task Agent, and persistence is complete only after its settled receipt.
 
 ## Workspace routing
 
@@ -122,7 +122,7 @@ authority: trusted-host
 | `versions` | Check installed/latest Mnemon and dsh-mnemon versions and installation sources |
 | `runtime-memory` | Runtime snapshot |
 | `documents` / `document` / `document-search` | Directory, body, and deterministic search |
-| `graph` / `bodies` | Active multi-space graph and Memory Space directory |
+| `graph` / `bodies` | Active multi-space graph projection and provider-capability catalog |
 | `list` / `entities` | Durable content list and entity aggregation |
 | `search` / `agent-search` / `related` | Direct retrieval, evidence answer, and relation traversal |
 | `turn-activities` / `turn-activity` | Session-wide or single-turn memory-tool activity |
@@ -138,10 +138,10 @@ authority: loopback
 | Endpoint | Behavior |
 |---|---|
 | `runtime-memory` | Hot-memory mutation |
-| `supervise` | Submit a candidate to the memory worker |
+| `supervise` | Process a candidate under an independent task Agent and return a settled receipt |
 | `document` | create / update / archive |
 | `remember` / `link` / `forget` | Durable semantic write, relation, and soft deletion |
-| `body-create` / `body-update` / `body-delete` | Create, edit, or physically delete a confirmed Memory Space |
+| `body-create` / `body-update` / `body-delete` | Create/connect, edit, or confirm Native deletion / remote disconnection |
 | `version-update` | Update a named component with Host-fixed commands and arguments |
 
 With `writeEnabled=false`, the channel remains registered but mutations are rejected at the Host boundary.

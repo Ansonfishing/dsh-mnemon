@@ -10,12 +10,13 @@
 
 <p align="center"><strong>Local, layered, supervised memory for DeepSeek Harness—with cross-agent sharing through Mnemon.</strong></p>
 
-`dsh-mnemon` integrates [Mnemon](https://github.com/mnemon-dev/mnemon) with DeepSeek Harness (DSH). It brings hot memory needed every turn, full project Documents, and on-demand long-term Memory Spaces into one workbench. Other agents can share DSH's long-term memory when they also integrate Mnemon and use the same accessible local Mnemon storage.
+`dsh-mnemon` integrates [Mnemon](https://github.com/mnemon-dev/mnemon) with DeepSeek Harness (DSH). It brings hot memory needed every turn, full project Documents, and on-demand long-term Memory Spaces into one workbench. The third tier is provider-backed: Mnemon Native remains the official, prioritized engine, while OpenViking, Honcho, Mem0, Hindsight, Holographic, RetainDB, ByteRover, and Supermemory can enter the same Memory Space workflow.
 
-- **Local first**: memory stays in local SQLite, JSON, and Markdown; no remote memory service is required.
-- **Cross-agent sharing**: Mnemon-enabled agents can read and reuse DSH's Mnemon Memory Spaces.
+- **Local-first default**: Mnemon Native keeps memory in local SQLite, JSON, and Markdown; every third-party engine is an explicit opt-in.
+- **Replaceable long-term tier**: choose among nine engines without changing the Runtime, Documents, Memory Space, or Agent-tool mental model.
+- **Explainable smart placement**: keep manual engine selection or let hard rules plus a strategy prompt guide an isolated subagent among eligible providers; the reason and confidence are retained.
 - **Three cooperating tiers**: Runtime Memory, Project Documents, and Memory Spaces retain information at the right granularity.
-- **Supervised writes**: isolated memory subagents make semantic decisions; the Host enforces paths, permissions, capacity, locks, and revisions.
+- **Supervised writes**: user-triggered memory work runs under clean independent task Agents; the Host enforces paths, permissions, capacity, locks, and revisions.
 - **Web and Headless**: a complete Sidebar workbench for interactive management, plus the same Agent tools, memory context, and cwd routing in one-shot Headless tasks.
 
 Current user instructions, repository files, and live tool results always take precedence over historical memory.
@@ -82,7 +83,7 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 New installations use `sidebar` by default. Click **Memory System** in the DSH sidebar, then follow this first-run path:
 
 1. Confirm the Mnemon CLI, Runtime, Memory Spaces, and Documents are healthy under **Status**.
-2. Create a narrowly scoped Memory Space under **Memory Spaces → Overview**.
+2. Create a narrowly scoped Memory Space under **Memory Spaces → Overview**; either choose the engine manually or guide smart selection with rules and a strategy prompt.
 3. Submit one stable, future-useful item through **Remember**.
 4. Verify it with a focused question under **Recall**.
 5. Return to the conversation and expand **Turn memory** below the answer.
@@ -107,6 +108,8 @@ Cross-agent sharing applies to the **Memory Spaces** backed by Mnemon. Another M
 
 The default `global` scope uses `~/.mnemon`, making it the simplest shared memory root for local agents. `custom` and `workspace` roots can also be shared, but every participant must align its directory explicitly. A shared root is shared data: establish a trust boundary first, and avoid incompatible offline migration or directory operations while another process is using it.
 
+Third-party spaces follow their provider's own scope—such as an OpenViking URI, Honcho workspace and peers, Hindsight bank, or Supermemory container. See the [provider guide](./docs/en/memory-providers.md) for the capability and connection matrix.
+
 ## Sidebar workbench
 
 | Page | Main purpose |
@@ -125,7 +128,7 @@ Add and edit use consistent dialogs, destructive actions require confirmation, l
 | [![Expanded Turn memory with exact tool links](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/conversation-turn-memory.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/conversation-turn-memory.png) | [![Confirm save to memory dialog](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/conversation-save-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/conversation-save-dialog.png) |
 
 - **Turn memory** summarizes recalls, writes, and Document searches for the turn; expand it to jump to the matching page.
-- **Save to memory** loads an editable candidate. Only confirmation sends it to the memory subagent for qualification, deduplication, distillation, and writing.
+- **Save to memory** loads an editable candidate. Only confirmation starts an independent task Agent for qualification, deduplication, distillation, and writing.
 
 Both are on by default. Disable them independently under **Settings → Memory System → Conversation interface**; saved changes apply live.
 
@@ -163,9 +166,9 @@ Recommended lookup order: Runtime Memory → active Documents → active Memory 
 
 ## Data and security boundaries
 
-- The plugin reaches durable memory through the local `mnemon` CLI. The WebUI neither reads SQLite directly nor starts processes.
+- Mnemon Native uses the local `mnemon` CLI. External HTTP providers and the ByteRover CLI are called only through the Host; the WebUI neither reads stores nor calls providers directly.
 - CLI calls use argument arrays with shell disabled, bounded output, timeouts, and cancellation.
-- The plugin stores no API keys. Subagent inference uses the provider already configured in DSH.
+- Provider credentials are stored mode `0600` in `<storageRoot>/state/memory-providers.json`, are never returned to the browser or placement Agent, and are excluded from Mnemon Pack exports. Independent task Agents use the DSH new-session model by default, or an explicit Provider and model chosen under **Settings → Memory System**.
 - There is no deterministic secret scanner yet. Never store keys, tokens, private keys, or raw sensitive logs in any tier.
 - Uninstalling the plugin does not remove data under `~/.mnemon`, workspace `.mnemon` roots, or custom directories.
 
@@ -178,6 +181,7 @@ See [Operations, security, and troubleshooting](./docs/en/operations.md) for com
 | Install and complete first-run verification | [Getting Started](./docs/en/getting-started.md) |
 | Learn every page and conversation entry | [Sidebar and conversation UI guide](./docs/en/ui-guide.md) |
 | Understand the three tiers and complete flow | [Project overview](./docs/en/project-overview.md) · [Lifecycle and workflows](./docs/en/workflows.md) |
+| Choose or configure a long-term memory provider | [Long-term memory providers](./docs/en/memory-providers.md) |
 | Choose storage scope or advanced switches | [Configuration reference](./docs/en/configuration.md) |
 | Back up, update, or troubleshoot | [Operations, security, and troubleshooting](./docs/en/operations.md) |
 | Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |

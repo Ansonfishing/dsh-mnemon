@@ -146,12 +146,24 @@ export function apply(rawContext: unknown): void {
     order: 20,
     label: () => translate('tab.label'),
     locale: namespace,
-    inject: (): { scope: MnemonSettingsScope<Config>; interactionScope: MnemonSettingsScope<InteractionConfig>; connection: ClientConnectionHandle; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
-      scope: settings,
-      interactionScope: interactionSettings,
-      connection: ctx.connection,
-      t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
-    }),
+    inject: (): { scope: MnemonSettingsScope<Config>; interactionScope: MnemonSettingsScope<InteractionConfig>; connection: ClientConnectionHandle; sessionId?: string; workspaceId?: string; workspaceLabel?: string; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => {
+      const sessions = ctx.sessions?.list?.getSnapshot?.() ?? { current: undefined, byId: {} }
+      const workspaces = ctx.workspaces?.list?.getSnapshot?.() ?? { items: [], recentWorkspaceId: undefined }
+      const sessionId = sessions.current
+      const cwd = sessionId === undefined ? undefined : sessions.byId[sessionId]?.cwd
+      const normalizePath = (value: string): string => value.replace(/[\\/]+$/u, '')
+      const workspace = cwd === undefined
+        ? workspaces.items.find(candidate => String(candidate.workspaceId) === String(workspaces.recentWorkspaceId)) ?? workspaces.items[0]
+        : workspaces.items.find(candidate => normalizePath(candidate.path) === normalizePath(cwd))
+      return {
+        scope: settings,
+        interactionScope: interactionSettings,
+        connection: ctx.connection,
+        ...(sessionId === undefined ? {} : { sessionId }),
+        ...(workspace === undefined ? {} : { workspaceId: String(workspace.workspaceId), workspaceLabel: workspace.title }),
+        t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
+      }
+    },
   }, MnemonSettingsCard))
 
   // In-conversation interaction surfaces default on and are bound live: each

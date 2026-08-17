@@ -6,8 +6,11 @@ import css from './MnemonSettingsCard.module.css'
 
 interface MnemonPackSectionProps {
   connection?: ClientConnectionHandle
+  sessionId?: string
+  workspaceId?: string
   refreshKey: number
   t: MnemonTranslate
+  embedded?: boolean
 }
 
 interface PendingZip {
@@ -55,8 +58,8 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function MnemonPackSection({ connection, refreshKey, t }: MnemonPackSectionProps): JSX.Element {
-  const client = useMemo(() => connection === undefined ? null : new MnemonClient(connection), [connection])
+export function MnemonPackSection({ connection, sessionId, workspaceId, refreshKey, t, embedded = false }: MnemonPackSectionProps): JSX.Element {
+  const client = useMemo(() => connection === undefined ? null : new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
   const input = useRef<HTMLInputElement | null>(null)
   const [target, setTarget] = useState<{ root: string; scope: 'global' | 'workspace' | 'custom' } | null>(null)
   const [pending, setPending] = useState<PendingZip | null>(null)
@@ -120,7 +123,7 @@ export function MnemonPackSection({ connection, refreshKey, t }: MnemonPackSecti
 
   const items = pending?.preview.manifest.summary.reduce((sum, component) => sum + component.items, 0) ?? 0
 
-  return <section className={css.section} aria-labelledby="mnemon-pack-heading">
+  return <section className={embedded ? css.embeddedSection : css.section} aria-labelledby="mnemon-pack-heading">
     <div className={css.sectionHeading}><div><h2 id="mnemon-pack-heading">{t('config.packTitle')}</h2><p>{t('config.packSimpleDescription')}</p></div></div>
     <div className={css.settingRow}>
       <div className={css.settingCopy}>

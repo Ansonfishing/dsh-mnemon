@@ -3,6 +3,7 @@ import {
   MNEMON_READ_CHANNEL,
   MNEMON_WRITE_CHANNEL,
   type AssistantMessageText,
+  type CreateMemoryBodyRequest,
   type ClientConnectionHandle,
   type DocumentMutation,
   type DocumentMutationResult,
@@ -12,10 +13,16 @@ import {
   type EntityView,
   type Insight,
   type MemoryBody,
+  type MemoryBodyView,
+  type MemoryBodyMetadataMaintenanceResult,
   type MemoryBodyCatalog,
+  type MemoryProviderServiceCatalog,
+  type MemoryProviderServiceView,
   type MemoryGraphSnapshot,
   type MemoryListRequest,
   type MemoryListView,
+  type MemoryProviderId,
+  type MemoryReadSource,
   type MnemonPackExport,
   type MnemonPackImportResult,
   type MnemonPackPreview,
@@ -26,8 +33,11 @@ import {
   type RuntimeMemoryTarget,
   type SearchRequest,
   type StatusView,
+  type TaskAgentModelCatalog,
   type TurnMemoryActivity,
   type TurnMemoryActivitySnapshot,
+  type UpdateMemoryBodyRequest,
+  type UpdateMemoryProviderServiceRequest,
   type VersionComponentId,
   type VersionStatus,
   type VersionUpdateResult,
@@ -77,6 +87,8 @@ export interface SearchResponse {
   mode: string
   results: Insight[]
   hint?: string
+  /** Omitted only when talking to a pre-provider-aware Host. */
+  sources?: MemoryReadSource[]
 }
 
 export interface AgentSearchResponse extends SearchResponse {
@@ -104,6 +116,14 @@ export class MnemonClient {
 
   status(): Promise<StatusView> {
     return this.call(MNEMON_READ_CHANNEL, 'status', this.scoped())
+  }
+
+  statusSummary(): Promise<StatusView> {
+    return this.call<StatusView>(MNEMON_READ_CHANNEL, 'status-summary', this.scoped()).catch(() => this.status())
+  }
+
+  taskAgentModels(includeCatalog?: boolean): Promise<TaskAgentModelCatalog> {
+    return this.call(MNEMON_READ_CHANNEL, 'task-agent-models', includeCatalog === undefined ? {} : { includeCatalog })
   }
 
   versions(): Promise<VersionStatus> {
@@ -150,6 +170,20 @@ export class MnemonClient {
 
   bodies(): Promise<MemoryBodyCatalog> {
     return this.call(MNEMON_READ_CHANNEL, 'bodies', this.scoped())
+  }
+
+  bodyDirectory(): Promise<MemoryBodyCatalog> {
+    // Rolling Host upgrades may not expose the fast directory endpoint yet.
+    // Preserve the previous full-catalog path as a transparent compatibility fallback.
+    return this.call<MemoryBodyCatalog>(MNEMON_READ_CHANNEL, 'body-directory', this.scoped()).catch(() => this.bodies())
+  }
+
+  providerServices(): Promise<MemoryProviderServiceCatalog> {
+    return this.call(MNEMON_READ_CHANNEL, 'provider-services', this.scoped())
+  }
+
+  updateProviderService(request: UpdateMemoryProviderServiceRequest): Promise<MemoryProviderServiceView> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'provider-service-update', this.scoped(request))
   }
 
   graph(memoryBodyIds?: string[]): Promise<MemoryGraphSnapshot> {
@@ -202,12 +236,20 @@ export class MnemonClient {
     return this.call(MNEMON_WRITE_CHANNEL, 'forget', this.scoped({ id, ...(memoryBodyId === undefined ? {} : { memoryBodyId }) }))
   }
 
-  createBody(request: { name: string; description: string; active?: boolean }): Promise<MemoryBody> {
+  createBody(request: CreateMemoryBodyRequest): Promise<MemoryBody> {
     return this.call(MNEMON_WRITE_CHANNEL, 'body-create', this.scoped(request))
   }
 
-  updateBody(memoryBodyId: string, request: { name?: string; description?: string; active?: boolean }): Promise<MemoryBody> {
+  updateBody(memoryBodyId: string, request: UpdateMemoryBodyRequest): Promise<MemoryBody> {
     return this.call(MNEMON_WRITE_CHANNEL, 'body-update', this.scoped({ memoryBodyId, ...request }))
+  }
+
+  reconnectBody(memoryBodyId: string): Promise<MemoryBodyView> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'body-reconnect', this.scoped({ memoryBodyId }))
+  }
+
+  maintainBodyMetadata(memoryBodyIds: string[]): Promise<MemoryBodyMetadataMaintenanceResult> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'body-metadata-maintain', this.scoped({ memoryBodyIds }))
   }
 
   deleteBody(memoryBodyId: string): Promise<MemoryBody> {
@@ -215,18 +257,18 @@ export class MnemonClient {
   }
 
   packTarget(): Promise<{ root: string; scope: 'global' | 'workspace' | 'custom' }> {
-    return this.call(MNEMON_PACK_CHANNEL, 'target', {})
+    return this.call(MNEMON_PACK_CHANNEL, 'target', this.scoped())
   }
 
   exportPack(): Promise<MnemonPackExport> {
-    return this.call(MNEMON_PACK_CHANNEL, 'export', {})
+    return this.call(MNEMON_PACK_CHANNEL, 'export', this.scoped())
   }
 
   inspectPack(base64: string, fileName?: string): Promise<MnemonPackPreview> {
-    return this.call(MNEMON_PACK_CHANNEL, 'inspect', { base64, ...(fileName === undefined ? {} : { fileName }) })
+    return this.call(MNEMON_PACK_CHANNEL, 'inspect', this.scoped({ base64, ...(fileName === undefined ? {} : { fileName }) }))
   }
 
   importPack(base64: string): Promise<MnemonPackImportResult> {
-    return this.call(MNEMON_PACK_CHANNEL, 'import', { base64 })
+    return this.call(MNEMON_PACK_CHANNEL, 'import', this.scoped({ base64 }))
   }
 }

@@ -13,6 +13,12 @@ function fakeService(writeEnabled = true): MnemonService {
   return {
     config: resolveConfig({ writeEnabled }),
     status: vi.fn(async () => ({ healthy: true })),
+    statusSummary: vi.fn(() => ({ healthy: true, memoryBodies: [] })),
+    updateProviderService: vi.fn(async (providerId, settings) => ({ providerId, configured: true, settings, configuredSecrets: [] })),
+    memoryBodies: {
+      providerServices: vi.fn(() => ({ providers: [], items: [], generatedAt: 'now' })),
+    },
+    bodyDirectory: vi.fn(() => ({ items: [{ id: 'project', name: 'Project', description: 'Project memory.', active: true, providerEnabled: true }], providers: [], total: 1, activeCount: 1, directory: '/tmp/mnemon/data', generatedAt: 'now' })),
     bodies: vi.fn(async () => ({ items: [], total: 0, activeCount: 0, directory: '/tmp/mnemon/data', generatedAt: 'now' })),
     graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
     list: vi.fn(async () => ({ items: [], total: 0, generatedAt: 'now' })),
@@ -22,8 +28,16 @@ function fakeService(writeEnabled = true): MnemonService {
     remember: vi.fn(async () => ({ action: 'added' })),
     link: vi.fn(async () => ({ status: 'linked' })),
     forget: vi.fn(async () => ({ status: 'deleted' })),
+    prepareBodyPlacement: vi.fn(request => ({
+      prompt: request.placement?.prompt ?? '',
+      candidates: [{ id: 'mnemon-native' }],
+      appliedRules: ['preference:balanced'],
+      selectorBrief: 'eligible providers',
+    })),
     createBody: vi.fn(async request => ({ id: '00000000-0000-4000-8000-000000000001', name: request.name, description: request.description, active: request.active ?? false })),
     updateBody: vi.fn((id, request) => ({ id, name: request.name ?? id, description: request.description ?? '', active: request.active ?? false })),
+    updateBodyMetadata: vi.fn(updates => updates),
+    reconnectBody: vi.fn(async id => ({ id, name: id, description: '', active: true, healthy: true })),
     deleteBody: vi.fn(async id => ({ id, name: id, description: '', active: false })),
   } as unknown as MnemonService
 }
@@ -48,6 +62,9 @@ describe('Mnemon RPC', () => {
     await expect(createReadHandler(service)('search', { query: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { query: 'SQLite' } })
     await expect(createReadHandler(service)('graph', {})).resolves.toMatchObject({ ok: true, value: { nodes: [] } })
     await expect(createReadHandler(service)('bodies', {})).resolves.toMatchObject({ ok: true, value: { items: [], total: 0 } })
+    await expect(createReadHandler(service)('body-directory', {})).resolves.toMatchObject({ ok: true, value: { total: 1 } })
+    await expect(createReadHandler(service)('status-summary', {})).resolves.toMatchObject({ ok: true, value: { healthy: true } })
+    await expect(createReadHandler(service)('provider-services', {})).resolves.toMatchObject({ ok: true, value: { items: [] } })
     await expect(createReadHandler(service)('list', { category: 'decision' })).resolves.toMatchObject({ ok: true, value: { total: 0 } })
     await expect(createReadHandler(service)('entities', { entity: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { insights: [] } })
     await expect(createReadHandler(service)('nope', {})).resolves.toEqual({
@@ -108,14 +125,113 @@ describe('Mnemon RPC', () => {
     expect(service.deleteBody).toHaveBeenCalledWith('project')
   })
 
-  it('routes supervised Tab writeback through an isolated memory subagent', async () => {
+  it('reconnects one Memory Space through the loopback write channel', async () => {
+    const service = fakeService()
+    await expect(createWriteHandler(service)('body-reconnect', { memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { id: 'project', healthy: true } })
+    expect(service.reconnectBody).toHaveBeenCalledWith('project')
+  })
+
+  it('updates provider service settings without creating a Memory Space', async () => {
+    const service = fakeService()
+    await expect(createWriteHandler(service)('provider-service-update', {
+      providerId: 'openviking', settings: { endpoint: 'http://127.0.0.1:1933' }, clearSecrets: ['apiKey'], enabled: false,
+    })).resolves.toMatchObject({ ok: true, value: { providerId: 'openviking', configured: true } })
+    expect(service.updateProviderService).toHaveBeenCalledWith('openviking', { endpoint: 'http://127.0.0.1:1933' }, ['apiKey'], false)
+    expect(service.createBody).not.toHaveBeenCalled()
+  })
+
+  it('resolves automatic provider placement through the bound Agent before creating a Memory Space', async () => {
+    const service = fakeService()
+    const decision = {
+      mode: 'automatic' as const,
+      providerId: 'mnemon-native' as const,
+      decidedBy: 'rules' as const,
+      reason: 'Graph support is required.',
+      confidence: 'high' as const,
+      candidateProviderIds: ['mnemon-native' as const],
+      appliedRules: ['requires:graph'],
+      decidedAt: '2026-08-16T00:00:00.000Z',
+    }
+    const lifecycle = {
+      placeProvider: vi.fn(async () => decision),
+    } as unknown as MnemonLifecycle
+
+    await expect(createWriteHandler(service, lifecycle)('body-create', {
+      sessionId: 'session-1',
+      name: '产品知识',
+      description: '精确记录产品决策并维护关系。',
+      placement: {
+        mode: 'automatic',
+        prompt: '共享不是重点，优先可解释性。',
+        rules: { dataBoundary: 'local-only', requiredCapabilities: ['graph'] },
+      },
+      providerConnections: {
+        holographic: { dataPath: '/tmp/holographic.json', defaultTrust: 0.6, minTrust: 0.4 },
+      },
+    })).resolves.toMatchObject({ ok: true, value: { name: '产品知识' } })
+
+    expect(service.prepareBodyPlacement).toHaveBeenCalledWith(expect.objectContaining({
+      placement: expect.objectContaining({ prompt: '共享不是重点，优先可解释性。' }),
+      providerConnections: { holographic: { dataPath: '/tmp/holographic.json', defaultTrust: 0.6, minTrust: 0.4 } },
+    }))
+    expect(lifecycle.placeProvider).toHaveBeenCalledWith('session-1', {
+      name: '产品知识',
+      description: '精确记录产品决策并维护关系。',
+    }, expect.objectContaining({ selectorBrief: 'eligible providers' }))
+    expect(service.createBody).toHaveBeenCalledWith(expect.objectContaining({ placement: expect.any(Object) }), undefined, decision)
+  })
+
+  it('applies AI-generated Memory Space metadata only after exact selected-space validation', async () => {
+    const service = fakeService()
+    const maintained = {
+      delegated: true as const,
+      runId: 'metadata-1',
+      provider: 'spawn',
+      summary: 'Updated project metadata.',
+      updates: [{ memoryBodyId: 'project', title: '产品决策', description: '记录稳定的产品范围与取舍，在规划和复盘产品方向时召回。' }],
+    }
+    const lifecycle = { maintainMetadata: vi.fn(async () => maintained) } as unknown as MnemonLifecycle
+
+    await expect(createWriteHandler(service, lifecycle)('body-metadata-maintain', {
+      sessionId: 'session-1', memoryBodyIds: ['project'],
+    })).resolves.toMatchObject({ ok: true, value: { runId: 'metadata-1' } })
+
+    expect(lifecycle.maintainMetadata).toHaveBeenCalledWith('session-1', ['project'], undefined)
+    expect(service.updateBodyMetadata).toHaveBeenCalledWith(maintained.updates)
+  })
+
+  it('routes supervised Tab writeback through an independent task Agent', async () => {
     const service = fakeService()
     const lifecycle = {
-      supervise: vi.fn(async () => ({ delegated: true, sessionId: 'session-1', runId: 'child-1', provider: 'spawn', summary: 'stored', action: 'stored', memoryBodyIds: ['project'] })),
+      workspaceRoot: vi.fn(() => undefined),
+      superviseTask: vi.fn(async () => ({ delegated: true, sessionId: 'session-1', runId: 'child-1', provider: 'spawn', summary: 'stored', action: 'stored', memoryBodyIds: ['project'] })),
     } as unknown as MnemonLifecycle
     await expect(createWriteHandler(service, lifecycle)('supervise', { sessionId: 'session-1', content: 'A candidate', idempotencyKey: 'message-1' })).resolves.toMatchObject({ ok: true, value: { delegated: true, runId: 'child-1' } })
-    expect(lifecycle.supervise).toHaveBeenCalledWith('session-1', 'A candidate', 'message-1')
+    expect(lifecycle.superviseTask).toHaveBeenCalledWith('session-1', 'A candidate', 'message-1', undefined)
     expect(service.remember).not.toHaveBeenCalled()
+  })
+
+  it('exposes the DSH model catalog for independent task Agent settings', async () => {
+    const service = fakeService()
+    const catalog = {
+      effective: { provider: 'deepseek', model: 'deepseek-chat', source: 'dsh-default' as const },
+      groups: [{ id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] }],
+      failures: [],
+    }
+    const lifecycle = { taskAgentModels: vi.fn(async () => catalog) } as unknown as MnemonLifecycle
+
+    await expect(createReadHandler(service, lifecycle)('task-agent-models', { includeCatalog: false })).resolves.toEqual({ ok: true, value: catalog })
+    expect(lifecycle.taskAgentModels).toHaveBeenCalledWith(false)
+  })
+
+  it('routes sessionless supervised work through a workspace task Agent', async () => {
+    const service = fakeService()
+    const lifecycle = {
+      workspaceRoot: vi.fn(() => undefined),
+      superviseTask: vi.fn(async () => ({ delegated: true, sessionId: 'task-1', runId: 'child-1', provider: 'spawn', summary: 'stored', action: 'stored', memoryBodyIds: ['project'] })),
+    } as unknown as MnemonLifecycle
+    await expect(createWriteHandler(service, lifecycle)('supervise', { content: 'A workspace candidate' })).resolves.toMatchObject({ ok: true, value: { sessionId: 'task-1' } })
+    expect(lifecycle.superviseTask).toHaveBeenCalledWith('', 'A workspace candidate', undefined, undefined)
   })
 
   it('routes project Documents reads and controlled mutations through the bound session', async () => {
@@ -136,7 +252,7 @@ describe('Mnemon RPC', () => {
 
     expect(lifecycle.searchDocuments).toHaveBeenCalledWith('session-1', 'design', true, undefined)
     expect(lifecycle.mutateDocument).toHaveBeenCalledWith('session-1', { action: 'create', title: 'Design', content: '# Design', sourcePaths: ['src/index.ts'], sessionIds: ['session-1'] })
-    expect(lifecycle.archiveDocument).toHaveBeenCalledWith('session-1', 'doc-1')
+    expect(lifecycle.archiveDocument).toHaveBeenCalledWith('session-1', 'doc-1', undefined)
   })
 
   it('keeps Tab reads deterministic while delegating semantic writes', async () => {
@@ -163,7 +279,7 @@ describe('Mnemon RPC', () => {
   it('performs Agent query synthesis only after a deterministic direct search', async () => {
     const service = fakeService()
     const lifecycle = {
-      answer: vi.fn(async () => ({ answer: 'SQLite.', citations: [], delegation: { runId: 'answer-1', provider: 'spawn' } })),
+      answerTask: vi.fn(async () => ({ answer: 'SQLite.', citations: [], delegation: { runId: 'answer-1', provider: 'spawn' } })),
     } as unknown as MnemonLifecycle
 
     await expect(createReadHandler(service, lifecycle)('agent-search', { sessionId: 'session-1', query: 'database' })).resolves.toMatchObject({
@@ -171,7 +287,7 @@ describe('Mnemon RPC', () => {
       value: { query: 'database', answer: 'SQLite.', delegation: { runId: 'answer-1' }, results: [] },
     })
     expect(service.search).toHaveBeenCalledWith(expect.objectContaining({ query: 'database' }))
-    expect(lifecycle.answer).toHaveBeenCalledWith('session-1', 'database', [])
+    expect(lifecycle.answerTask).toHaveBeenCalledWith('session-1', 'database', [], undefined)
   })
 
   it('adds lifecycle diagnostics to status without changing Mnemon runtime status', async () => {
@@ -209,6 +325,7 @@ describe('Mnemon RPC', () => {
     const lifecycle = {
       snapshot: vi.fn(() => ({ enabled: true })),
       supervise: vi.fn(),
+      superviseTask: vi.fn(async () => ({ delegated: true, sessionId: 'task-1', runId: 'child-1' })),
       remember: vi.fn(async () => ({ delegated: true, runId: 'write-1' })),
     } as unknown as MnemonLifecycle
 
@@ -228,11 +345,9 @@ describe('Mnemon RPC', () => {
     await expect(createWriteHandler(runtime, lifecycle)('remember', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Inspect this workspace' })).resolves.toMatchObject({ ok: true })
     expect(selectedService.remember).toHaveBeenCalledWith(expect.objectContaining({ content: 'Inspect this workspace', source: 'user' }))
 
-    await expect(createWriteHandler(runtime, lifecycle)('supervise', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Do not run in the wrong workspace' })).resolves.toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('align the workbench') },
-    })
+    await expect(createWriteHandler(runtime, lifecycle)('supervise', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Run in the selected workspace' })).resolves.toMatchObject({ ok: true })
     expect(lifecycle.supervise).not.toHaveBeenCalled()
+    expect(lifecycle.superviseTask).toHaveBeenCalledWith('session-1', 'Run in the selected workspace', undefined, '/tmp/workspace-two')
 
     route.aligned = true
     route.effectiveRoot = route.selectedRoot
@@ -240,6 +355,49 @@ describe('Mnemon RPC', () => {
     await expect(createWriteHandler(runtime, lifecycle)('remember', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Use the aligned Agent path' })).resolves.toMatchObject({ ok: true })
     expect(lifecycle.remember).toHaveBeenCalledWith('session-1', expect.objectContaining({ content: 'Use the aligned Agent path' }))
     expect(selectedService.remember).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs workspace-scoped maintenance without a selected conversation session', async () => {
+    const selectedService = fakeService()
+    selectedService.config.storageScope = 'workspace'
+    const selectedWorkspace = { id: 'workspace-2', title: 'Workspace Two', path: '/tmp/workspace-two' }
+    const runtime = {
+      route: vi.fn(() => ({
+        graph: {
+          config: selectedService.config,
+          service: selectedService,
+          runtimeMemory: {},
+          documents: { forWorkspace: vi.fn(() => ({})) },
+          storage: {},
+          packs: {},
+        },
+        selectedWorkspace,
+        selectedRoot: '/tmp/workspace-two/.mnemon',
+        effectiveRoot: '/tmp/global/.mnemon',
+        aligned: false,
+      })),
+    } as unknown as LiveMnemonRuntime
+    const maintained = {
+      delegated: true as const,
+      runId: 'metadata-task',
+      provider: 'spawn',
+      summary: 'updated',
+      updates: [{ memoryBodyId: 'project', title: '产品决策', description: '记录稳定的产品范围与取舍，在规划和复盘产品方向时召回。' }],
+    }
+    const lifecycle = {
+      maintainMetadata: vi.fn(async () => maintained),
+      archiveDocument: vi.fn(async () => ({ success: true, action: 'archived', document: { id: 'doc-1' } })),
+    } as unknown as MnemonLifecycle
+
+    await expect(createWriteHandler(runtime, lifecycle)('body-metadata-maintain', {
+      workspaceId: 'workspace-2', memoryBodyIds: ['project'],
+    })).resolves.toMatchObject({ ok: true, value: { runId: 'metadata-task' } })
+    await expect(createWriteHandler(runtime, lifecycle)('document', {
+      workspaceId: 'workspace-2', action: 'archive', id: 'doc-1',
+    })).resolves.toMatchObject({ ok: true, value: { action: 'archived' } })
+
+    expect(lifecycle.maintainMetadata).toHaveBeenCalledWith('', ['project'], '/tmp/workspace-two')
+    expect(lifecycle.archiveDocument).toHaveBeenCalledWith('', 'doc-1', '/tmp/workspace-two')
   })
 
   it('does not treat a browser workspace hint as an inspection override in global scope', async () => {
@@ -298,6 +456,12 @@ describe('Mnemon RPC', () => {
     await expect(createPackHandler(packs)('import', { base64: 'eA==', mode: 'replace', components: ['runtime'] })).resolves.toMatchObject({ ok: true, value: { imported: true } })
     expect(packs.importPack).toHaveBeenCalledWith('eA==', { mode: 'merge' })
     await expect(createPackHandler(packs, false)('import', { base64: 'eA==', mode: 'merge' })).resolves.toMatchObject({ ok: false, error: { code: 'internal' } })
+
+    const workspacePacks = { ...packs, target: vi.fn(() => ({ root: '/workspace/.mnemon', scope: 'workspace' })) } as unknown as MnemonPackManager
+    const route = vi.fn(() => ({ graph: { packs: workspacePacks } }))
+    const runtime = { route } as unknown as LiveMnemonRuntime
+    await expect(createPackHandler(runtime)('target', { sessionId: 'session-1', workspaceId: 'workspace-1' })).resolves.toMatchObject({ ok: true, value: { root: '/workspace/.mnemon' } })
+    expect(route).toHaveBeenCalledWith({ sessionId: 'session-1', workspaceId: 'workspace-1' })
 
     const handle = vi.fn()
     registerRpc({ rpc: { handle } } as unknown as HostConnectionHandle, fakeService(), undefined, undefined, undefined, packs)

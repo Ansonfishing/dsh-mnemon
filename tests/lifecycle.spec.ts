@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveConfig } from '../src/config.ts'
 import type {
+  CreateHostAgentOptions,
   HostAgent,
   HostAgentContext,
   HostContextShape,
@@ -23,12 +24,29 @@ function userMessage(text = 'Continue the project'): HostUserMessage {
   }
 }
 
-function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
+function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: { taskModelRoute?: boolean } = {}) {
   const agentListeners = new Map<string, Listener>()
   const rootListeners = new Map<string, Listener>()
   const events: HostSessionEvent[] = []
   const followup = vi.fn()
   const steer = vi.fn()
+  const taskAgents: HostAgent[] = []
+  const disposedTaskAgents: string[] = []
+  const taskModelRoute = options.taskModelRoute !== false
+  const defaultModel = { currentSelection: vi.fn(() => ({ provider: 'deepseek', model: 'deepseek-chat' })) }
+  const llm = {
+    listProviders: vi.fn(() => [
+      { id: 'deepseek', name: 'DeepSeek' },
+      { id: 'openai', name: 'OpenAI' },
+    ]),
+    listModels: vi.fn(async (provider: string) => provider === 'openai'
+      ? [{ id: 'gpt-5', name: 'GPT-5', description: 'General reasoning' }]
+      : [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }]),
+  }
+  const agentPresets = {
+    resolve: vi.fn(async () => ({ id: 'default' })),
+    mount: vi.fn(async () => ({ id: 'default' })),
+  }
   const agentCtx = {
     on: vi.fn((name: string, listener: Listener) => {
       agentListeners.set(name, listener)
@@ -42,6 +60,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
   const agent = {
     id: 'session-1',
     status: 'idle',
+    ...(taskModelRoute ? { options: { provider: 'deepseek', model: 'deepseek-chat' } } : {}),
     session: { events },
     ctx: agentCtx,
     followup,
@@ -59,11 +78,51 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
   const coordinator = {
     recall: vi.fn(async (_agent, request) => ({ query: request.query, mode: 'smart', results: [], delegation: { runId: 'recall-child', provider: 'spawn', summary: '', selectedMemoryBodyIds: [] } })),
     write: vi.fn(async () => ({ delegated: true, runId: 'write-child', provider: 'spawn', summary: 'No durable memory', action: 'skipped', memoryBodyIds: [] })),
+    answer: vi.fn(async () => ({ answer: 'SQLite.', citations: [], delegation: { runId: 'answer-child', provider: 'spawn' } })),
     review: vi.fn(async () => ({ delegated: true, runId: 'review-child', provider: 'fork', summary: 'No durable change', action: 'skipped', memoryBodyIds: [] })),
+    maintainMetadata: vi.fn(async () => ({ delegated: true, runId: 'metadata-child', provider: 'spawn', summary: 'updated', updates: [] })),
+    archiveDocument: vi.fn(async () => ({ success: true, action: 'archived', document: { id: 'doc-1' } })),
     snapshot: vi.fn(() => ({ recalls: 0, writes: 0, answers: 0, reviews: 0, failures: 0 })),
   } as unknown as MnemonSubagentCoordinator
+  const createTaskAgent = vi.fn(async (options: CreateHostAgentOptions) => {
+    const taskCtx = {
+      on: vi.fn(() => () => undefined),
+      effect: vi.fn((callback: () => (() => unknown) | void) => {
+        const cleanup = callback()
+        return () => cleanup?.()
+      }),
+    } as unknown as HostAgentContext
+    await options.setup?.(taskCtx)
+    const taskAgent = {
+      id: options.sessionId,
+      status: 'idle' as const,
+      ...(options.agentOptions === undefined ? {} : { options: options.agentOptions }),
+      session: { header: options.meta ?? {}, events: [] },
+      ctx: taskCtx,
+      followup: vi.fn(),
+      steer: vi.fn(),
+      inject: vi.fn(),
+    } satisfies HostAgent
+    taskAgents.push(taskAgent)
+    rootListeners.get('agent/created')?.({ agent: taskAgent })
+    return {
+      agent: taskAgent,
+      dispose: vi.fn(async () => {
+        disposedTaskAgents.push(taskAgent.id)
+        const index = taskAgents.indexOf(taskAgent)
+        if (index >= 0) taskAgents.splice(index, 1)
+      }),
+    }
+  })
   const ctx = {
-    agents: { get: (id: string) => id === agent.id ? agent : undefined, roots: () => [agent] },
+    agents: { get: (id: string) => id === agent.id ? agent : taskAgents.find(candidate => candidate.id === id), roots: () => [agent, ...taskAgents], create: createTaskAgent },
+    get: vi.fn((name: string) => name === 'agentDefaultModel' && taskModelRoute
+      ? defaultModel
+      : name === 'agentPresets'
+        ? agentPresets
+        : name === 'llm'
+          ? llm
+          : undefined),
     on: vi.fn((name: string, listener: Listener) => {
       rootListeners.set(name, listener)
       return () => rootListeners.delete(name)
@@ -82,12 +141,134 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
     if (listener === undefined) throw new Error('turn-stopping listener missing')
     await listener({ agent, turn, signal: new AbortController().signal })
   }
-  return { agent, agentListeners, events, followup, steer, lifecycle, service, coordinator, preStep, turnStopping, stop }
+  return { agent, agentListeners, events, followup, steer, lifecycle, service, coordinator, createTaskAgent, disposedTaskAgents, defaultModel, llm, agentPresets, preStep, turnStopping, stop }
 }
 
 afterEach(() => vi.useRealTimers())
 
 describe('Mnemon DSH lifecycle integration', () => {
+  it('offers an active root Agent to standalone WebUI maintenance when no session is selected', () => {
+    const value = fixture()
+
+    expect(value.lifecycle.snapshot()).toMatchObject({
+      activeAgents: 1,
+      sessionAvailable: true,
+      taskAgentAvailable: true,
+      current: { sessionId: 'session-1' },
+    })
+    expect(value.lifecycle.snapshot('missing-session')).toMatchObject({
+      sessionAvailable: true,
+      current: { sessionId: 'session-1' },
+    })
+  })
+
+  it('does not advertise task Agent actions when creation has no usable model route', async () => {
+    const value = fixture(resolveConfig({ cliPath: '/fake/mnemon' }), { taskModelRoute: false })
+
+    expect(value.lifecycle.snapshot()).toMatchObject({ sessionAvailable: true, taskAgentAvailable: false })
+    await expect(value.lifecycle.maintainMetadata('', ['project'], '/tmp/workspace-two')).rejects.toThrow('no default provider/model')
+    expect(value.createTaskAgent).not.toHaveBeenCalled()
+  })
+
+  it('runs standalone maintenance under a disposable clean root Agent scoped to the selected workspace', async () => {
+    const value = fixture()
+
+    await value.lifecycle.maintainMetadata('', ['project'], '/tmp/workspace-two')
+    await value.lifecycle.archiveDocument('', 'doc-1', '/tmp/workspace-two')
+
+    expect(value.createTaskAgent).toHaveBeenCalledTimes(2)
+    expect(value.createTaskAgent).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      sessionId: expect.any(String),
+      meta: { cwd: '/tmp/workspace-two', agentPreset: 'default' },
+      agentOptions: { provider: 'deepseek', model: 'deepseek-chat' },
+      setup: expect.any(Function),
+      signal: expect.any(AbortSignal),
+    }))
+    const metadataAgent = vi.mocked(value.coordinator.maintainMetadata).mock.calls[0]?.[0] as HostAgent
+    expect(metadataAgent).not.toBe(value.agent)
+    expect(metadataAgent.session.header?.cwd).toBe('/tmp/workspace-two')
+    expect(value.coordinator.archiveDocument).toHaveBeenCalledWith(expect.objectContaining({ session: { header: { cwd: '/tmp/workspace-two', agentPreset: 'default' }, events: [] } }), 'doc-1', expect.any(AbortSignal))
+    expect(value.defaultModel.currentSelection).toHaveBeenCalledTimes(2)
+    expect(value.agentPresets.resolve).toHaveBeenCalledTimes(2)
+    expect(value.agentPresets.mount).toHaveBeenCalledTimes(2)
+    expect(value.disposedTaskAgents).toHaveLength(2)
+    expect(value.lifecycle.snapshot()).toMatchObject({ activeAgents: 1, taskAgentAvailable: true })
+  })
+
+  it('uses a fixed Provider and model for independent task Agents when configured', async () => {
+    const value = fixture(resolveConfig({
+      cliPath: '/fake/mnemon',
+      taskAgentModel: { mode: 'fixed', provider: 'openai', model: 'gpt-5' },
+    }))
+
+    await value.lifecycle.maintainMetadata('', ['project'], '/tmp/workspace-two')
+
+    expect(value.createTaskAgent).toHaveBeenCalledWith(expect.objectContaining({
+      agentOptions: { provider: 'openai', model: 'gpt-5', maxTokens: undefined },
+    }))
+    expect(value.defaultModel.currentSelection).not.toHaveBeenCalled()
+  })
+
+  it('lists model Providers concurrently and reports the effective independent task route', async () => {
+    const value = fixture()
+
+    await expect(value.lifecycle.taskAgentModels()).resolves.toEqual({
+      effective: { provider: 'deepseek', model: 'deepseek-chat', source: 'dsh-default' },
+      defaultSelection: { provider: 'deepseek', model: 'deepseek-chat' },
+      groups: [
+        { id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] },
+        { id: 'openai', name: 'OpenAI', models: [{ id: 'gpt-5', name: 'GPT-5', description: 'General reasoning' }] },
+      ],
+      failures: [],
+    })
+    expect(value.llm.listModels).toHaveBeenCalledTimes(2)
+  })
+
+  it('resolves the inherited task route without loading the full model directory', async () => {
+    const value = fixture()
+
+    await expect(value.lifecycle.taskAgentModels(false)).resolves.toEqual({
+      effective: { provider: 'deepseek', model: 'deepseek-chat', source: 'dsh-default' },
+      defaultSelection: { provider: 'deepseek', model: 'deepseek-chat' },
+      groups: [],
+      failures: [],
+    })
+    expect(value.llm.listProviders).not.toHaveBeenCalled()
+    expect(value.llm.listModels).not.toHaveBeenCalled()
+  })
+
+  it('isolates a stalled Provider while keeping the rest of the model catalog usable', async () => {
+    vi.useFakeTimers()
+    const value = fixture()
+    value.llm.listModels.mockImplementation(async provider => provider === 'openai'
+      ? await new Promise<never>(() => {})
+      : [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }])
+
+    const pending = value.lifecycle.taskAgentModels()
+    await vi.advanceTimersByTimeAsync(3_000)
+
+    await expect(pending).resolves.toMatchObject({
+      groups: [{ id: 'deepseek', models: [{ id: 'deepseek-chat' }] }],
+      failures: [{ id: 'openai', message: 'model directory timed out after 3 seconds' }],
+    })
+  })
+
+  it('runs Agent Query synthesis under a disposable clean root Agent', async () => {
+    const value = fixture()
+
+    await value.lifecycle.answerTask('', 'Which database?', [], '/tmp/workspace-two')
+
+    expect(value.createTaskAgent).toHaveBeenCalledWith(expect.objectContaining({
+      meta: { cwd: '/tmp/workspace-two', agentPreset: 'default' },
+      agentOptions: { provider: 'deepseek', model: 'deepseek-chat' },
+    }))
+    expect(value.coordinator.answer).toHaveBeenCalledWith(expect.objectContaining({
+      options: { provider: 'deepseek', model: 'deepseek-chat' },
+      session: expect.objectContaining({ header: expect.objectContaining({ cwd: '/tmp/workspace-two' }) }),
+    }), 'Which database?', [], expect.any(AbortSignal))
+    expect(value.disposedTaskAgents).toHaveLength(1)
+  })
+
   it('adds a short optional reminder without forcing recall or remember for an ordinary turn', async () => {
     const value = fixture()
     const prompt = userMessage('Aster 发布前需要检查哪些事项？')
@@ -298,6 +479,20 @@ describe('Mnemon DSH lifecycle integration', () => {
       source: 'explicit Mnemon tab submission',
     }, expect.any(AbortSignal))
     expect(value.lifecycle.snapshot('session-1').counters.supervisedRequests).toBe(1)
+  })
+
+  it('runs workspace-only memory-tab candidates in a disposable top-level task Agent', async () => {
+    const value = fixture()
+
+    const result = await value.lifecycle.superviseTask('', 'Keep workspace release decisions durable.', undefined, '/tmp/workspace-two')
+
+    expect(result).toMatchObject({ delegated: true, runId: 'write-child' })
+    expect(value.createTaskAgent).toHaveBeenCalledWith(expect.objectContaining({ meta: { cwd: '/tmp/workspace-two', agentPreset: 'default' } }))
+    expect(value.coordinator.write).toHaveBeenCalledWith(expect.objectContaining({ session: expect.objectContaining({ header: expect.objectContaining({ cwd: '/tmp/workspace-two' }) }) }), 'supervised-writeback', {
+      content: 'Keep workspace release decisions durable.',
+      source: 'explicit Mnemon tab submission',
+    }, expect.anything())
+    expect(value.disposedTaskAgents).toContain(result.sessionId)
   })
 
   it('deduplicates replayed assistant-message supervision by session and message id', async () => {

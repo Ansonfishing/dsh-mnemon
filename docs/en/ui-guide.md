@@ -17,11 +17,13 @@ Choose the entry point and storage location under **Settings → Memory System**
 
 Both modes share functionality, data, and Host services. Only entry and appearance differ. Saving switches live without a browser refresh or duplicate mounts.
 
+The same page's **Background task Agent** setting controls AI metadata, Agent Query, memory distillation, and document archiving. **Follow the main route** uses the DSH new-session default; **Choose model provider** selects a complete Provider + Model route that overrides only those independent background tasks.
+
 ## Workbench anatomy
 
 The Sidebar header always answers three questions: which system is open, which storage-location mode is effective, and whether the Host is connected.
 
-The body has four primary tabs: **Status, Runtime, Memory Spaces, and Documents**. Memory Spaces adds **Overview, Recall, Content, and Entities** as secondary tabs, with **Remember** as its primary action.
+The body has four primary tabs: **Status, Runtime, Documents, and Memory Spaces**. Memory Spaces adds **Overview, Recall, Content, and Entities** as secondary tabs, with **Remember** as its primary action.
 
 ## 1. Status: establish that the system is ready
 
@@ -69,25 +71,28 @@ A Runtime item should be compact, independent, and repeatedly useful. Put identi
 
 [![Memory Space catalog, activation, and multi-space relationship graph](../assets/screenshots/overview-memory-graph.png)](../assets/screenshots/overview-memory-graph.png)
 
-Each card leads with its name and routing description, pins read activation at the top right, and keeps statistics plus Edit / Delete in the footer. The **Mnemon default** badge identifies the native CLI's default Store. Activation controls only DSH reads and routing; it neither changes that default nor affects other agents. A write may target an inactive registered space and activates it after success.
+Each card leads with its name and routing description. Provider identity sits beside the ID and health state, while the familiar read-activation toggle stays at the top right. Creation adds no new top-level concept: it remains **Create Memory Space**, defaulting to **Choose manually** with **Mnemon Native** (official and prioritized) or one of the eight third-party engines inside the dialog. When the current conversation is available, users may opt into **Smart selection**: data boundary and required capabilities are hard rules, while local/shared preference and a strategy prompt guide an isolated subagent. A model runs only when multiple eligible candidates remain, and credentials never enter its context.
 
-The graph aggregates all active spaces. Layout, dragging, and reset affect browser presentation only and never mutate Mnemon data.
+Native cards retain statistics, Edit, and Delete. Third-party cards show provider identity, local/remote location, Edit, and **Disconnect**. Smart-created cards additionally show whether rules or the Agent decided, plus confidence and a concise reason. Disconnect never deletes provider data.
+
+The **Snapshot visibility** section first states which read surface each Memory Space can actually honor, then the graph aggregates all active spaces. Mnemon Native supplies complete typed relationships; Hindsight and Holographic contribute their supported graphs; providers without graph edges contribute bounded disconnected content projections; query-only providers such as ByteRover wait for an explicit question. The snapshot never fabricates unsupported relationships. Layout, dragging, and reset affect browser presentation only.
 
 ### Remember
 
 [![Remember dialog with candidate and optional advanced constraints](../assets/screenshots/remember-dialog.png)](../assets/screenshots/remember-dialog.png)
 
-Normally, provide only a candidate. On confirmation, an isolated memory subagent decides whether it qualifies, chooses the narrowest space, deduplicates, distills, and writes. Expand advanced options only when a target space, category, or importance must be constrained explicitly.
+Normally, provide only a candidate. On confirmation, a clean independent task Agent decides whether it qualifies, chooses the narrowest space, deduplicates, distills, and writes. Expand advanced options only when a target space, category, or importance must be constrained explicitly.
 
 ### Recall
 
 [![Recall query, category, strategy, raw evidence, and progressive results](../assets/screenshots/recall-agent-answer.png)](../assets/screenshots/recall-agent-answer.png)
 
 - **Direct recall** returns raw evidence without an answer Agent.
-- **Agent query** retrieves the same evidence, then gives it to an evidence-only worker with no Mnemon tools.
+- **Agent query** retrieves the same evidence, then starts a clean evidence-only task Agent with no Mnemon tools.
 - Category and strategy narrow the search.
-- Results retain space, category, importance, score, and ID.
-- Related traverses the graph; Forget is a destructive semantic action.
+- **Recall scope** reports the provider-native search state for every active searchable Memory Space; one failed connection does not hide other sources.
+- Results retain Memory Space, provider, category, importance, engine-native score, and ID; cross-provider order uses rank fusion.
+- Related, Link, Browse, and Forget appear only when the provider supports their semantics.
 
 Focused questions are more reliable than broad keywords.
 
@@ -97,8 +102,8 @@ Focused questions are more reliable than broad keywords.
 |---|---|
 | [![Memory content and filters](../assets/screenshots/memory-content.png)](../assets/screenshots/memory-content.png) | [![Entity lookup and related memories](../assets/screenshots/entities-context.png)](../assets/screenshots/entities-context.png) |
 
-- **Content** browses durable memory without recall side effects and supports text/category filtering, Related, clone-from-item, Copy ID, and Forget.
-- **Entities** starts with frequent names, then aggregates related facts, decisions, and context for a selected or entered entity.
+- **Content** calls each provider's read-only browse contract without recall side effects. Source cards distinguish enumerable, query-only, and unavailable surfaces. Supermemory projects both extracted memories and still-browseable ingested documents; ByteRover reads only after a query. Results expose Related, clone-from-item, Copy ID, and Forget only when their real capabilities allow it.
+- **Entities** aggregates frequent names only from real entity indexes—currently Mnemon Native, Hindsight, and Holographic. RetainDB, Supermemory, Mem0, and other providers without an entity index are explicitly unsupported rather than inferred from ordinary text. Selecting or entering an entity then aggregates related facts, decisions, and context.
 
 Both expose visible / total counts and progressive loading.
 
@@ -130,7 +135,7 @@ The bar appears only on completed turns with memory activity. Expanding lists ex
 
 [![Confirm save to memory and edit the candidate before dispatch](../assets/screenshots/conversation-save-dialog.png)](../assets/screenshots/conversation-save-dialog.png)
 
-Save to memory sits in the native action strip for finalized assistant replies. Clicking only opens confirmation and reads that reply. Edit or cancel freely; writing starts only after **Confirm and send to memory subagent**.
+Save to memory sits in the native action strip for finalized assistant replies. Clicking only opens confirmation and reads that reply. Edit or cancel freely; confirmation starts a clean independent task Agent for the write flow.
 
 ## Workspace mode: separating inspection from execution
 
@@ -139,9 +144,9 @@ Under `storageScope=workspace`, keep two concepts separate:
 | Concept | Selected by | Affects |
 |---|---|---|
 | **Inspected workspace** | Workbench header selector | Which `<workspace>/.mnemon` the UI displays and maintains manually |
-| **Effective workspace** | Current conversation / Agent cwd | Which root tools, commands, lifecycle hooks, and subagents actually use |
+| **Effective workspace** | Current conversation / Agent cwd | Which root conversation tools, commands, and lifecycle hooks actually use |
 
-You may inspect project B while staying in project A's conversation; the Agent still uses A. When they differ, the header explains the mismatch and offers one-click alignment. Agent-backed actions are rejected while misaligned to prevent writes to the wrong project. Switching inspection target unmounts old page state before loading the new root.
+You may inspect project B while staying in project A's conversation: the conversation Agent still uses A, while AI metadata, Agent Query, memory distillation, and document archiving create independent task Agents explicitly scoped to B. This also works when no main session is selected. Switching inspection target unmounts old page state before loading the new root.
 
 `global` and `custom` resolve to one explicit root and need no alignment layer.
 
@@ -149,7 +154,7 @@ You may inspect project B while staying in project A's conversation; the Agent s
 
 - Solid blue is the primary action; blue outline usually means Edit; red is Remove, Delete, Archive, or Forget; neutral actions are View, Copy, and Cancel.
 - A Memory Space toggle controls only whether dsh-mnemon includes it in read routing; it is not Mnemon CLI's default Store selection. Before deleting Mnemon's default Store, the plugin switches to another existing Memory Space. The last native Store may be inactive but cannot be deleted.
-- Physical destructive operations such as deleting a Memory Space require a dedicated confirmation. Forget is semantic soft deletion and should still be deliberate.
+- Physical deletion of a Mnemon Native space requires dedicated confirmation. Every third-party space has an explicit Disconnect confirmation that leaves provider data untouched. Per-memory Forget follows the provider's declared hard, soft, or unsupported semantics.
 - Saving settings clears stale page state and reloads automatically; no browser refresh is needed.
 - Sidebar primary headings remain stable; secondary headings within Memory Spaces scroll naturally.
 - Buildin preserves its established layout and visuals. Functional concepts still apply, though control positions differ.

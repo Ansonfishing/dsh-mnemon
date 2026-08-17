@@ -12,7 +12,11 @@ export class MnemonSettingsScope<T extends object> implements ClientSettingsScop
   private readonly listeners = new Set<() => void>()
   private tail = Promise.resolve()
 
-  constructor(private readonly connection: ClientConnectionHandle, private readonly namespace = MNEMON_SETTINGS_NAMESPACE) {
+  constructor(
+    private readonly connection: ClientConnectionHandle,
+    private readonly namespace = MNEMON_SETTINGS_NAMESPACE,
+    private readonly requestTimeoutMs = 12_000,
+  ) {
     void this.load()
   }
 
@@ -47,7 +51,7 @@ export class MnemonSettingsScope<T extends object> implements ClientSettingsScop
 
   private async load(): Promise<void> {
     try {
-      const response = await this.connection.rpc.call(MNEMON_SETTINGS_CHANNEL, 'get', { namespace: this.namespace })
+      const response = await this.call('get', { namespace: this.namespace })
       if (!response.ok) {
         this.publish({ status: 'unavailable', writable: false, mode: 'host' })
         return
@@ -60,7 +64,7 @@ export class MnemonSettingsScope<T extends object> implements ClientSettingsScop
 
   private write(ops: SettingsOperation[]): Promise<void> {
     const task = this.tail.then(async () => {
-      const response = await this.connection.rpc.call(MNEMON_SETTINGS_CHANNEL, 'mutate', {
+      const response = await this.call('mutate', {
         namespace: this.namespace,
         ops,
         ...(this.snapshot.revision === undefined ? {} : { expectedRevision: this.snapshot.revision }),
@@ -73,6 +77,19 @@ export class MnemonSettingsScope<T extends object> implements ClientSettingsScop
     })
     this.tail = task.catch(() => {})
     return task
+  }
+
+  private async call(endpoint: 'get' | 'mutate', payload: unknown) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), Math.max(1, this.requestTimeoutMs))
+    try {
+      return await this.connection.rpc.call(MNEMON_SETTINGS_CHANNEL, endpoint, payload, controller.signal)
+    } catch (error) {
+      if (controller.signal.aborted) throw new Error('Mnemon settings request timed out')
+      throw error
+    } finally {
+      clearTimeout(timeout)
+    }
   }
 
   private publish(snapshot: ClientSettingsSnapshot<T>): void {

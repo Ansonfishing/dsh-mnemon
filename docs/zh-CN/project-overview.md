@@ -1,8 +1,8 @@
-# 项目介绍：面向 DSH 的本地三层与跨 Agent 共享记忆系统
+# 项目介绍：面向 DSH 的三层与跨 Agent 共享记忆系统
 
 **简体中文** | [English](../en/project-overview.md) | [文档中心](./README.md)
 
-`dsh-mnemon` 将 [Mnemon](https://github.com/mnemon-dev/mnemon) 的长期记忆体接入 DeepSeek Harness，并补充运行时热记忆、项目档案、生命周期路由、受限子 Agent、确定性控制层与 DSH 原生界面。因为长期层使用 Mnemon 原生 Store，DSH 也获得了与其他 Mnemon-enabled Agent 复用同一套本地长期记忆的能力。
+`dsh-mnemon` 将长期记忆体接入 DeepSeek Harness，并补充运行时热记忆、项目档案、生命周期路由、受限子 Agent、确定性控制层与 DSH 原生界面。第三层采用可替换 Provider：Mnemon Native 是官方优先、默认完整能力实现；8 种三方引擎通过显式适配器复用同一套记忆体工作流。
 
 它要解决的不是“保存更多文字”，而是让 Agent 在长期连续性、当前事实优先、上下文成本和可恢复写入之间取得平衡。
 
@@ -41,12 +41,12 @@
 
 ### 3. 记忆体
 
-每个记忆体对应一个独立 Mnemon Store 与 `mnemon.db`，并拥有稳定 ID、名称、路由说明和激活状态。激活是 DSH 的读取与路由控制面，可以为零或多个；Mnemon 原生默认 Store 仍保持独立的单选语义，供普通 Mnemon Agent 使用。
+每个记忆体都拥有稳定 ID、名称、路由说明、激活状态和 Provider 能力集。Mnemon Native 对应独立 Store 与 `mnemon.db`；三方记忆体对应各自 Provider endpoint、作用域、本地文件或 CLI 目录。激活仍是统一的 DSH 读取与路由控制面，可以为零或多个；Mnemon 原生默认 Store 继续保持独立的单选语义。
 
 - 读取只覆盖已激活记忆体；
 - 写入可以选择任何已登记目标，成功后自动激活；
-- 长期层保留时间、语义、因果和实体四类关系；
-- 召回返回记忆体来源与记忆 ID，后续可以继续查看关联。
+- 跨 Provider 召回保留记忆体与 Provider 来源，并按各引擎内部排名融合，不直接比较异构原始分数；
+- 关系、实体、删除和写入方式以目标 Provider 公布的能力为准；Mnemon Native 保留完整图关系和软删除，三方引擎只开放 [Provider 能力矩阵](./memory-providers.md)中记录的语义。
 
 三层的权威文件、容量与目录结构见[存储与三层记忆模型](./storage-model.md)。
 
@@ -58,7 +58,7 @@
 2. 每个参与方都能访问同一个 `storageRoot`；
 3. 需要共享的长期记忆位于各方共同识别的 Mnemon Store 中。
 
-满足这些条件后，在 DSH 中写入的长期事实、实体与关系可以由其他 Mnemon-enabled Agent 召回，反向写入也能被 DSH 发现。共享范围只覆盖 Mnemon Memory Spaces；`runtime/` 和 `documents/` 是 dsh-mnemon 管理的 DSH 层，不会仅因共用目录就自动成为其他 Agent 的上下文。
+满足这些条件后，Mnemon Native 记忆体中的长期事实、实体与关系可以由其他 Mnemon-enabled Agent 召回，反向写入也能被 DSH 发现。三方记忆体通过各自 Provider 作用域共享。共享范围只覆盖第三层 Provider 数据；`runtime/` 和 `documents/` 不会自动成为其他 Agent 的上下文。
 
 `global` 默认根 `~/.mnemon` 最适合本机多个 Agent 共享；`custom` 适合显式约定的公共根；`workspace` 则把共享限制在对应项目目录。多个进程同时访问时依赖 Mnemon / SQLite 的并发语义，离线复制、迁移或直接修改数据库前应先停止所有使用者。
 
@@ -71,7 +71,7 @@
 1. **交互边界**：用户通过对话、Sidebar / Buildin 工作台、`/mnemon` 命令与模型工具使用记忆。
 2. **监督边界**：长期召回、语义写入和归档在受限 worker 中执行；生命周期只提供短提示和调度信号。
 3. **确定性控制边界**：Host 校验 schema、路径、权限、容量、锁、revision、CLI 参数、超时与取消。
-4. **本地数据边界**：Runtime、Documents 与 Memory Spaces 统一位于当前 `storageRoot`，不依赖远程记忆服务。
+4. **数据边界**：Runtime、Documents 与 Mnemon Native 数据位于当前 `storageRoot`；第三方 Provider 只在 Host 内通过显式连接访问，浏览器不直连。
 
 ### 记忆系统流转
 

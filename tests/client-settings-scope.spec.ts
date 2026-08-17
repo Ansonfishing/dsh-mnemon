@@ -18,7 +18,7 @@ describe('MnemonSettingsScope', () => {
     ]
     await scope.mutate(ops)
 
-    expect(call).toHaveBeenLastCalledWith('/dsh-mnemon-settings', 'mutate', { namespace: 'mnemon-ui', expectedRevision: 3, ops })
+    expect(call).toHaveBeenLastCalledWith('/dsh-mnemon-settings', 'mutate', { namespace: 'mnemon-ui', expectedRevision: 3, ops }, expect.any(AbortSignal))
     expect(scope.getSnapshot()).toMatchObject({ revision: 4, value: { turnBar: true, saveAction: true } })
   })
 
@@ -36,5 +36,24 @@ describe('MnemonSettingsScope', () => {
 
     await expect(scope.mutate([{ op: 'set', path: ['turnBar'], value: true }])).rejects.toThrow('concurrently')
     expect(scope.getSnapshot()).toMatchObject({ revision: 2, value: { turnBar: true } })
+  })
+
+  it('bounds a stalled settings write instead of leaving the UI saving forever', async () => {
+    const call = vi.fn((_channel: string, endpoint: string, _payload: unknown, signal?: AbortSignal) => {
+      if (endpoint === 'get') {
+        return Promise.resolve({ ok: true as const, value: { status: 'ready', value: { turnBar: false }, revision: 1, writable: true, mode: 'host' } })
+      }
+      return new Promise<never>((_resolve, reject) => {
+        if (signal?.aborted) reject(signal.reason)
+        else signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+    })
+    const scope = new MnemonSettingsScope<InteractionConfig>({ rpc: { call } } as ClientConnectionHandle, 'mnemon-ui', 20)
+    await vi.waitFor(() => expect(scope.getSnapshot().revision).toBe(1))
+
+    await expect(scope.mutate([{ op: 'set', path: ['turnBar'], value: true }])).rejects.toThrow('timed out')
+
+    expect(call).toHaveBeenLastCalledWith('/dsh-mnemon-settings', 'mutate', expect.any(Object), expect.any(AbortSignal))
+    expect(scope.getSnapshot()).toMatchObject({ status: 'ready', revision: 1, value: { turnBar: false } })
   })
 })
