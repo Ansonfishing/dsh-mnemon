@@ -81,7 +81,7 @@ The top-level task Agent is the user-visible execution unit. The `spawn` / `fork
 
 - a fixed persona;
 - a minimal tool allowlist;
-- a structured output schema within the subset supported by DSH;
+- a schema-validated, randomly named result tool scoped to that one run and included in the same allowlist;
 - `maxDepth: 1`;
 - a cancellable signal and bounded token budget.
 

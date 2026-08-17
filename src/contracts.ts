@@ -45,6 +45,11 @@ export interface HostSettingsService {
 export interface ToolExecution {
   signal: AbortSignal
   agent?: HostAgent
+  name?: string
+  parent?: symbol
+  token?: symbol
+  /** End the current model turn after an authoritative terminal tool call. */
+  concludeTurn?: () => void
 }
 
 export type CommandResult = { kind: 'success'; text?: string } | { kind: 'error'; text: string }

@@ -81,7 +81,7 @@ Web 工作台发起的 AI 元信息、Agent 查询、记忆沉淀和档案归档
 
 - 固定 persona；
 - 最小工具白名单；
-- DSH 支持子集内的结构化输出 schema；
+- 一个经过 schema 校验、随机命名、仅用于本次运行且纳入同一白名单的结果工具；
 - `maxDepth: 1`；
 - 可取消的 signal 和有界 token 预算。
 

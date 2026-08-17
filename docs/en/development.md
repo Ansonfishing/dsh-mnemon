@@ -136,14 +136,14 @@ README demo assets are `docs/assets/media/dsh-mnemon-memory-system-demo.*`. The 
 
 ## Modifying Subagent Schemas
 
-DSH structured output supports only a compact JSON Schema subset:
+Mnemon's one-run result tools use the compact JSON Schema subset accepted by DSH tool parameters:
 
 ```text
 type, oneOf, properties, required, additionalProperties,
 items, enum, const, and annotation keywords
 ```
 
-Do not add unsupported keywords such as `maxItems`. `assertDshOutputSchema()` recursively rejects unknown schema keys before starting a worker; result-count and similar limits are enforced by both the persona and the Host parser.
+Do not add unsupported keywords such as `maxItems`. `assertDshOutputSchema()` recursively rejects unknown schema keys before registering the result tool; result-count and similar limits are enforced by both the persona and the Host parser.
 
 ## Modifying Storage Formats
 

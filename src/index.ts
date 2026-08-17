@@ -55,7 +55,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     base: resolveInteractionConfig(resolved.conversationInteraction),
     applies: 'live',
   })
-  const coordinator = new MnemonSubagentCoordinator(ctx.subagents, runtime)
+  const coordinator = new MnemonSubagentCoordinator(ctx.subagents, runtime, undefined, ctx)
   const lifecycle = new MnemonLifecycle(ctx, coordinator, runtime.config, runtime)
   ctx.effect(() => lifecycle.start(), 'dsh-mnemon.lifecycle-root()')
   registerTools(ctx, runtime, coordinator)

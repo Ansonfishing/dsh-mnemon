@@ -130,7 +130,7 @@ See the [Sidebar and conversation UI guide](./ui-guide.md) for screenshots and w
 - CLI calls use argument arrays with `shell=false`, bounded output, timeout, and cancellation.
 - Runtime and Documents use in-process queues, cross-instance locks, temporary files, and rename.
 - Runtime revisions block stale compaction; Document revisions block movement of updated originals.
-- Independent task Agents and bounded internal workers use personas, tool allowlists, structured output, and depth limits.
+- Independent task Agents and bounded internal workers use personas, tool allowlists, schema-validated one-run result tools, and depth limits.
 - The WebUI never reads SQLite directly or supplies arbitrary update commands.
 - The plugin stores no model credentials, but it does not yet include a deterministic secret scanner.
 
