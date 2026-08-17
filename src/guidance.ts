@@ -5,21 +5,27 @@ import type { RuntimeMemoryController } from './runtime-memory.ts'
 export const GUIDANCE_SECTION_NAME = 'mnemon:routing'
 export const RUNTIME_MEMORY_SECTION_NAME = 'mnemon:runtime-memory'
 export const ROUTING_GUIDANCE = 'Use memory only by need. For substantial project records, search active Mnemon Documents before deep recall. Call mnemon_recall when durable history may matter or an exact prior detail is missing; never infer a missing historical rule. New explicit reusable facts normally go to mnemon_runtime_memory. A write completes only with a tool receipt.'
+const RUNTIME_MEMORY_EMPTY_BRACES_VARIABLE = 'mnemon_runtime_memory_empty_braces'
+const LITERAL_EMPTY_BRACES = '{{}}'
 
-function systemPrompt(ctx: HostContextShape): {
+interface SystemPromptRegistry {
   section?: (value: { name: string; order: number; text: string | (() => string) }) => unknown
-} | undefined {
-  return ctx.get('systemPrompt') as {
-    section?: (value: { name: string; order: number; text: string | (() => string) }) => unknown
-  } | undefined
+  variable?: (name: string, provider: () => string) => unknown
 }
 
-function scopedSystemPrompt(agent: HostAgent): {
-  section?: (value: { name: string; order: number; text: string | (() => string) }) => unknown
-} | undefined {
-  return agent.ctx.get?.('systemPrompt') as {
-    section?: (value: { name: string; order: number; text: string | (() => string) }) => unknown
-  } | undefined
+function systemPrompt(ctx: HostContextShape): SystemPromptRegistry | undefined {
+  return ctx.get('systemPrompt') as SystemPromptRegistry | undefined
+}
+
+function scopedSystemPrompt(agent: HostAgent): SystemPromptRegistry | undefined {
+  return agent.ctx.get?.('systemPrompt') as SystemPromptRegistry | undefined
+}
+
+function runtimeMemoryPromptText(runtimeMemory: RuntimeMemoryController): string {
+  return runtimeMemory.contextText().replaceAll(
+    LITERAL_EMPTY_BRACES,
+    `{{${RUNTIME_MEMORY_EMPTY_BRACES_VARIABLE}}}`,
+  )
 }
 
 export function registerGuidance(ctx: HostContextShape, config?: Pick<ResolvedConfig, 'routingGuidance'>): void {
@@ -32,10 +38,12 @@ export function registerGuidance(ctx: HostContextShape, config?: Pick<ResolvedCo
 
 /** Inject the latest committed USER.md/MEMORY.md projections on every prompt assembly. */
 export function registerRuntimeMemoryContext(ctx: HostContextShape, runtimeMemory: RuntimeMemoryController): void {
-  systemPrompt(ctx)?.section?.({
+  const prompt = systemPrompt(ctx)
+  prompt?.variable?.(RUNTIME_MEMORY_EMPTY_BRACES_VARIABLE, () => LITERAL_EMPTY_BRACES)
+  prompt?.section?.({
     name: RUNTIME_MEMORY_SECTION_NAME,
     order: 145,
-    text: () => runtimeMemory.contextText(),
+    text: () => runtimeMemoryPromptText(runtimeMemory),
   })
 }
 
@@ -44,7 +52,7 @@ export function registerAgentRuntimeMemoryContext(agent: HostAgent, runtimeMemor
   const dispose = scopedSystemPrompt(agent)?.section?.({
     name: RUNTIME_MEMORY_SECTION_NAME,
     order: 145,
-    text: () => runtimeMemory().contextText(),
+    text: () => runtimeMemoryPromptText(runtimeMemory()),
   })
   return typeof dispose === 'function' ? dispose as () => void : () => {}
 }
