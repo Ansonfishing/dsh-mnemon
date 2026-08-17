@@ -30,7 +30,7 @@ function populatedDataDir(): string {
   return dataDir
 }
 
-function fixture(): { service: MnemonService; process: ReturnType<typeof vi.fn<ProcessRunner>>; dataDir: string } {
+function fixture(writeEnabled = true): { service: MnemonService; process: ReturnType<typeof vi.fn<ProcessRunner>>; dataDir: string } {
   const process = vi.fn<ProcessRunner>(async (_command, args) => {
     if (args.includes('--version')) return { stdout: 'mnemon version 0.1.2\n', stderr: '', exitCode: 0 }
     if (args.includes('status')) return {
@@ -69,6 +69,7 @@ function fixture(): { service: MnemonService; process: ReturnType<typeof vi.fn<P
     store: 'work',
     timeoutMs: 4321,
     defaultRecallLimit: 7,
+    writeEnabled,
   })
   const runner = createRunner(config, process)
   return { service: new MnemonService(runner, config, new MemoryBodyRegistry(runner, true)), process, dataDir }
@@ -232,6 +233,12 @@ describe('MnemonService', () => {
     expect(provider.discover).toHaveBeenCalledOnce()
     expect(provider.status).toHaveBeenCalledOnce()
     expect(provider.status).toHaveBeenCalledWith(expect.objectContaining({ id: body.id, provider: expect.objectContaining({ settings: expect.objectContaining({ bankId: 'bank-1' }) }) }), undefined)
+  })
+
+  it('refreshes one Memory Space health status in read-only mode', async () => {
+    const { service } = fixture(false)
+
+    await expect(service.reconnectBody('work')).resolves.toMatchObject({ id: 'work', healthy: true })
   })
 
   it('keeps the previous provider projection untouched when reconnect discovery fails', async () => {

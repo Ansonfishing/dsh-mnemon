@@ -121,13 +121,13 @@ describe('MnemonClient turn activity batching', () => {
     expect(call).toHaveBeenCalledWith(expect.any(String), 'task-agent-models', {})
   })
 
-  it('routes a card-level Memory Space reconnect with the active scope', async () => {
+  it('routes a card-level Memory Space reconnect through the trusted-host read channel with the active scope', async () => {
     const call = vi.fn(async () => ({ ok: true as const, value: { id: 'mem0-body', healthy: true } }))
     const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle, 'session-1', 'workspace-1')
 
     await client.reconnectBody('mem0-body')
 
-    expect(call).toHaveBeenCalledWith(expect.any(String), 'body-reconnect', {
+    expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'body-reconnect', {
       memoryBodyId: 'mem0-body', sessionId: 'session-1', workspaceId: 'workspace-1',
     })
   })

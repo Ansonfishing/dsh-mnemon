@@ -1113,7 +1113,7 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
   }
 
   const reconnect = async (body: MemoryBodyView) => {
-    if (!props.writeEnabled || reconnectingBody !== null || editingBody !== null || deletingBody !== null) return
+    if (reconnectingBody !== null || editingBody !== null || deletingBody !== null) return
     setReconnectingBody(body.id); setError(null)
     setCatalog(current => current === null ? current : {
       ...current,
@@ -1318,7 +1318,7 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
         </div>
         <div className={css.bodyGrid}>
           {catalog?.items.map(body => (
-            <article key={body.id} className={css.bodyCard} data-provider={body.provider.id} data-active={body.active || undefined} data-healthy={!body.statusLoading && body.healthy || undefined} data-status-loading={body.statusLoading || undefined} data-reconnectable={props.writeEnabled || undefined} data-reconnecting={reconnectingBody === body.id || undefined} data-mnemon-default={body.mnemonDefault || undefined} data-editing={(appearance.surface === 'buildin' && editingBody === body.id) || undefined} tabIndex={props.writeEnabled ? 0 : undefined} aria-label={props.writeEnabled ? t('overview.reconnectAria', { name: body.name }) : undefined} title={reconnectingBody === body.id ? t('overview.reconnecting') : body.error ?? (props.writeEnabled ? t('overview.reconnectHint') : undefined)} onClick={event => {
+            <article key={body.id} className={css.bodyCard} data-provider={body.provider.id} data-active={body.active || undefined} data-healthy={!body.statusLoading && body.healthy || undefined} data-status-loading={body.statusLoading || undefined} data-reconnectable="" data-reconnecting={reconnectingBody === body.id || undefined} data-mnemon-default={body.mnemonDefault || undefined} data-editing={(appearance.surface === 'buildin' && editingBody === body.id) || undefined} tabIndex={0} aria-label={t('overview.reconnectAria', { name: body.name })} title={reconnectingBody === body.id ? t('overview.reconnecting') : body.error ?? t('overview.reconnectHint')} onClick={event => {
               if (event.target instanceof Element && event.target.closest('button, input, textarea, select, label, a, [role="switch"]') !== null) return
               void reconnect(body)
             }} onKeyDown={event => {

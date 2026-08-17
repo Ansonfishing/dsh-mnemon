@@ -458,6 +458,9 @@ describe('MnemonView', () => {
     expect((screen.getByRole('button', { name: '编辑项目记忆体' }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: '删除项目记忆体' }) as HTMLButtonElement).disabled).toBe(true)
 
+    fireEvent.click(screen.getByRole('article', { name: '重新连接项目记忆体' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'body-reconnect', { memoryBodyId: 'project', sessionId: 'session-1' }))
+
     const toggle = screen.getByRole('switch', { name: '偏好记忆体读取开关' }) as HTMLButtonElement
     expect(toggle.disabled).toBe(false)
     fireEvent.click(toggle)

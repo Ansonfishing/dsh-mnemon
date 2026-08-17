@@ -225,6 +225,8 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
           return success(await service.bodies())
         case 'body-directory':
           return success(service.bodyDirectory())
+        case 'body-reconnect':
+          return success(await service.reconnectBody(String(payload.memoryBodyId ?? '')))
         case 'provider-services':
           return success(service.memoryBodies.providerServices())
         case 'list':
@@ -549,6 +551,8 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
             service.updateBodyMetadata(maintained.updates)
             return success(maintained)
           }
+        // Compatibility route for clients released before card reconnect was
+        // correctly classified as a trusted-host read operation.
         case 'body-reconnect':
           return success(await service.reconnectBody(String(payload.memoryBodyId ?? '')))
         case 'body-delete':

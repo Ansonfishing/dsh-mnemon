@@ -275,7 +275,7 @@ export class MnemonClient {
   }
 
   reconnectBody(memoryBodyId: string): Promise<MemoryBodyView> {
-    return this.call(MNEMON_WRITE_CHANNEL, 'body-reconnect', this.scoped({ memoryBodyId }))
+    return this.call(MNEMON_READ_CHANNEL, 'body-reconnect', this.scoped({ memoryBodyId }))
   }
 
   maintainBodyMetadata(memoryBodyIds: string[]): Promise<MemoryBodyMetadataMaintenanceResult> {
