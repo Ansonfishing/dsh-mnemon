@@ -1,8 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { HostSettingsService } from '../src/contracts.ts'
-import { createSettingsHandler } from '../src/settings.ts'
+import type { HostConnectionHandle, HostSettingsService } from '../src/contracts.ts'
+import { createSettingsHandler, registerSettingsRpc } from '../src/settings.ts'
+import { MNEMON_SETTINGS_CHANNEL } from '../src/shared/contracts.ts'
 
 describe('Mnemon settings bridge', () => {
+  it('keeps settings local by default and supports an explicit trusted Host', () => {
+    const settings = {} as HostSettingsService
+    const handle = vi.fn()
+    const connection = { rpc: { handle } } as unknown as HostConnectionHandle
+    registerSettingsRpc(connection, settings)
+    registerSettingsRpc(connection, settings, 'trusted-host')
+    expect(handle).toHaveBeenNthCalledWith(1, MNEMON_SETTINGS_CHANNEL, expect.any(Function), { authority: 'loopback' })
+    expect(handle).toHaveBeenNthCalledWith(2, MNEMON_SETTINGS_CHANNEL, expect.any(Function), { authority: 'trusted-host' })
+  })
+
   it('exposes and mutates only the Mnemon namespace through a revision fence', async () => {
     let revision = 2
     let value = { store: 'base', timeoutMs: 10000 }
@@ -50,6 +61,19 @@ describe('Mnemon settings bridge', () => {
       ok: false,
       error: expect.objectContaining({ code: 'settings-rejected', details: { ns: 'mnemon' } }),
     }))
+    expect(settings.mutate).not.toHaveBeenCalled()
+  })
+
+  it('does not let a remote settings client promote its own transport authority', async () => {
+    const settings = {
+      writable: true,
+      register: vi.fn(),
+      mutate: vi.fn(),
+      describe: () => [{ ns: 'mnemon', value: { remoteAccess: 'read-only' }, revision: 0, applies: 'live' as const }],
+    } as unknown as HostSettingsService
+    await expect(createSettingsHandler(settings)('mutate', {
+      ops: [{ op: 'set', path: ['remoteAccess'], value: 'trusted-host' }],
+    })).resolves.toMatchObject({ ok: false, error: { code: 'settings-rejected' } })
     expect(settings.mutate).not.toHaveBeenCalled()
   })
 

@@ -145,7 +145,7 @@ endpoint:  body
 
 ```text
 channel:   /dsh-mnemon-write
-authority: loopback
+authority: loopback（`remoteAccess=trusted-host` 时为 trusted-host）
 ```
 
 | Endpoint | 行为 |
@@ -166,7 +166,7 @@ authority: loopback
 
 ```text
 channel:   /dsh-mnemon-pack
-authority: loopback
+authority: loopback（`remoteAccess=trusted-host` 时为 trusted-host）
 ```
 
 | Endpoint | 行为 |
@@ -176,13 +176,13 @@ authority: loopback
 | `inspect` | 解析并校验待导入 ZIP，返回组件与占用预览 |
 | `import` | 把 ZIP 安全合并到当前有效根；只读模式拒绝 |
 
-备份包含私有记忆，因此整个通道保持 loopback-only。
+备份包含私有记忆，因此默认保持 loopback-only；远程管理模式必须由部署层认证保护。
 
 ### 设置通道
 
 ```text
 channel:   /dsh-mnemon-settings
-authority: loopback
+authority: loopback（`remoteAccess=trusted-host` 时为 trusted-host）
 namespaces: mnemon, mnemon-ui
 endpoints: get, mutate
 ```

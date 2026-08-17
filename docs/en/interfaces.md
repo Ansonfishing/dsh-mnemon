@@ -145,7 +145,7 @@ All broader mutations remain on the write channel:
 
 ```text
 channel:   /dsh-mnemon-write
-authority: loopback
+authority: loopback (`trusted-host` when `remoteAccess=trusted-host`)
 ```
 
 | Endpoint | Behavior |
@@ -166,7 +166,7 @@ With `writeEnabled=false`, both activation control and the write channel remain 
 
 ```text
 channel:   /dsh-mnemon-pack
-authority: loopback
+authority: loopback (`trusted-host` when `remoteAccess=trusted-host`)
 ```
 
 | Endpoint | Behavior |
@@ -176,13 +176,13 @@ authority: loopback
 | `inspect` | Parse and verify an import ZIP, returning component and occupancy preview |
 | `import` | Safely merge into the effective root; rejected in read-only mode |
 
-Backups contain private memory, so the entire channel is loopback-only.
+Backups contain private memory, so the channel is loopback-only by default; deployment authentication must protect remote management mode.
 
 ### Settings channel
 
 ```text
 channel:   /dsh-mnemon-settings
-authority: loopback
+authority: loopback (`trusted-host` when `remoteAccess=trusted-host`)
 namespaces: mnemon, mnemon-ui
 endpoints: get, mutate
 ```

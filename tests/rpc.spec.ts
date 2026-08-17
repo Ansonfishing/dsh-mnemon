@@ -500,6 +500,13 @@ describe('Mnemon RPC', () => {
     expect(handle).toHaveBeenCalledWith(MNEMON_WRITE_CHANNEL, expect.any(Function), { authority: 'loopback' })
   })
 
+  it('grants the write channel to an explicitly trusted remote Host', () => {
+    const handle = vi.fn()
+    const connection = { rpc: { handle } } as unknown as HostConnectionHandle
+    registerRpc(connection, fakeService(), undefined, undefined, undefined, undefined, undefined, 'trusted-host')
+    expect(handle).toHaveBeenCalledWith(MNEMON_WRITE_CHANNEL, expect.any(Function), { authority: 'trusted-host' })
+  })
+
   it('keeps Pack backup and restore on a dedicated loopback channel', async () => {
     const packs = {
       target: vi.fn(() => ({ root: '/tmp/mnemon', scope: 'custom' })),
@@ -525,6 +532,10 @@ describe('Mnemon RPC', () => {
     const handle = vi.fn()
     registerRpc({ rpc: { handle } } as unknown as HostConnectionHandle, fakeService(), undefined, undefined, undefined, packs)
     expect(handle).toHaveBeenCalledWith(MNEMON_PACK_CHANNEL, expect.any(Function), { authority: 'loopback' })
+
+    const remoteHandle = vi.fn()
+    registerRpc({ rpc: { handle: remoteHandle } } as unknown as HostConnectionHandle, fakeService(), undefined, undefined, undefined, packs, undefined, 'trusted-host')
+    expect(remoteHandle).toHaveBeenCalledWith(MNEMON_PACK_CHANNEL, expect.any(Function), { authority: 'trusted-host' })
   })
 
   it('keeps the live write channel stable but rejects it in read-only mode', async () => {

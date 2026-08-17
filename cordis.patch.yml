@@ -13,5 +13,6 @@
         idleReviewMs: 30000
         tabEnabled: true
         writeEnabled: true
+        remoteAccess: read-only
         timeoutMs: 10000
         defaultRecallLimit: 10

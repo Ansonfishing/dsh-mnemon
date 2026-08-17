@@ -66,7 +66,10 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     // `inject` guarantees the service at runtime; retain the defensive guard
     // because HostContextShape also models profiles where it is absent.
     if (webContext.connection === undefined) return
-    registerRpc(webContext.connection, runtime, lifecycle)
-    registerSettingsRpc(webContext.connection, ctx.settings)
+    // This authority is deliberately sampled once at Host startup. Remote Web
+    // pages cannot promote themselves by mutating live Mnemon settings.
+    const managementAuthority = resolved.remoteAccess === 'trusted-host' ? 'trusted-host' : 'loopback'
+    registerRpc(webContext.connection, runtime, lifecycle, undefined, undefined, undefined, undefined, managementAuthority)
+    registerSettingsRpc(webContext.connection, ctx.settings, managementAuthority)
   })
 }

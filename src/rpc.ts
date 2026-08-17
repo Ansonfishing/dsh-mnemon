@@ -1,4 +1,4 @@
-import type { HostConnectionHandle, HostRpcHandler, RpcResult } from './contracts.ts'
+import type { HostConnectionHandle, HostRpcAuthority, HostRpcHandler, RpcResult } from './contracts.ts'
 import type { MnemonLifecycle } from './lifecycle.ts'
 import type { RuntimeMemoryController, RuntimeMemoryImportance, RuntimeMemoryTarget } from './runtime-memory.ts'
 import type { Category, EdgeType, Intent, MnemonService, SearchRequest, Source } from './service.ts'
@@ -562,7 +562,7 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
   }
 }
 
-/** Backup payloads contain private memory and therefore remain loopback-only. */
+/** Backup payloads contain private memory and use the deployment's management authority. */
 export function createPackHandler(input: MnemonPackManager | LiveMnemonRuntime, writeEnabled: boolean | (() => boolean) = true): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
@@ -585,15 +585,15 @@ export function createPackHandler(input: MnemonPackManager | LiveMnemonRuntime, 
   }
 }
 
-/** Read and activation control are available to trusted Web hosts; all other mutations stay loopback-only. */
-export function registerRpc(connection: HostConnectionHandle, input: RuntimeInput, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector, packs?: MnemonPackManager, versions?: VersionUpdateManager): void {
+/** Reads and activation use trusted hosts; other privileged channels require explicit promotion. */
+export function registerRpc(connection: HostConnectionHandle, input: RuntimeInput, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector, packs?: MnemonPackManager, versions?: VersionUpdateManager, managementAuthority: HostRpcAuthority = 'loopback'): void {
   const versionManager = versions ?? new VersionUpdateManager({ mnemonCliPath: () => findVersionCli(input) })
   connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(input, lifecycle, runtimeMemory, storage, versionManager), { authority: 'trusted-host' })
   connection.rpc.handle(MNEMON_ACTIVATION_CHANNEL, createActivationHandler(input), { authority: 'trusted-host' })
-  connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(input, lifecycle, runtimeMemory, versionManager), { authority: 'loopback' })
+  connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(input, lifecycle, runtimeMemory, versionManager), { authority: managementAuthority })
   const packManager = isRoutedRuntime(input) ? input : packs
   const config = input.config
-  if (packManager !== undefined) connection.rpc.handle(MNEMON_PACK_CHANNEL, createPackHandler(packManager, () => config.writeEnabled), { authority: 'loopback' })
+  if (packManager !== undefined) connection.rpc.handle(MNEMON_PACK_CHANNEL, createPackHandler(packManager, () => config.writeEnabled), { authority: managementAuthority })
 }
 
 function findVersionCli(input: RuntimeInput): string | undefined {

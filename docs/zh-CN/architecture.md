@@ -122,7 +122,7 @@ browser component
   -> local CLI or managed files
 ```
 
-读通道与仅含记忆体激活的控制通道要求 `trusted-host`，更宽泛的记忆写通道和设置通道要求 `loopback`。激活处理器只接受精确的记忆体 ID 与布尔状态。Provider 凭据值只经私密的 loopback 服务目录传递，trusted-host 目录始终脱敏。浏览器组件也会从连接边界推导本地写入能力，在传输前禁用更宽泛的控件。`writeEnabled=false` 时所有 mutation 处理器都会在 Host 边界拒绝请求。
+读通道与仅含记忆体激活的控制通道要求 `trusted-host`，更宽泛的记忆写、设置和备份通道默认要求 `loopback`。激活处理器只接受精确的记忆体 ID 与布尔状态。Provider 凭据值只经私密的管理权限服务目录传递，普通 trusted-host 目录始终脱敏。浏览器组件会从连接边界推导本地写入能力，在传输前禁用更宽泛的控件。对于已有可靠部署层认证的环境，可在 Host 本地设置 `remoteAccess=trusted-host` 并重启，将三个特权通道整体提升；DSH `trustedHosts` 本身不是用户身份认证。`writeEnabled=false` 时所有 mutation 处理器都会在 Host 边界拒绝请求。
 
 ## 国际化
 
