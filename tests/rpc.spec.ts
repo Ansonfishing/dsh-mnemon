@@ -220,8 +220,8 @@ describe('Mnemon RPC', () => {
     }
     const lifecycle = { taskAgentModels: vi.fn(async () => catalog) } as unknown as MnemonLifecycle
 
-    await expect(createReadHandler(service, lifecycle)('task-agent-models', {})).resolves.toEqual({ ok: true, value: catalog })
-    expect(lifecycle.taskAgentModels).toHaveBeenCalledTimes(1)
+    await expect(createReadHandler(service, lifecycle)('task-agent-models', { includeCatalog: false })).resolves.toEqual({ ok: true, value: catalog })
+    expect(lifecycle.taskAgentModels).toHaveBeenCalledWith(false)
   })
 
   it('routes sessionless supervised work through a workspace task Agent', async () => {

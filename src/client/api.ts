@@ -122,8 +122,8 @@ export class MnemonClient {
     return this.call<StatusView>(MNEMON_READ_CHANNEL, 'status-summary', this.scoped()).catch(() => this.status())
   }
 
-  taskAgentModels(): Promise<TaskAgentModelCatalog> {
-    return this.call(MNEMON_READ_CHANNEL, 'task-agent-models', {})
+  taskAgentModels(includeCatalog?: boolean): Promise<TaskAgentModelCatalog> {
+    return this.call(MNEMON_READ_CHANNEL, 'task-agent-models', includeCatalog === undefined ? {} : { includeCatalog })
   }
 
   versions(): Promise<VersionStatus> {

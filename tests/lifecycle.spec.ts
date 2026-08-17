@@ -224,6 +224,35 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.llm.listModels).toHaveBeenCalledTimes(2)
   })
 
+  it('resolves the inherited task route without loading the full model directory', async () => {
+    const value = fixture()
+
+    await expect(value.lifecycle.taskAgentModels(false)).resolves.toEqual({
+      effective: { provider: 'deepseek', model: 'deepseek-chat', source: 'dsh-default' },
+      defaultSelection: { provider: 'deepseek', model: 'deepseek-chat' },
+      groups: [],
+      failures: [],
+    })
+    expect(value.llm.listProviders).not.toHaveBeenCalled()
+    expect(value.llm.listModels).not.toHaveBeenCalled()
+  })
+
+  it('isolates a stalled Provider while keeping the rest of the model catalog usable', async () => {
+    vi.useFakeTimers()
+    const value = fixture()
+    value.llm.listModels.mockImplementation(async provider => provider === 'openai'
+      ? await new Promise<never>(() => {})
+      : [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }])
+
+    const pending = value.lifecycle.taskAgentModels()
+    await vi.advanceTimersByTimeAsync(3_000)
+
+    await expect(pending).resolves.toMatchObject({
+      groups: [{ id: 'deepseek', models: [{ id: 'deepseek-chat' }] }],
+      failures: [{ id: 'openai', message: 'model directory timed out after 3 seconds' }],
+    })
+  })
+
   it('runs Agent Query synthesis under a disposable clean root Agent', async () => {
     const value = fixture()
 

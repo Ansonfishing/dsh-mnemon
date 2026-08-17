@@ -125,7 +125,7 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
       }
       if (endpoint === 'task-agent-models') {
         if (lifecycle === undefined) throw new Error('Mnemon task Agent model directory is unavailable without lifecycle integration')
-        return success(await lifecycle.taskAgentModels())
+        return success(await lifecycle.taskAgentModels(payload.includeCatalog !== false))
       }
       const resolved = runtimeFor(input, payload, runtimeMemory, storage)
       const { service } = resolved.graph

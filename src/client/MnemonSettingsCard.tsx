@@ -143,7 +143,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
     let active = true
     setModelCatalogState('loading')
     setModelCatalogError(null)
-    void new MnemonClient(connection).taskAgentModels().then(catalog => {
+    void new MnemonClient(connection).taskAgentModels(draft.taskAgentModelMode === 'fixed').then(catalog => {
       if (!active) return
       setModelCatalog(catalog)
       setModelCatalogState('ready')
@@ -153,7 +153,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
       setModelCatalogError(reason instanceof Error ? reason.message : String(reason))
     })
     return () => { active = false }
-  }, [connection, modelCatalogRevision])
+  }, [connection, draft.taskAgentModelMode, modelCatalogRevision])
 
   const coreUser = useMemo(() => record(coreSnapshot.user), [coreSnapshot.user])
   const activeScope = coreDraft(coreSnapshot.value).storageScope === 'workspace' ? 'workspace' : 'global'

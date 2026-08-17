@@ -22,7 +22,7 @@ describe('MnemonSettingsCard', () => {
       subscribe() { return () => {} },
       set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}), mutate,
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
-    const call = vi.fn(async (channel: string, endpoint: string) => {
+    const call = vi.fn(async (channel: string, endpoint: string, _payload: unknown) => {
       if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') return {
         ok: true as const,
         value: {
@@ -42,7 +42,9 @@ describe('MnemonSettingsCard', () => {
 
     expect((screen.getByRole('radio', { name: '跟随主链路' }) as HTMLInputElement).checked).toBe(true)
     expect(await screen.findByText('deepseek / deepseek-chat')).toBeTruthy()
+    expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'task-agent-models', { includeCatalog: false })
     fireEvent.click(screen.getByRole('radio', { name: '指定模型 Provider' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'task-agent-models', { includeCatalog: true }))
     fireEvent.change(screen.getByRole('combobox', { name: '模型 Provider' }), { target: { value: 'openai' } })
     expect((screen.getByRole('combobox', { name: '模型' }) as HTMLSelectElement).value).toBe('gpt-5')
     fireEvent.click(screen.getByRole('button', { name: '保存' }))

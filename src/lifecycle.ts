@@ -410,7 +410,7 @@ export class MnemonLifecycle {
   }
 
   /** Provider/model directory used by Settings without requiring a live session. */
-  async taskAgentModels(): Promise<TaskAgentModelCatalog> {
+  async taskAgentModels(includeCatalog = true): Promise<TaskAgentModelCatalog> {
     const route = this.taskAgentModelRoute('', undefined)
     let defaultSelection: { provider: string; model: string } | undefined
     try {
@@ -424,6 +424,7 @@ export class MnemonLifecycle {
       ...(route === undefined ? {} : { effective: { provider: route.options.provider!, model: route.options.model!, source: route.source } }),
       ...(defaultSelection === undefined ? {} : { defaultSelection }),
     }
+    if (!includeCatalog) return { ...base, groups: [], failures: [] }
     const llm = llmService(this.ctx.get('llm'))
     if (llm === undefined) {
       return { ...base, groups: [], failures: [{ id: 'dsh', name: 'DSH', message: 'model directory service is unavailable' }] }
@@ -437,7 +438,11 @@ export class MnemonLifecycle {
     }
     const entries = await Promise.all(providers.map(async provider => {
       try {
-        const models = await llm.listModels(provider.id)
+        let timeout: ReturnType<typeof setTimeout> | undefined
+        const models = await Promise.race([
+          llm.listModels(provider.id),
+          new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('model directory timed out after 3 seconds')), 3_000) }),
+        ]).finally(() => { if (timeout !== undefined) clearTimeout(timeout) })
         return {
           kind: 'group' as const,
           value: {
