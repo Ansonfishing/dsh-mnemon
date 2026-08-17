@@ -186,10 +186,14 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const activeScope = coreDraft(coreSnapshot.value).storageScope === 'workspace' ? 'workspace' : 'global'
   const error = validation(t, draft)
   const loading = coreSnapshot.status === 'loading' || interactionSnapshot.status === 'loading'
-  const localWrites = connection?.isLoopback !== false
-  const writable = localWrites && coreSnapshot.writable && interactionSnapshot.writable
+  // A successful writable settings snapshot is the Host's authoritative
+  // capability grant. Remote trusted-host deployments deliberately expose the
+  // same management RPCs, so transport locality is not a capability signal.
+  const writable = coreSnapshot.writable && interactionSnapshot.writable
 
-  if (coreSnapshot.status === 'unavailable' && interactionSnapshot.status === 'unavailable') return null
+  if (coreSnapshot.status === 'unavailable' && interactionSnapshot.status === 'unavailable') {
+    return <section className={css.page} aria-label={t('config.aria')}><p className={css.error} role="alert">{t('config.unavailable')}</p></section>
+  }
 
   const edit = (field: Field, value: string | boolean): void => {
     setDraft(current => ({ ...current, [field]: value }))
@@ -245,8 +249,8 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
     }
   }
 
-  const coreDisabled = loading || saving || !localWrites || !coreSnapshot.writable
-  const interactionDisabled = loading || saving || !localWrites || !interactionSnapshot.writable
+  const coreDisabled = loading || saving || !coreSnapshot.writable
+  const interactionDisabled = loading || saving || !interactionSnapshot.writable
   const scopeChanging = dirty.has('storageScope') || dirty.has('dataDir')
   return (
     <section className={css.page} aria-label={t('config.aria')} aria-busy={saving || loading}>
