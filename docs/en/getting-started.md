@@ -205,8 +205,6 @@ Ask a question that genuinely depends on history and allow the Agent to decide w
 - Expanding shows exact tools and links to their pages.
 - Save to memory opens an editable confirmation; canceling performs no write.
 
-[![Turn memory and exact tool navigation](../assets/screenshots/conversation-turn-memory.png)](../assets/screenshots/conversation-turn-memory.png)
-
 Ordinary conversation should not force recall. Current requests, repository files, and live tool results outrank historical content.
 
 ## 8. Next steps

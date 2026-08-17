@@ -10,7 +10,7 @@
 
 [播放 1600×900 MP4](../assets/media/dsh-mnemon-memory-system-demo.mp4) · [打开 GIF](../assets/media/dsh-mnemon-memory-system-demo.gif)
 
-约 62 秒录制在页面切换、弹窗、按钮状态变化和 Agent 答案上保留了明确停顿，并包含：四个一级页的整体上下滑动、活跃/归档切换、Provider 内容筛选与取消、创建与策略弹窗、AI 元信息多选、后台任务模型路由切换、对话内“存入记忆”、展开“本回合记忆”、点击工具跳转，以及一次真正完成的只读 Agent 查询。所有可能改变数据的确认动作都停在提交前。
+约 55 秒录制在页面切换、弹窗、按钮状态变化和 Agent 答案上保留了明确停顿，并包含：四个一级页的整体上下滑动、活跃/归档切换、Provider 内容筛选与取消、创建与策略弹窗、AI 元信息多选、后台任务模型路由切换，以及一次真正完成的只读 Agent 查询。所有可能改变数据的确认动作都停在提交前。
 
 ## 交互心智
 
@@ -157,15 +157,9 @@ Mnemon 自己的自定义目录、备份与迁移留在 Mnemon 专属折叠区�
 
 ### 本回合记忆
 
-[![展开本回合记忆：具体工具与点击入口](../assets/screenshots/conversation-turn-memory.png)](../assets/screenshots/conversation-turn-memory.png)
-
 只有已经完成且发生记忆活动的回合才显示。“本回合记忆”可以重复展开/收起；展开后列出具体工具，点击工具名跳转到对应检索、内容、实体或档案页面。
 
-[![从本回合记忆精确跳转到档案](../assets/screenshots/conversation-memory-jump.png)](../assets/screenshots/conversation-memory-jump.png)
-
 ### 存入记忆
-
-[![存入记忆确认：编辑候选后再启动独立任务 Agent](../assets/screenshots/conversation-save-dialog.png)](../assets/screenshots/conversation-save-dialog.png)
 
 “存入记忆”位于已定稿回复的原生操作区。首次点击只读取这条回复并打开可编辑弹窗；取消不会产生任何写入。只有“确认并交给独立任务 Agent”才开始沉淀流程。
 

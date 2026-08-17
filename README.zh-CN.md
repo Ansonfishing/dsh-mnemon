@@ -14,8 +14,8 @@
 <p align="center">三层记忆 · 九种长期记忆 Provider · 一套受监督工作流</p>
 
 <p align="center">
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">
-    <img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/media/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon v0.2.0 记忆系统与 Provider 状态概览" width="1180">
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">
+    <img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/media/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon v0.2.0 记忆系统与 Provider 状态概览" width="1180">
   </a>
 </p>
 
@@ -23,7 +23,7 @@
   <a href="./docs/zh-CN/capabilities.md"><strong>先看能力地图</strong></a> ·
   <a href="./docs/zh-CN/getting-started.md">5 分钟开始</a> ·
   <a href="./docs/zh-CN/releases/v0.2.0.md">v0.2.0 升级说明</a> ·
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">观看宽屏实机演示</a>
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">观看宽屏实机演示</a>
 </p>
 
 `dsh-mnemon` 为 DSH 提供统一的记忆控制面，但不要求所有知识进入同一种数据库。运行时记忆让紧凑上下文每轮可用；项目档案保留完整叙事；记忆体按需召回长期证据，底层可选择 **Mnemon、OpenViking、Honcho、Mem0、Hindsight、Holographic、RetainDB、ByteRover 或 Supermemory**。
@@ -74,11 +74,11 @@ Provider 能力差异会如实展示：引擎没有图谱边、删除语义或�
 
 ## 真实 WebUI 演示
 
-下面约 62 秒的素材来自真实的 1600×900 DSH WebUI：在页面切换、弹窗、按钮状态变化和 Agent 答案上都保留了更清晰的停留，同时包含整个工作台的上下滑动、对话内记忆展开、精确跳转档案，以及一次真正完成的只读 Agent 查询。可能改变数据的确认按钮都没有提交。
+下面约 55 秒的素材来自真实的 1600×900 DSH WebUI：在完整上下滑动、页面切换、Provider 卡片、弹窗、按钮状态变化和 Agent 答案上都保留了更清晰的停留，并包含一次真正完成的只读 Agent 查询。可能改变数据的确认按钮都没有提交。
 
-![dsh-mnemon v0.2.0 完整 WebUI：上下滚动与按钮交互](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/media/dsh-mnemon-memory-system-demo.gif)
+![dsh-mnemon v0.2.0 完整 WebUI：上下滚动与按钮交互](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/media/dsh-mnemon-memory-system-demo.gif)
 
-[观看 1600×900 MP4](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/media/dsh-mnemon-memory-system-demo.mp4) · [按页面查看交互指南](./docs/zh-CN/ui-guide.md)
+[观看 1600×900 MP4](https://github.com/omdsh-dev/dsh-mnemon/blob/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/media/dsh-mnemon-memory-system-demo.mp4) · [按页面查看交互指南](./docs/zh-CN/ui-guide.md)
 
 ## 5 分钟开始使用
 
@@ -131,19 +131,19 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 
 ## 沿用熟悉心智，扩展底层能力
 
-### 对话内记忆
+### Agent 驱动的记忆操作
 
-| 本回合记忆 | 存入记忆 |
+| 受监督沉淀 | 有界 Agent 查询 |
 |---|---|
-| [![展开本回合记忆并查看精确工具入口](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/conversation-turn-memory.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/conversation-turn-memory.png) | [![确认存入记忆弹窗](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/conversation-save-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/conversation-save-dialog.png) |
+| [![编辑候选内容后再调度独立任务 Agent](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/remember-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/remember-dialog.png) | [![基于多 Provider 有界证据完成只读 Agent 查询](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/recall-agent-answer.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/recall-agent-answer.png) |
 
-两项默认开启，可在**设置 → 记忆系统 → 对话界面**分别关闭。
+工作台会在调度前明确展示任务边界，并把返回答案与本次证据范围放在一起。对话内的“本回合记忆”和“存入记忆”仍默认开启，可在**设置 → 记忆系统 → 对话界面**分别关闭。
 
 ### 人工创建与策略选路
 
 | 明确选择底层 | 智能路由后续沉淀 |
 |---|---|
-| [![创建记忆体时明确选择 Provider](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/memory-space-create-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/memory-space-create-dialog.png) | [![在人工指定与智能选择之间配置沉淀策略](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/distillation-strategy.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/distillation-strategy.png) |
+| [![创建记忆体时明确选择 Provider](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/memory-space-create-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/memory-space-create-dialog.png) | [![在人工指定与智能选择之间配置沉淀策略](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/distillation-strategy.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/distillation-strategy.png) |
 
 手动创建记忆体始终由用户明确选择。智能选择属于“沉淀策略”：硬规则定义候选范围，策略 Prompt 只在多个候选都合格时帮助任务 Agent 决策。
 

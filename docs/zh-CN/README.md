@@ -7,7 +7,7 @@
 ## 新用户路径
 
 1. [能力地图](./capabilities.md)：用 30 秒理解三层记忆、九种 Provider，以及哪些点击会启动独立任务 Agent。
-2. [约 62 秒宽屏实机演示](../assets/media/dsh-mnemon-memory-system-demo.mp4)：看带停留的完整上下滑动、按钮操作、会话内跳转与真实 Agent 查询。
+2. [约 55 秒宽屏实机演示](../assets/media/dsh-mnemon-memory-system-demo.mp4)：看带停留的完整上下滑动、Provider 与弹窗操作，以及一次完成的只读 Agent 查询。
 3. [快速开始](./getting-started.md)：安装 Mnemon 与插件，选择存储范围，完成第一次验证。
 4. [Sidebar 与对话交互指南](./ui-guide.md)：认识状态、运行时、档案、记忆体和对话内入口。
 5. [项目介绍](./project-overview.md)：理解三层模型、跨 Agent 共享边界、读写边界与完整流转。

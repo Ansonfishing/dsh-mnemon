@@ -132,7 +132,7 @@ Public UI screenshots live under `docs/assets/screenshots/`, shared by both lang
 8. Remove unreferenced assets, stale Buildin layouts, and obsolete terminology.
 9. Run link/image checks, then open both READMEs and UI guides manually.
 
-README demo assets are `docs/assets/media/dsh-mnemon-memory-system-demo.*`. The demo should cover Status, Runtime, Documents, Memory Spaces, and conversation surfaces with full vertical scrolling and key button-state changes. Automation must not submit memory, update components, or save settings, but it may complete a safe read-only Agent Query.
+README demo assets are `docs/assets/media/dsh-mnemon-memory-system-demo.*`. The demo should cover Status, Runtime, Documents, Memory Spaces, Provider and dialog interactions with full vertical scrolling and key button-state changes. Automation must not submit memory, update components, or save settings, but it may complete a safe read-only Agent Query.
 
 ## Modifying Subagent Schemas
 

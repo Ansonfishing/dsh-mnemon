@@ -10,7 +10,7 @@ This guide follows the v0.2.0 default `sidebar` presentation and a real user pat
 
 [Play the 1600×900 MP4](../assets/media/dsh-mnemon-memory-system-demo.mp4) · [Open the GIF](../assets/media/dsh-mnemon-memory-system-demo.gif)
 
-The roughly 62-second recording leaves a clear pause on page transitions, dialogs, button-state changes, and the Agent answer. It scrolls all four primary pages, switches active/archive Documents, applies and clears Provider content filters, opens creation and strategy dialogs, selects multiple AI-metadata targets, changes and restores background model routing, opens Save to memory, expands Turn memory, follows an exact tool link, and completes a real read-only Agent Query. Every confirmation that could mutate data stops before submission.
+The roughly 55-second recording leaves a clear pause on page transitions, dialogs, button-state changes, and the Agent answer. It scrolls all four primary pages, switches active/archive Documents, applies and clears Provider content filters, opens creation and strategy dialogs, selects multiple AI-metadata targets, changes and restores background model routing, and completes a real read-only Agent Query. Every confirmation that could mutate data stops before submission.
 
 ## Interaction model
 
@@ -157,15 +157,9 @@ Switches, radio options, and eye buttons tolerate repeated clicks—including cl
 
 ### Turn memory
 
-[![Expanded Turn memory with exact tool entries](../assets/screenshots/conversation-turn-memory.png)](../assets/screenshots/conversation-turn-memory.png)
-
 Turn memory appears only on completed turns with memory activity. Expand or collapse it repeatedly. Clicking an exact tool opens its matching Recall, Content, Entities, or Documents page.
 
-[![Exact navigation from Turn memory to a Document](../assets/screenshots/conversation-memory-jump.png)](../assets/screenshots/conversation-memory-jump.png)
-
 ### Save to memory
-
-[![Edit the candidate before dispatching an independent task Agent](../assets/screenshots/conversation-save-dialog.png)](../assets/screenshots/conversation-save-dialog.png)
 
 Save to memory sits in the native action strip for finalized replies. The first click only reads that reply and opens an editable dialog. Cancel has no data effect. Only **Confirm and send to independent task Agent** starts distillation.
 

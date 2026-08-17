@@ -14,8 +14,8 @@
 <p align="center">Three memory tiers · Nine long-term providers · One supervised workflow</p>
 
 <p align="center">
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">
-    <img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/media/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon v0.2.0 Memory System status and provider overview" width="1180">
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">
+    <img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/media/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon v0.2.0 Memory System status and provider overview" width="1180">
   </a>
 </p>
 
@@ -23,7 +23,7 @@
   <a href="./docs/en/capabilities.md"><strong>Explore the capability map</strong></a> ·
   <a href="./docs/en/getting-started.md">Start in five minutes</a> ·
   <a href="./docs/en/releases/v0.2.0.md">Read the v0.2.0 notes</a> ·
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">Watch the widescreen demo</a>
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">Watch the widescreen demo</a>
 </p>
 
 `dsh-mnemon` gives DSH one memory control plane without forcing every kind of knowledge into one database. Runtime Memory keeps compact context available every turn. Project Documents preserve complete narratives. Memory Spaces retrieve durable evidence on demand and can use **Mnemon, OpenViking, Honcho, Mem0, Hindsight, Holographic, RetainDB, ByteRover, or Supermemory**.
@@ -74,11 +74,11 @@ See the [provider capability and deployment matrix](./docs/en/memory-providers.m
 
 ## Real WebUI walkthrough
 
-The following roughly 62-second capture comes from a live 1600×900 DSH WebUI. It deliberately pauses on page transitions, dialogs, button-state changes, and the Agent answer while scrolling the full workbench, following an exact Document link, and completing a read-only Agent Query. Destructive confirmations are deliberately not submitted.
+The following roughly 55-second capture comes from a live 1600×900 DSH WebUI. It deliberately pauses on full-page scrolling, page transitions, Provider cards, dialogs, button-state changes, and a completed read-only Agent Query. Destructive confirmations are deliberately not submitted.
 
-![Full dsh-mnemon v0.2.0 WebUI walkthrough with scrolling and button interactions](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/media/dsh-mnemon-memory-system-demo.gif)
+![Full dsh-mnemon v0.2.0 WebUI walkthrough with scrolling and button interactions](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/media/dsh-mnemon-memory-system-demo.gif)
 
-[Watch the 1600×900 MP4](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/media/dsh-mnemon-memory-system-demo.mp4) · [Open the page-by-page UI guide](./docs/en/ui-guide.md)
+[Watch the 1600×900 MP4](https://github.com/omdsh-dev/dsh-mnemon/blob/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/media/dsh-mnemon-memory-system-demo.mp4) · [Open the page-by-page UI guide](./docs/en/ui-guide.md)
 
 ## Start in five minutes
 
@@ -131,19 +131,19 @@ The primary tab order is intentionally stable: **Status, Runtime, Documents, Mem
 
 ## Familiar controls, expanded capability
 
-### Conversation-native memory
+### Agent-driven memory operations
 
-| Turn memory | Save to memory |
+| Supervised distillation | Bounded Agent query |
 |---|---|
-| [![Expanded Turn memory with exact tool links](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/conversation-turn-memory.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/conversation-turn-memory.png) | [![Confirm save to memory dialog](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/conversation-save-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/conversation-save-dialog.png) |
+| [![Edit a candidate before dispatching an independent task Agent](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/remember-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/remember-dialog.png) | [![Read-only Agent answer grounded in bounded multi-provider evidence](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/recall-agent-answer.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/recall-agent-answer.png) |
 
-Both are enabled by default and can be changed independently under **Settings → Memory System → Conversation interface**.
+The workbench makes the task boundary explicit before dispatch and keeps the returned answer beside its evidence scope. Conversation-native Turn memory and Save to memory remain enabled by default and can be changed independently under **Settings → Memory System → Conversation interface**.
 
 ### Manual or policy-driven placement
 
 | Create explicitly | Route future distillation intelligently |
 |---|---|
-| [![Choose a Provider while creating a Memory Space](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/memory-space-create-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/memory-space-create-dialog.png) | [![Choose manual or smart Provider placement](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/distillation-strategy.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/distillation-strategy.png) |
+| [![Choose a Provider while creating a Memory Space](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/memory-space-create-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/memory-space-create-dialog.png) | [![Choose manual or smart Provider placement](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/distillation-strategy.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/6912bf513544cd6d6762083abbcc932918a77e32/docs/assets/screenshots/distillation-strategy.png) |
 
 Manual creation always asks the user to choose. Smart selection is a distillation policy: hard rules define the eligible set, then an optional prompt guides the Agent only when several candidates remain.
 

@@ -132,7 +132,7 @@ local link installation
 8. 删除已无引用、展示旧 Buildin 布局或术语过时的截图；
 9. 运行链接与图片检查，再人工打开中英文 README 和 UI 指南。
 
-README 演示资源位于 `docs/assets/media/dsh-mnemon-memory-system-demo.*`。演示顺序应覆盖状态、运行时、档案、记忆体和对话内入口；既要展示整体上下滑动，也要展示关键按钮的两种状态。自动化不得真正提交记忆、更新组件或保存设置，但可以执行安全的只读 Agent 查询。
+README 演示资源位于 `docs/assets/media/dsh-mnemon-memory-system-demo.*`。演示顺序应覆盖状态、运行时、档案、记忆体、Provider 与弹窗交互；既要展示整体上下滑动，也要展示关键按钮的两种状态。自动化不得真正提交记忆、更新组件或保存设置，但可以执行安全的只读 Agent 查询。
 
 ## 修改 subagent schema
 

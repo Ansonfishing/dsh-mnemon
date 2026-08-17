@@ -205,8 +205,6 @@ dsh --profile headless "回答前先检查持久化的项目上下文。"
 - 展开后可以看到具体工具名，并点击跳到对应页面；
 - “存入记忆”会先打开可编辑确认弹窗，取消不会写入。
 
-[![本回合记忆与工具跳转](../assets/screenshots/conversation-turn-memory.png)](../assets/screenshots/conversation-turn-memory.png)
-
 普通聊天不应强制召回。当前请求、现有源文件和实时工具结果应优先于历史内容。
 
 ## 8. 下一步
