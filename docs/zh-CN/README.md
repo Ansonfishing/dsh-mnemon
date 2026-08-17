@@ -37,7 +37,7 @@
 | 档案 | Project Documents | 受管、可检索、保留完整 Markdown 叙事的项目知识 |
 | 记忆体 | Memory Space | 独立、可激活、按需召回的长期 Mnemon Store |
 | 跨 Agent 共享 | Cross-agent memory sharing | 多个 Mnemon-enabled Agent 使用同一根和 Store，共享长期记忆而非完整 DSH 上下文 |
-| 沉淀 | Remember / Distill | 把候选交给受监督子 Agent 判断、查重与写入 |
+| 沉淀 | Remember / Distill | 启动独立任务 Agent 判断、查重与写入 |
 | 召回 | Recall | 从已激活记忆体按需取回有界证据 |
 | 归档 | Archive | 先建立冷引用，再把不常用档案迁出 active 层 |
 

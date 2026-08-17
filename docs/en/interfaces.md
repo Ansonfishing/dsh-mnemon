@@ -92,7 +92,7 @@ When a worker invokes the same tool name, it reaches the service directly and is
 | `conversation.chat.turnTail` | chain | `turn-activity` summarizes `mnemon_*` calls from completed turns; open turns and turns without activity render nothing |
 | `conversation.chat.assistant-actions` | list, `id=mnemon-save` | `assistant-message` reads finalized text; `supervise` runs only after confirmation |
 
-Both are additive and replace no official DSH rendering. The assistant-message candidate is editable and long replies are bounded by the UI preview limit. Persistence is complete only after a memory-subagent receipt.
+Both are additive and replace no official DSH rendering. The assistant-message candidate is editable and long replies are bounded by the UI preview limit. Confirmation starts an independent task Agent, and persistence is complete only after its settled receipt.
 
 ## Workspace routing
 
@@ -138,7 +138,7 @@ authority: loopback
 | Endpoint | Behavior |
 |---|---|
 | `runtime-memory` | Hot-memory mutation |
-| `supervise` | Submit a candidate to the memory worker |
+| `supervise` | Process a candidate under an independent task Agent and return a settled receipt |
 | `document` | create / update / archive |
 | `remember` / `link` / `forget` | Durable semantic write, relation, and soft deletion |
 | `body-create` / `body-update` / `body-delete` | Create/connect, edit, or confirm Native deletion / remote disconnection |

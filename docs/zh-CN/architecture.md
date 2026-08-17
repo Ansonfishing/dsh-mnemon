@@ -69,9 +69,13 @@ root Agent calls mnemon_recall
 
 记忆体目录的移除是独立危险操作：Mnemon Native 经确认后调用 `store remove`，成功才移除登记；所有三方 Provider 都使用“断开”语义，只删除本地连接元数据，绝不删除 Provider 记忆。
 
-## 两类子 Agent
+## 独立任务 Agent 与内部 Worker
 
-### `spawn`
+Web 工作台发起的 AI 元信息、Agent 查询、记忆沉淀和档案归档先创建一个新的顶层任务 Agent。这个 Agent 不借用对话历史，cwd 明确绑定工作台选中的工作区，并组合 DSH 的默认 preset；任务完成后立即释放。它的模型路由默认跟随 DSH 新会话默认值，也可以用 `taskAgentModel` 固定完整 Provider + Model。
+
+顶层任务 Agent 是用户可感知的执行单元；下述 `spawn` / `fork` 是插件内部受限 Worker Provider。任务 Agent 需要语义判断时仍会调度 bounded worker，worker 继承其父任务 Agent 的模型路由。因此，界面统一使用“独立任务 Agent”，而诊断与架构文档保留 worker / subagent 术语。
+
+### `spawn` worker
 
 `spawn` 使用新的隔离上下文。插件为每类任务提供：
 
@@ -83,7 +87,7 @@ root Agent calls mnemon_recall
 
 它用于召回、长期语义写入、证据限定问答、热记忆整理和 Document 归档。
 
-### `fork`
+### `fork` worker
 
 评分后台审查必须使用名为 `fork` 且 `inheritsParentContext=true` 的 provider。它只继承已经完成的父 checkpoint，用于判断是否需要维护热记忆或最多一份项目档案。它不是用户任务的延续，也不会把审查推理注入主对话。
 

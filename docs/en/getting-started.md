@@ -179,7 +179,7 @@ See [Long-term memory providers](./memory-providers.md) before connecting an ext
 
 ### Remember one test item
 
-Open **Remember** and enter something stable, self-contained, future-useful, and secret-free. Leave advanced options collapsed so the memory subagent can select a target, deduplicate, and distill.
+Open **Remember** and enter something stable, self-contained, future-useful, and secret-free. Leave advanced options collapsed so the independent task Agent can select a target, deduplicate, and distill.
 
 Writing starts only after confirmation. Canceling the dialog changes no state.
 

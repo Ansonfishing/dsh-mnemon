@@ -16,7 +16,7 @@
 - **第三层可替换**：可在 9 种引擎之间选择，而不改变运行时、档案、记忆体与 Agent 工具的用户心智。
 - **可解释的智能选底层**：创建记忆体时可保持手动指定，也可用硬规则与策略 Prompt 让隔离子 Agent 在合格 Provider 中选择；结果会记录理由与置信度。
 - **三层协作**：运行时记忆、项目档案、记忆体各自保存适合自己的信息粒度。
-- **受监督写入**：语义判断交给隔离的记忆子 Agent，路径、权限、容量、锁与 revision 由 Host 控制。
+- **受监督写入**：用户发起的记忆任务由无会话历史的独立任务 Agent 执行，路径、权限、容量、锁与 revision 由 Host 控制。
 - **Web 与 Headless**：Web 提供完整 Sidebar 工作台；一次性 Headless 任务获得同一套 Agent 工具、记忆上下文和 cwd 路由。
 
 当前用户指令、仓库文件与实时工具结果始终高于历史记忆。
@@ -128,7 +128,7 @@ Headless 没有工作台和对话按钮，但仍会挂载运行时上下文、�
 | [![展开本回合记忆并查看工具入口](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/conversation-turn-memory.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/conversation-turn-memory.png) | [![确认存入记忆弹窗](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/conversation-save-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/conversation-save-dialog.png) |
 
 - **本回合记忆**汇总本轮的召回、沉淀与档案检索；展开后可以跳到对应页面。
-- **存入记忆**先加载可编辑候选，只有确认后才交给记忆子 Agent 判断、查重、提炼并写入。
+- **存入记忆**先加载可编辑候选，只有确认后才启动独立任务 Agent 判断、查重、提炼并写入。
 
 这两个入口默认开启，可在“设置 → 记忆系统 → 对话界面”中分别关闭，保存后实时生效。
 
@@ -168,7 +168,7 @@ mnemon:
 
 - Mnemon Native 通过本地 `mnemon` CLI；外部 HTTP Provider 与 ByteRover CLI 只由 Host 调用。WebUI 不读取 Store，也不直接调用 Provider。
 - CLI 使用参数数组且禁用 shell；输出、超时和取消均有边界。
-- Provider 凭据以 `0600` 权限保存在 `<storageRoot>/state/memory-providers.json`，不会返回浏览器或 placement 子 Agent，也不会进入 Mnemon Pack；子 Agent 推理仍复用 DSH 已配置的模型 Provider。
+- Provider 凭据以 `0600` 权限保存在 `<storageRoot>/state/memory-providers.json`，不会返回浏览器或参与选址的 Agent，也不会进入 Mnemon Pack；独立任务 Agent 默认使用 DSH 新会话模型，也可在“设置 → 记忆系统”单独指定 Provider 与模型。
 - 当前没有确定性的秘密扫描器。不要把密钥、token、私钥或原始敏感日志写入任何记忆层。
 - 卸载插件不会删除 `~/.mnemon`、工作区 `.mnemon` 或自定义目录中的数据。
 

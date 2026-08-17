@@ -92,7 +92,7 @@ worker 内调用同名工具时直接进入服务层，不再递归委派。
 | `conversation.chat.turnTail` | chain | 通过 `turn-activity` 汇总完成回合中的 `mnemon_*` 调用；无活动或未完成回合不渲染 |
 | `conversation.chat.assistant-actions` | list，`id=mnemon-save` | 通过 `assistant-message` 读取已定稿文本；只在用户确认后调用 `supervise` |
 
-两者都是增量注册，不替换 DSH 官方渲染。`assistant-message` 读取的候选可编辑，长回复会按界面上限截取；写入结果以记忆子 Agent 回执为准。
+两者都是增量注册，不替换 DSH 官方渲染。`assistant-message` 读取的候选可编辑，长回复会按界面上限截取；确认后会启动独立任务 Agent，写入结果以它的落定回执为准。
 
 ## 工作区路由
 
@@ -138,7 +138,7 @@ authority: loopback
 | Endpoint | 行为 |
 |---|---|
 | `runtime-memory` | 热记忆 mutation |
-| `supervise` | 把候选交给记忆 worker |
+| `supervise` | 用独立任务 Agent 处理候选并返回落定回执 |
 | `document` | create / update / archive |
 | `remember` / `link` / `forget` | 长期语义写入、关系与软删除 |
 | `body-create` / `body-update` / `body-delete` | 记忆体创建/连接、编辑，以及确认后的 Native 删除或远程断开 |

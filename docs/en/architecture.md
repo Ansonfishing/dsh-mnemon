@@ -69,9 +69,13 @@ Long-term semantic writes, relationships, deletion, and Memory Space creation or
 
 Memory Space removal is a separate dangerous action. Mnemon Native invokes `store remove` after confirmation and removes registration only after success. Every third-party provider uses **Disconnect** semantics: it removes local connection metadata and never deletes provider memory.
 
-## Two Types of Subagent
+## Independent Task Agents and Internal Workers
 
-### `spawn`
+AI metadata, Agent Query, memory distillation, and document archiving initiated by the Web workbench first create a new top-level task Agent. It borrows no conversation history, binds its cwd explicitly to the selected workbench workspace, composes the default DSH preset, and is disposed after completion. Its model route follows the DSH new-session default unless `taskAgentModel` pins a complete Provider + Model.
+
+The top-level task Agent is the user-visible execution unit. The `spawn` / `fork` providers below are bounded internal workers. When semantic judgment is needed, the task Agent may still dispatch a worker, which inherits its parent task Agent's model route. UI copy therefore says **independent task Agent**, while diagnostics and architecture retain worker / subagent terminology.
+
+### `spawn` worker
 
 `spawn` uses a new isolated context. For each task type, the plugin supplies:
 
@@ -83,7 +87,7 @@ Memory Space removal is a separate dangerous action. Mnemon Native invokes `stor
 
 It is used for recall, long-term semantic writes, evidence-bound answers, hot-memory maintenance, and Document archiving.
 
-### `fork`
+### `fork` worker
 
 Scored background review requires a provider named `fork` with `inheritsParentContext=true`. It inherits only a completed parent checkpoint and determines whether to maintain hot memory or at most one Project Document. It is not a continuation of the user's task, and it does not inject review reasoning into the main conversation.
 

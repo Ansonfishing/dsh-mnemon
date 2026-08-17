@@ -17,11 +17,13 @@ Choose the entry point and storage location under **Settings → Memory System**
 
 Both modes share functionality, data, and Host services. Only entry and appearance differ. Saving switches live without a browser refresh or duplicate mounts.
 
+The same page's **Background task Agent** setting controls AI metadata, Agent Query, memory distillation, and document archiving. **Follow the main route** uses the DSH new-session default; **Choose model provider** selects a complete Provider + Model route that overrides only those independent background tasks.
+
 ## Workbench anatomy
 
 The Sidebar header always answers three questions: which system is open, which storage-location mode is effective, and whether the Host is connected.
 
-The body has four primary tabs: **Status, Runtime, Memory Spaces, and Documents**. Memory Spaces adds **Overview, Recall, Content, and Entities** as secondary tabs, with **Remember** as its primary action.
+The body has four primary tabs: **Status, Runtime, Documents, and Memory Spaces**. Memory Spaces adds **Overview, Recall, Content, and Entities** as secondary tabs, with **Remember** as its primary action.
 
 ## 1. Status: establish that the system is ready
 
@@ -79,14 +81,14 @@ The **Snapshot visibility** section first states which read surface each Memory 
 
 [![Remember dialog with candidate and optional advanced constraints](../assets/screenshots/remember-dialog.png)](../assets/screenshots/remember-dialog.png)
 
-Normally, provide only a candidate. On confirmation, an isolated memory subagent decides whether it qualifies, chooses the narrowest space, deduplicates, distills, and writes. Expand advanced options only when a target space, category, or importance must be constrained explicitly.
+Normally, provide only a candidate. On confirmation, a clean independent task Agent decides whether it qualifies, chooses the narrowest space, deduplicates, distills, and writes. Expand advanced options only when a target space, category, or importance must be constrained explicitly.
 
 ### Recall
 
 [![Recall query, category, strategy, raw evidence, and progressive results](../assets/screenshots/recall-agent-answer.png)](../assets/screenshots/recall-agent-answer.png)
 
 - **Direct recall** returns raw evidence without an answer Agent.
-- **Agent query** retrieves the same evidence, then gives it to an evidence-only worker with no Mnemon tools.
+- **Agent query** retrieves the same evidence, then starts a clean evidence-only task Agent with no Mnemon tools.
 - Category and strategy narrow the search.
 - **Recall scope** reports the provider-native search state for every active searchable Memory Space; one failed connection does not hide other sources.
 - Results retain Memory Space, provider, category, importance, engine-native score, and ID; cross-provider order uses rank fusion.
@@ -133,7 +135,7 @@ The bar appears only on completed turns with memory activity. Expanding lists ex
 
 [![Confirm save to memory and edit the candidate before dispatch](../assets/screenshots/conversation-save-dialog.png)](../assets/screenshots/conversation-save-dialog.png)
 
-Save to memory sits in the native action strip for finalized assistant replies. Clicking only opens confirmation and reads that reply. Edit or cancel freely; writing starts only after **Confirm and send to memory subagent**.
+Save to memory sits in the native action strip for finalized assistant replies. Clicking only opens confirmation and reads that reply. Edit or cancel freely; confirmation starts a clean independent task Agent for the write flow.
 
 ## Workspace mode: separating inspection from execution
 
@@ -142,9 +144,9 @@ Under `storageScope=workspace`, keep two concepts separate:
 | Concept | Selected by | Affects |
 |---|---|---|
 | **Inspected workspace** | Workbench header selector | Which `<workspace>/.mnemon` the UI displays and maintains manually |
-| **Effective workspace** | Current conversation / Agent cwd | Which root tools, commands, lifecycle hooks, and subagents actually use |
+| **Effective workspace** | Current conversation / Agent cwd | Which root conversation tools, commands, and lifecycle hooks actually use |
 
-You may inspect project B while staying in project A's conversation; the Agent still uses A. When they differ, the header explains the mismatch and offers one-click alignment. Agent-backed actions are rejected while misaligned to prevent writes to the wrong project. Switching inspection target unmounts old page state before loading the new root.
+You may inspect project B while staying in project A's conversation: the conversation Agent still uses A, while AI metadata, Agent Query, memory distillation, and document archiving create independent task Agents explicitly scoped to B. This also works when no main session is selected. Switching inspection target unmounts old page state before loading the new root.
 
 `global` and `custom` resolve to one explicit root and need no alignment layer.
 

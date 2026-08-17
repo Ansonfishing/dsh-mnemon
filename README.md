@@ -16,7 +16,7 @@
 - **Replaceable long-term tier**: choose among nine engines without changing the Runtime, Documents, Memory Space, or Agent-tool mental model.
 - **Explainable smart placement**: keep manual engine selection or let hard rules plus a strategy prompt guide an isolated subagent among eligible providers; the reason and confidence are retained.
 - **Three cooperating tiers**: Runtime Memory, Project Documents, and Memory Spaces retain information at the right granularity.
-- **Supervised writes**: isolated memory subagents make semantic decisions; the Host enforces paths, permissions, capacity, locks, and revisions.
+- **Supervised writes**: user-triggered memory work runs under clean independent task Agents; the Host enforces paths, permissions, capacity, locks, and revisions.
 - **Web and Headless**: a complete Sidebar workbench for interactive management, plus the same Agent tools, memory context, and cwd routing in one-shot Headless tasks.
 
 Current user instructions, repository files, and live tool results always take precedence over historical memory.
@@ -128,7 +128,7 @@ Add and edit use consistent dialogs, destructive actions require confirmation, l
 | [![Expanded Turn memory with exact tool links](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/conversation-turn-memory.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/conversation-turn-memory.png) | [![Confirm save to memory dialog](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/conversation-save-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/conversation-save-dialog.png) |
 
 - **Turn memory** summarizes recalls, writes, and Document searches for the turn; expand it to jump to the matching page.
-- **Save to memory** loads an editable candidate. Only confirmation sends it to the memory subagent for qualification, deduplication, distillation, and writing.
+- **Save to memory** loads an editable candidate. Only confirmation starts an independent task Agent for qualification, deduplication, distillation, and writing.
 
 Both are on by default. Disable them independently under **Settings → Memory System → Conversation interface**; saved changes apply live.
 
@@ -168,7 +168,7 @@ Recommended lookup order: Runtime Memory → active Documents → active Memory 
 
 - Mnemon Native uses the local `mnemon` CLI. External HTTP providers and the ByteRover CLI are called only through the Host; the WebUI neither reads stores nor calls providers directly.
 - CLI calls use argument arrays with shell disabled, bounded output, timeouts, and cancellation.
-- Provider credentials are stored mode `0600` in `<storageRoot>/state/memory-providers.json`, are never returned to the browser or placement subagent, and are excluded from Mnemon Pack exports. Subagent inference still uses the model provider configured in DSH.
+- Provider credentials are stored mode `0600` in `<storageRoot>/state/memory-providers.json`, are never returned to the browser or placement Agent, and are excluded from Mnemon Pack exports. Independent task Agents use the DSH new-session model by default, or an explicit Provider and model chosen under **Settings → Memory System**.
 - There is no deterministic secret scanner yet. Never store keys, tokens, private keys, or raw sensitive logs in any tier.
 - Uninstalling the plugin does not remove data under `~/.mnemon`, workspace `.mnemon` roots, or custom directories.
 
