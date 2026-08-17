@@ -19,6 +19,11 @@ describe('MnemonView', () => {
     setPath: async () => {},
     unsetPath: async () => {},
   } satisfies ClientSettingsScope<Config>
+  const readOnlySettingsSnapshot = { status: 'unavailable' as const, writable: false, mode: 'host' as const }
+  const readOnlySettingsScope = {
+    ...settingsScope,
+    getSnapshot: () => readOnlySettingsSnapshot,
+  } satisfies ClientSettingsScope<Config>
 
   function createConnection(options: { isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean } = {}) {
     const body = {
@@ -446,9 +451,9 @@ describe('MnemonView', () => {
     expect(screen.getByRole('button', { name: '实体: DSH' })).toBeTruthy()
   })
 
-  it('keeps only activation controls writable on a remote trusted-host connection', async () => {
+  it('keeps only activation controls writable when remote management is not authorized', async () => {
     const { connection, call } = createConnection({ isLoopback: false, withInactiveBody: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+    render(<MnemonView connection={connection} settingsScope={readOnlySettingsScope} sessionId="session-1" surface="sidebar" />)
 
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: '检查版本' }))
@@ -475,6 +480,22 @@ describe('MnemonView', () => {
     await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'))
     expect(call).toHaveBeenCalledWith('/dsh-mnemon-activation', 'body', { memoryBodyId: 'preferences', active: true, sessionId: 'session-1' })
     expect(call.mock.calls.some(([channel]) => channel === '/dsh-mnemon-write')).toBe(false)
+  })
+
+  it('enables memory management controls on an explicitly authorized remote Host', async () => {
+    const { connection } = createConnection({ isLoopback: false, withInactiveBody: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
+    fireEvent.click(screen.getByRole('tab', { name: '记忆体' }))
+    await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
+
+    expect(screen.getByText('独立任务 Agent')).toBeTruthy()
+    expect((screen.getByRole('button', { name: '沉淀记忆' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByRole('button', { name: '创建记忆体' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'AI 维护元信息' })).toBeTruthy()
+    expect((screen.getByRole('button', { name: '编辑项目记忆体' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: '删除项目记忆体' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('keeps overview, recall, content, and entities aligned with each provider read contract', async () => {

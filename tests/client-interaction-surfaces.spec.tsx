@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ClientConnectionHandle } from '../src/contracts.ts'
+import type { ClientConnectionHandle, ClientSettingsScope } from '../src/contracts.ts'
+import type { Config } from '../src/config.ts'
 import { MnemonSaveAction } from '../src/client/MnemonSaveAction.tsx'
 import { MnemonTurnTail, memoryPageForTool } from '../src/client/MnemonTurnTail.tsx'
 import { consumeMnemonAnchor, dispatchMnemonAnchor, subscribeMnemonAnchor } from '../src/client/anchor.ts'
@@ -12,6 +13,17 @@ afterEach(() => {
 })
 
 const translate = (key: string): string => key
+const writableSettingsSnapshot = { status: 'ready' as const, value: {}, writable: true, mode: 'host' as const }
+const readOnlySettingsSnapshot = { status: 'unavailable' as const, writable: false, mode: 'host' as const }
+const writableSettingsScope = {
+  getSnapshot: () => writableSettingsSnapshot,
+  subscribe: () => () => {},
+  set: async () => {}, unset: async () => {}, setPath: async () => {}, unsetPath: async () => {},
+} satisfies ClientSettingsScope<Config>
+const readOnlySettingsScope = {
+  ...writableSettingsScope,
+  getSnapshot: () => readOnlySettingsSnapshot,
+} satisfies ClientSettingsScope<Config>
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -81,7 +93,7 @@ describe('conversation interaction surfaces', () => {
     })
     const connection = { rpc: { call: rpcCall } } as ClientConnectionHandle
 
-    render(<MnemonSaveAction messageId="message-1" sessionId="session-a" connection={connection} t={translate as never} />)
+    render(<MnemonSaveAction messageId="message-1" sessionId="session-a" connection={connection} settingsScope={writableSettingsScope} t={translate as never} />)
     const action = screen.getByRole('button', { name: 'saveAction.button' })
     expect(action.textContent).toBe('')
     expect(action.getAttribute('aria-haspopup')).toBe('dialog')
@@ -120,7 +132,7 @@ describe('conversation interaction surfaces', () => {
     expect(screen.queryByText('saveAction.result')).toBeNull()
   })
 
-  it('keeps supervised message writes read-only on a remote trusted-host connection', async () => {
+  it('keeps supervised message writes read-only when the Host management grant is unavailable', async () => {
     const rpcCall = vi.fn(async (_channel: string, endpoint: string) => {
       if (endpoint === 'status') return { ok: true as const, value: { writeEnabled: true } }
       if (endpoint === 'assistant-message') return { ok: true as const, value: { messageId: 'message-1', text: 'A durable project decision.' } }
@@ -128,7 +140,7 @@ describe('conversation interaction surfaces', () => {
     })
     const connection = { rpc: { call: rpcCall }, isLoopback: false } as ClientConnectionHandle
 
-    render(<MnemonSaveAction messageId="message-1" sessionId="session-a" connection={connection} t={translate as never} />)
+    render(<MnemonSaveAction messageId="message-1" sessionId="session-a" connection={connection} settingsScope={readOnlySettingsScope} t={translate as never} />)
     fireEvent.click(screen.getByRole('button', { name: 'saveAction.button' }))
 
     const submit = await screen.findByRole('button', { name: 'saveAction.submit' }) as HTMLButtonElement
@@ -136,5 +148,23 @@ describe('conversation interaction surfaces', () => {
     expect(submit.disabled).toBe(true)
     fireEvent.click(submit)
     expect(rpcCall.mock.calls.some(([, endpoint]) => endpoint === 'supervise')).toBe(false)
+  })
+
+  it('allows supervised message writes on an explicitly authorized remote Host', async () => {
+    const rpcCall = vi.fn(async (_channel: string, endpoint: string) => {
+      if (endpoint === 'status') return { ok: true as const, value: { writeEnabled: true } }
+      if (endpoint === 'assistant-message') return { ok: true as const, value: { messageId: 'message-1', text: 'A durable project decision.' } }
+      if (endpoint === 'supervise') return { ok: true as const, value: { summary: 'stored', action: 'remember' } }
+      throw new Error(`unexpected endpoint: ${endpoint}`)
+    })
+    const connection = { rpc: { call: rpcCall }, isLoopback: false } as ClientConnectionHandle
+
+    render(<MnemonSaveAction messageId="message-1" sessionId="session-a" connection={connection} settingsScope={writableSettingsScope} t={translate as never} />)
+    fireEvent.click(screen.getByRole('button', { name: 'saveAction.button' }))
+
+    const submit = await screen.findByRole('button', { name: 'saveAction.submit' }) as HTMLButtonElement
+    await waitFor(() => expect(submit.disabled).toBe(false))
+    fireEvent.click(submit)
+    await waitFor(() => expect(rpcCall.mock.calls.some(([, endpoint]) => endpoint === 'supervise')).toBe(true))
   })
 })

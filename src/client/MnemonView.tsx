@@ -2493,7 +2493,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   }, [appearance.surface, openRemember, selectPage])
   const refreshAll = () => { setRevision(value => value + 1); void loadStatus() }
   const activationEnabled = status?.writeEnabled === true
-  const writeEnabled = activationEnabled && connection.isLoopback !== false
+  const writeEnabled = activationEnabled && settingsSnapshot.status === 'ready' && settingsSnapshot.writable
   const stats = status?.stats
   const catalogKnown = status?.memoryBodies !== undefined
   const memoryBodies = useMemo(() => (status?.memoryBodies ?? []).map(normalizeMemoryBody), [status])

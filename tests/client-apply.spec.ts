@@ -29,9 +29,15 @@ describe('Mnemon Web client composition', () => {
     expect(slots.find(options => options.name === 'conversation.view')).toBeUndefined()
     expect(slots).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'settings.section', id: 'mnemon', order: 20 })]))
     const settingsEntry = slots.find(options => options.name === 'settings.section')
-    const settingsInject = settingsEntry?.inject as (() => { t: (key: keyof typeof zh) => string }) | undefined
+    const settingsInject = settingsEntry?.inject as (() => { scope: unknown; t: (key: keyof typeof zh) => string }) | undefined
     expect(settingsInject?.().t('config.scope')).toBe('存储范围')
     expect((settingsEntry?.label as () => string)()).toBe('记忆系统')
+    await vi.waitFor(() => expect(slots).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'conversation.chat.assistant-actions', id: 'mnemon-save' }),
+    ])))
+    const saveEntry = slots.find(options => options.name === 'conversation.chat.assistant-actions')
+    const saveProps = (saveEntry?.inject as (sessionId: string) => { settingsScope: unknown })('session-1')
+    expect(saveProps.settingsScope).toBe(settingsInject?.().scope)
     active = 'en'
     expect((settingsEntry?.label as () => string)()).toBe('Memory System')
     expect(settingsInject?.().t('config.scope')).toBe('Storage scope')
