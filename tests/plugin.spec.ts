@@ -148,8 +148,9 @@ describe('dsh-mnemon plugin composition', () => {
     expect(guidance.length).toBeLessThan(360)
     expect(guidance).not.toContain('RECALL RESULT')
     expect(fixture.commands).toEqual([expect.objectContaining({ name: 'mnemon' })])
-    expect(fixture.channels).toHaveLength(4)
+    expect(fixture.channels).toHaveLength(5)
     expect(fixture.channels).toEqual(expect.arrayContaining([
+      expect.arrayContaining(['/dsh-mnemon-activation', expect.anything(), { authority: 'trusted-host' }]),
       expect.arrayContaining(['/dsh-mnemon-pack', expect.anything(), { authority: 'loopback' }]),
     ]))
     expect(fixture.registrations).toEqual([
@@ -166,8 +167,9 @@ describe('dsh-mnemon plugin composition', () => {
       execute: (args: unknown, execution: unknown) => Promise<unknown>
     }
     expect(() => runtimeTool.execute({ action: 'add', target: 'memory', content: 'blocked' }, { signal: new AbortController().signal })).toThrow('read-only')
-    expect(fixture.channels).toHaveLength(4)
+    expect(fixture.channels).toHaveLength(5)
     expect(fixture.channels).toEqual(expect.arrayContaining([
+      expect.arrayContaining(['/dsh-mnemon-activation', expect.anything(), { authority: 'trusted-host' }]),
       expect.arrayContaining(['/dsh-mnemon-pack', expect.anything(), { authority: 'loopback' }]),
     ]))
     expect(fixture.sections).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'mnemon:runtime-memory' })]))
@@ -212,7 +214,7 @@ describe('dsh-mnemon plugin composition', () => {
       expect.objectContaining({ name: 'mnemon:runtime-memory' }),
     ])
     expect((fixture.sections[0] as { text: () => string }).text()).toBe('')
-    expect(fixture.channels).toHaveLength(4)
+    expect(fixture.channels).toHaveLength(5)
   })
 
   it('atomically switches the same live RPC faces after settings validation', async () => {

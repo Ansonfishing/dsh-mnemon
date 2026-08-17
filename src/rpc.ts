@@ -6,7 +6,7 @@ import type { StorageScopeInspector } from './storage-scope.ts'
 import type { MnemonPackManager } from './pack.ts'
 import type { LiveMnemonRuntime, MnemonRuntimeGraph } from './live-runtime.ts'
 import { VersionUpdateManager, type VersionComponentId } from './version-updates.ts'
-import { MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from './channels.ts'
+import { MNEMON_ACTIVATION_CHANNEL, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from './channels.ts'
 import { isMemoryProviderId } from './providers/catalog.ts'
 import type {
   CreateMemoryBodyRequest,
@@ -15,7 +15,7 @@ import type {
   MemoryProviderId,
   UpdateMemoryBodyRequest,
 } from './shared/contracts.ts'
-export { MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from './channels.ts'
+export { MNEMON_ACTIVATION_CHANNEL, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from './channels.ts'
 
 type RuntimeInput = MnemonService | LiveMnemonRuntime
 
@@ -297,6 +297,34 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
   }
 }
 
+const ACTIVATION_PAYLOAD_FIELDS = new Set(['memoryBodyId', 'active', 'sessionId', 'workspaceId'])
+
+/**
+ * Expose only DSH read-routing activation to trusted Web hosts. Metadata,
+ * provider connections, credentials, and durable memory writes stay on the
+ * loopback-only write channel.
+ */
+export function createActivationHandler(input: RuntimeInput): HostRpcHandler {
+  return async (endpoint, rawPayload) => {
+    try {
+      if (endpoint !== 'body') return badRequest(`unknown activation endpoint: ${endpoint}`)
+      const payload = object(rawPayload)
+      const unexpected = Object.keys(payload).filter(field => !ACTIVATION_PAYLOAD_FIELDS.has(field))
+      if (unexpected.length > 0) return badRequest(`unsupported activation fields: ${unexpected.join(', ')}`)
+      if (typeof payload.memoryBodyId !== 'string' || payload.memoryBodyId.trim() === '') return badRequest('memoryBodyId must be a non-empty string')
+      if (typeof payload.active !== 'boolean') return badRequest('active must be a boolean')
+      if (payload.sessionId !== undefined && typeof payload.sessionId !== 'string') return badRequest('sessionId must be a string')
+      if (payload.workspaceId !== undefined && typeof payload.workspaceId !== 'string') return badRequest('workspaceId must be a string')
+
+      const { graph } = runtimeFor(input, payload)
+      if (!graph.service.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
+      return success(graph.service.updateBody(payload.memoryBodyId.trim(), { active: payload.active }))
+    } catch (error) {
+      return failure(error)
+    }
+  }
+}
+
 export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, versions?: VersionUpdateManager): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
@@ -554,10 +582,11 @@ export function createPackHandler(input: MnemonPackManager | LiveMnemonRuntime, 
   }
 }
 
-/** Read operations are available to trusted Web hosts; local mutations stay loopback-only. */
+/** Read and activation control are available to trusted Web hosts; all other mutations stay loopback-only. */
 export function registerRpc(connection: HostConnectionHandle, input: RuntimeInput, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector, packs?: MnemonPackManager, versions?: VersionUpdateManager): void {
   const versionManager = versions ?? new VersionUpdateManager({ mnemonCliPath: () => findVersionCli(input) })
   connection.rpc.handle(MNEMON_READ_CHANNEL, createReadHandler(input, lifecycle, runtimeMemory, storage, versionManager), { authority: 'trusted-host' })
+  connection.rpc.handle(MNEMON_ACTIVATION_CHANNEL, createActivationHandler(input), { authority: 'trusted-host' })
   connection.rpc.handle(MNEMON_WRITE_CHANNEL, createWriteHandler(input, lifecycle, runtimeMemory, versionManager), { authority: 'loopback' })
   const packManager = isRoutedRuntime(input) ? input : packs
   const config = input.config

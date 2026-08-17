@@ -1,6 +1,7 @@
 import type { ConnectionHandle as DshClientConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 
 export const MNEMON_READ_CHANNEL = '/dsh-mnemon-read'
+export const MNEMON_ACTIVATION_CHANNEL = '/dsh-mnemon-activation'
 export const MNEMON_WRITE_CHANNEL = '/dsh-mnemon-write'
 export const MNEMON_PACK_CHANNEL = '/dsh-mnemon-pack'
 export const MNEMON_SETTINGS_CHANNEL = '/dsh-mnemon-settings'
