@@ -97,6 +97,7 @@ describe('MnemonView', () => {
         idleReviewMs: 30000,
         activeAgents: 1,
         sessionAvailable: true,
+        taskAgentAvailable: true,
         counters: { primes: 1, recallCues: 2, writebackCues: 2, supervisedRequests: 1, failures: 0 },
         subagents: { recalls: 2, answers: 1, reviews: 1, writes: 1, failures: 0 },
         current: {
@@ -819,7 +820,7 @@ describe('MnemonView', () => {
     expect(within(dialog).getByRole('checkbox', { name: /项目记忆体/ })).toBeTruthy()
   })
 
-  it('keeps metadata maintenance discoverable while the matching Agent is unavailable', async () => {
+  it('keeps metadata maintenance runnable from the selected workspace when the conversation points elsewhere', async () => {
     const { connection } = createConnection({ workspaceMismatch: true })
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
 
@@ -830,9 +831,9 @@ describe('MnemonView', () => {
     fireEvent.click(action)
 
     const dialog = screen.getByRole('dialog', { name: 'AI 维护记忆体元信息' })
-    expect(within(dialog).getByText('暂时无法运行：未找到与当前记忆范围匹配的活跃 Agent')).toBeTruthy()
+    expect(within(dialog).queryByText('暂时无法运行：未找到与当前记忆范围匹配的活跃 Agent')).toBeNull()
     fireEvent.click(within(dialog).getByRole('checkbox', { name: /项目记忆体/ }))
-    expect(within(dialog).getByRole('button', { name: 'AI 生成（1）' }).hasAttribute('disabled')).toBe(true)
+    expect(within(dialog).getByRole('button', { name: 'AI 生成（1）' }).hasAttribute('disabled')).toBe(false)
   })
 
   it('isolates concurrent metadata subagents and contains failures inside the affected card', async () => {
@@ -1253,7 +1254,9 @@ describe('MnemonView', () => {
     expect(screen.getByText('project/memory-12345678')).toBeTruthy()
     expect(screen.getByText('原始召回内容')).toBeTruthy()
     expect(screen.getByText('项目选择 SQLite，因为需要单文件部署。')).toBeTruthy()
-    expect(call).toHaveBeenCalledWith(expect.anything(), 'agent-search', expect.objectContaining({ query: 'SQLite', sessionId: 'session-1' }))
+    expect(call).toHaveBeenCalledWith(expect.anything(), 'agent-search', expect.objectContaining({ query: 'SQLite' }))
+    const agentSearchPayload = call.mock.calls.find((entry: unknown[]) => entry[1] === 'agent-search')?.[2]
+    expect(agentSearchPayload).not.toHaveProperty('sessionId')
   })
 
   it('creates and cold-archives a managed Document through the WebUI control plane', async () => {

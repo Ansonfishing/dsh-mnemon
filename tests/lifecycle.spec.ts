@@ -68,6 +68,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' })) {
   const coordinator = {
     recall: vi.fn(async (_agent, request) => ({ query: request.query, mode: 'smart', results: [], delegation: { runId: 'recall-child', provider: 'spawn', summary: '', selectedMemoryBodyIds: [] } })),
     write: vi.fn(async () => ({ delegated: true, runId: 'write-child', provider: 'spawn', summary: 'No durable memory', action: 'skipped', memoryBodyIds: [] })),
+    answer: vi.fn(async () => ({ answer: 'SQLite.', citations: [], delegation: { runId: 'answer-child', provider: 'spawn' } })),
     review: vi.fn(async () => ({ delegated: true, runId: 'review-child', provider: 'fork', summary: 'No durable change', action: 'skipped', memoryBodyIds: [] })),
     maintainMetadata: vi.fn(async () => ({ delegated: true, runId: 'metadata-child', provider: 'spawn', summary: 'updated', updates: [] })),
     archiveDocument: vi.fn(async () => ({ success: true, action: 'archived', document: { id: 'doc-1' } })),
@@ -168,6 +169,22 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.agentPresets.mount).toHaveBeenCalledTimes(2)
     expect(value.disposedTaskAgents).toHaveLength(2)
     expect(value.lifecycle.snapshot()).toMatchObject({ activeAgents: 1, taskAgentAvailable: true })
+  })
+
+  it('runs Agent Query synthesis under a disposable clean root Agent', async () => {
+    const value = fixture()
+
+    await value.lifecycle.answerTask('', 'Which database?', [], '/tmp/workspace-two')
+
+    expect(value.createTaskAgent).toHaveBeenCalledWith(expect.objectContaining({
+      meta: { cwd: '/tmp/workspace-two', agentPreset: 'default' },
+      agentOptions: { provider: 'deepseek', model: 'deepseek-chat' },
+    }))
+    expect(value.coordinator.answer).toHaveBeenCalledWith(expect.objectContaining({
+      options: { provider: 'deepseek', model: 'deepseek-chat' },
+      session: expect.objectContaining({ header: expect.objectContaining({ cwd: '/tmp/workspace-two' }) }),
+    }), 'Which database?', [], expect.any(AbortSignal))
+    expect(value.disposedTaskAgents).toHaveLength(1)
   })
 
   it('adds a short optional reminder without forcing recall or remember for an ordinary turn', async () => {

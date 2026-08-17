@@ -262,7 +262,12 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
               ...(Array.isArray(payload.memoryBodyIds) ? { memoryBodyIds: payload.memoryBodyIds.map(String) } : {}),
             }
             const recalled = await service.search(request)
-            const answer = await lifecycle.answer(String(payload.sessionId ?? ''), request.query, recalled.results)
+            const answer = await lifecycle.answerTask(
+              String(payload.sessionId ?? ''),
+              request.query,
+              recalled.results,
+              service.config.storageScope === 'workspace' ? selectedWorkspace?.path : undefined,
+            )
             return success({ ...recalled, ...answer })
           }
         case 'related':

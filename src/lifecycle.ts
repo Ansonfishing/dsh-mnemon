@@ -444,6 +444,12 @@ export class MnemonLifecycle {
     return this.coordinator.answer(this.liveAgent(sessionId), query, evidence, signal)
   }
 
+  /** Synthesize a Web Agent Query without borrowing a conversation Agent or its history. */
+  answerTask(sessionId: string, query: string, evidence: Insight[], workspaceRoot?: string, signal = new AbortController().signal) {
+    const root = workspaceRoot?.trim() || this.workspaceRoot(sessionId)
+    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.answer(agent, query, evidence, signal))
+  }
+
   remember(sessionId: string, request: RememberRequest, signal = new AbortController().signal) {
     return this.coordinator.remember(this.liveAgent(sessionId), request, signal)
   }

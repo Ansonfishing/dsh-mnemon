@@ -264,7 +264,7 @@ describe('Mnemon RPC', () => {
   it('performs Agent query synthesis only after a deterministic direct search', async () => {
     const service = fakeService()
     const lifecycle = {
-      answer: vi.fn(async () => ({ answer: 'SQLite.', citations: [], delegation: { runId: 'answer-1', provider: 'spawn' } })),
+      answerTask: vi.fn(async () => ({ answer: 'SQLite.', citations: [], delegation: { runId: 'answer-1', provider: 'spawn' } })),
     } as unknown as MnemonLifecycle
 
     await expect(createReadHandler(service, lifecycle)('agent-search', { sessionId: 'session-1', query: 'database' })).resolves.toMatchObject({
@@ -272,7 +272,7 @@ describe('Mnemon RPC', () => {
       value: { query: 'database', answer: 'SQLite.', delegation: { runId: 'answer-1' }, results: [] },
     })
     expect(service.search).toHaveBeenCalledWith(expect.objectContaining({ query: 'database' }))
-    expect(lifecycle.answer).toHaveBeenCalledWith('session-1', 'database', [])
+    expect(lifecycle.answerTask).toHaveBeenCalledWith('session-1', 'database', [], undefined)
   })
 
   it('adds lifecycle diagnostics to status without changing Mnemon runtime status', async () => {
