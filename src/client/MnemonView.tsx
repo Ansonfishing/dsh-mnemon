@@ -1413,11 +1413,13 @@ function ExplorePage(props: { client: MnemonClient; agentClient: MnemonClient; a
   const [relatedLoading, setRelatedLoading] = useState(false)
   const [visibleResultLimit, setVisibleResultLimit] = useState(pageSize)
   const [visibleRelatedLimit, setVisibleRelatedLimit] = useState(pageSize)
+  const relatedRequests = useRequestVersion()
 
   useEffect(() => { if (props.seed !== '') setQuery(props.seed) }, [props.seed])
 
   const runSearch = async (withAgent: boolean) => {
     if (query.trim() === '') return
+    relatedRequests.begin()
     setSearchKind(withAgent ? 'agent' : 'direct'); setSearched(true); setError(null); setRelatedTo(null); setAgentAnswer(null); setVisibleResultLimit(pageSize); setVisibleRelatedLimit(pageSize)
     try {
       const request = { query, mode, ...(category === '' ? {} : { category }), limit: props.status?.defaultRecallLimit ?? 10 }
@@ -1442,9 +1444,17 @@ function ExplorePage(props: { client: MnemonClient; agentClient: MnemonClient; a
   const searching = searchKind !== null
 
   const showRelated = async (insight: Insight) => {
+    const request = relatedRequests.begin()
     setRelatedTo(insight); setRelated([]); setRelatedLoading(true); setError(null); setVisibleRelatedLimit(pageSize)
-    if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(() => document.getElementById('mnemon-related-pane')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))
-    try { setRelated(await props.client.related(insight.id, insight.memoryBodyId)) } catch (reason) { setError(message(reason)) } finally { setRelatedLoading(false) }
+    if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(() => document.getElementById('mnemon-related-pane')?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }))
+    try {
+      const response = await props.client.related(insight.id, insight.memoryBodyId)
+      if (relatedRequests.isCurrent(request)) setRelated(response)
+    } catch (reason) {
+      if (relatedRequests.isCurrent(request)) setError(message(reason))
+    } finally {
+      if (relatedRequests.isCurrent(request)) setRelatedLoading(false)
+    }
   }
 
   const forget = async (insight: Insight) => {
@@ -1477,7 +1487,7 @@ function ExplorePage(props: { client: MnemonClient; agentClient: MnemonClient; a
       {results.length > 0 && (
         <div className={relatedTo === null ? css.singleColumn : css.resultLayout}>
           <section className={css.results}><div className={css.sectionHeading}><div><h3>{t('search.results')}</h3></div><strong>{results.length}</strong></div>{visibleResults.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}{appearance.surface === 'sidebar' && <ProgressiveFooter visible={visibleResults.length} total={results.length} pageSize={pageSize} onMore={() => setVisibleResultLimit(value => value + pageSize)} />}</section>
-          {relatedTo !== null && <aside id="mnemon-related-pane" className={css.relatedPane}><div className={css.sectionHeading}><div><h3>{t('search.related')}</h3></div><button type="button" onClick={() => setRelatedTo(null)} aria-label={t('search.closeRelated')}>×</button></div><p className={css.relatedSource}>{relatedTo.content}</p>{relatedLoading && <div className={css.loading}>{t('search.traversing')}</div>}{!relatedLoading && related.length === 0 && <div className={css.muted}>{t('search.noRelated')}</div>}{visibleRelated.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}{appearance.surface === 'sidebar' && !relatedLoading && <ProgressiveFooter visible={visibleRelated.length} total={related.length} pageSize={pageSize} onMore={() => setVisibleRelatedLimit(value => value + pageSize)} />}</aside>}
+          {relatedTo !== null && <aside id="mnemon-related-pane" className={css.relatedPane}><div className={css.sectionHeading}><div><h3>{t('search.related')}</h3></div><button type="button" onClick={() => { relatedRequests.begin(); setRelatedTo(null); setRelatedLoading(false) }} aria-label={t('search.closeRelated')}>×</button></div><p className={css.relatedSource}>{relatedTo.content}</p>{relatedLoading && <div className={css.loading}>{t('search.traversing')}</div>}{!relatedLoading && related.length === 0 && <div className={css.muted}>{t('search.noRelated')}</div>}{visibleRelated.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}{appearance.surface === 'sidebar' && !relatedLoading && <ProgressiveFooter visible={visibleRelated.length} total={related.length} pageSize={pageSize} onMore={() => setVisibleRelatedLimit(value => value + pageSize)} />}</aside>}
         </div>
       )}
       </div>
@@ -1496,12 +1506,21 @@ function EntitiesPage(props: { client: MnemonClient; revision: number; writeEnab
   const [error, setError] = useState<string | null>(null)
   const [visibleEntityLimit, setVisibleEntityLimit] = useState(entityPageSize)
   const [visibleInsightLimit, setVisibleInsightLimit] = useState(insightPageSize)
+  const entityRequests = useRequestVersion()
 
   const load = useCallback(async (selected?: string) => {
+    const request = entityRequests.begin()
     setLoading(true); setError(null); setVisibleInsightLimit(insightPageSize)
     if (selected === undefined) setVisibleEntityLimit(entityPageSize)
-    try { setView(await props.client.entities(selected, 20)) } catch (reason) { setError(message(reason)) } finally { setLoading(false) }
-  }, [entityPageSize, insightPageSize, props.client])
+    try {
+      const response = await props.client.entities(selected, 20)
+      if (entityRequests.isCurrent(request)) setView(response)
+    } catch (reason) {
+      if (entityRequests.isCurrent(request)) setError(message(reason))
+    } finally {
+      if (entityRequests.isCurrent(request)) setLoading(false)
+    }
+  }, [entityPageSize, entityRequests, insightPageSize, props.client])
 
   useEffect(() => { void load() }, [load, props.revision])
   const submit = (event: FormEvent) => { event.preventDefault(); if (entity.trim() !== '') void load(entity) }

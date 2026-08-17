@@ -20,7 +20,7 @@ describe('MnemonView', () => {
     unsetPath: async () => {},
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean } = {}) {
+  function createConnection(options: { isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -128,6 +128,7 @@ describe('MnemonView', () => {
     }
     const memory = { id: 'memory-12345678', content: options.longContent === true ? '这是一段非常长的记忆内容，用于验证图谱检查器对超长文本的截断展示，以及全文预览窗口的打开与关闭。'.repeat(6) : '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], entities: ['SQLite'], color: '#e74c3c', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-12345678` }
     const secondaryMemory = { id: 'preference-1', content: '用户偏好简洁中文回答。', category: 'preference', importance: 4, tags: ['style'], entities: ['DSH'], color: '#9b59b6', memoryBodyId: secondaryBody.id, memoryBodyName: secondaryBody.name, graphId: `${secondaryBody.id}:preference-1` }
+    const relatedResolvers: Array<(response: { ok: true; value: Array<typeof memory> }) => void> = []
     const providerSources = options.withProviderSources === true ? {
       graph: [
         { memoryBodyId: body.id, memoryBodyName: body.name, providerId: 'mnemon-native', providerLabel: 'Mnemon Native', mode: 'graph', status: 'ready', itemCount: 2, edgeCount: 2 },
@@ -276,7 +277,10 @@ describe('MnemonView', () => {
           delegation: { runId: 'answer-child-1', provider: 'spawn' },
         },
       }
-      if (endpoint === 'related') return { ok: true, value: [] }
+      if (endpoint === 'related') {
+        if (options.relatedDeferred === true) return await new Promise<{ ok: true; value: Array<typeof memory> }>(resolve => relatedResolvers.push(resolve))
+        return { ok: true, value: [] }
+      }
       if (endpoint === 'supervise') return { ok: true, value: { delegated: true, sessionId: 'session-1', runId: 'child-1', provider: 'spawn', summary: '已提炼并写入项目交付约束。', action: 'stored', memoryBodyIds: ['project'] } }
       if (endpoint === 'remember') return { ok: true, value: { delegated: true, runId: 'child-2', provider: 'spawn', summary: '已按高级约束写入。', action: 'stored', memoryBodyIds: ['project'] } }
       if (endpoint === 'forget') return { ok: true, value: { action: 'forgotten' } }
@@ -300,7 +304,11 @@ describe('MnemonView', () => {
       if (endpoint === 'body-create') return { ok: true, value: { ...body, id: 'new-body', name: String(payload?.name ?? '') } }
       return { ok: false, error: { code: 'unexpected', message: endpoint } }
     })
-    return { connection: { rpc: { call }, ...(options.isLoopback === undefined ? {} : { isLoopback: options.isLoopback }) } as unknown as ClientConnectionHandle, call }
+    return {
+      connection: { rpc: { call }, ...(options.isLoopback === undefined ? {} : { isLoopback: options.isLoopback }) } as unknown as ClientConnectionHandle,
+      call,
+      resolveRelated: (index: number, content: string) => relatedResolvers[index]?.({ ok: true, value: [{ ...memory, id: `related-${index}`, graphId: `${body.id}:related-${index}`, content }] }),
+    }
   }
 
   it('shows the live graph and all eight Mnemon workspaces', async () => {
@@ -1287,6 +1295,25 @@ describe('MnemonView', () => {
     fireEvent.click(screen.getByRole('button', { name: '确认忘记' }))
     await waitFor(() => expect(screen.queryByText('项目选择 SQLite，因为需要单文件部署。')).toBeNull())
     expect(call).toHaveBeenCalledWith(expect.anything(), 'forget', { id: 'memory-12345678', memoryBodyId: 'project', sessionId: 'session-1' })
+  })
+
+  it('keeps the newest related-memory response when requests finish out of order', async () => {
+    const { connection, resolveRelated } = createConnection({ relatedDeferred: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    await waitFor(() => expect(screen.getByText('已连接 · 1 个已激活')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: /检索 意图增强召回/ }))
+    fireEvent.change(screen.getByRole('textbox', { name: '记忆查询' }), { target: { value: 'SQLite' } })
+    fireEvent.click(screen.getByRole('button', { name: '直接检索' }))
+    await waitFor(() => expect(screen.getByText('项目选择 SQLite，因为需要单文件部署。')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: '查看关联' }))
+    fireEvent.click(screen.getByRole('button', { name: '查看关联' }))
+    await act(async () => { resolveRelated(1, '较新的关联响应') })
+    expect(await screen.findByText('较新的关联响应')).toBeTruthy()
+    await act(async () => { resolveRelated(0, '已经过期的关联响应') })
+    expect(screen.getByText('较新的关联响应')).toBeTruthy()
+    expect(screen.queryByText('已经过期的关联响应')).toBeNull()
   })
 
   it('shows an Agent answer above the raw direct-recall evidence', async () => {
