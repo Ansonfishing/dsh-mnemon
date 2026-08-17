@@ -7,7 +7,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 ## New-user path
 
 1. [Capability map](./capabilities.md): understand the three tiers, nine Providers, and which clicks start independent task Agents in 30 seconds.
-2. [41-second widescreen live demo](../assets/media/dsh-mnemon-memory-system-demo.mp4): see full-page scrolling, button actions, conversation navigation, and a real Agent Query.
+2. [Roughly 62-second widescreen live demo](../assets/media/dsh-mnemon-memory-system-demo.mp4): see paced full-page scrolling, button actions, conversation navigation, and a real Agent Query.
 3. [Getting Started](./getting-started.md): install Mnemon and the plugin, choose storage, and complete first-run verification.
 4. [Sidebar and conversation UI guide](./ui-guide.md): learn Status, Runtime, Documents, Memory Spaces, and in-conversation entry points.
 5. [Project overview](./project-overview.md): understand the three-tier model, cross-agent sharing boundary, read/write boundaries, and complete flow.

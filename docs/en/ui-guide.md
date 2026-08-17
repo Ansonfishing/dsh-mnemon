@@ -10,7 +10,7 @@ This guide follows the v0.2.0 default `sidebar` presentation and a real user pat
 
 [Play the 1600×900 MP4](../assets/media/dsh-mnemon-memory-system-demo.mp4) · [Open the GIF](../assets/media/dsh-mnemon-memory-system-demo.gif)
 
-The 41-second recording scrolls all four primary pages, switches active/archive Documents, applies and clears Provider content filters, opens creation and strategy dialogs, selects multiple AI-metadata targets, changes and restores background model routing, opens Save to memory, expands Turn memory, follows an exact tool link, and completes a real read-only Agent Query. Every confirmation that could mutate data stops before submission.
+The roughly 62-second recording leaves a clear pause on page transitions, dialogs, button-state changes, and the Agent answer. It scrolls all four primary pages, switches active/archive Documents, applies and clears Provider content filters, opens creation and strategy dialogs, selects multiple AI-metadata targets, changes and restores background model routing, opens Save to memory, expands Turn memory, follows an exact tool link, and completes a real read-only Agent Query. Every confirmation that could mutate data stops before submission.
 
 ## Interaction model
 

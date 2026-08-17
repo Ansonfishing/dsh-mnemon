@@ -74,7 +74,7 @@ Provider 能力差异会如实展示：引擎没有图谱边、删除语义或�
 
 ## 真实 WebUI 演示
 
-下面的 41 秒素材来自真实的 1600×900 DSH WebUI：包含整个工作台的上下滑动、筛选与弹窗按钮、路由选项切换、对话内记忆展开、精确跳转档案，以及一次真正完成的只读 Agent 查询。可能改变数据的确认按钮都没有提交。
+下面约 62 秒的素材来自真实的 1600×900 DSH WebUI：在页面切换、弹窗、按钮状态变化和 Agent 答案上都保留了更清晰的停留，同时包含整个工作台的上下滑动、对话内记忆展开、精确跳转档案，以及一次真正完成的只读 Agent 查询。可能改变数据的确认按钮都没有提交。
 
 ![dsh-mnemon v0.2.0 完整 WebUI：上下滚动与按钮交互](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/media/dsh-mnemon-memory-system-demo.gif)
 

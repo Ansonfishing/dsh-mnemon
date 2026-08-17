@@ -74,7 +74,7 @@ See the [provider capability and deployment matrix](./docs/en/memory-providers.m
 
 ## Real WebUI walkthrough
 
-The following 41-second capture comes from a live 1600×900 DSH WebUI. It scrolls the full workbench, exercises filters and dialogs, switches routing controls without saving, expands in-conversation memory, follows an exact Document link, and completes a read-only Agent Query. Destructive confirmations are deliberately not submitted.
+The following roughly 62-second capture comes from a live 1600×900 DSH WebUI. It deliberately pauses on page transitions, dialogs, button-state changes, and the Agent answer while scrolling the full workbench, following an exact Document link, and completing a read-only Agent Query. Destructive confirmations are deliberately not submitted.
 
 ![Full dsh-mnemon v0.2.0 WebUI walkthrough with scrolling and button interactions](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/media/dsh-mnemon-memory-system-demo.gif)
 
