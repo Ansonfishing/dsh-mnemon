@@ -14,7 +14,7 @@
 
 [![dsh-mnemon runtime architecture](../assets/diagrams/en/project-architecture.svg)](../assets/diagrams/en/project-architecture.svg)
 
-Solid lines show deterministic data or control paths; purple dashed lines show LLM-supervised paths. Runtime Memory and Documents use managed files directly. Memory Spaces first pass through `MemoryProviderAdapter`, then enter the selected provider data plane. The current diagram emphasizes the default Native path. Click the image to open the original SVG.
+Solid lines show deterministic data or control paths; purple dashed lines show independent task-Agent paths. Runtime Memory and Documents use managed files directly. Memory Spaces first pass through `MemoryProviderAdapter`, then enter the selected provider data plane. The third tier represents Mnemon Native and all eight external implementations rather than describing the whole system as Native-only local data. Click the image to open the original 1600×900 SVG.
 
 Cross-agent interoperability therefore applies only to the third tier: Mnemon Native shares by aligning a local root and Store, while external engines share through their own provider scope. None automatically shares DSH conversation context, Runtime projections, or Documents.
 

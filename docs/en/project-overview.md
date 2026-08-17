@@ -2,7 +2,7 @@
 
 [简体中文](../zh-CN/project-overview.md) | **English** | [Documentation hub](./README.md)
 
-`dsh-mnemon` integrates long-term Memory Spaces with DeepSeek Harness, then adds Runtime hot memory, Project Documents, lifecycle routing, bounded subagents, a deterministic control layer, and native DSH interfaces. The third tier is provider-backed: Mnemon Native is the official, prioritized, full-capability implementation, while eight third-party engines reuse the same workflow through explicit adapters.
+`dsh-mnemon` integrates long-term Memory Spaces with DeepSeek Harness, then adds Runtime hot memory, Project Documents, lifecycle routing, independent task Agents, a deterministic control layer, and native DSH interfaces. The third tier is provider-backed: Mnemon Native is the official, prioritized, full-capability implementation, while eight third-party engines reuse the same workflow through explicit adapters.
 
 Its goal is not to store more text. It balances long-term continuity, current-fact priority, context cost, and recoverable writes.
 
@@ -18,7 +18,7 @@ One memory tier cannot serve frequent injection, full-document reading, and cros
 | Read a complete design, investigation, or procedure | Fragmentation loses narrative and provenance | Keep managed Markdown Documents |
 | Find cross-session facts, decisions, and relations | Full loading pollutes context | Recall bounded graph-enhanced evidence on demand |
 | Preserve traceability for cold long-form material | Keeping it hot consumes capacity forever | Create a cold reference before moving the original |
-| Let a model judge value without owning system safety | An LLM cannot guarantee paths, locks, or transactions | Workers own semantics; the Host owns hard boundaries |
+| Let a model judge value without owning system safety | An LLM cannot guarantee paths, locks, or transactions | Independent task Agents own semantics; the Host owns hard boundaries |
 
 Priority always remains: **current user instructions → live tools and repository facts → historical memory**.
 
@@ -31,13 +31,13 @@ Runtime retains compact, high-frequency information useful on many turns:
 - `USER.md`: identity, roles, preferences, habits, and explicit collaboration requirements;
 - `MEMORY.md`: project conventions, environment facts, decisions, tool behavior, and reusable lessons.
 
-`runtime/memories.json` is the source of truth; both Markdown files are deterministic projections. USER is capped at 4 KiB and MEMORY at 10 KiB, measured in UTF-8 bytes. Regular mutations are deterministic; only capacity maintenance may start a worker.
+`runtime/memories.json` is the source of truth; both Markdown files are deterministic projections. USER is capped at 4 KiB and MEMORY at 10 KiB, measured in UTF-8 bytes. Regular mutations are deterministic; only capacity maintenance may start an internal worker.
 
 ### 2. Project Documents
 
 Documents preserve complete designs, investigations, procedures, postmortems, and handoffs. Title, retrieval description, and body participate in deterministic search; the body keeps Markdown structure.
 
-One body may be up to 2 MiB and active rendered content up to 10 MiB. Before manual or capacity archiving, a bounded worker writes a Mnemon cold reference containing a summary and SHA-256. The original moves only if its revision is unchanged. Failure or conflict preserves active content.
+One body may be up to 2 MiB and active rendered content up to 10 MiB. Before manual or capacity archiving, an independent task Agent uses a bounded internal worker to write a Mnemon cold reference containing a summary and SHA-256. The original moves only if its revision is unchanged. Failure or conflict preserves active content.
 
 ### 3. Memory Spaces
 
@@ -64,26 +64,27 @@ The default `global` root, `~/.mnemon`, is the simplest choice for several local
 
 ## Architecture
 
-[![dsh-mnemon runtime architecture with DSH Web or Headless, Root Agent, supervised control, and three local tiers](../assets/diagrams/en/project-architecture.svg)](../assets/diagrams/en/project-architecture.svg)
+[![dsh-mnemon v0.2.0 architecture with Web, conversation and Headless surfaces, control plane, task Agents, and three data tiers](../assets/diagrams/en/project-architecture.svg)](../assets/diagrams/en/project-architecture.svg)
 
 Four boundaries shape the system:
 
 1. **Interaction**: conversation, Sidebar / Buildin workbench, `/mnemon` commands, and model tools.
-2. **Supervision**: durable recall, semantic writes, and archiving run in bounded workers; lifecycle hooks provide short cues and scheduling signals.
+2. **Supervision**: user-visible AI metadata, Agent Query, semantic writes, and archiving run in independent top-level task Agents; bounded internal workers are used only for structured judgment.
 3. **Deterministic control**: the Host enforces schema, paths, permissions, capacity, locks, revisions, CLI arguments, timeouts, and cancellation.
 4. **Data**: Runtime, Documents, and Mnemon Native data live under the effective `storageRoot`; external providers are reached only by the Host through explicit connections, never directly by the browser.
 
 ### Memory System flow
 
-This diagram describes stable execution boundaries, not a live status dashboard. Solid lines are deterministic Host paths; dashed lines require supervised LLM judgment.
+This diagram describes stable execution boundaries, not a live status dashboard. Solid lines are deterministic Host paths; dashed lines are independent task-Agent paths.
 
-[![Memory System flow across per-turn context, on-demand semantics, maintenance, and archive](../assets/diagrams/en/memory-system-flow.png)](../assets/diagrams/en/memory-system-flow.png)
+[![Memory System flow across deterministic reads, Agent Query, supervised writes, maintenance, and archive](../assets/diagrams/en/memory-system-flow.png)](../assets/diagrams/en/memory-system-flow.png)
 
-The three major flows are:
+The four visible flows are:
 
-- **Per-turn context**: Runtime projections enter the prompt; the Root Agent searches active Documents deterministically when needed.
-- **On-demand semantics**: the Root Agent dispatches a `spawn` worker through the Host Bridge to active Memory Spaces; only bounded evidence or receipts return.
-- **Maintenance and archive**: the Host applies ordinary mutations atomically; idle review uses `fork` from a completed checkpoint; Document archive verifies a cold index before moving the original across a revision fence.
+- **Deterministic reads**: Status, direct search, Content, and Entities load concurrently and render as results arrive.
+- **Agent Query**: bounded evidence is recalled first, then a clean task Agent with no Mnemon tools organizes the answer.
+- **Supervised writes**: after user confirmation, a task Agent qualifies, deduplicates, distills, and routes; the Host enforces permission and transaction boundaries.
+- **Maintenance and archive**: AI metadata tasks are isolated per space; Documents move only after a cold reference crosses the revision fence.
 
 See [Lifecycle and workflows](./workflows.md) for thresholds, cancellation, and failure semantics.
 
@@ -99,11 +100,11 @@ A history-dependent request expands in this order:
 
 `mnemon_recall` starts an isolated worker. It selects the narrowest spaces from names and descriptions and can use only allowed recall/related tools. The complete catalog and routing trace do not fill the root conversation.
 
-Direct recall in the Web returns raw evidence. Agent query retrieves the same evidence, then gives it to an evidence-only worker with no Mnemon tools.
+Direct recall in the Web returns raw evidence. Agent Query retrieves the same evidence, then gives it to an evidence-only top-level task Agent with no Mnemon tools.
 
 ## Write path: semantics versus guarantees
 
-| Memory worker | Host guarantees |
+| Independent task Agent / internal worker | Host guarantees |
 |---|---|
 | Decide whether a candidate is durable | Input schema and operation permissions |
 | Select the narrowest space and deduplicate | Workspace and path confinement |
@@ -115,7 +116,7 @@ Durable recall and writes prefer isolated `spawn`. Score-based background review
 
 ## What users see
 
-The default Sidebar has four primary pages: Status, Runtime, Memory Spaces, and Documents. Memory Spaces adds Overview, Recall, Content, and Entities. Add, edit, and Remember use consistent dialogs; long collections use filters and progressive loading.
+The default Sidebar has four primary pages: Status, Runtime, Documents, and Memory Spaces. Memory Spaces adds Overview, Recall, Content, and Entities. Add, edit, and Remember use consistent dialogs; long collections use filters and progressive loading.
 
 Two additive entries surface memory in conversations:
 
@@ -129,7 +130,7 @@ See the [Sidebar and conversation UI guide](./ui-guide.md) for screenshots and w
 - CLI calls use argument arrays with `shell=false`, bounded output, timeout, and cancellation.
 - Runtime and Documents use in-process queues, cross-instance locks, temporary files, and rename.
 - Runtime revisions block stale compaction; Document revisions block movement of updated originals.
-- Subagents use persona, tool allowlists, structured output, and depth limits.
+- Independent task Agents and bounded internal workers use personas, tool allowlists, structured output, and depth limits.
 - The WebUI never reads SQLite directly or supplies arbitrary update commands.
 - The plugin stores no model credentials, but it does not yet include a deterministic secret scanner.
 

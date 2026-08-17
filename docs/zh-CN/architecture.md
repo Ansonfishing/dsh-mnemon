@@ -14,7 +14,7 @@
 
 [![dsh-mnemon 运行时架构](../assets/diagrams/zh-CN/project-architecture.svg)](../assets/diagrams/zh-CN/project-architecture.svg)
 
-图中实线表示确定性数据或控制路径，紫色虚线表示 LLM 监督路径。Runtime Memory 和 Documents 直接使用受管文件；Memory Spaces 先经过 `MemoryProviderAdapter`，再进入选中的 Provider 数据面。现有图主要绘制默认的 Native 路径。点击图片可以查看原始 SVG。
+图中实线表示确定性数据或控制路径，紫色虚线表示独立任务 Agent 路径。Runtime Memory 和 Documents 直接使用受管文件；Memory Spaces 先经过 `MemoryProviderAdapter`，再进入选中的 Provider 数据面。图中第三层同时表示 Mnemon Native 与 8 种三方实现，不再把整套系统描述为只有 Native 的本地数据。点击图片可以查看 1600×900 原始 SVG。
 
 因此跨 Agent 互操作只发生在第三层：Mnemon Native 通过对齐本地根和 Store 共享，三方引擎通过各自 Provider 作用域共享；任何 Provider 都不会自动共享 DSH 会话、Runtime 投影或 Documents。
 

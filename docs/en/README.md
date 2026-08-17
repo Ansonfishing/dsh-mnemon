@@ -7,9 +7,10 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 ## New-user path
 
 1. [Capability map](./capabilities.md): understand the three tiers, nine Providers, and which clicks start independent task Agents in 30 seconds.
-2. [Getting Started](./getting-started.md): install Mnemon and the plugin, choose storage, and complete first-run verification.
-3. [Sidebar and conversation UI guide](./ui-guide.md): learn Status, Runtime, Documents, Memory Spaces, and in-conversation entry points.
-4. [Project overview](./project-overview.md): understand the three-tier model, cross-agent sharing boundary, read/write boundaries, and complete flow.
+2. [41-second widescreen live demo](../assets/media/dsh-mnemon-memory-system-demo.mp4): see full-page scrolling, button actions, conversation navigation, and a real Agent Query.
+3. [Getting Started](./getting-started.md): install Mnemon and the plugin, choose storage, and complete first-run verification.
+4. [Sidebar and conversation UI guide](./ui-guide.md): learn Status, Runtime, Documents, Memory Spaces, and in-conversation entry points.
+5. [Project overview](./project-overview.md): understand the three-tier model, cross-agent sharing boundary, read/write boundaries, and complete flow.
 
 ## Find a task
 
@@ -37,7 +38,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 | Memory System | 记忆系统 | The complete dsh-mnemon entry in DSH |
 | Runtime Memory | USER / MEMORY | Hot memory projected into every turn |
 | Project Documents | Documents / 档案 | Managed, searchable project knowledge that keeps full Markdown structure |
-| Memory Space | 记忆体 | An independent, activatable, on-demand Mnemon Store |
+| Memory Space | 记忆体 | An independent, activatable, on-demand long-term-memory instance backed by Mnemon or an external Provider |
 | Cross-agent memory sharing | 跨 Agent 共享 | Mnemon-enabled agents use the same root and Store to share durable memory, not the complete DSH context |
 | Remember | Distill / 沉淀 | Start an independent task Agent for qualification, dedupe, and writing |
 | Recall | 召回 | Retrieve bounded evidence from active Memory Spaces |

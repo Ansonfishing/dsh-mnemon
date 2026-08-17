@@ -143,20 +143,20 @@ dsh --profile headless "回答前先检查持久化的项目上下文。"
 
 点击保存后会先初始化新运行图，再原子切换 Host；页面自动清理旧状态并重新读取，无需刷新浏览器。切换范围不会自动迁移、合并或删除旧数据。
 
-在工作区模式下，工作台选择器只决定“正在查看哪套数据”；Agent、工具与生命周期实际使用的目录始终跟随当前会话。两者不一致时顶部会提示并提供一键对齐。
+在工作区模式下，对话 Agent、工具与生命周期使用当前会话的实际根；从工作台启动的独立任务 Agent 会显式使用正在查看的工作区，即使没有选中主 session 也一样。两者不一致时顶部会提示并提供一键对齐。
 
 ## 5. 打开 Sidebar 工作台
 
 点击左侧栏“记忆系统”，先查看“状态”：
 
-[![状态页：CLI、版本、运行时、记忆体、档案与存储根](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
+[![状态页：CLI、版本、运行时、档案、记忆体与存储根](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
 
 确认：
 
 - 右上角显示“已连接”；
 - Mnemon 与 dsh-mnemon 能显示当前版本；
 - 存储根与刚才选择的范围一致；
-- Runtime、Memory Spaces 和 Documents 没有错误提示。
+- Runtime、Documents 和 Memory Spaces 没有错误提示。
 
 如果 Mnemon 不可用，macOS/Linux 先运行 `command -v mnemon` 与 `mnemon --version`；Windows PowerShell 运行 `Get-Command mnemon` 与 `Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"`。更多症状见[故障排查](./operations.md#故障排查)。
 

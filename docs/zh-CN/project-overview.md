@@ -2,7 +2,7 @@
 
 **简体中文** | [English](../en/project-overview.md) | [文档中心](./README.md)
 
-`dsh-mnemon` 将长期记忆体接入 DeepSeek Harness，并补充运行时热记忆、项目档案、生命周期路由、受限子 Agent、确定性控制层与 DSH 原生界面。第三层采用可替换 Provider：Mnemon Native 是官方优先、默认完整能力实现；8 种三方引擎通过显式适配器复用同一套记忆体工作流。
+`dsh-mnemon` 将长期记忆体接入 DeepSeek Harness，并补充运行时热记忆、项目档案、生命周期路由、独立任务 Agent、确定性控制层与 DSH 原生界面。第三层采用可替换 Provider：Mnemon Native 是官方优先、默认完整能力实现；8 种三方引擎通过显式适配器复用同一套记忆体工作流。
 
 它要解决的不是“保存更多文字”，而是让 Agent 在长期连续性、当前事实优先、上下文成本和可恢复写入之间取得平衡。
 
@@ -18,7 +18,7 @@
 | 阅读完整设计、调查或流程 | 切成碎片会失去叙事和来源 | 档案保留受管 Markdown 全文 |
 | 跨会话查找事实、决策和关系 | 全量加载会污染上下文 | 记忆体按需返回有界图增强证据 |
 | 保留不常用长文的可追溯性 | 永久留在热层持续占容量 | 先建立冷引用，再迁移原文 |
-| 让模型判断价值但不掌握系统安全 | LLM 无法保证路径、锁和事务 | worker 负责语义，Host 负责硬边界 |
+| 让模型判断价值但不掌握系统安全 | LLM 无法保证路径、锁和事务 | 独立任务 Agent 负责语义，Host 负责硬边界 |
 
 无论命中哪一层，优先级始终是：**当前用户指令 → 实时工具与仓库事实 → 历史记忆**。
 
@@ -31,13 +31,13 @@
 - `USER.md`：身份、角色、偏好、习惯和明确协作要求；
 - `MEMORY.md`：项目约定、环境事实、决策、工具特性与可复用经验。
 
-`runtime/memories.json` 是唯一事实源，两个 Markdown 文件是确定性投影。USER 上限 4 KiB，MEMORY 上限 10 KiB，均按 UTF-8 字节计算。普通增删改由控制层执行；只有容量维护才可能启动 worker。
+`runtime/memories.json` 是唯一事实源，两个 Markdown 文件是确定性投影。USER 上限 4 KiB，MEMORY 上限 10 KiB，均按 UTF-8 字节计算。普通增删改由控制层执行；只有容量维护才可能启动内部 worker。
 
 ### 2. 项目档案
 
 档案保存需要完整结构的设计、调查、流程、复盘和交接。标题、检索说明与正文参与确定性搜索，正文保持 Markdown。
 
-单份正文最大 2 MiB，active 总量最大 10 MiB。人工归档或容量整理时，插件先让受限 worker 在 Mnemon 写入带摘要与 SHA-256 的冷引用，再在 revision 未变化时移动原文。失败或冲突时优先保留 active 原文。
+单份正文最大 2 MiB，active 总量最大 10 MiB。人工归档或容量整理时，插件先启动独立任务 Agent，并通过内部受限 worker 在 Mnemon 写入带摘要与 SHA-256 的冷引用，再在 revision 未变化时移动原文。失败或冲突时优先保留 active 原文。
 
 ### 3. 记忆体
 
@@ -64,26 +64,27 @@
 
 ## 总体架构
 
-[![dsh-mnemon 运行时架构：DSH Web 或 Headless、Root Agent、监督控制层与三层本地存储](../assets/diagrams/zh-CN/project-architecture.svg)](../assets/diagrams/zh-CN/project-architecture.svg)
+[![dsh-mnemon v0.2.0 架构：Web、对话与 Headless 入口、控制面、独立任务 Agent 和三层数据面](../assets/diagrams/zh-CN/project-architecture.svg)](../assets/diagrams/zh-CN/project-architecture.svg)
 
 架构由四个边界组成：
 
 1. **交互边界**：用户通过对话、Sidebar / Buildin 工作台、`/mnemon` 命令与模型工具使用记忆。
-2. **监督边界**：长期召回、语义写入和归档在受限 worker 中执行；生命周期只提供短提示和调度信号。
+2. **监督边界**：用户可见的 AI 元信息、Agent 查询、语义写入和归档由独立顶层任务 Agent 执行；需要结构化判断时才继续调用内部受限 worker。
 3. **确定性控制边界**：Host 校验 schema、路径、权限、容量、锁、revision、CLI 参数、超时与取消。
 4. **数据边界**：Runtime、Documents 与 Mnemon Native 数据位于当前 `storageRoot`；第三方 Provider 只在 Host 内通过显式连接访问，浏览器不直连。
 
 ### 记忆系统流转
 
-下面的架构图是稳定执行边界，不是实时状态面板。实线是 Host 确定性路径，虚线是需要 LLM 判断的受监督 worker 路径。
+下面的架构图是稳定执行边界，不是实时状态面板。实线是 Host 确定性路径，虚线是独立任务 Agent 路径。
 
-[![记忆系统流转：每轮上下文、按需语义操作、空闲维护与归档](../assets/diagrams/zh-CN/memory-system-flow.png)](../assets/diagrams/zh-CN/memory-system-flow.png)
+[![记忆系统流转：确定性只读、Agent 查询、受监督写入、维护与归档](../assets/diagrams/zh-CN/memory-system-flow.png)](../assets/diagrams/zh-CN/memory-system-flow.png)
 
-三条主链路分别是：
+四条可见链路分别是：
 
-- **每轮上下文**：Runtime 投影进入 prompt；Root Agent 按需确定性搜索 active Documents。
-- **按需语义操作**：Root Agent 调度 `spawn` worker，通过 Host Bridge 访问已激活记忆体并只返回有界证据或写入回执。
-- **维护与归档**：普通变更由 Host 原子执行；空闲审查使用继承已完成 checkpoint 的 `fork`；档案归档先验证冷索引，再跨 revision fence 移动原文。
+- **确定性只读**：状态、直接检索、内容与实体并发读取，结果到达即展示。
+- **Agent 查询**：先取得有界证据，再交给无会话历史、无 Mnemon 工具的独立任务 Agent 组织答案。
+- **受监督写入**：用户确认候选后，任务 Agent 判断、查重、提炼与选路，Host 再执行权限和事务边界。
+- **维护与归档**：每个记忆体的 AI 元信息任务互相隔离；档案先验证冷引用，再跨 revision fence 移动原文。
 
 触发门槛、取消行为和失败语义见[生命周期与核心流程](./workflows.md)。
 
@@ -99,11 +100,11 @@
 
 `mnemon_recall` 会启动隔离 worker。worker 根据记忆体名称和说明选择最窄范围，只能使用允许的召回与关联工具；完整路由过程与整个目录不会灌入主对话。
 
-Web 的“直接检索”返回原始证据；“Agent 查询”先取得相同证据，再让一个无 Mnemon 工具的 evidence-only worker 组织答案。
+Web 的“直接检索”返回原始证据；“Agent 查询”先取得相同证据，再让一个无 Mnemon 工具的 evidence-only 顶层任务 Agent 组织答案。
 
 ## 写入路径：语义与系统保证分离
 
-| 记忆 worker 负责 | Host 硬保证 |
+| 独立任务 Agent / 内部 worker 负责 | Host 硬保证 |
 |---|---|
 | 判断候选是否值得保存 | 输入 schema 与操作权限 |
 | 选择最窄记忆体并查重 | 工作区与路径不能逃逸 |
@@ -115,7 +116,7 @@ Web 的“直接检索”返回原始证据；“Agent 查询”先取得相同�
 
 ## 用户能看到什么
 
-默认 Sidebar 只有四个一级页面：状态、运行时、记忆体、档案。记忆体再分概览、检索、内容、实体；添加、编辑和沉淀使用统一弹窗，长列表采用筛选与渐进加载。
+默认 Sidebar 只有四个一级页面：状态、运行时、档案、记忆体。记忆体再分概览、检索、内容、实体；添加、编辑和沉淀使用统一弹窗，长列表采用筛选与渐进加载。
 
 对话内还有两个增量入口：
 
@@ -129,7 +130,7 @@ Web 的“直接检索”返回原始证据；“Agent 查询”先取得相同�
 - CLI 通过参数数组启动，`shell=false`；输出、超时与取消有界。
 - Runtime 与 Documents 使用进程内队列、跨实例锁、临时文件与 rename。
 - Runtime revision 阻止过期压缩覆盖；Document revision 阻止移动已更新原文。
-- 子 Agent 使用 persona、工具白名单、结构化输出和深度限制。
+- 独立任务 Agent 与内部受限 worker 使用 persona、工具白名单、结构化输出和深度限制。
 - WebUI 不直接读取 SQLite，不从浏览器传入任意更新命令。
 - 插件不存储模型凭据，但当前也没有确定性的秘密扫描器。
 

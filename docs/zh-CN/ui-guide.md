@@ -2,165 +2,192 @@
 
 **简体中文** | [English](../en/ui-guide.md) | [文档中心](./README.md)
 
-本指南以默认的 `sidebar` 形态为主，按真实使用路径介绍记忆系统。截图来自 v0.2.0 实机宽屏界面；数量、名称和内容会随你的数据变化。
+本指南按 v0.2.0 默认 `sidebar` 形态和真实用户路径编排。全部新截图来自 1600×900 标准宽屏实机页面；名称、数量和内容会随本地数据变化。
 
-## 先认识两种展示形态
+## 先看一次完整操作
 
-在 DSH 的“设置 → 记忆系统”中选择入口与存储位置：
+[![dsh-mnemon v0.2.0 记忆系统实机演示封面](../assets/media/dsh-mnemon-memory-system-demo-poster.jpg)](../assets/media/dsh-mnemon-memory-system-demo.mp4)
 
-[![记忆系统设置：Sidebar、Buildin、存储位置、对话界面与备份迁移](../assets/screenshots/settings-memory-system.png)](../assets/screenshots/settings-memory-system.png)
+[播放 1600×900 MP4](../assets/media/dsh-mnemon-memory-system-demo.mp4) · [打开 GIF](../assets/media/dsh-mnemon-memory-system-demo.gif)
 
-| 形态 | 适合场景 |
-|---|---|
-| **Sidebar**（默认） | 从 DSH 左侧栏进入独立工作台；外观与任务看板、SSH 等官方面板一致，适合日常管理 |
-| **Buildin** | 在对话区内打开原有标签页；保留之前的布局和视觉，适合依赖旧工作流的用户 |
+41 秒录制包含：四个一级页的整体上下滑动、活跃/归档切换、Provider 内容筛选与取消、创建与策略弹窗、AI 元信息多选、后台任务模型路由切换、对话内“存入记忆”、展开“本回合记忆”、点击工具跳转，以及一次真正完成的只读 Agent 查询。所有可能改变数据的确认动作都停在提交前。
 
-两种形态共享功能、数据和 Host 服务，只拆分入口与外观。保存后实时切换，不需要刷新浏览器，也不会同时挂载两个入口。
+## 交互心智
 
-同一页的“后台任务 Agent”用于 AI 元信息、Agent 查询、记忆沉淀和档案归档。默认“跟随主链路”，也就是使用 DSH 创建新会话时的默认模型；选择“指定模型 Provider”后，再分行选择 Provider 与模型，只覆盖这些独立后台任务。
+一级页始终按**状态、运行时、档案、记忆体**排列。记忆体内部再分为**概览、检索、内容、实体**，右上角保留“沉淀记忆”和“沉淀策略”。
 
-## 工作台结构
+| 看到的动作 | 点击后发生什么 | 是否启动独立任务 Agent |
+|---|---|---|
+| 刷新状态、立即同步、点击记忆体卡片重连 | Host 异步读取；当前区域右上角或卡片状态灯显示一个转圈 | 否 |
+| 直接检索、浏览内容、查看实体 | 并发调用 Provider 原生只读能力，结果到达即展示 | 否 |
+| Agent 查询 | 先召回，再把有界证据交给无会话历史的顶层任务 Agent | 是，只读 |
+| 沉淀记忆 / 存入记忆 | 先弹出可编辑确认，再判断价值、查重、提炼、选路与写入 | 确认后启动 |
+| AI 维护元信息 | 每个记忆体独立快速采样并异步生成，失败只留在对应卡片 | 是，每个记忆体互相隔离 |
+| 归档 | 先建立可检索冷引用，再由 Host 移动原文 | 确认后启动 |
 
-Sidebar 顶部始终回答三个问题：
+## 1. 状态：先判断系统是否可用
 
-1. 现在打开的是“记忆系统”；
-2. 存储位置使用全局、工作区还是自定义模式；
-3. Host 是否已连接。
+[![状态页：dsh-mnemon、Mnemon Native 与三方 Provider 状态](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
 
-主体只有四个一级标签：**状态、运行时、档案、记忆体**。记忆体内部再分为**概览、检索、内容、实体**；“沉淀记忆”固定为这一层的主要动作。
+最上方“记忆引擎”只展示 dsh-mnemon。Mnemon Native 的异常进入独立状态栏，三方 Provider 在下面逐项显示启用、健康和连接信息，不会把局部异常提升成整个系统故障。
 
-## 1. 状态：先确认系统是否可用
+页面采用渐进式并发加载；正在读取时只保留一个区域级转圈，已经返回的数据立即可见。这里同时汇总运行时、档案、记忆体、存储根以及 dsh-mnemon / Mnemon 版本。
 
-[![状态页：版本、运行时、记忆体、档案与存储根摘要](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
+### 检查版本
 
-状态页聚合以下信息：
+[![检查 dsh-mnemon 与 Mnemon 版本](../assets/screenshots/version-check.png)](../assets/screenshots/version-check.png)
 
-- Mnemon CLI 与 dsh-mnemon 当前版本；
-- USER / MEMORY 运行时条目数；
-- 已激活记忆体与长期记忆数量；
-- active / archived 档案数量；
-- 当前存储根，以及 Runtime、Documents、Memory Spaces 三个实际目录。
+“检查更新”只读取，不会自动安装。支持的安装来源出现新版本时才展示更新动作；更新 dsh-mnemon 后需要重启 `dsh web` 才能加载新代码。
 
-如果这里显示异常，先不要沉淀或归档；从[故障排查](./operations.md#故障排查)开始检查。
+## 2. 运行时：维护每轮都需要的热记忆
 
-### 检查与更新版本
+[![运行时容量、筛选与统一记忆卡片](../assets/screenshots/runtime-memory.png)](../assets/screenshots/runtime-memory.png)
 
-点击版本区域会打开只读检查面板：
+顶部汇总用户档案（`USER.md`）和工作记忆（`MEMORY.md`），下方用统一卡片展示具体条目。可以按来源、文本、分类和重要性筛选；再次点击已选筛选不会破坏页面。超长字段在自己的块内省略，悬停显示全文。
 
-[![检查与更新 Mnemon 和 dsh-mnemon 版本](../assets/screenshots/version-check.png)](../assets/screenshots/version-check.png)
+[![添加运行时记忆](../assets/screenshots/runtime-memory-add.png)](../assets/screenshots/runtime-memory-add.png)
 
-检查不会自动安装。只有识别到受支持的安装来源并发现新版本时，才会出现“更新”。更新完成后界面会自动重新检查并刷新系统状态；dsh-mnemon 更新后仍需重启 `dsh web` 才能加载新代码。
+运行时条目应紧凑、独立、反复有用。身份、偏好和协作要求放用户档案；项目事实、环境、决策和工具经验放工作记忆。临时进度和原始日志不适合这一层。
 
-## 2. 运行时：管理每轮都会使用的热记忆
+## 3. 档案：保留完整项目叙事
 
-[![运行时记忆：容量摘要、范围筛选、内容筛选与统一列表](../assets/screenshots/runtime-memory.png)](../assets/screenshots/runtime-memory.png)
+[![档案目录、容量摘要与 Markdown 阅读器](../assets/screenshots/documents-markdown.png)](../assets/screenshots/documents-markdown.png)
 
-页面上方分别显示用户画像（`USER.md`）和工作记忆（`MEMORY.md`）的条目与容量；下方是统一列表。
+左侧活跃/归档目录可切换；选中条目后重复点击仍保持选中，不会关闭右侧阅读器。右侧保留标题、检索说明、来源、revision、哈希、文件大小与完整 Markdown，切换档案时自动回到顶部。
 
-- 用“全部 / 用户画像 / 工作记忆”筛选范围；
-- 用右侧输入框按内容筛选；
-- 标签显示来源和重要性；
-- “编辑”打开弹窗，“移除”进入危险操作流程；
-- 长列表通过“再显示 N 条”逐步展开。
+达到 active 容量上限前，最久未使用的档案会先通过独立任务 Agent 建立 Mnemon 冷引用；Host 验证成功后才迁入 archived。失败或 revision 冲突保留 active 原文。
 
-### 添加运行时记忆
+[![创建托管档案](../assets/screenshots/document-create-dialog.png)](../assets/screenshots/document-create-dialog.png)
 
-[![添加热记忆弹窗：内容、分类与重要性](../assets/screenshots/runtime-memory-add.png)](../assets/screenshots/runtime-memory-add.png)
+标题与检索说明决定未来是否容易找到，来源路径用于追溯，正文保留 Markdown 结构。项目源文件始终只读；工作台创建受管副本。
 
-一条运行时记忆应当简洁、独立、未来仍然常用。用户身份、偏好与明确协作要求放入“用户画像”；项目、环境、决策和工具经验放入“工作记忆”。临时进度、原始日志和一次性事实不适合这里。
+## 4. 记忆体：统一管理可替换的第三层
 
-## 3. 记忆体：管理长期记忆与关系
+### 概览与实时快照
 
-### 概览
+[![多 Provider 记忆体目录与实时关系快照](../assets/screenshots/overview-memory-graph.png)](../assets/screenshots/overview-memory-graph.png)
 
-[![记忆体概览：目录卡片、激活开关与多空间关系图](../assets/screenshots/overview-memory-graph.png)](../assets/screenshots/overview-memory-graph.png)
+每张卡片对应一个真实记忆空间。Provider 标签只用颜色区分，不在标签内重复放图标；`Mnemon Native` 在目录统一展示为 `mnemon`。卡片点击区域用于按需重连当前 Provider + ID，状态灯在重连期间原位变成同尺寸转圈，不触发全量同步。
 
-目录卡片先展示名称和路由说明，Provider 标记紧邻 ID 与健康状态，右上角仍是熟悉的读取激活开关。创建入口没有增加新的一级概念：仍然是“创建记忆体”，并默认保持“手动指定”，在弹窗中选择 **Mnemon**（官方原生、优先）或 8 种三方引擎之一。沉淀策略也可以使用“智能选择”：用数据边界和必需能力设置硬规则，用本地/共享软偏好与策略 Prompt 引导独立任务 Agent。只有多个合格候选时才调用模型，凭据不会进入模型上下文。
+首次进入概览执行一次全量同步；之后只按需同步。右上角保留“立即同步”，旁边显示距离上次全量同步的时间。
 
-Native 卡片保留统计、编辑和删除；三方卡片展示 Provider、本地/远程位置、编辑与“断开”。智能创建的卡片还会展示“规则自动确定”或“Agent 智能选择”、置信度和简短理由。断开只移除连接，不删除 Provider 数据。
+下方“快照可观察范围”先说明每个记忆体真实支持的读取表面，再生成多记忆体实时快照：
 
-下方“快照可观察范围”先按记忆体列出它能兑现的读取表面，再聚合全部已激活记忆体。Mnemon Native 提供完整类型关系；Hindsight 与 Holographic 贡献各自支持的图谱；没有图谱边的 Provider 以有界无边节点参与内容投影；ByteRover 等查询型 Provider 等待明确问题。快照不会伪造 Provider 不具备的关系。布局、拖拽和重置只影响当前浏览器展示。
+- Mnemon Native 提供完整类型关系；
+- Hindsight 与 Holographic 贡献各自的真实图谱；
+- 没有边的 Provider 只贡献内容投影；
+- ByteRover 等查询型 Provider 等待明确查询。
+
+页面不会伪造 Provider 不具备的关系、实体、删除或浏览能力。
+
+### 手动创建记忆体
+
+[![创建记忆体：分行信息与 Provider 选择](../assets/screenshots/memory-space-create-dialog.png)](../assets/screenshots/memory-space-create-dialog.png)
+
+手动点击“创建记忆体”时始终由用户明确选择 Provider。只列出设置中已经启用的服务；Provider 特有字段按分行结构展示，避免横向对齐误差。创建完成后，该实例才进入目录、激活和检索工作流。
+
+### 沉淀策略：人工指定或智能选择
+
+[![沉淀策略：人工指定与智能选择](../assets/screenshots/distillation-strategy.png)](../assets/screenshots/distillation-strategy.png)
+
+沉淀策略影响后续 Agent 写入目标，不改变“创建记忆体”这个人工动作：
+
+- **人工指定**：由高级选项或现有范围明确目标；
+- **智能选择**：数据边界和能力要求是硬规则，本地/共享倾向和 Prompt 是软策略；只有多个候选都合格时才调用任务 Agent。
+
+回执保留决定来源、置信度和理由，Provider 凭据不会进入模型上下文。
+
+### AI 维护元信息
+
+[![AI 维护元信息：跨 Provider 多选与独立异步任务](../assets/screenshots/ai-metadata-dialog.png)](../assets/screenshots/ai-metadata-dialog.png)
+
+可多选已激活记忆体。每个任务先调用对应 Provider 最快的原生查询方式读取少量样本，再按 system prompt 的长度和能力约束生成 title / description。任务互不共享状态；一个失败只在自己的卡片显示错误。生成过程不关闭弹窗，卡片向右播放同色调刷新动画并原位更新。
+
+人工生成的标题与说明属于本地目录元数据，普通重连不会覆盖；关闭 Provider 会清理映射和元数据，重新启用后从 Provider 重建，映射不到的字段用最近似默认值补充。
 
 ### 沉淀记忆
 
-[![沉淀记忆弹窗：候选内容与可选高级约束](../assets/screenshots/remember-dialog.png)](../assets/screenshots/remember-dialog.png)
+[![沉淀记忆：候选内容与人工高级约束](../assets/screenshots/remember-dialog.png)](../assets/screenshots/remember-dialog.png)
 
-默认只需填写候选内容。确认后，无会话历史的独立任务 Agent 会判断是否值得保存、选择最窄记忆体、查重、提炼并写入。“人工高级选项”只用于确实需要约束目标记忆体、分类或重要性时。
+默认只需填写候选内容。点击确认后，独立任务 Agent 判断是否值得保存、选择最窄记忆体、查重、提炼并写入。“人工高级选项”只用于确实需要约束目标记忆体、分类或重要性时。
 
-### 检索
+### 检索与 Agent 查询
 
-[![记忆检索：查询、分类、策略、原始召回与加载更多](../assets/screenshots/recall-agent-answer.png)](../assets/screenshots/recall-agent-answer.png)
+[![真实 Agent 查询结果与多 Provider 检索范围](../assets/screenshots/recall-agent-answer.png)](../assets/screenshots/recall-agent-answer.png)
 
-- **直接检索**返回原始证据，不启动回答 Agent；
-- **Agent 查询**先取得相同证据，再启动无 Mnemon 工具的 evidence-only 独立任务 Agent 组织答案；
-- 分类与策略可以缩小范围；
-- “本次检索范围”逐个展示已激活 Provider 的原生检索状态，单个连接失败不会隐藏其他来源；
-- 结果保留记忆体、Provider、分类、重要性、引擎原始分数与 ID；跨 Provider 顺序使用排名融合；
-- 只有 Provider 支持相应语义时才显示关联、链接、浏览与遗忘动作。
+- **直接检索**返回原始证据，不启动 Agent；
+- **Agent 查询**使用相同证据，再启动 evidence-only 顶层任务 Agent 组织答案；
+- 各 Provider 并发返回，单个连接失败不隐藏其他来源；
+- 跨 Provider 排序使用排名融合，同时保留原始分数、ID、记忆体、Provider 与分类；
+- 只有 Provider 真正支持时才显示关联、链接、浏览和遗忘动作。
 
-使用具体问题比宽泛关键词更可靠。例如“这个项目为什么禁止 shell 拼接？”通常优于“项目架构”。
+具体问题通常比宽泛关键词更可靠。
 
 ### 内容与实体
 
 | 内容 | 实体 |
 |---|---|
-| [![记忆内容列表与筛选](../assets/screenshots/memory-content.png)](../assets/screenshots/memory-content.png) | [![实体查询与相关记忆](../assets/screenshots/entities-context.png)](../assets/screenshots/entities-context.png) |
+| [![记忆内容、Provider 筛选与加载更多](../assets/screenshots/memory-content.png)](../assets/screenshots/memory-content.png) | [![真实实体索引与相关记忆](../assets/screenshots/entities-context.png)](../assets/screenshots/entities-context.png) |
 
-- **内容**用于无召回副作用地调用 Provider 的只读浏览契约，并按文本或分类筛选；来源卡明确区分可枚举、仅查询与不可浏览。Supermemory 同时投影已抽取记忆和仍可浏览的摄取文档；ByteRover 只在输入查询后读取。结果可以按真实能力查看关联、基于当前内容新建、复制 ID 或忘记。
-- **实体**只从真实实体索引聚合高频名称：当前为 Mnemon Native、Hindsight 与 Holographic。RetainDB、Supermemory、Mem0 等不具备实体索引的 Provider 会明确显示“不支持”，不会从普通文本伪造实体能力。选择或输入名称后再聚合跨事实、决策与上下文的相关记忆。
+内容页区分可枚举、仅查询和不可浏览；Provider 标签既可点击筛选，也可再次点击取消。实体页只聚合真实实体索引，目前包括 Mnemon Native、Hindsight 与 Holographic；普通文本不会被伪装成实体能力。
 
-两页都采用可见数量 / 总数和加载更多，避免大量数据一次撑满页面。
+## 5. 设置：服务配置与记忆体实例分开
 
-## 4. 档案：保留完整项目叙事
+[![记忆系统设置：显示、范围、Provider 服务与备份](../assets/screenshots/settings-memory-system.png)](../assets/screenshots/settings-memory-system.png)
 
-[![项目档案：容量摘要、渐进目录与独立 Markdown 阅读器](../assets/screenshots/documents-markdown.png)](../assets/screenshots/documents-markdown.png)
+设置页只管理可复用的**服务配置**：
 
-档案适合设计、调查、流程、复盘和交接。左侧目录分批加载，右侧保留标题、检索说明、来源、revision、哈希、文件大小与完整 Markdown；切换文档时阅读区会回到顶部。
+- 每个三方 Provider 都有独立开关，默认关闭；
+- 打开后才展示 endpoint、API Key 和 Provider 特有字段；
+- API Key 使用经典 password 输入，眼睛按钮在显示/隐藏之间切换；不再使用“清除凭证”checkbox、“移除”独占行或“已安全保存”提示；
+- 保存只更新服务配置，不在设置页等待完整发现或检索；健康监控放在状态页，记忆体发现放在概览；
+- 全局 / 工作区 / 自定义标签显示当前有效范围；支持相同范围语义的 Provider 复用 Mnemon 的配置框架。
 
-达到 active 容量上限前，最久未使用的档案会先在 Mnemon 中建立冷引用，再迁入 archived；失败或 revision 冲突时保留 active 原文。
+Mnemon 自己的自定义目录、备份与迁移留在 Mnemon 专属折叠区。自定义本质上是显式路径的全局范围。
 
-### 新建档案
+### 后台任务 Agent 模型路由
 
-[![创建托管档案弹窗](../assets/screenshots/document-create-dialog.png)](../assets/screenshots/document-create-dialog.png)
+[![后台任务 Agent：跟随主链路或指定 Provider 与模型](../assets/screenshots/settings-task-agent-routing.png)](../assets/screenshots/settings-task-agent-routing.png)
 
-标题与检索说明决定未来是否容易找到，来源路径用于追溯；正文保留 Markdown 结构。原项目文件始终只读，工作台创建的是受管副本。
+“跟随主链路”使用 DSH 新建 session 的默认模型；“指定模型 Provider”保存完整 Provider + Model 路由。这个设置只影响 AI 元信息、Agent 查询、沉淀记忆、智能 Provider 选择和档案归档，不改变当前主会话模型。推理强度由所选模型 Provider 能力与 DSH 路由支持共同决定。
 
-## 5. 对话内交互
+开关、单选项与眼睛按钮都允许重复点击；即使点击当前已选值，也不会让设置页卸载或白屏。
+
+## 6. 对话内交互
 
 ### 本回合记忆
 
-[![展开本回合记忆：召回、档案检索与精确工具跳转](../assets/screenshots/conversation-turn-memory.png)](../assets/screenshots/conversation-turn-memory.png)
+[![展开本回合记忆：具体工具与点击入口](../assets/screenshots/conversation-turn-memory.png)](../assets/screenshots/conversation-turn-memory.png)
 
-只有已完成且发生记忆活动的回合才显示这一行。展开后列出具体工具；点击工具名会打开对应页面，并保留当前会话上下文。
+只有已经完成且发生记忆活动的回合才显示。“本回合记忆”可以重复展开/收起；展开后列出具体工具，点击工具名跳转到对应检索、内容、实体或档案页面。
 
-[![从本回合记忆跳转到记忆体检索页](../assets/screenshots/conversation-memory-jump.png)](../assets/screenshots/conversation-memory-jump.png)
+[![从本回合记忆精确跳转到档案](../assets/screenshots/conversation-memory-jump.png)](../assets/screenshots/conversation-memory-jump.png)
 
 ### 存入记忆
 
-[![确认存入记忆：编辑候选后再启动独立任务 Agent](../assets/screenshots/conversation-save-dialog.png)](../assets/screenshots/conversation-save-dialog.png)
+[![存入记忆确认：编辑候选后再启动独立任务 Agent](../assets/screenshots/conversation-save-dialog.png)](../assets/screenshots/conversation-save-dialog.png)
 
-“存入记忆”位于已定稿助手回复的原生操作区。点击只会打开确认弹窗并读取这条回复；可以修改候选或取消。只有点击确认才会启动独立任务 Agent 执行写入流程。
+“存入记忆”位于已定稿回复的原生操作区。首次点击只读取这条回复并打开可编辑弹窗；取消不会产生任何写入。只有“确认并交给独立任务 Agent”才开始沉淀流程。
+
+两项默认开启，可在**设置 → 记忆系统 → 对话界面**分别关闭，保存后即时生效。
 
 ## 工作区模式：查看与执行分离
 
-`storageScope=workspace` 下需要区分两个概念：
-
 | 概念 | 由什么决定 | 影响什么 |
 |---|---|---|
-| **查看工作区** | 工作台顶部的工作区选择器 | 当前页面展示和人工维护哪套 `<workspace>/.mnemon` |
-| **执行工作区** | 当前对话 / Agent 的 cwd | 对话工具、命令与生命周期实际使用哪套目录 |
+| **查看工作区** | 工作台顶部选择器 | 当前页面展示与人工维护哪套 `<workspace>/.mnemon` |
+| **执行工作区** | 当前对话 / Agent 的 cwd | 对话工具、命令与生命周期使用哪套目录 |
 
-因此，你可以留在项目 A 的对话中查看项目 B 的记忆：对话 Agent 仍使用 A，而 AI 元信息、Agent 查询、记忆沉淀和档案归档会创建独立任务 Agent，并明确使用工作台选中的 B；即使没有选中主会话也一样。切换查看工作区会先卸载旧页面状态，再加载新目录。
+可以留在项目 A 对话中查看项目 B：对话 Agent 仍使用 A；从工作台发起的 AI 元信息、Agent 查询、沉淀和档案归档会启动独立任务 Agent，并显式使用查看工作区 B。没有选中主 session 时也可以正确执行。
 
-`global` 与 `custom` 只有一个明确存储根，不需要这层对齐。
+远程 Provider 的 workspace、user、bank、project、container 和 URI 是独立命名空间，不会跟随 DSH 工作区被隐式改写。`global` 与 `custom` 只有一个明确根，不需要查看/执行对齐。
 
-## 常见交互规则
+## 常见规则
 
-- 蓝色实心按钮表示当前主要动作；蓝色描边通常用于编辑；红色用于移除、删除、归档或忘记；中性按钮用于查看、复制与取消。
-- 记忆体开关只决定它是否参与 dsh-mnemon 的读取路由，不等同于 Mnemon CLI 的默认 Store。删除 Mnemon 的默认 Store 时，插件会先切换到另一个现存记忆体；最后一个原生 Store 可以未激活，但不能删除。
-- 删除 Mnemon Native 记忆体等物理危险操作需要独立确认；所有三方记忆体都使用明确的“断开”确认且不触碰 Provider 数据。单条“遗忘”按 Provider 声明的硬删除、软删除或不支持语义执行。
-- 保存配置后页面自动清理旧状态并重新读取，无需浏览器刷新。
-- Sidebar 的一级页头保持稳定；记忆体内部二级内容标题随内容自然滚动。
-- Buildin 保留既有布局和视觉，功能说明仍可参考本指南，但控件位置可能不同。
+- 蓝色实心表示主动作；蓝色描边通常用于编辑；红色只用于删除、断开、归档或遗忘；中性按钮用于查看、复制和取消。
+- 记忆体开关只决定它是否参与 dsh-mnemon 读取路由，不等于 Mnemon CLI 默认 Store。
+- Mnemon Native 物理删除需要二次确认；三方记忆体使用“断开”，不删除 Provider 数据。
+- 页面按区域异步加载；局部错误不阻塞其他区域，也不会堆叠多个转圈。
+- Buildin 保留既有布局与视觉，功能心智相同，但控件位置可能不同。
 
-下一步：[快速开始](./getting-started.md) · [存储模型](./storage-model.md) · [配置参考](./configuration.md) · [运维指南](./operations.md)
+下一步：[能力地图](./capabilities.md) · [快速开始](./getting-started.md) · [Provider 指南](./memory-providers.md) · [配置参考](./configuration.md)

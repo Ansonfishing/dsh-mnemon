@@ -3,33 +3,88 @@
 <p align="center"><a href="./README.md">English</a> · <strong>简体中文</strong></p>
 
 <p align="center">
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/ui-guide.md">
-    <img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/media/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon Sidebar 记忆系统：记忆体目录与关系图" width="760">
+  <img src="https://img.shields.io/badge/release-v0.2.0-5b5bd6" alt="发布版本 v0.2.0">
+  <img src="https://img.shields.io/badge/%E8%AE%B0%E5%BF%86-3%20%E5%B1%82-087c5b" alt="三层记忆">
+  <img src="https://img.shields.io/badge/Provider-9-c66a09" alt="九种 Provider">
+  <img src="https://img.shields.io/badge/Node.js-%E2%89%A520-43853d" alt="Node.js 20 或更新版本">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-172033" alt="MIT 许可证"></a>
+</p>
+
+<p align="center"><strong>DeepSeek Harness 的三层、可插拔、Agent 驱动记忆系统。</strong></p>
+<p align="center">三层记忆 · 九种长期记忆 Provider · 一套受监督工作流</p>
+
+<p align="center">
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">
+    <img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/media/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon v0.2.0 记忆系统与 Provider 状态概览" width="1180">
   </a>
 </p>
 
-<p align="center"><strong>让 DeepSeek Harness 拥有可跨 Agent 共享、分层、可监督的长期记忆。</strong></p>
+<p align="center">
+  <a href="./docs/zh-CN/capabilities.md"><strong>先看能力地图</strong></a> ·
+  <a href="./docs/zh-CN/getting-started.md">5 分钟开始</a> ·
+  <a href="./docs/zh-CN/releases/v0.2.0.md">v0.2.0 升级说明</a> ·
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">观看宽屏实机演示</a>
+</p>
 
-`dsh-mnemon` 把长期记忆接入 DeepSeek Harness（DSH），并将每轮需要的热记忆、需要完整阅读的项目档案和按需召回的长期记忆体组织在同一个工作台中。第三层采用可替换 Provider：Mnemon Native 是官方优先、默认完整能力实现；OpenViking、Honcho、Mem0、Hindsight、Holographic、RetainDB、ByteRover 与 Supermemory 都可以进入同一套记忆体工作流。
+`dsh-mnemon` 为 DSH 提供统一的记忆控制面，但不要求所有知识进入同一种数据库。运行时记忆让紧凑上下文每轮可用；项目档案保留完整叙事；记忆体按需召回长期证据，底层可选择 **Mnemon、OpenViking、Honcho、Mem0、Hindsight、Holographic、RetainDB、ByteRover 或 Supermemory**。
 
-- **默认本地优先**：Mnemon Native 将记忆保存在本机 SQLite、JSON 与 Markdown；所有三方引擎都需要显式选择。
-- **第三层可替换**：可在 9 种引擎之间选择，而不改变运行时、档案、记忆体与 Agent 工具的用户心智。
-- **可解释的智能选底层**：创建记忆体时可保持手动指定，也可用硬规则与策略 Prompt 让隔离子 Agent 在合格 Provider 中选择；结果会记录理由与置信度。
-- **三层协作**：运行时记忆、项目档案、记忆体各自保存适合自己的信息粒度。
-- **受监督写入**：用户发起的记忆任务由无会话历史的独立任务 Agent 执行，路径、权限、容量、锁与 revision 由 Host 控制。
-- **Web 与 Headless**：Web 提供完整 Sidebar 工作台；一次性 Headless 任务获得同一套 Agent 工具、记忆上下文和 cwd 路由。
+Mnemon 仍是官方优先的原生引擎。可以替换的是第三层；无论选择哪个 Provider，前两层的存储、工作区和交互心智保持不变。
 
-当前用户指令、仓库文件与实时工具结果始终高于历史记忆。
+## 30 秒理解能力边界
 
-## 实机演示
+| 层级 | 适合保存 | 如何进入 Agent 上下文 | 由谁管理 |
+|---|---|---|---|
+| **运行时** | 偏好、协作规则、项目约定、环境事实 | `USER.md` / `MEMORY.md` 每轮紧凑投影 | dsh-mnemon Host 确定性管理 |
+| **档案** | 设计、调查、流程、复盘、交接材料 | 先检索，再按需阅读全文 | dsh-mnemon Host 确定性管理 |
+| **记忆体** | 跨会话事实、决策、实体与关系 | 从已激活记忆体召回有界证据 | Mnemon Native 或三方 Provider |
 
-![dsh-mnemon Sidebar 记忆系统与对话内交互演示](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/media/dsh-mnemon-memory-system-demo.gif)
+三层不是同一内容的副本。简单判断规则是：**每轮都需要的放运行时，需要完整阅读的放档案，需要跨任务按需召回的放记忆体。**当前指令、仓库文件与实时工具结果始终高于历史记忆。
 
-完整逐页说明见 [Sidebar 与对话交互指南](./docs/zh-CN/ui-guide.md)。
+## 点击之后，谁在工作
+
+| 用户操作 | 实际执行方式 | 数据影响 |
+|---|---|---|
+| **检索** | 并发调用各 Provider 最快的原生召回路径 | 只读 |
+| **Agent 查询** | 新建独立顶层任务 Agent，只接收有界证据并组织答案 | 只读 |
+| **沉淀记忆** / **存入记忆** | 独立任务 Agent 判断、选路、查重、提炼；Host 控制写入 | 只有通过判断才写入 |
+| **智能选择** | 硬规则先筛选，只有真实歧义才交给任务 Agent | 保存路由回执 |
+| **AI 维护元信息** | 每个选中记忆体各自启动异步任务，并使用最快采样路径 | 只更新本地标题与说明 |
+| **归档档案** | 任务 Agent 先建立可检索冷引用，Host 验证后移动原文 | 受监督迁移 |
+| **本回合记忆** | 展开本轮召回、写入和档案检索；点击条目精确跳转 | 只读 |
+
+这些任务不会复用或挤占主对话历史。默认跟随 DSH 新建会话时的模型路由；也可以在**设置 → 记忆系统 → 后台任务 Agent**单独指定 Provider 与模型。
+
+## 一套记忆体工作流，九种 Provider
+
+| Provider | 形态 | 适合场景 |
+|---|---|---|
+| **Mnemon** | 官方原生，本地 CLI + SQLite | 精确写入、实体、类型关系、本地优先共享 |
+| **OpenViking** | HTTP + `viking://` | 资源树与异步提炼 |
+| **Honcho** | HTTP workspace / peers | 团队与 Agent peer conclusions |
+| **Mem0** | Platform 或自托管 HTTP | 已有用户 / Agent 记忆 |
+| **Hindsight** | HTTP memory bank | bank、实体与 Provider 原生图谱 |
+| **Holographic** | 本地结构化事实文件 | 可审计事实、信任评分、本地实体 |
+| **RetainDB** | HTTP project / user | 项目与用户双作用域画像 |
+| **ByteRover** | 本地 `brv` CLI | 代码知识树与 curate 流程 |
+| **Supermemory** | HTTP container | 文档摄取与容器级共享 |
+
+Provider 能力差异会如实展示：引擎没有图谱边、删除语义或可枚举内容时，dsh-mnemon 不会伪造。**设置页管理可复用的 Provider 服务；记忆体页管理具体实例、激活、作用域与元信息。**三方 Provider 默认关闭。
+
+完整差异见 [Provider 能力与部署矩阵](./docs/zh-CN/memory-providers.md)。
+
+## 真实 WebUI 演示
+
+下面的 41 秒素材来自真实的 1600×900 DSH WebUI：包含整个工作台的上下滑动、筛选与弹窗按钮、路由选项切换、对话内记忆展开、精确跳转档案，以及一次真正完成的只读 Agent 查询。可能改变数据的确认按钮都没有提交。
+
+![dsh-mnemon v0.2.0 完整 WebUI：上下滚动与按钮交互](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/media/dsh-mnemon-memory-system-demo.gif)
+
+[观看 1600×900 MP4](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/media/dsh-mnemon-memory-system-demo.mp4) · [按页面查看交互指南](./docs/zh-CN/ui-guide.md)
 
 ## 5 分钟开始使用
 
-### 1. 安装 Mnemon
+### 1. 安装 Mnemon Native
+
+Mnemon 是默认引擎，也是最简单的本地优先起点：
 
 ```sh
 # macOS
@@ -41,30 +96,16 @@ go install github.com/mnemon-dev/mnemon@latest
 mnemon --version
 ```
 
-Windows 推荐安装 v0.2.3 或更高版本的官方 ZIP；解压到以下目录后无需修改 `PATH` 即可自动发现。checksum 校验步骤见[入门指南](./docs/zh-CN/getting-started.md#2-安装-mnemon)：
+Windows 推荐安装 v0.2.3 或更高版本的官方 ZIP；标准安装目录与 checksum 步骤见[快速开始](./docs/zh-CN/getting-started.md#2-安装-mnemon)。
 
-```powershell
-$version = '0.2.3'
-$arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
-$archiveName = "mnemon_${version}_windows_${arch}.zip"
-$archive = Join-Path $env:TEMP $archiveName
-Invoke-WebRequest "https://github.com/mnemon-dev/mnemon/releases/download/v${version}/${archiveName}" -OutFile $archive
-$installDir = Join-Path $env:LOCALAPPDATA 'Programs\mnemon'
-New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-Expand-Archive -Path $archive -DestinationPath $installDir -Force
-& (Join-Path $installDir 'mnemon.exe') --version
-```
-
-### 2. 安装插件
-
-完整 Web 工作台：
+### 2. 安装 DSH 插件
 
 ```sh
 dsh plugin --profile web add dsh-mnemon
 dsh --profile web
 ```
 
-DSH 各 profile 的插件清单彼此独立；一次性 Headless 任务需要单独安装：
+DSH 各 profile 的插件清单彼此独立。一次性 Headless 任务需要单独安装：
 
 ```sh
 dsh plugin --profile headless add dsh-mnemon
@@ -78,114 +119,78 @@ dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 ```
 
-### 3. 打开记忆系统
+### 3. 完成第一次验证
 
-安装后默认使用 `sidebar`：点击 DSH 左侧栏的“记忆系统”即可进入。第一次使用建议按以下顺序：
+1. 打开**记忆系统 → 状态**，确认 dsh-mnemon、Mnemon Native、运行时、档案和已启用 Provider 正常；
+2. 打开**记忆体 → 概览 → 创建记忆体**，人工选择一个已启用 Provider；
+3. 通过**沉淀记忆**提交一条稳定、未来仍有用的候选；
+4. 在**检索**先执行直接检索，再对同一个问题执行**Agent 查询**；
+5. 回到对话，展开**本回合记忆**并点击一个具体工具条目。
 
-1. 在“状态”确认 Mnemon CLI、运行时、记忆体与档案均正常；
-2. 在“记忆体 → 概览”创建一个边界明确的记忆体；可手动指定底层，或让规则与策略 Prompt 引导智能选择；
-3. 用“沉淀记忆”提交一条稳定、未来仍有用的信息；
-4. 在“检索”用一个聚焦问题验证召回；
-5. 回到对话，展开回复下方的“本回合记忆”查看工具轨迹。
+一级页顺序刻意保持稳定：**状态、运行时、档案、记忆体**。
 
-更完整的安装、Provider 要求与验证步骤见[快速开始](./docs/zh-CN/getting-started.md)。
-
-Headless 没有工作台和对话按钮，但仍会挂载运行时上下文、档案、记忆体工具、生命周期提示和受监督写入。`storageScope=workspace` 时，记忆根跟随启动命令所在目录。一次性 Agent 进入 idle 后进程立即退出，因此延迟后台审查会在关闭时取消；任务内已经完成的显式或模型引导写入仍会持久化。
-
-## 一个工作台，三层记忆
-
-| 层级 | 适合保存 | 如何进入上下文 |
-|---|---|---|
-| **运行时** | 用户偏好、协作要求、项目约定、环境事实 | `USER.md` / `MEMORY.md` 每轮紧凑注入 |
-| **档案** | 设计、调查、流程、复盘、交接材料 | 先确定性检索 active Documents，再按需阅读全文 |
-| **记忆体** | 跨会话事实、决策、实体与关系 | 只从已激活 Memory Spaces 按需召回有界证据 |
-
-三层不是同一内容的简单复制：信息会按使用频率、叙事长度和召回方式进入最合适的层级。完整规则见[存储与三层记忆模型](./docs/zh-CN/storage-model.md)。
-
-### 与其他 Agent 共享长期记忆
-
-跨 Agent 共享发生在第三层**记忆体**：Mnemon Native 通过相同 `storageRoot` 和 Store 互操作，三方引擎通过各自 Provider 作用域互操作。DSH 专有的运行时记忆和项目档案不会因此自动暴露给其他 Agent。
-
-默认 `global` 模式使用 `~/.mnemon`，最适合作为本机 Agent 之间的共享记忆根；`custom` 和 `workspace` 也可以共享，但所有参与方必须显式对齐目录。共享同一目录意味着共享同一份数据，请先确认信任边界，并避免并发执行不兼容的离线迁移或目录操作。
-
-三方记忆体按各自 Provider 的作用域共享，例如 OpenViking URI、Honcho workspace/peers、Hindsight bank 或 Supermemory container。完整能力与连接矩阵见[长期记忆 Provider 指南](./docs/zh-CN/memory-providers.md)。
-
-## Sidebar 工作台
-
-| 页面 | 主要用途 |
-|---|---|
-| **状态** | 检查连接、存储根、三层数据摘要，以及 Mnemon / dsh-mnemon 版本 |
-| **运行时** | 查看 USER / MEMORY 容量，筛选、添加、编辑或移除热记忆 |
-| **记忆体** | 管理激活边界；在概览、检索、内容、实体之间切换；打开“沉淀记忆” |
-| **档案** | 搜索、阅读、新建、编辑与归档受管 Markdown 文档 |
-
-添加与编辑使用统一弹窗；危险操作需要二次确认；长列表采用筛选、计数与“加载更多”，档案正文使用独立阅读区域。
+## 沿用熟悉心智，扩展底层能力
 
 ### 对话内记忆
 
 | 本回合记忆 | 存入记忆 |
 |---|---|
-| [![展开本回合记忆并查看工具入口](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/conversation-turn-memory.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/conversation-turn-memory.png) | [![确认存入记忆弹窗](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/conversation-save-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/conversation-save-dialog.png) |
+| [![展开本回合记忆并查看精确工具入口](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/conversation-turn-memory.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/conversation-turn-memory.png) | [![确认存入记忆弹窗](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/conversation-save-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/conversation-save-dialog.png) |
 
-- **本回合记忆**汇总本轮的召回、沉淀与档案检索；展开后可以跳到对应页面。
-- **存入记忆**先加载可编辑候选，只有确认后才启动独立任务 Agent 判断、查重、提炼并写入。
+两项默认开启，可在**设置 → 记忆系统 → 对话界面**分别关闭。
 
-这两个入口默认开启，可在“设置 → 记忆系统 → 对话界面”中分别关闭，保存后实时生效。
+### 人工创建与策略选路
 
-## 展示与存储
-
-配置位于 `$DSH_HOME/settings.yaml`（通常为 `~/.dsh/settings.yaml`）：
-
-```yaml
-mnemon:
-  displayMode: sidebar # sidebar | buildin；默认 sidebar
-  storageScope: global # global | workspace | custom
-```
-
-| 选择 | 行为 |
+| 明确选择底层 | 智能路由后续沉淀 |
 |---|---|
-| `sidebar` | 默认；左侧栏独立工作台，采用与 DSH 官方面板一致的极简外观 |
-| `buildin` | 保留原有对话区内嵌形态及其既有视觉 |
-| `global` | 多个工作区共享 `~/.mnemon`（或 `MNEMON_DATA_DIR`） |
-| `workspace` | 每个工作区使用自己的 `<workspace>/.mnemon`；工作台可查看其他工作区，Agent 仍跟随当前会话 |
-| `custom` | 使用 `dataDir` 指定的绝对路径或 `~/...` |
+| [![创建记忆体时明确选择 Provider](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/memory-space-create-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/memory-space-create-dialog.png) | [![在人工指定与智能选择之间配置沉淀策略](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/screenshots/distillation-strategy.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/screenshots/distillation-strategy.png) |
 
-设置保存后实时生效，无需手动刷新。切换存储范围不会自动迁移、合并或删除旧数据；工作区查看目标与会话实际目录不一致时，顶部会提示并提供一键对齐。
+手动创建记忆体始终由用户明确选择。智能选择属于“沉淀策略”：硬规则定义候选范围，策略 Prompt 只在多个候选都合格时帮助任务 Agent 决策。
 
-## 常用命令
+## 全局、工作区与自定义
 
-```text
-/mnemon status
-/mnemon recall <查询>
-/mnemon related <完整记忆 ID>
-/mnemon remember <稳定、自包含的长期洞察>
-/mnemon forget <完整记忆 ID>
-```
+| 范围 | 行为 |
+|---|---|
+| `global` | 使用 `~/.mnemon`，适合多个工作区和本机 Agent 共享控制面 |
+| `workspace` | 使用 `<workspace>/.mnemon`；支持工作区跟随的本地 Provider 会随有效工作区切换 |
+| `custom` | 显式路径的全局语义，适合团队约定或隔离环境 |
 
-推荐查询顺序：运行时热记忆 → active Documents → 已激活记忆体 → 命中记录指向的归档原文。
+远程 Provider 的 workspace、user、bank、project、container 与 URI 保留自己的命名空间；切换 DSH 工作区不会暗中改写。工作区模式下，工作台可以查看一个选定工作区，而当前会话继续使用自己的 cwd；从工作台启动的独立任务 Agent 使用查看工作区，即使没有选中主会话也能正确执行。
+
+## Web、对话与 Headless 使用同一套系统
+
+| 表面 | 可用能力 |
+|---|---|
+| **Sidebar WebUI** | 状态、运行时、档案、记忆体、Provider 服务、可视化与确认入口 |
+| **对话内 UI** | 本回合记忆、存入记忆、精确跳转对应页面 |
+| **Headless** | 没有 WebUI，但保留运行时注入、档案检索、记忆体工具、工作区路由与受监督写入 |
+| **命令** | `/mnemon status`、`recall`、`related`、`remember`、`forget` |
 
 ## 数据与安全边界
 
-- Mnemon Native 通过本地 `mnemon` CLI；外部 HTTP Provider 与 ByteRover CLI 只由 Host 调用。WebUI 不读取 Store，也不直接调用 Provider。
-- CLI 使用参数数组且禁用 shell；输出、超时和取消均有边界。
-- Provider 凭据以 `0600` 权限保存在 `<storageRoot>/state/memory-providers.json`，不会返回浏览器或参与选址的 Agent，也不会进入 Mnemon Pack；独立任务 Agent 默认使用 DSH 新会话模型，也可在“设置 → 记忆系统”单独指定 Provider 与模型。
-- 当前没有确定性的秘密扫描器。不要把密钥、token、私钥或原始敏感日志写入任何记忆层。
-- 卸载插件不会删除 `~/.mnemon`、工作区 `.mnemon` 或自定义目录中的数据。
+- 运行时和档案是本地确定性存储；Mnemon Native 默认本地，三方 Provider 必须显式启用。
+- Provider 凭据以 mode `0600` 保存在 `<storageRoot>/state/memory-providers.json`，不会返回浏览器、智能选择 Agent 或 Mnemon Pack。
+- Host 调用使用参数数组并禁用 shell，同时约束输出、超时、取消、schema、路径、锁与 revision。
+- 关闭 Provider 只清理本地目录元数据，不删除远程数据；重连时从 Provider 重建，无法映射的字段才使用本地默认值。
+- 切换范围不会自动迁移、合并或删除旧根目录。
+- 当前没有确定性 secret scanner；任何层级都不应保存 key、token、私钥或原始敏感日志。
+- 卸载插件不会删除本地或远程记忆数据。
 
-完整边界、备份恢复与故障排查见[运维指南](./docs/zh-CN/operations.md)。
+备份、恢复与故障诊断见[运维、安全与故障处理](./docs/zh-CN/operations.md)。
 
-## 文档
+## 文档地图
 
 | 我想要…… | 从这里开始 |
 |---|---|
-| 安装并完成第一次验证 | [快速开始](./docs/zh-CN/getting-started.md) |
-| 认识每个页面与对话内入口 | [Sidebar 与对话交互指南](./docs/zh-CN/ui-guide.md) |
-| 理解三层模型和完整流转 | [项目介绍](./docs/zh-CN/project-overview.md) · [生命周期与核心流程](./docs/zh-CN/workflows.md) |
-| 选择或配置长期记忆 Provider | [长期记忆 Provider](./docs/zh-CN/memory-providers.md) |
-| 选择存储范围或高级开关 | [配置参考](./docs/zh-CN/configuration.md) |
-| 备份、更新或排查问题 | [运维、安全与故障排查](./docs/zh-CN/operations.md) |
-| 集成工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
-| 开发、测试或发布 | [开发与验证](./docs/zh-CN/development.md) |
+| 看清完整产品边界 | [能力地图](./docs/zh-CN/capabilities.md) |
+| 安装并验证第一次工作流 | [快速开始](./docs/zh-CN/getting-started.md) |
+| 跟随所有可见点击与 Agent 行为 | [Sidebar 与对话交互指南](./docs/zh-CN/ui-guide.md) |
+| 比较或部署九种 Provider | [长期记忆 Provider](./docs/zh-CN/memory-providers.md) |
+| 理解分层与生命周期 | [存储模型](./docs/zh-CN/storage-model.md) · [工作流](./docs/zh-CN/workflows.md) |
+| 配置范围、路由与模型 | [配置参考](./docs/zh-CN/configuration.md) |
+| 备份、更新或排障 | [运维指南](./docs/zh-CN/operations.md) |
+| 接入工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
+| 查看本次升级 | [v0.2.0 发布说明](./docs/zh-CN/releases/v0.2.0.md) |
 
 完整目录见[文档中心](./docs/zh-CN/README.md)。
 
@@ -196,8 +201,8 @@ pnpm install
 pnpm run verify
 ```
 
-`verify` 依次运行 TypeScript 检查、Vitest、两次可复现构建、隔离的真实 Headless profile 激活检查和发布包校验。`lib/` 是生成目录，不再提交到仓库。
+`verify` 会执行 TypeScript 检查、Vitest、可复现双构建、隔离的真实 Headless profile 激活检查与发布包验证。`lib/` 是生成产物，故意不进入版本库。
 
-## License
+## 许可证
 
-MIT。安全问题请按 [SECURITY.md](./SECURITY.md) 私下报告，不要直接创建公开 issue。
+MIT。安全问题请通过 [SECURITY.md](./SECURITY.md) 私下报告，不要公开提交 issue。

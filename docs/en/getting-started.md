@@ -143,20 +143,20 @@ Open **Settings → Memory System**:
 
 Save initializes a candidate runtime graph before atomically switching the Host. The page clears stale state and reloads automatically—no browser refresh is needed. Changing scope never migrates, merges, or deletes old data.
 
-In Workspace mode, the workbench selector changes only what data is being inspected. Agents, tools, and lifecycle hooks always use the current conversation's effective root. The header reports a mismatch and offers one-click alignment.
+In Workspace mode, conversation Agents, tools, and lifecycle hooks use the current conversation's effective root. Independent task Agents launched by the workbench use the inspected workspace explicitly, including when no main session is selected. The header reports a mismatch and offers one-click alignment.
 
 ## 5. Open the Sidebar workbench
 
 Click **Memory System** in the sidebar, then start on **Status**:
 
-[![Status with CLI, versions, Runtime, Memory Spaces, Documents, and storage root](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
+[![Status with CLI, versions, Runtime, Documents, Memory Spaces, and storage root](../assets/screenshots/status-overview.png)](../assets/screenshots/status-overview.png)
 
 Confirm that:
 
 - the top right says Connected;
 - Mnemon and dsh-mnemon show installed versions;
 - the storage root matches your chosen scope;
-- Runtime, Memory Spaces, and Documents report no errors.
+- Runtime, Documents, and Memory Spaces report no errors.
 
 If Mnemon is unavailable, run `command -v mnemon` and `mnemon --version` on macOS/Linux, or `Get-Command mnemon` and `Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"` on Windows PowerShell. See [Troubleshooting](./operations.md#troubleshooting) for other symptoms.
 
