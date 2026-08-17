@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MnemonSettingsCard } from '../src/client/MnemonSettingsCard.tsx'
 import { translateEn } from '../src/client/locales.ts'
@@ -52,6 +52,53 @@ describe('MnemonSettingsCard', () => {
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([{
       op: 'set', path: ['taskAgentModel'], value: { mode: 'fixed', provider: 'openai', model: 'gpt-5' },
     }]))
+  })
+
+  it('keeps rapid route-mode switches stable while model requests finish out of order', async () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}), mutate: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+    const catalog = {
+      effective: { provider: 'deepseek', model: 'deepseek-chat', source: 'dsh-default' as const },
+      defaultSelection: { provider: 'deepseek', model: 'deepseek-chat' },
+      groups: [{ id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] }],
+      failures: [],
+    }
+    let resolveRoute!: (value: { ok: true; value: typeof catalog }) => void
+    let resolveCatalog!: (value: { ok: true; value: typeof catalog }) => void
+    const route = new Promise<{ ok: true; value: typeof catalog }>(resolve => { resolveRoute = resolve })
+    const full = new Promise<{ ok: true; value: typeof catalog }>(resolve => { resolveCatalog = resolve })
+    const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') {
+        return (payload as { includeCatalog: boolean }).includeCatalog ? full : route
+      }
+      throw new Error(`unexpected ${channel} ${endpoint}`)
+    })
+
+    render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call } } as ClientConnectionHandle} />)
+    fireEvent.click(screen.getByText('指定模型 Provider', { exact: true }))
+    fireEvent.click(screen.getByText('跟随主链路', { exact: true }))
+
+    await act(async () => {
+      resolveCatalog({ ok: true, value: catalog })
+      await full
+      resolveRoute({ ok: true, value: catalog })
+      await route
+    })
+
+    expect((screen.getByRole('radio', { name: '跟随主链路' }) as HTMLInputElement).checked).toBe(true)
+    fireEvent.click(screen.getByText('指定模型 Provider', { exact: true }))
+    await waitFor(() => expect((screen.getByRole('combobox', { name: '模型 Provider' }) as HTMLSelectElement).disabled).toBe(false))
+    expect((screen.getByRole('combobox', { name: '模型 Provider' }) as HTMLSelectElement).value).toBe('deepseek')
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'task-agent-models')).toHaveLength(2)
   })
 
   it('defaults to sidebar and persists a buildin display-mode selection', async () => {

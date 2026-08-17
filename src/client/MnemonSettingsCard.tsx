@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore, type JSX } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type JSX } from 'react'
 import type { ClientConnectionHandle, ClientSettingsScope, ClientSettingsSnapshot, Config, InteractionConfig, SettingsOperation, TaskAgentModelCatalog } from '../shared/contracts.ts'
 import { MnemonClient } from './api.ts'
 import css from './MnemonSettingsCard.module.css'
@@ -124,36 +124,62 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const [failed, setFailed] = useState<string | null>(null)
   const [applied, setApplied] = useState(false)
   const [targetRevision, setTargetRevision] = useState(0)
-  const [modelCatalogRevision, setModelCatalogRevision] = useState(0)
   const [modelCatalog, setModelCatalog] = useState<TaskAgentModelCatalog | null>(null)
   const [modelCatalogState, setModelCatalogState] = useState<'unavailable' | 'loading' | 'ready' | 'error'>(connection === undefined ? 'unavailable' : 'loading')
   const [modelCatalogError, setModelCatalogError] = useState<string | null>(null)
+  const [fullModelCatalogLoaded, setFullModelCatalogLoaded] = useState(false)
+  const modelCatalogRequest = useRef(0)
 
   useEffect(() => {
     if (dirty.size === 0) setDraft(draftOf(coreSnapshot.value, interactionSnapshot.value))
   }, [dirty.size, coreSnapshot.value, interactionSnapshot.value])
 
-  useEffect(() => {
+  const loadModelCatalog = useCallback((includeCatalog: boolean): void => {
     if (connection === undefined) {
+      modelCatalogRequest.current += 1
       setModelCatalog(null)
       setModelCatalogState('unavailable')
       setModelCatalogError(null)
+      setFullModelCatalogLoaded(false)
       return
     }
-    let active = true
+    const request = modelCatalogRequest.current + 1
+    modelCatalogRequest.current = request
     setModelCatalogState('loading')
     setModelCatalogError(null)
-    void new MnemonClient(connection).taskAgentModels(draft.taskAgentModelMode === 'fixed').then(catalog => {
-      if (!active) return
+    void new MnemonClient(connection).taskAgentModels(includeCatalog).then(catalog => {
+      if (modelCatalogRequest.current !== request) return
       setModelCatalog(catalog)
       setModelCatalogState('ready')
+      setFullModelCatalogLoaded(includeCatalog)
+      if (includeCatalog) {
+        setDraft(current => {
+          if (current.taskAgentModelMode !== 'fixed') return current
+          const provider = current.taskAgentProvider
+            || catalog.defaultSelection?.provider
+            || catalog.groups[0]?.id
+            || ''
+          const group = catalog.groups.find(candidate => candidate.id === provider)
+          const model = current.taskAgentModel
+            || (catalog.defaultSelection?.provider === provider ? catalog.defaultSelection.model : undefined)
+            || group?.models[0]?.id
+            || ''
+          return provider === current.taskAgentProvider && model === current.taskAgentModel
+            ? current
+            : { ...current, taskAgentProvider: provider, taskAgentModel: model }
+        })
+      }
     }, reason => {
-      if (!active) return
+      if (modelCatalogRequest.current !== request) return
       setModelCatalogState('error')
       setModelCatalogError(reason instanceof Error ? reason.message : String(reason))
     })
-    return () => { active = false }
-  }, [connection, draft.taskAgentModelMode, modelCatalogRevision])
+  }, [connection])
+
+  useEffect(() => {
+    loadModelCatalog(false)
+    return () => { modelCatalogRequest.current += 1 }
+  }, [loadModelCatalog])
 
   const coreUser = useMemo(() => record(coreSnapshot.user), [coreSnapshot.user])
   const activeScope = coreDraft(coreSnapshot.value).storageScope === 'workspace' ? 'workspace' : 'global'
@@ -210,7 +236,6 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
       setDirty(new Set())
       setApplied(true)
       if (regularCoreChanged) setTargetRevision(revision => revision + 1)
-      if (taskAgentChanged) setModelCatalogRevision(revision => revision + 1)
     } catch (reason) {
       setFailed(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -315,6 +340,8 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           state={modelCatalogState}
           error={modelCatalogError}
           disabled={coreDisabled}
+          fullCatalogLoaded={fullModelCatalogLoaded}
+          onLoadCatalog={() => loadModelCatalog(true)}
           onEdit={edit}
           onEditMany={editMany}
           t={t}
@@ -353,6 +380,8 @@ function TaskAgentModelSection(props: {
   state: 'unavailable' | 'loading' | 'ready' | 'error'
   error: string | null
   disabled: boolean
+  fullCatalogLoaded: boolean
+  onLoadCatalog: () => void
   onEdit: (field: Field, value: string | boolean) => void
   onEditMany: (values: Partial<Draft>) => void
   t: MnemonTranslate
@@ -376,6 +405,7 @@ function TaskAgentModelSection(props: {
       || models[0]?.id
       || ''
     props.onEditMany({ taskAgentModelMode: 'fixed', taskAgentProvider: preferredProvider, taskAgentModel: preferredModel })
+    if (!props.fullCatalogLoaded) props.onLoadCatalog()
   }
   const chooseProvider = (provider: string): void => {
     const models = groups.find(candidate => candidate.id === provider)?.models ?? []
