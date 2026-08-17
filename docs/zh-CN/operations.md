@@ -151,7 +151,7 @@ Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"
 | ZIP 导出提示 WAL busy | 等待 Memory Space 写入完成并重试；不要绕过未 checkpoint WAL 检查 |
 | ZIP 导入 checksum / schema 失败 | 备份损坏或格式不兼容；保留当前根，不要手工解压覆盖 |
 | 更新按钮不出现 | 当前已是最新、远程检查失败，或安装来源是 link / 手工模式；按面板提示沿原方式更新 |
-| 远程页面能切换记忆体，但不能执行其他写操作 | 只有激活控制开放给 `trusted-host`；元信息、Provider 连接、持久写入、设置与备份按设计保持 loopback-only |
+| 远程页面能切换记忆体，但不能执行其他写操作 | 默认权限设计；仅在入口已有可靠认证时，本地设置 `remoteAccess: trusted-host`、配置 DSH `trustedHosts` 并重启 Host |
 
 ## 已知限制
 

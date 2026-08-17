@@ -122,7 +122,7 @@ browser component
   -> local CLI or managed files
 ```
 
-Read channels and the activation-only Memory Space control require `trusted-host`; broader memory write channels and settings channels require `loopback`. The activation handler accepts only an exact body ID and Boolean state. Provider credential values travel only through the private loopback service catalog; the trusted-host catalog is redacted. Browser components also derive local-write capability from the connection boundary and disable broader controls before transport. When `writeEnabled=false`, every mutation handler rejects the request at the Host boundary.
+Read channels and the activation-only Memory Space control require `trusted-host`; broader memory write, settings, and backup channels require `loopback` by default. The activation handler accepts only an exact body ID and Boolean state. Provider credential values travel only through the private management-authorized service catalog; the ordinary trusted-host catalog is redacted. Browser components derive local-write capability from the connection boundary and disable broader controls before transport. A local `remoteAccess=trusted-host` setting followed by a Host restart promotes all three privileged channels together for deployments protected by reliable authentication; DSH `trustedHosts` alone is not user authentication. When `writeEnabled=false`, every mutation handler rejects the request at the Host boundary.
 
 ## Internationalization
 

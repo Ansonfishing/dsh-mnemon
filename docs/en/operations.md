@@ -151,7 +151,7 @@ Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md), not a
 | ZIP export reports WAL busy | Wait for Memory Space writes to settle; do not bypass the uncheckpointed-WAL guard |
 | ZIP import checksum/schema failure | The backup is damaged or incompatible; preserve the current root and never unzip over it manually |
 | No Update button | Already current, remote check failed, or the source is link/manual; follow panel guidance |
-| Remote page can toggle a Memory Space but cannot perform another write | Only activation is exposed to `trusted-host`; metadata, Provider connections, durable writes, settings, and backups remain loopback-only by design |
+| Remote page can toggle a Memory Space but cannot perform another write | Secure default; only behind reliable authentication, set `remoteAccess: trusted-host` locally, configure DSH `trustedHosts`, and restart the Host |
 
 ## Known limitations
 

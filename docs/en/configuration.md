@@ -36,6 +36,7 @@ mnemon:
     mode: inherit # inherit | fixed
     # provider: deepseek # required for fixed
     # model: deepseek-chat # required for fixed
+  remoteAccess: read-only # read-only | trusted-host
 ```
 
 ## Options
@@ -57,10 +58,20 @@ mnemon:
 | `tabEnabled` | `true` | boolean | Whether to mount the Web entry selected by `displayMode`; Host RPC, commands, and Agent tools remain registered when off |
 | `writeEnabled` | `true` | boolean | Whether to expose semantic write tools, write RPC, and write commands |
 | `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed` | Model route for independent task Agents used by AI metadata, Agent Query, memory distillation, and document archiving; `fixed` requires both `provider` and `model` |
+| `remoteAccess` | `read-only` | `read-only` / `trusted-host` | Whether non-loopback Web pages stay read-only or may use every Mnemon management RPC; this startup authority must be changed locally and requires a Host restart |
 | `mnemon-ui.turnBar` | `true` | boolean | Turn-tail memory activity bar; on by default, **applies live after saving** |
 | `mnemon-ui.saveAction` | `true` | boolean | “Save to memory” icon and confirmation on finalized assistant replies; on by default, **applies live after saving** |
 
 Both the `mnemon` Host/storage namespace and the `mnemon-ui` browser-presentation namespace apply live. The storage root switches atomically only after the new runtime graph initializes successfully. Legacy `mnemon.conversationInteraction` values remain a migration default, but new saves write only to `mnemon-ui`.
+
+`remoteAccess` is the sole startup-time security boundary and cannot be changed through the Web settings bridge. With the default `read-only` mode, a trusted remote authority can read and use the narrow Memory Space activation channel; settings, ZIP backups, provider connections, and all broader mutations remain loopback-only. If the deployment already has reliable authentication at its reverse proxy, opt in from the Host's local configuration:
+
+```yaml
+mnemon:
+  remoteAccess: trusted-host
+```
+
+Then restart the DSH Host. DSH Connection must also list the serving authority (for example, `rsi.griv.dev`) in `trustedHosts`, and the page must remain same-origin. `trustedHosts` verifies that a request targets an expected Host; it is not user authentication. Never enable this mode on an unauthenticated public endpoint. When enabled, `/dsh-mnemon-write`, `/dsh-mnemon-settings`, and `/dsh-mnemon-pack` are promoted together so the remote management UI does not fail partially with 403 responses.
 
 ## Storage Scopes
 

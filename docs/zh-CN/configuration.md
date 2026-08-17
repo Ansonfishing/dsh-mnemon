@@ -36,6 +36,7 @@ mnemon:
     mode: inherit # inherit | fixed
     # provider: deepseek # fixed 时必填
     # model: deepseek-chat # fixed 时必填
+  remoteAccess: read-only # read-only | trusted-host
 ```
 
 ## 选项
@@ -57,10 +58,20 @@ mnemon:
 | `tabEnabled` | `true` | boolean | 是否挂载 `displayMode` 指定的 Web 入口；关闭后 Host RPC、命令和 Agent 工具保持注册 |
 | `writeEnabled` | `true` | boolean | 是否暴露语义写工具、写 RPC 和写命令 |
 | `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed` | AI 元信息、Agent 查询、记忆沉淀和档案归档所用独立任务 Agent 的模型路由；`fixed` 必须同时保存 `provider` 与 `model` |
+| `remoteAccess` | `read-only` | `read-only` / `trusted-host` | 非 loopback Web 页面是否只能读取，或可访问全部 Mnemon 管理 RPC；这是启动时权限边界，必须本地修改并重启 Host |
 | `mnemon-ui.turnBar` | `true` | boolean | 回合尾记忆活动条；默认开启，**保存后实时生效** |
 | `mnemon-ui.saveAction` | `true` | boolean | 已定稿助手回复旁的「存入记忆」图标与确认弹窗；默认开启，**保存后实时生效** |
 
 `mnemon` Host/存储命名空间和 `mnemon-ui` 浏览器呈现命名空间都实时生效。存储根只会在新运行图初始化成功后原子切换；旧版 `mnemon.conversationInteraction` 仍会作为迁移默认值读取，但新保存只写入 `mnemon-ui`。
+
+`remoteAccess` 是唯一的启动时安全边界，不通过 Web 设置桥开放修改。默认 `read-only` 时，受信任远程域名可以读取并使用范围严格受限的记忆体激活通道；设置、ZIP 备份、Provider 连接以及其他写操作仍限制为 loopback。若部署已经在反向代理层提供可靠认证，可在 Host 本地配置中显式设置：
+
+```yaml
+mnemon:
+  remoteAccess: trusted-host
+```
+
+随后重启 DSH Host。DSH Connection 还必须把实际访问 authority（例如 `rsi.griv.dev`）配置为 `trustedHosts`，且页面必须同源。`trustedHosts` 本身只校验请求是否发往预期 Host，不提供用户身份认证；不要在未认证的公网入口启用该模式。启用后，`/dsh-mnemon-write`、`/dsh-mnemon-settings` 和 `/dsh-mnemon-pack` 会一起开放，避免部分按钮继续以 403 失败。
 
 ## 存储范围
 

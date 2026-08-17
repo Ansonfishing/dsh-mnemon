@@ -19,6 +19,7 @@ describe('Mnemon config and resolution', () => {
       idleReviewMs: 30_000,
       tabEnabled: true,
       writeEnabled: true,
+      remoteAccess: 'read-only',
       conversationInteraction: { turnBar: true, saveAction: true },
       persistenceStrategy: {
         mode: 'manual',
@@ -77,6 +78,10 @@ describe('Mnemon config and resolution', () => {
       .toEqual(['mnemon-native'])
     expect(() => resolveConfig({ persistenceStrategy: { mode: 'automatic', rules: { allowedProviderIds: [] } } }))
       .toThrow('at least one allowed provider')
+  })
+
+  it('requires an explicit trusted-host grant for remote management', () => {
+    expect(resolveConfig({ remoteAccess: 'trusted-host' }).remoteAccess).toBe('trusted-host')
   })
 
   it('keeps explicit conversation-surface opt-outs', () => {

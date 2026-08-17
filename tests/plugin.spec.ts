@@ -159,6 +159,23 @@ describe('dsh-mnemon plugin composition', () => {
     ])
   })
 
+  it('promotes every privileged Mnemon channel only with explicit remote access', () => {
+    const fixture = context()
+    apply(fixture.ctx as never, {
+      cliPath: '/fake/mnemon',
+      dataDir: dataDir(),
+      remoteAccess: 'trusted-host',
+    })
+    for (const channel of ['/dsh-mnemon-write', '/dsh-mnemon-settings', '/dsh-mnemon-pack']) {
+      expect(fixture.channels).toEqual(expect.arrayContaining([
+        expect.arrayContaining([channel, expect.anything(), { authority: 'trusted-host' }]),
+      ]))
+    }
+    expect(fixture.channels).toEqual(expect.arrayContaining([
+      expect.arrayContaining(['/dsh-mnemon-read', expect.anything(), { authority: 'trusted-host' }]),
+    ]))
+  })
+
   it('keeps stable live surfaces while fencing every mutation in read-only mode', async () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), writeEnabled: false })
