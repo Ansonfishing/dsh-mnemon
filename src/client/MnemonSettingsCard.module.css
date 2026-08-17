@@ -80,6 +80,57 @@
 
 .displayGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
+.miniSpinner {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin-top: 3px;
+  border: 2px solid var(--dsw-alias-border-l2);
+  border-top-color: var(--dsw-alias-label-secondary);
+  border-radius: 50%;
+  animation: task-agent-spin .7s linear infinite;
+}
+
+.taskAgentPanel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  padding: 12px 13px;
+  background: var(--dsw-alias-bg-layer-3);
+}
+
+.taskAgentPanel[data-mode='fixed'] { background: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 54%, var(--dsw-alias-bg-layer-3)); }
+.taskAgentFields { display: grid; min-width: 0; gap: 12px; }
+.taskAgentFields > label { display: grid; min-width: 0; gap: 6px; }
+.taskAgentFields > label > span { display: flex; min-width: 0; flex-direction: column; }
+.taskAgentFields strong { font-size: 12px; font-weight: 500; line-height: 18px; }
+.taskAgentFields small { color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 16px; }
+.taskAgentFields select {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  outline: none;
+  padding: 0 10px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-2);
+  font: inherit;
+  font-size: 12px;
+}
+.taskAgentFields select:disabled { cursor: default; opacity: .46; }
+.taskAgentFields select:focus-visible { box-shadow: 0 0 0 2px var(--dsw-alias-border-l3); }
+.taskAgentEffective { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; }
+.taskAgentEffective > span { color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 16px; }
+.taskAgentEffective code { min-width: 0; overflow: hidden; border-radius: 999px; padding: 3px 8px; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-layer-2); font-family: var(--ds-font-family-code, ui-monospace, monospace); font-size: 10px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.taskAgentEffective small { min-width: 0; overflow: hidden; color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 16px; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.taskAgentWarning { margin: 0; color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-label-secondary)); font-size: 10px; line-height: 16px; overflow-wrap: anywhere; }
+
+@keyframes task-agent-spin { to { transform: rotate(360deg); } }
+
 .providerPanel {
   overflow: hidden;
   border: 1px solid var(--dsw-alias-border-l2);
@@ -496,4 +547,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .choiceFace, .switch, .switch i, .providerChevron, .providerToggle > span, .providerToggle > span > i { transition: none; }
+  .miniSpinner { animation: none; }
 }

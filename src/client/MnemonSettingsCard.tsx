@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type JSX } from 'react'
-import type { ClientConnectionHandle, ClientSettingsScope, ClientSettingsSnapshot, Config, InteractionConfig, SettingsOperation } from '../shared/contracts.ts'
+import type { ClientConnectionHandle, ClientSettingsScope, ClientSettingsSnapshot, Config, InteractionConfig, SettingsOperation, TaskAgentModelCatalog } from '../shared/contracts.ts'
+import { MnemonClient } from './api.ts'
 import css from './MnemonSettingsCard.module.css'
 import { GlobalLocationSetting } from './GlobalLocationSetting.tsx'
 import { translateZh, type MnemonTranslate } from './locales.ts'
@@ -20,16 +21,21 @@ export interface MnemonSettingsCardProps {
 }
 
 type CoreField = 'displayMode' | 'storageScope' | 'dataDir'
+type TaskAgentField = 'taskAgentModelMode' | 'taskAgentProvider' | 'taskAgentModel'
 type InteractionField = 'turnBar' | 'saveAction'
-type Field = CoreField | InteractionField
+type Field = CoreField | TaskAgentField | InteractionField
 interface Draft extends Record<InteractionField, boolean> {
   displayMode: 'sidebar' | 'buildin'
   storageScope: string
   dataDir: string
+  taskAgentModelMode: 'inherit' | 'fixed'
+  taskAgentProvider: string
+  taskAgentModel: string
 }
 
 const CORE_FIELDS: CoreField[] = ['displayMode', 'storageScope', 'dataDir']
 const INTERACTION_FIELDS: InteractionField[] = ['turnBar', 'saveAction']
+const TASK_AGENT_FIELDS: TaskAgentField[] = ['taskAgentModelMode', 'taskAgentProvider', 'taskAgentModel']
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -42,13 +48,16 @@ function legacyPackDirectory(value: Config): string {
     ?? ''
 }
 
-function coreDraft(value: Config | undefined): Pick<Draft, CoreField> {
+function coreDraft(value: Config | undefined): Pick<Draft, CoreField | TaskAgentField> {
   const resolved = value ?? {}
   const dataDir = resolved.dataDir?.trim() || legacyPackDirectory(resolved)
   return {
     displayMode: resolved.displayMode ?? 'sidebar',
     storageScope: resolved.storageScope ?? (dataDir === '' ? 'global' : 'custom'),
     dataDir,
+    taskAgentModelMode: resolved.taskAgentModel?.mode === 'fixed' ? 'fixed' : 'inherit',
+    taskAgentProvider: resolved.taskAgentModel?.provider?.trim() ?? '',
+    taskAgentModel: resolved.taskAgentModel?.model?.trim() ?? '',
   }
 }
 
@@ -65,14 +74,16 @@ function draftOf(core: Config | undefined, interaction: InteractionConfig | unde
 
 function validation(t: MnemonTranslate, draft: Draft): string | null {
   if (!['global', 'workspace', 'custom'].includes(draft.storageScope)) return t('config.invalidScope')
-  if (draft.storageScope !== 'custom') return null
-  const directory = draft.dataDir.trim()
-  if (directory === '') return t('config.customRequired')
-  const posixAbsolute = directory.startsWith('/')
-  const homeRelative = directory === '~' || directory.startsWith('~/')
-  const windowsDriveAbsolute = /^[a-zA-Z]:[\\/]/.test(directory)
-  const windowsUncAbsolute = /^\\\\[^\\/]+[\\/][^\\/]+/.test(directory)
-  if (!posixAbsolute && !homeRelative && !windowsDriveAbsolute && !windowsUncAbsolute) return t('config.customAbsolute')
+  if (draft.storageScope === 'custom') {
+    const directory = draft.dataDir.trim()
+    if (directory === '') return t('config.customRequired')
+    const posixAbsolute = directory.startsWith('/')
+    const homeRelative = directory === '~' || directory.startsWith('~/')
+    const windowsDriveAbsolute = /^[a-zA-Z]:[\\/]/.test(directory)
+    const windowsUncAbsolute = /^\\\\[^\\/]+[\\/][^\\/]+/.test(directory)
+    if (!posixAbsolute && !homeRelative && !windowsDriveAbsolute && !windowsUncAbsolute) return t('config.customAbsolute')
+  }
+  if (draft.taskAgentModelMode === 'fixed' && (draft.taskAgentProvider.trim() === '' || draft.taskAgentModel.trim() === '')) return t('config.taskAgentRouteRequired')
   return null
 }
 
@@ -113,10 +124,36 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const [failed, setFailed] = useState<string | null>(null)
   const [applied, setApplied] = useState(false)
   const [targetRevision, setTargetRevision] = useState(0)
+  const [modelCatalogRevision, setModelCatalogRevision] = useState(0)
+  const [modelCatalog, setModelCatalog] = useState<TaskAgentModelCatalog | null>(null)
+  const [modelCatalogState, setModelCatalogState] = useState<'unavailable' | 'loading' | 'ready' | 'error'>(connection === undefined ? 'unavailable' : 'loading')
+  const [modelCatalogError, setModelCatalogError] = useState<string | null>(null)
 
   useEffect(() => {
     if (dirty.size === 0) setDraft(draftOf(coreSnapshot.value, interactionSnapshot.value))
   }, [dirty.size, coreSnapshot.value, interactionSnapshot.value])
+
+  useEffect(() => {
+    if (connection === undefined) {
+      setModelCatalog(null)
+      setModelCatalogState('unavailable')
+      setModelCatalogError(null)
+      return
+    }
+    let active = true
+    setModelCatalogState('loading')
+    setModelCatalogError(null)
+    void new MnemonClient(connection).taskAgentModels().then(catalog => {
+      if (!active) return
+      setModelCatalog(catalog)
+      setModelCatalogState('ready')
+    }, reason => {
+      if (!active) return
+      setModelCatalogState('error')
+      setModelCatalogError(reason instanceof Error ? reason.message : String(reason))
+    })
+    return () => { active = false }
+  }, [connection, modelCatalogRevision])
 
   const coreUser = useMemo(() => record(coreSnapshot.user), [coreSnapshot.user])
   const activeScope = coreDraft(coreSnapshot.value).storageScope === 'workspace' ? 'workspace' : 'global'
@@ -150,9 +187,20 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
     setSaving(true); setFailed(null)
     try {
       const coreOps = operations(CORE_FIELDS, dirty, draft)
-      if (coreOps.length > 0) {
+      const regularCoreChanged = coreOps.length > 0
+      const taskAgentChanged = TASK_AGENT_FIELDS.some(field => dirty.has(field))
+      if (regularCoreChanged) {
         if (Object.hasOwn(coreUser, 'customPackId')) coreOps.push({ op: 'unset', path: ['customPackId'] })
         if (Object.hasOwn(coreUser, 'customPacks')) coreOps.push({ op: 'unset', path: ['customPacks'] })
+      }
+      if (taskAgentChanged) {
+        coreOps.push({
+          op: 'set',
+          path: ['taskAgentModel'],
+          value: draft.taskAgentModelMode === 'inherit'
+            ? { mode: 'inherit' }
+            : { mode: 'fixed', provider: draft.taskAgentProvider.trim(), model: draft.taskAgentModel.trim() },
+        })
       }
       const interactionOps = operations(INTERACTION_FIELDS, dirty, draft)
       await Promise.all([
@@ -161,7 +209,8 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
       ])
       setDirty(new Set())
       setApplied(true)
-      if (coreOps.length > 0) setTargetRevision(revision => revision + 1)
+      if (regularCoreChanged) setTargetRevision(revision => revision + 1)
+      if (taskAgentChanged) setModelCatalogRevision(revision => revision + 1)
     } catch (reason) {
       setFailed(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -260,6 +309,17 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           />
         </section>
 
+        <TaskAgentModelSection
+          draft={draft}
+          catalog={modelCatalog}
+          state={modelCatalogState}
+          error={modelCatalogError}
+          disabled={coreDisabled}
+          onEdit={edit}
+          onEditMany={editMany}
+          t={t}
+        />
+
         <section className={css.section} aria-labelledby="mnemon-interaction-heading">
           <div className={css.sectionHeading}>
             <div><h2 id="mnemon-interaction-heading">{t('config.interactionTitle')}</h2><p>{t('config.interactionHint')}</p></div>
@@ -285,6 +345,81 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
       </>}
     </section>
   )
+}
+
+function TaskAgentModelSection(props: {
+  draft: Draft
+  catalog: TaskAgentModelCatalog | null
+  state: 'unavailable' | 'loading' | 'ready' | 'error'
+  error: string | null
+  disabled: boolean
+  onEdit: (field: Field, value: string | boolean) => void
+  onEditMany: (values: Partial<Draft>) => void
+  t: MnemonTranslate
+}): JSX.Element {
+  const groups = props.catalog?.groups ?? []
+  const group = groups.find(candidate => candidate.id === props.draft.taskAgentProvider)
+  const inherited = props.catalog?.defaultSelection
+    ?? (props.catalog?.effective?.source === 'fixed' ? undefined : props.catalog?.effective)
+  const effective = props.draft.taskAgentModelMode === 'fixed'
+    ? (props.draft.taskAgentProvider.trim() === '' || props.draft.taskAgentModel.trim() === '' ? undefined : { provider: props.draft.taskAgentProvider, model: props.draft.taskAgentModel })
+    : inherited
+
+  const chooseFixed = (): void => {
+    const preferredProvider = props.draft.taskAgentProvider
+      || inherited?.provider
+      || groups[0]?.id
+      || ''
+    const models = groups.find(candidate => candidate.id === preferredProvider)?.models ?? []
+    const preferredModel = props.draft.taskAgentModel
+      || (inherited?.provider === preferredProvider ? inherited.model : undefined)
+      || models[0]?.id
+      || ''
+    props.onEditMany({ taskAgentModelMode: 'fixed', taskAgentProvider: preferredProvider, taskAgentModel: preferredModel })
+  }
+  const chooseProvider = (provider: string): void => {
+    const models = groups.find(candidate => candidate.id === provider)?.models ?? []
+    props.onEditMany({ taskAgentProvider: provider, taskAgentModel: models[0]?.id ?? '' })
+  }
+
+  return <section className={css.section} aria-labelledby="mnemon-task-agent-heading">
+    <div className={css.sectionHeading}>
+      <div><h2 id="mnemon-task-agent-heading">{props.t('config.taskAgentTitle')}</h2><p>{props.t('config.taskAgentDescription')}</p></div>
+      {props.state === 'loading' && <span className={css.miniSpinner} aria-hidden="true" />}
+    </div>
+    <div className={css.choiceGrid} role="radiogroup" aria-label={props.t('config.taskAgentModeAria')}>
+      <ChoiceCard id="mnemon-task-agent-inherit" name="mnemon-task-agent" label={props.t('config.taskAgentInherit')} detail={props.t('config.taskAgentInheritHint')} checked={props.draft.taskAgentModelMode === 'inherit'} disabled={props.disabled} onChange={() => props.onEditMany({ taskAgentModelMode: 'inherit' })} />
+      <ChoiceCard id="mnemon-task-agent-fixed" name="mnemon-task-agent" label={props.t('config.taskAgentFixed')} detail={props.t('config.taskAgentFixedHint')} checked={props.draft.taskAgentModelMode === 'fixed'} disabled={props.disabled || props.state === 'unavailable'} onChange={chooseFixed} />
+    </div>
+    <div className={css.taskAgentPanel} data-mode={props.draft.taskAgentModelMode}>
+      {props.draft.taskAgentModelMode === 'fixed' && <div className={css.taskAgentFields}>
+        <label>
+          <span><strong>{props.t('config.taskAgentProvider')}</strong><small>{props.t('config.taskAgentProviderHint')}</small></span>
+          <select aria-label={props.t('config.taskAgentProvider')} value={props.draft.taskAgentProvider} disabled={props.disabled || props.state !== 'ready'} onChange={event => chooseProvider(event.target.value)}>
+            <option value="">{props.t('config.taskAgentChooseProvider')}</option>
+            {props.draft.taskAgentProvider !== '' && !groups.some(candidate => candidate.id === props.draft.taskAgentProvider) && <option value={props.draft.taskAgentProvider}>{props.draft.taskAgentProvider}</option>}
+            {groups.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+          </select>
+        </label>
+        <label>
+          <span><strong>{props.t('config.taskAgentModel')}</strong><small>{props.t('config.taskAgentModelHint')}</small></span>
+          <select aria-label={props.t('config.taskAgentModel')} value={props.draft.taskAgentModel} disabled={props.disabled || props.state !== 'ready' || group === undefined} onChange={event => props.onEdit('taskAgentModel', event.target.value)}>
+            <option value="">{props.t('config.taskAgentChooseModel')}</option>
+            {props.draft.taskAgentModel !== '' && !group?.models.some(model => model.id === props.draft.taskAgentModel) && <option value={props.draft.taskAgentModel}>{props.draft.taskAgentModel}</option>}
+            {(group?.models ?? []).map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
+          </select>
+        </label>
+      </div>}
+      <div className={css.taskAgentEffective}>
+        <span>{props.t('config.taskAgentEffective')}</span>
+        {effective === undefined
+          ? <small>{props.state === 'loading' ? props.t('config.taskAgentLoading') : props.t('config.taskAgentUnavailable')}</small>
+          : <code>{effective.provider} / {effective.model}</code>}
+      </div>
+      {props.state === 'error' && <p className={css.taskAgentWarning}>{props.t('config.taskAgentLoadFailed', { error: props.error ?? '' })}</p>}
+      {(props.catalog?.failures.length ?? 0) > 0 && groups.length > 0 && <p className={css.taskAgentWarning}>{props.t('config.taskAgentPartial', { count: props.catalog!.failures.length })}</p>}
+    </div>
+  </section>
 }
 
 function ChoiceCard(props: { id: string; name: string; label: string; detail: string; checked: boolean; disabled: boolean; onChange: () => void }): JSX.Element {
