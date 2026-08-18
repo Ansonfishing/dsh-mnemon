@@ -100,7 +100,7 @@ describe('VersionUpdateManager', () => {
     })
     await expect(manager.update('dsh-mnemon')).resolves.toMatchObject({ updated: true, currentVersion: '0.1.3', restartRequired: true })
     expect(manager.currentDshMnemonVersion).toBe('0.1.3')
-    expect(run).toHaveBeenCalledWith(expect.stringMatching(/pnpm$/), ['update', 'dsh-mnemon'], expect.objectContaining({ timeoutMs: 600_000, maxOutputBytes: 16 * 1024 }))
+    expect(run).toHaveBeenCalledWith(expect.stringMatching(/pnpm$/), ['update', 'dsh-mnemon'], expect.objectContaining({ timeoutMs: 600_000, maxOutputBytes: 16 * 1024, cwd: profile }))
   })
 
   it('uses the fixed Homebrew cask command for a recognized Mnemon install', async () => {
