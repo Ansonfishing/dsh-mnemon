@@ -325,13 +325,13 @@ function SidebarModal(props: { title: string; description?: string; busy?: boole
   const returnFocusRef = useRef<HTMLElement | null>(null)
   const close = useCallback(() => { if (props.busy !== true) props.onClose() }, [props.busy, props.onClose])
   const focusPreferredControl = useCallback(() => {
-    const control = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]')
+    const control = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]:not(:disabled)')
       ?? dialogRef.current?.querySelector<HTMLElement>('input:not(:disabled), textarea:not(:disabled), select:not(:disabled)')
     control?.focus({ preventScroll: true })
   }, [])
   useLayoutEffect(() => {
     returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const firstControl = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]')
+    const firstControl = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]:not(:disabled)')
       ?? dialogRef.current?.querySelector<HTMLElement>('input:not(:disabled), textarea:not(:disabled), select:not(:disabled)')
       ?? dialogRef.current?.querySelector<HTMLElement>('button:not(:disabled)')
     firstControl?.focus({ preventScroll: true })
@@ -2212,8 +2212,9 @@ function VersionDialog(props: { client: MnemonClient; writeEnabled: boolean; onC
       setUpdating(null)
     }
   }
-  const busy = checking || updating !== null
-  return <SidebarModal title={t('versions.title')} description={t('versions.description')} busy={busy} onClose={props.onClose} footer={<><span className={css.modalFooterMeta}>{snapshot === null ? '' : t('versions.checkedAt', { time: new Date(snapshot.checkedAt).toLocaleTimeString() })}</span><div className={css.modalFooterActions}><button type="button" className={css.ghostButton} disabled={busy} onClick={props.onClose}>{t('common.cancel')}</button><button type="button" data-autofocus className={css.secondaryButton} disabled={busy} onClick={() => void check()}>{checking ? t('versions.checkingShort') : t('versions.recheck')}</button></div></>}>
+  const updatingBusy = updating !== null
+  const controlsBusy = checking || updatingBusy
+  return <SidebarModal title={t('versions.title')} description={t('versions.description')} busy={updatingBusy} contentReady={!checking} onClose={props.onClose} footer={<><span className={css.modalFooterMeta}>{snapshot === null ? '' : t('versions.checkedAt', { time: new Date(snapshot.checkedAt).toLocaleTimeString() })}</span><div className={css.modalFooterActions}><button type="button" className={css.ghostButton} disabled={updatingBusy} onClick={props.onClose}>{t('common.cancel')}</button><button type="button" data-autofocus className={css.secondaryButton} disabled={controlsBusy} onClick={() => void check()}>{checking ? t('versions.checkingShort') : t('versions.recheck')}</button></div></>}>
     <div className={css.versionDialogBody}>
       {checking && snapshot === null && <div className={css.versionChecking} role="status"><span />{t('versions.checking')}</div>}
       {error !== null && <div className={css.versionError} role="alert"><strong>{t('versions.failed')}</strong><p>{error}</p></div>}
@@ -2226,7 +2227,7 @@ function VersionDialog(props: { client: MnemonClient; writeEnabled: boolean; onC
           <div className={css.versionNumbers}><div><small>{t('versions.installed')}</small><code>{component.current ?? '—'}</code></div><span>→</span><div><small>{t('versions.latest')}</small><code>{component.latest ?? '—'}</code></div></div>
           {component.id === 'mnemon' && component.executablePath !== undefined && <small className={css.versionLocation} title={component.executablePath}><span>{t('versions.executable')}</span><code>{component.executablePath}</code></small>}
           {component.id === 'dsh-mnemon' && component.installPath !== undefined && <small className={css.versionLocation} title={component.installPath}><span>{dshInstallLabel(t, component)}</span><code>{component.installPath}</code></small>}
-          <footer><p>{versionHint(t, component)}</p>{canUpdate && <button type="button" className={css.primaryButton} disabled={busy} onClick={() => void update(component)}>{updating === component.id ? t('versions.updating') : t('versions.update')}</button>}</footer>
+          <footer><p>{versionHint(t, component)}</p>{canUpdate && <button type="button" className={css.primaryButton} disabled={controlsBusy} onClick={() => void update(component)}>{updating === component.id ? t('versions.updating') : t('versions.update')}</button>}</footer>
         </article>
       })}</div>}
     </div>

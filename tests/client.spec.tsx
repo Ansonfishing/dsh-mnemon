@@ -25,7 +25,7 @@ describe('MnemonView', () => {
     getSnapshot: () => readOnlySettingsSnapshot,
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean } = {}) {
+  function createConnection(options: { isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean; versionsDeferred?: boolean } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -134,6 +134,14 @@ describe('MnemonView', () => {
     const memory = { id: 'memory-12345678', content: options.longContent === true ? '这是一段非常长的记忆内容，用于验证图谱检查器对超长文本的截断展示，以及全文预览窗口的打开与关闭。'.repeat(6) : '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], entities: ['SQLite'], color: '#e74c3c', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-12345678` }
     const secondaryMemory = { id: 'preference-1', content: '用户偏好简洁中文回答。', category: 'preference', importance: 4, tags: ['style'], entities: ['DSH'], color: '#9b59b6', memoryBodyId: secondaryBody.id, memoryBodyName: secondaryBody.name, graphId: `${secondaryBody.id}:preference-1` }
     const relatedResolvers: Array<(response: { ok: true; value: Array<typeof memory> }) => void> = []
+    const versionResponse = () => ({ ok: true as const, value: {
+      checkedAt: '2026-08-15T03:00:00.000Z',
+      components: [
+        { id: 'mnemon', name: 'Mnemon CLI', executablePath: '/usr/local/bin/mnemon', current: mnemonVersionUpdated ? '0.2.0' : '0.1.2', latest: '0.2.0', outdated: !mnemonVersionUpdated, installMode: 'homebrew', updateSupported: true, updateHint: 'brew' },
+        { id: 'dsh-mnemon', name: 'dsh-mnemon', installProfile: 'web', installPath: '/workspace/dsh-mnemon', current: '0.1.2', latest: '0.1.3', outdated: true, installMode: 'link', updateSupported: false, updateHint: 'link' },
+      ],
+    } })
+    const versionResolvers: Array<(response: ReturnType<typeof versionResponse>) => void> = []
     const providerSources = options.withProviderSources === true ? {
       graph: [
         { memoryBodyId: body.id, memoryBodyName: body.name, providerId: 'mnemon-native', providerLabel: 'Mnemon Native', mode: 'graph', status: 'ready', itemCount: 2, edgeCount: 2 },
@@ -210,13 +218,10 @@ describe('MnemonView', () => {
       if (endpoint === 'status-summary' && options.statusPending === true) return { ok: true, value: { ...status, memoryBodies: bodies.map(item => ({ ...item, statusLoading: true })) } }
       if (endpoint === 'status' && options.statusPending === true) return await new Promise<never>(() => {})
       if (endpoint === 'status') return { ok: true, value: { ...status, memoryBodies: bodies } }
-      if (endpoint === 'versions') return { ok: true, value: {
-        checkedAt: '2026-08-15T03:00:00.000Z',
-        components: [
-          { id: 'mnemon', name: 'Mnemon CLI', executablePath: '/usr/local/bin/mnemon', current: mnemonVersionUpdated ? '0.2.0' : '0.1.2', latest: '0.2.0', outdated: !mnemonVersionUpdated, installMode: 'homebrew', updateSupported: true, updateHint: 'brew' },
-          { id: 'dsh-mnemon', name: 'dsh-mnemon', installProfile: 'web', installPath: '/workspace/dsh-mnemon', current: '0.1.2', latest: '0.1.3', outdated: true, installMode: 'link', updateSupported: false, updateHint: 'link' },
-        ],
-      } }
+      if (endpoint === 'versions') {
+        if (options.versionsDeferred === true) return await new Promise<ReturnType<typeof versionResponse>>(resolve => versionResolvers.push(resolve))
+        return versionResponse()
+      }
       if (endpoint === 'version-update') {
         mnemonVersionUpdated = payload?.component === 'mnemon'
         status.version = mnemonVersionUpdated ? '0.2.0' : status.version
@@ -313,6 +318,7 @@ describe('MnemonView', () => {
       connection: { rpc: { call }, ...(options.isLoopback === undefined ? {} : { isLoopback: options.isLoopback }) } as unknown as ClientConnectionHandle,
       call,
       resolveRelated: (index: number, content: string) => relatedResolvers[index]?.({ ok: true, value: [{ ...memory, id: `related-${index}`, graphId: `${body.id}:related-${index}`, content }] }),
+      resolveVersions: (index: number) => versionResolvers[index]?.(versionResponse()),
     }
   }
 
@@ -567,6 +573,35 @@ describe('MnemonView', () => {
     await waitFor(() => expect(within(dialog).getByText('已是最新')).toBeTruthy())
     expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'versions')).toHaveLength(2)
     await waitFor(() => expect(screen.getByText('Mnemon 0.2.0')).toBeTruthy())
+  })
+
+  it('keeps a version check dismissible and moves focus into ready content', async () => {
+    const { connection, resolveVersions } = createConnection({ versionsDeferred: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    await waitFor(() => expect(screen.getByText('dsh-mnemon 0.1.2')).toBeTruthy())
+    const trigger = screen.getByRole('button', { name: '检查版本' })
+    trigger.focus()
+    fireEvent.click(trigger)
+    const dialog = screen.getByRole('dialog', { name: '检查与更新版本' })
+    const close = within(dialog).getAllByRole('button', { name: '取消' })[0]!
+    const cancel = within(dialog).getAllByRole('button', { name: '取消' }).at(-1)!
+    expect(dialog.getAttribute('aria-busy')).toBe('true')
+    expect(close.hasAttribute('disabled')).toBe(false)
+    expect(cancel.hasAttribute('disabled')).toBe(false)
+    expect(document.activeElement).toBe(close)
+
+    await act(async () => { resolveVersions(0) })
+    const recheck = await within(dialog).findByRole('button', { name: '重新检查' })
+    await waitFor(() => expect(document.activeElement).toBe(recheck))
+
+    fireEvent.click(recheck)
+    expect(within(dialog).getByRole('button', { name: /^检查中/ }).hasAttribute('disabled')).toBe(true)
+    expect(cancel.hasAttribute('disabled')).toBe(false)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: '检查与更新版本' })).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+    await act(async () => { resolveVersions(1) })
   })
 
   it('keeps shared functionality but applies the minimal unbranded sidebar appearance', async () => {
