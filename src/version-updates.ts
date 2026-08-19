@@ -235,8 +235,8 @@ function inspectDshInstall(packageManifestPath: string, dshHome: string): DshIns
   return profileFromAncestor(packageManifestPath) ?? linkedProfile(packageManifestPath, dshHome) ?? { mode: 'manual', locationDir: resolve(dirname(packageManifestPath)) }
 }
 
-async function resultOrThrow(runner: ProcessRunner, command: string, args: readonly string[], timeoutMs: number): Promise<ProcessResult> {
-  const result = await runner(command, args, { timeoutMs, maxOutputBytes: MAX_UPDATE_OUTPUT_BYTES })
+async function resultOrThrow(runner: ProcessRunner, command: string, args: readonly string[], timeoutMs: number, options: { cwd?: string } = {}): Promise<ProcessResult> {
+  const result = await runner(command, args, { timeoutMs, maxOutputBytes: MAX_UPDATE_OUTPUT_BYTES, ...options })
   if (result.exitCode !== 0) {
     const detail = result.stderr.trim() || result.stdout.trim() || `exit ${String(result.exitCode)}`
     throw new Error(detail)
@@ -387,7 +387,7 @@ export class VersionUpdateManager {
     const install = inspectDshInstall(this.packageManifestPath, this.dshHome)
     const pnpm = this.executable('pnpm')
     if (install.mode !== 'npm' || install.profileDir === undefined || pnpm === undefined) throw new Error('This dsh-mnemon installation cannot be updated automatically')
-    const output = await resultOrThrow(this.processRunner, pnpm, ['update', DSH_MNEMON_PACKAGE], UPDATE_TIMEOUT_MS)
+    const output = await resultOrThrow(this.processRunner, pnpm, ['update', DSH_MNEMON_PACKAGE], UPDATE_TIMEOUT_MS, { cwd: install.profileDir })
     const outputText = updateOutput(output)
     this.dshMnemonVersion = latest
     return {
