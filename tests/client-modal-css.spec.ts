@@ -22,6 +22,14 @@ describe('responsive dialog layout invariants', () => {
     expect(sidebarCss).toContain(".shell .modal > [class*='modalFooter'] [class*='modalFooterActions'] button { min-height: 44px;")
   })
 
+  it('keeps dialog content and actions clear of landscape safe areas', () => {
+    expect(viewCss).toContain('padding: 10px max(14px, env(safe-area-inset-right, 0px)) 12px max(14px, env(safe-area-inset-left, 0px));')
+    expect(viewCss).toContain('padding: 14px max(14px, env(safe-area-inset-right, 0px)) 18px max(14px, env(safe-area-inset-left, 0px));')
+    expect(sidebarCss).toContain(".shell .modal > [class*='modalFooter'] { padding: 10px max(14px, env(safe-area-inset-right, 0px))")
+    expect(saveActionCss).toContain('max(12px, env(safe-area-inset-left, 0px))')
+    expect(saveActionCss).toContain('max(12px, env(safe-area-inset-right, 0px))')
+  })
+
   it('bounds the conversation save dialog against dynamic and short viewports', () => {
     expect(saveActionCss).toContain('max-height: calc(100dvh - 16px);')
     expect(saveActionCss).toContain('min-height: clamp(140px, 32dvh, 220px);')

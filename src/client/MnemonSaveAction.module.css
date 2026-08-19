@@ -34,7 +34,7 @@
 }
 
 .modal {
-  width: min(640px, calc(100vw - 24px));
+  width: min(640px, calc(100vw - max(12px, env(safe-area-inset-left, 0px)) - max(12px, env(safe-area-inset-right, 0px))));
   max-height: calc(100vh - 24px);
 }
 
@@ -124,7 +124,7 @@
 
 @media (max-width: 640px), (max-height: 560px) {
   .modal {
-    width: min(100%, calc(100vw - 16px));
+    width: min(100%, calc(100vw - max(8px, env(safe-area-inset-left, 0px)) - max(8px, env(safe-area-inset-right, 0px))));
     max-height: calc(100vh - 16px);
   }
   .modal .modalAction {

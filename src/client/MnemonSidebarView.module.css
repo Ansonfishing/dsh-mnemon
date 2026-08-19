@@ -753,11 +753,11 @@
   .shell .modalBackdrop { align-items: flex-end; padding: max(10px, env(safe-area-inset-top, 0px)) 0 0; }
   .shell .modal, .shell .modal.modalWide { width: 100vw; max-height: calc(100vh - max(10px, env(safe-area-inset-top, 0px))); border-radius: 18px 18px 0 0; border-bottom: 0; }
   .shell .modal::before { background: var(--dsw-alias-border-l2); }
-  .shell .modal > header { gap: 12px; padding: 10px 14px 12px; }
+  .shell .modal > header { gap: 12px; padding: 10px max(14px, env(safe-area-inset-right, 0px)) 12px max(14px, env(safe-area-inset-left, 0px)); }
   .shell .modal > header p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
   .shell .modal > header [class*='iconButton'] { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
-  .shell .modal > [class*='modalBody'] { padding: 14px 14px 18px; scrollbar-gutter: auto; }
-  .shell .modal > [class*='modalFooter'] { padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .shell .modal > [class*='modalBody'] { padding: 14px max(14px, env(safe-area-inset-right, 0px)) 18px max(14px, env(safe-area-inset-left, 0px)); scrollbar-gutter: auto; }
+  .shell .modal > [class*='modalFooter'] { padding: 10px max(14px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); }
   .shell .modal > [class*='modalFooter'] [class*='modalFooterActions'] button { min-height: 44px; padding-block: 8px; }
   .shell [class*='documentWorkspace'] { height: auto; min-height: 0; }
   .shell [class*='documentList'] { overflow-y: auto; scrollbar-gutter: auto; }

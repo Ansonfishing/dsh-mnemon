@@ -856,11 +856,11 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
   .modalBackdrop { align-items: flex-end; padding: max(10px, env(safe-area-inset-top, 0px)) 0 0; }
   .modal, .modalWide { width: 100vw; max-height: calc(100vh - max(10px, env(safe-area-inset-top, 0px))); border-radius: 18px 18px 0 0; border-bottom: 0; }
   .modal::before { display: block; width: 36px; height: 4px; flex: none; margin: 8px auto 0; border-radius: 999px; background: var(--mn-line-strong); content: ''; }
-  .modal > header { gap: 12px; padding: 10px 14px 12px; }
+  .modal > header { gap: 12px; padding: 10px max(14px, env(safe-area-inset-right, 0px)) 12px max(14px, env(safe-area-inset-left, 0px)); }
   .modal > header p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
   .modal > header .iconButton { width: 44px; height: 44px; margin: -4px -5px -4px 0; }
-  .modalBody { padding: 14px 14px 18px; scrollbar-gutter: auto; scroll-padding-bottom: 12px; }
-  .modalFooter { align-items: stretch; flex-direction: column; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .modalBody { padding: 14px max(14px, env(safe-area-inset-right, 0px)) 18px max(14px, env(safe-area-inset-left, 0px)); scrollbar-gutter: auto; scroll-padding-bottom: 12px; }
+  .modalFooter { align-items: stretch; flex-direction: column; gap: 8px; padding: 10px max(14px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); }
   .modalFooterNote, .modalFooterMeta { max-width: none; margin: 0; font-size: 10px; }
   .modalFooterActions { display: grid; width: 100%; grid-template-columns: minmax(82px, .55fr) minmax(0, 1.45fr); gap: 8px; margin: 0; }
   .modalFooterActions button { min-width: 0; min-height: 44px; padding-block: 8px; white-space: normal; }
