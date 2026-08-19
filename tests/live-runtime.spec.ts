@@ -31,6 +31,27 @@ afterEach(() => {
 })
 
 describe('LiveMnemonRuntime workspace routing', () => {
+  it('builds one composable memory generation beside the compatible runtime services', () => {
+    const runtime = createRuntimeGraph(resolveConfig({ storageScope: 'global', cliPath: '/fake/mnemon' }))
+    const descriptor = runtime.memoryKernel.descriptor()
+    expect(descriptor).toMatchObject({
+      topology: {
+        id: 'default-three-tier',
+        generation: 1,
+        layers: [
+          { id: 'runtime', enabled: true },
+          { id: 'documents', enabled: true },
+          { id: 'memory-spaces', enabled: true },
+        ],
+      },
+      catalog: {
+        layers: [{ id: 'runtime' }, { id: 'documents' }, { id: 'memory-spaces' }],
+        strategies: [{ id: 'default-three-tier' }],
+      },
+    })
+    expect(descriptor.catalog.adapters.map(adapter => adapter.id)).toEqual(expect.arrayContaining(['mnemon-native', 'openviking', 'supermemory']))
+  })
+
   it('separates the inspected workspace from the current session execution workspace', () => {
     const workspaceOne = temporaryDirectory('workspace-one')
     const workspaceTwo = temporaryDirectory('workspace-two')

@@ -1,4 +1,5 @@
 import type { ConnectionHandle as DshClientConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
+import type { MemoryLayerParticipation } from '../memory-system/contracts.ts'
 
 export const MNEMON_READ_CHANNEL = '/dsh-mnemon-read'
 export const MNEMON_ACTIVATION_CHANNEL = '/dsh-mnemon-activation'
@@ -47,6 +48,30 @@ export type SettingsOperation = { op: 'set'; path: string[]; value: unknown } | 
 
 export type StorageScopeKind = 'global' | 'workspace' | 'custom'
 
+export interface MemoryLayerConfig {
+  enabled?: boolean
+  participation?: Partial<MemoryLayerParticipation>
+  adapterIds?: string[]
+}
+
+export interface MemoryTopologyConfig {
+  id?: string
+  strategyId?: string
+  layers?: Record<string, MemoryLayerConfig>
+}
+
+export interface ResolvedMemoryLayerConfig {
+  enabled: boolean
+  participation: MemoryLayerParticipation
+  adapterIds: string[]
+}
+
+export interface ResolvedMemoryTopologyConfig {
+  id: string
+  strategyId: string
+  layers: Record<string, ResolvedMemoryLayerConfig>
+}
+
 export interface CustomPackConfig {
   id: string
   name: string
@@ -84,6 +109,7 @@ export interface Config {
   store?: string
   timeoutMs?: number
   defaultRecallLimit?: number
+  memoryTopology?: MemoryTopologyConfig
   recallQuality?: RecallQualityConfig
   routingGuidance?: boolean
   displayMode?: 'sidebar' | 'buildin'
@@ -155,6 +181,7 @@ export interface ResolvedConfig {
   store?: string
   timeoutMs: number
   defaultRecallLimit: number
+  memoryTopology: ResolvedMemoryTopologyConfig
   recallQuality: ResolvedRecallQualityConfig
   routingGuidance: boolean
   displayMode: 'sidebar' | 'buildin'

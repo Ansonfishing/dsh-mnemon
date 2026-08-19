@@ -7,6 +7,11 @@ import { createRunner, type MnemonRunner } from './runner.ts'
 import { RuntimeMemoryController } from './runtime-memory.ts'
 import { MnemonService } from './service.ts'
 import { StorageScopeInspector } from './storage-scope.ts'
+import { MemoryCatalog } from './memory-system/catalog.ts'
+import { MemoryKernel } from './memory-system/kernel.ts'
+import { registerDefaultMemorySystem } from './memory-system/defaults.ts'
+import { MemoryTopologyManager } from './memory-system/topology.ts'
+import { registerBuiltinMemoryAdapters } from './providers/memory-system.ts'
 
 export interface MnemonRuntimeGraph {
   config: ResolvedConfig
@@ -16,6 +21,9 @@ export interface MnemonRuntimeGraph {
   documents: DocumentManager
   storage: StorageScopeInspector
   packs: MnemonPackManager
+  memoryCatalog: MemoryCatalog
+  memoryTopology: MemoryTopologyManager
+  memoryKernel: MemoryKernel
 }
 
 /**
@@ -24,6 +32,15 @@ export interface MnemonRuntimeGraph {
  * rejected by DSH settings validation without disturbing the active graph.
  */
 export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: string): MnemonRuntimeGraph {
+  const memoryCatalog = new MemoryCatalog()
+  registerDefaultMemorySystem(memoryCatalog)
+  registerBuiltinMemoryAdapters(memoryCatalog)
+  const memoryTopology = new MemoryTopologyManager(memoryCatalog, {
+    id: config.memoryTopology.id,
+    strategyId: config.memoryTopology.strategyId,
+    layers: Object.entries(config.memoryTopology.layers).map(([id, layer]) => ({ id, ...layer })),
+  })
+  const memoryKernel = new MemoryKernel(memoryCatalog, memoryTopology)
   const runner = createRunner(config, undefined, workspaceRoot)
   const service = new MnemonService(runner, config)
   const runtimeMemory = new RuntimeMemoryController(runner)
@@ -32,7 +49,7 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: strin
   const packs = new MnemonPackManager(runner, config, components => {
     if (components.includes('memory-spaces')) service.memoryBodies.reload()
   })
-  return { config, runner, service, runtimeMemory, documents, storage, packs }
+  return { config, runner, service, runtimeMemory, documents, storage, packs, memoryCatalog, memoryTopology, memoryKernel }
 }
 
 /** Resolve every property access against one generation, binding methods to it. */
@@ -73,6 +90,9 @@ export class LiveMnemonRuntime {
   readonly documents: DocumentManager
   readonly storage: StorageScopeInspector
   readonly packs: MnemonPackManager
+  readonly memoryCatalog: MemoryCatalog
+  readonly memoryTopology: MemoryTopologyManager
+  readonly memoryKernel: MemoryKernel
 
   constructor(initial: MnemonRuntimeGraph, private readonly workspaceRegistry?: HostWorkspaceRegistry, private readonly agents?: HostAgentsService) {
     this.current = initial
@@ -83,6 +103,9 @@ export class LiveMnemonRuntime {
     this.documents = liveProxy(() => this.current.documents)
     this.storage = liveProxy(() => this.current.storage)
     this.packs = liveProxy(() => this.current.packs)
+    this.memoryCatalog = liveProxy(() => this.current.memoryCatalog)
+    this.memoryTopology = liveProxy(() => this.current.memoryTopology)
+    this.memoryKernel = liveProxy(() => this.current.memoryKernel)
   }
 
   swap(next: MnemonRuntimeGraph): void {

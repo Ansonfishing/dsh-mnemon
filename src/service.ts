@@ -11,16 +11,9 @@ import {
 } from './memory-bodies.ts'
 import type { MnemonRunner } from './runner.ts'
 import { finalizeLlmPlacement, prepareMemoryPlacement, rulesOnlyPlacement, type LlmMemoryPlacementSelection, type PreparedMemoryPlacement } from './provider-placement.ts'
-import { OpenVikingProvider } from './providers/openviking.ts'
-import { Mem0Provider } from './providers/mem0.ts'
-import { RetainDbProvider } from './providers/retaindb.ts'
-import { SupermemoryProvider } from './providers/supermemory.ts'
-import { HolographicProvider } from './providers/holographic.ts'
-import { ByteRoverProvider } from './providers/byterover.ts'
-import { HonchoProvider } from './providers/honcho.ts'
-import { HindsightProvider } from './providers/hindsight.ts'
 import { MEMORY_PROVIDER_CATALOG, memoryProviderDescriptor } from './providers/catalog.ts'
 import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus, type ProviderSearchResult } from './providers/provider.ts'
+import { memoryProviderAdapterFactories, type MemoryProviderAdapterRegistry } from './providers/registry.ts'
 import {
   applyRecallQualityPolicy,
   prepareRecallQualityPolicy,
@@ -268,6 +261,7 @@ export class MnemonService {
     readonly config: ResolvedConfig,
     memoryBodies?: MemoryBodyRegistry,
     recallQualityPolicyRegistry: RecallQualityPolicyRegistry = recallQualityPolicies,
+    providerAdapterRegistry: MemoryProviderAdapterRegistry = memoryProviderAdapterFactories,
   ) {
     this.memoryBodies = memoryBodies ?? new MemoryBodyRegistry(runner)
     this.recallQualityPolicy = recallQualityPolicyRegistry.resolve(config.recallQuality.policy)
@@ -283,28 +277,7 @@ export class MnemonService {
       link: (body, sourceId, targetId, type, weight, reason, signal) => this.nativeLink(body, sourceId, targetId, type, weight, reason, signal),
       forget: (body, id, signal) => this.nativeForget(body, id, signal),
     }
-    const openVikingProvider = new OpenVikingProvider(this.memoryBodies, {
-      requestTimeoutMs: this.config.timeoutMs,
-      settlementTimeoutMs: this.config.timeoutMs,
-    })
-    const mem0Provider = new Mem0Provider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
-    const retainDbProvider = new RetainDbProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
-    const supermemoryProvider = new SupermemoryProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
-    const holographicProvider = new HolographicProvider(this.memoryBodies)
-    const byteRoverProvider = new ByteRoverProvider(this.memoryBodies, { queryTimeoutMs: this.config.timeoutMs })
-    const honchoProvider = new HonchoProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
-    const hindsightProvider = new HindsightProvider(this.memoryBodies, { requestTimeoutMs: this.config.timeoutMs })
-    this.providers = new Map([
-      [nativeProvider.id, nativeProvider],
-      [openVikingProvider.id, openVikingProvider],
-      [mem0Provider.id, mem0Provider],
-      [retainDbProvider.id, retainDbProvider],
-      [supermemoryProvider.id, supermemoryProvider],
-      [holographicProvider.id, holographicProvider],
-      [byteRoverProvider.id, byteRoverProvider],
-      [honchoProvider.id, honchoProvider],
-      [hindsightProvider.id, hindsightProvider],
-    ])
+    this.providers = providerAdapterRegistry.create({ memoryBodies: this.memoryBodies, config: this.config, nativeAdapter: nativeProvider })
   }
 
   async bodies(signal?: AbortSignal): Promise<MemoryBodyCatalog> {
