@@ -1,6 +1,6 @@
-import { memo, useEffect, useRef, useState, type JSX } from 'react'
+import { memo, useEffect, useRef, useState, useSyncExternalStore, type JSX } from 'react'
 import { Button, IconDataOutline16, Modal, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ClientConnectionHandle } from '../shared/contracts.ts'
+import type { ClientConnectionHandle, ClientSettingsScope, Config } from '../shared/contracts.ts'
 import { MnemonClient } from './api.ts'
 import type { MnemonKey } from './locales.ts'
 import css from './MnemonSaveAction.module.css'
@@ -11,6 +11,7 @@ export interface MnemonSaveActionProps {
   /** Injected by the slot host: the session this message belongs to. */
   sessionId?: string
   connection: ClientConnectionHandle
+  settingsScope: ClientSettingsScope<Config>
   t: (key: MnemonKey, params?: Record<string, unknown>) => string
 }
 
@@ -22,7 +23,9 @@ interface SuperviseOutcome {
 const PREVIEW_LIMIT = 8000
 
 /** Save-to-memory action on finalized assistant messages, routed through the supervised writeback gate. */
-export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sessionId, connection, t }: MnemonSaveActionProps): JSX.Element {
+export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sessionId, connection, settingsScope, t }: MnemonSaveActionProps): JSX.Element {
+  const settingsSnapshot = useSyncExternalStore(settingsScope.subscribe, settingsScope.getSnapshot, settingsScope.getSnapshot)
+  const managementWritable = settingsSnapshot.status === 'ready' && settingsSnapshot.writable
   const [open, setOpen] = useState(false)
   const [writeEnabled, setWriteEnabled] = useState<boolean | undefined>(undefined)
   const [candidate, setCandidate] = useState<string | undefined>(undefined)
@@ -58,7 +61,7 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
     setSubmitting(submitActiveRef.current)
     const client = new MnemonClient(connection, sessionId)
     client.status()
-      .then(status => { if (alive && requestVersionRef.current === requestVersion) setWriteEnabled(status.writeEnabled && connection.isLoopback !== false) })
+      .then(status => { if (alive && requestVersionRef.current === requestVersion) setWriteEnabled(status.writeEnabled && managementWritable) })
       .catch(() => { if (alive && requestVersionRef.current === requestVersion) setWriteEnabled(false) })
     client.assistantMessageText(messageId)
       .then(result => {
@@ -71,7 +74,7 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
       })
       .catch(() => { if (alive && requestVersionRef.current === requestVersion) setMissing(true) })
     return () => { alive = false }
-  }, [open, connection, sessionId, messageId])
+  }, [open, connection, sessionId, messageId, managementWritable])
 
   const submit = (): void => {
     const content = textareaRef.current?.value.trim() ?? ''

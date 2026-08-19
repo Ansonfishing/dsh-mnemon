@@ -20,7 +20,7 @@ export const inject = ['slots', 'sessions', 'workspaces', 'connection', 'locale'
 /** Interaction surfaces: slot name, settings toggle, and the registrations it owns. */
 type MnemonNamespace = 'mnemon'
 type InteractionSlot = 'conversation.chat.turnTail' | 'conversation.chat.assistant-actions'
-type InteractionRegister = (ctx: MnemonClientContext, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string) => () => void
+type InteractionRegister = (ctx: MnemonClientContext, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string, settings: MnemonSettingsScope<Config>) => () => void
 
 interface InteractionUnit {
   slot: InteractionSlot
@@ -48,15 +48,16 @@ const INTERACTION_UNITS: Record<'turnBar' | 'saveAction', InteractionUnit> = {
   saveAction: {
     slot: 'conversation.chat.assistant-actions',
     enabled: (value: unknown): boolean => enabledOf(value, 'saveAction'),
-    register(ctx: MnemonClientContext, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
+    register(ctx: MnemonClientContext, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string, settings: MnemonSettingsScope<Config>): () => void {
       return ctx.slots.register({
         name: 'conversation.chat.assistant-actions',
         id: 'mnemon-save',
         order: 90,
         locale: namespace,
-        inject: (sessionId: unknown): { sessionId?: string; connection: ClientConnectionHandle; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+        inject: (sessionId: unknown): { sessionId?: string; connection: ClientConnectionHandle; settingsScope: MnemonSettingsScope<Config>; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
           ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
           connection: ctx.connection,
+          settingsScope: settings,
           t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
         }),
       }, MnemonSaveAction)
@@ -176,7 +177,7 @@ export function apply(rawContext: unknown): void {
       const unit = INTERACTION_UNITS[key]
       const enabled = unit.enabled(value)
       if (enabled && !active.has(key)) {
-        active.set(key, ctx.slots.inject(unit.slot, () => unit.register(ctx, namespace, translate)))
+        active.set(key, ctx.slots.inject(unit.slot, () => unit.register(ctx, namespace, translate, settings)))
       } else if (!enabled && active.has(key)) {
         active.get(key)!()
         active.delete(key)
