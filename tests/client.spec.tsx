@@ -25,7 +25,7 @@ describe('MnemonView', () => {
     getSnapshot: () => readOnlySettingsSnapshot,
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean } = {}) {
+  function createConnection(options: { isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean; versionsDeferred?: boolean } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -134,6 +134,14 @@ describe('MnemonView', () => {
     const memory = { id: 'memory-12345678', content: options.longContent === true ? '这是一段非常长的记忆内容，用于验证图谱检查器对超长文本的截断展示，以及全文预览窗口的打开与关闭。'.repeat(6) : '项目选择 SQLite，因为需要单文件部署。', category: 'decision', importance: 4, tags: ['architecture'], entities: ['SQLite'], color: '#e74c3c', memoryBodyId: body.id, memoryBodyName: body.name, graphId: `${body.id}:memory-12345678` }
     const secondaryMemory = { id: 'preference-1', content: '用户偏好简洁中文回答。', category: 'preference', importance: 4, tags: ['style'], entities: ['DSH'], color: '#9b59b6', memoryBodyId: secondaryBody.id, memoryBodyName: secondaryBody.name, graphId: `${secondaryBody.id}:preference-1` }
     const relatedResolvers: Array<(response: { ok: true; value: Array<typeof memory> }) => void> = []
+    const versionResponse = () => ({ ok: true as const, value: {
+      checkedAt: '2026-08-15T03:00:00.000Z',
+      components: [
+        { id: 'mnemon', name: 'Mnemon CLI', executablePath: '/usr/local/bin/mnemon', current: mnemonVersionUpdated ? '0.2.0' : '0.1.2', latest: '0.2.0', outdated: !mnemonVersionUpdated, installMode: 'homebrew', updateSupported: true, updateHint: 'brew' },
+        { id: 'dsh-mnemon', name: 'dsh-mnemon', installProfile: 'web', installPath: '/workspace/dsh-mnemon', current: '0.1.2', latest: '0.1.3', outdated: true, installMode: 'link', updateSupported: false, updateHint: 'link' },
+      ],
+    } })
+    const versionResolvers: Array<(response: ReturnType<typeof versionResponse>) => void> = []
     const providerSources = options.withProviderSources === true ? {
       graph: [
         { memoryBodyId: body.id, memoryBodyName: body.name, providerId: 'mnemon-native', providerLabel: 'Mnemon Native', mode: 'graph', status: 'ready', itemCount: 2, edgeCount: 2 },
@@ -210,13 +218,10 @@ describe('MnemonView', () => {
       if (endpoint === 'status-summary' && options.statusPending === true) return { ok: true, value: { ...status, memoryBodies: bodies.map(item => ({ ...item, statusLoading: true })) } }
       if (endpoint === 'status' && options.statusPending === true) return await new Promise<never>(() => {})
       if (endpoint === 'status') return { ok: true, value: { ...status, memoryBodies: bodies } }
-      if (endpoint === 'versions') return { ok: true, value: {
-        checkedAt: '2026-08-15T03:00:00.000Z',
-        components: [
-          { id: 'mnemon', name: 'Mnemon CLI', executablePath: '/usr/local/bin/mnemon', current: mnemonVersionUpdated ? '0.2.0' : '0.1.2', latest: '0.2.0', outdated: !mnemonVersionUpdated, installMode: 'homebrew', updateSupported: true, updateHint: 'brew' },
-          { id: 'dsh-mnemon', name: 'dsh-mnemon', installProfile: 'web', installPath: '/workspace/dsh-mnemon', current: '0.1.2', latest: '0.1.3', outdated: true, installMode: 'link', updateSupported: false, updateHint: 'link' },
-        ],
-      } }
+      if (endpoint === 'versions') {
+        if (options.versionsDeferred === true) return await new Promise<ReturnType<typeof versionResponse>>(resolve => versionResolvers.push(resolve))
+        return versionResponse()
+      }
       if (endpoint === 'version-update') {
         mnemonVersionUpdated = payload?.component === 'mnemon'
         status.version = mnemonVersionUpdated ? '0.2.0' : status.version
@@ -313,6 +318,7 @@ describe('MnemonView', () => {
       connection: { rpc: { call }, ...(options.isLoopback === undefined ? {} : { isLoopback: options.isLoopback }) } as unknown as ClientConnectionHandle,
       call,
       resolveRelated: (index: number, content: string) => relatedResolvers[index]?.({ ok: true, value: [{ ...memory, id: `related-${index}`, graphId: `${body.id}:related-${index}`, content }] }),
+      resolveVersions: (index: number) => versionResolvers[index]?.(versionResponse()),
     }
   }
 
@@ -569,6 +575,37 @@ describe('MnemonView', () => {
     await waitFor(() => expect(screen.getByText('Mnemon 0.2.0')).toBeTruthy())
   })
 
+  it('keeps a version check dismissible and moves focus into ready content', async () => {
+    const { connection, resolveVersions } = createConnection({ versionsDeferred: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+
+    await waitFor(() => expect(screen.getByText('dsh-mnemon 0.1.2')).toBeTruthy())
+    const trigger = screen.getByRole('button', { name: '检查版本' })
+    trigger.focus()
+    fireEvent.click(trigger)
+    const dialog = screen.getByRole('dialog', { name: '检查与更新版本' })
+    const close = within(dialog).getAllByRole('button', { name: '取消' })[0]!
+    const cancel = within(dialog).getAllByRole('button', { name: '取消' }).at(-1)!
+    expect(dialog.getAttribute('aria-busy')).toBe('true')
+    expect(close.hasAttribute('disabled')).toBe(false)
+    expect(cancel.hasAttribute('disabled')).toBe(false)
+    expect(document.activeElement).toBe(close)
+
+    await act(async () => { resolveVersions(0) })
+    const recheck = await within(dialog).findByRole('button', { name: '重新检查' })
+    await waitFor(() => expect(document.activeElement).toBe(recheck))
+
+    fireEvent.click(recheck)
+    expect(within(dialog).getByRole('button', { name: /^检查中/ }).hasAttribute('disabled')).toBe(true)
+    expect(cancel.hasAttribute('disabled')).toBe(false)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: '检查与更新版本' })).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+    await act(async () => { resolveVersions(1) })
+    expect(screen.queryByRole('dialog', { name: '检查与更新版本' })).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+  })
+
   it('keeps shared functionality but applies the minimal unbranded sidebar appearance', async () => {
     const { connection, call } = createConnection({ withInactiveBody: true })
     const onClose = vi.fn()
@@ -633,8 +670,14 @@ describe('MnemonView', () => {
     createBodyButton.focus()
     fireEvent.click(createBodyButton)
     const bodyCreateDialog = screen.getByRole('dialog', { name: '创建记忆体' })
-    expect(within(bodyCreateDialog).getByRole('textbox', { name: '新记忆体名称' })).toBeTruthy()
+    const bodyCreateName = within(bodyCreateDialog).getByRole('textbox', { name: '新记忆体名称' })
+    const bodyCreateAction = within(bodyCreateDialog).getByRole('button', { name: '创建' })
+    expect(bodyCreateName).toBeTruthy()
     expect(within(bodyCreateDialog).getByRole('textbox', { name: '新记忆体描述' })).toBeTruthy()
+    expect(bodyCreateDialog.getAttribute('aria-labelledby')).toBeTruthy()
+    expect(bodyCreateDialog.getAttribute('aria-describedby')).toBeTruthy()
+    expect(bodyCreateAction.getAttribute('form')).toBe(bodyCreateName.closest('form')?.id)
+    expect(bodyCreateAction.closest('footer')?.parentElement).toBe(bodyCreateDialog)
     const bodyCreateCancel = within(bodyCreateDialog).getAllByRole('button', { name: '取消' }).at(-1)
     if (bodyCreateCancel === undefined) throw new Error('memory body create cancel button missing')
     fireEvent.click(bodyCreateCancel)
@@ -643,8 +686,12 @@ describe('MnemonView', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '编辑项目记忆体' }))
     const bodyDialog = screen.getByRole('dialog', { name: '编辑项目记忆体' })
-    expect(within(bodyDialog).getByRole('textbox', { name: '名称' })).toBeTruthy()
+    const bodyName = within(bodyDialog).getByRole('textbox', { name: '名称' })
+    const bodySave = within(bodyDialog).getByRole('button', { name: '保存' })
+    expect(bodyName).toBeTruthy()
     expect(within(bodyDialog).getByRole('textbox', { name: '路由说明' })).toBeTruthy()
+    expect(bodySave.getAttribute('form')).toBe(bodyName.closest('form')?.id)
+    expect(bodySave.closest('footer')?.parentElement).toBe(bodyDialog)
     const bodyCancel = within(bodyDialog).getAllByRole('button', { name: '取消' }).at(-1)
     if (bodyCancel === undefined) throw new Error('memory body cancel button missing')
     fireEvent.click(bodyCancel)
@@ -653,14 +700,20 @@ describe('MnemonView', () => {
     fireEvent.click(screen.getByRole('button', { name: '删除项目记忆体' }))
     const deleteDialog = screen.getByRole('dialog', { name: '删除“项目记忆体”？' })
     expect(within(deleteDialog).getByText(/永久删除这个记忆体及其中的全部记忆与关系/)).toBeTruthy()
-    expect(document.activeElement).toBe(within(deleteDialog).getAllByRole('button', { name: '取消' }).at(-1))
+    const deleteCancel = within(deleteDialog).getAllByRole('button', { name: '取消' }).at(-1)
+    expect(document.activeElement).toBe(deleteCancel)
+    expect(deleteCancel?.closest('footer')?.parentElement).toBe(deleteDialog)
     fireEvent.click(within(deleteDialog).getByRole('button', { name: '确认删除' }))
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '删除“项目记忆体”？' })).toBeNull())
     expect(call).toHaveBeenCalledWith(expect.anything(), 'body-delete', { memoryBodyId: 'project', sessionId: 'session-1' })
 
     fireEvent.click(rememberAction)
     const rememberDialog = screen.getByRole('dialog', { name: '沉淀记忆' })
-    expect(within(rememberDialog).getByRole('textbox', { name: '待沉淀内容' })).toBeTruthy()
+    const rememberCandidate = within(rememberDialog).getByRole('textbox', { name: '待沉淀内容' })
+    const rememberSubmit = within(rememberDialog).getByRole('button', { name: '调度独立任务 Agent 判断并沉淀' })
+    expect(rememberCandidate).toBeTruthy()
+    expect(rememberSubmit.getAttribute('form')).toBe(rememberCandidate.closest('form')?.id)
+    expect(rememberSubmit.closest('footer')?.parentElement).toBe(rememberDialog)
     const advanced = rememberDialog.querySelector('details')
     expect(advanced?.hasAttribute('open')).toBe(false)
     fireEvent.click(within(rememberDialog).getByText('人工高级选项'))
@@ -704,6 +757,7 @@ describe('MnemonView', () => {
     expect(within(runtimeRemoveDialog).getByText(/不再随每轮上下文加载/)).toBeTruthy()
     const runtimeRemoveCancel = within(runtimeRemoveDialog).getAllByRole('button', { name: '取消' }).at(-1)
     if (runtimeRemoveCancel === undefined) throw new Error('runtime remove cancel button missing')
+    expect(runtimeRemoveCancel.closest('footer')?.parentElement).toBe(runtimeRemoveDialog)
     fireEvent.click(runtimeRemoveCancel)
     expect(screen.queryByRole('dialog', { name: '移除运行时记忆？' })).toBeNull()
 
@@ -716,6 +770,7 @@ describe('MnemonView', () => {
     expect(within(forgetDialog).getByText('项目选择 SQLite，因为需要单文件部署。')).toBeTruthy()
     const forgetCancel = within(forgetDialog).getAllByRole('button', { name: '取消' }).at(-1)
     if (forgetCancel === undefined) throw new Error('forget cancel button missing')
+    expect(forgetCancel.closest('footer')?.parentElement).toBe(forgetDialog)
     fireEvent.click(forgetCancel)
     expect(screen.queryByRole('dialog', { name: '软删除这条记忆？' })).toBeNull()
 
@@ -741,6 +796,7 @@ describe('MnemonView', () => {
     expect(within(documentArchiveDialog).getByText(/受限的独立任务 Agent 写入可检索的 Mnemon 摘要/)).toBeTruthy()
     const documentArchiveCancel = within(documentArchiveDialog).getAllByRole('button', { name: '取消' }).at(-1)
     if (documentArchiveCancel === undefined) throw new Error('document archive cancel button missing')
+    expect(documentArchiveCancel.closest('footer')?.parentElement).toBe(documentArchiveDialog)
     fireEvent.click(documentArchiveCancel)
     expect(screen.queryByRole('dialog', { name: '确认建立 Mnemon 索引并迁移这份档案？' })).toBeNull()
     expect(screen.queryByRole('img', { name: 'Mnemon' })).toBeNull()
@@ -984,7 +1040,13 @@ describe('MnemonView', () => {
     fireEvent.click(screen.getByRole('button', { name: '沉淀策略' }))
     const dialog = screen.getByRole('dialog', { name: '沉淀策略' })
     await waitFor(() => expect(within(dialog).getByRole('radio', { name: /智能选择/ })).toBeTruthy())
-    expect((within(dialog).getByRole('radio', { name: /手动指定/ }) as HTMLInputElement).checked).toBe(true)
+    const manualMode = within(dialog).getByRole('radio', { name: /手动指定/ }) as HTMLInputElement
+    const saveStrategy = within(dialog).getByRole('button', { name: '保存策略' })
+    await waitFor(() => expect(document.activeElement).toBe(manualMode))
+    expect(dialog.getAttribute('aria-busy')).toBeNull()
+    expect(manualMode.checked).toBe(true)
+    expect(saveStrategy.getAttribute('form')).toBe(manualMode.closest('form')?.id)
+    expect(saveStrategy.closest('footer')?.parentElement).toBe(dialog)
     fireEvent.click(within(dialog).getByRole('radio', { name: /智能选择/ }))
     fireEvent.change(within(dialog).getByRole('textbox', { name: '策略 Prompt（可选）' }), { target: { value: '这是团队知识；满足精确写入后优先共享。' } })
     fireEvent.change(within(dialog).getByRole('combobox', { name: '软偏好' }), { target: { value: 'shared-first' } })
@@ -995,7 +1057,7 @@ describe('MnemonView', () => {
     expect(exactWrite.closest('label')?.hasAttribute('data-selected')).toBe(true)
     expect(openVikingCandidate.closest('label')?.hasAttribute('data-selected')).toBe(true)
     fireEvent.change(within(dialog).getByRole('textbox', { name: '记忆范围 URI' }), { target: { value: 'viking://user/team/memories' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: '保存策略' }))
+    fireEvent.click(saveStrategy)
 
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '沉淀策略' })).toBeNull())
     expect(setPath).toHaveBeenCalledWith(['persistenceStrategy'], {
@@ -1207,12 +1269,18 @@ describe('MnemonView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^决策: 这是一段非常长的记忆内容/ }))
     const eye = await screen.findByRole('button', { name: '查看全文' })
+    eye.focus()
     fireEvent.click(eye)
 
     const dialog = screen.getByRole('dialog', { name: '内容全文' })
     expect(dialog.textContent).toContain('全文预览窗口的打开与关闭')
-    fireEvent.click(within(dialog).getByRole('button', { name: '取消' }))
+    expect(dialog.getAttribute('aria-labelledby')).toBeTruthy()
+    expect(dialog.getAttribute('aria-describedby')).toBeTruthy()
+    const close = within(dialog).getByRole('button', { name: '取消' })
+    expect(document.activeElement).toBe(close)
+    fireEvent.click(close)
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(document.activeElement).toBe(eye)
   })
 
   it('resets the shared canvas scroll position when switching pages', async () => {
