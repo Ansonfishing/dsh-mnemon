@@ -56,9 +56,14 @@ function service(): MnemonService {
   } as unknown as MnemonService
 }
 
-function subagents(structured: unknown, stopReason = 'completed', providers = ['spawn'], localAgent?: HostAgent) {
+function subagents(structured: unknown, stopReason = 'completed', providers = ['spawn'], localAgent?: HostAgent, diagnostic?: string) {
   const dispose = vi.fn(async () => {})
-  const start = vi.fn(async () => ({ id: 'child-run-1', result: Promise.resolve({ output: [], structured, stopReason }), dispose, ...(localAgent === undefined ? {} : { localAgent }) }))
+  const start = vi.fn(async () => ({
+    id: 'child-run-1',
+    result: Promise.resolve({ output: [], structured, stopReason, ...(diagnostic === undefined ? {} : { diagnostic }) }),
+    dispose,
+    ...(localAgent === undefined ? {} : { localAgent }),
+  }))
   const value = {
     list: vi.fn(() => providers),
     getProvider: vi.fn((name: string) => providers.includes(name) ? { capabilities, inheritsParentContext: name === 'fork' } : undefined),
@@ -648,6 +653,15 @@ describe('Mnemon memory subagent coordinator', () => {
     await expect(coordinator.recall(parent(), { query: 'x' }, new AbortController().signal)).rejects.toThrow('stopped with error: MODEL_ROUTE: provider rejected [redacted]')
     expect(host.dispose).toHaveBeenCalledOnce()
     expect(coordinator.snapshot().failures).toBe(1)
+  })
+
+  it('uses the rc.8 provider diagnostic for a failed remote child', async () => {
+    const host = subagents(undefined, 'error', ['spawn'], undefined, 'REMOTE_GATEWAY:  rejected   sk-secret123456')
+    const coordinator = createCoordinator(host.value)
+
+    await expect(coordinator.recall(parent(), { query: 'x' }, new AbortController().signal))
+      .rejects.toThrow('stopped with error: REMOTE_GATEWAY: rejected [redacted]')
+    expect(host.dispose).toHaveBeenCalledOnce()
   })
 })
 

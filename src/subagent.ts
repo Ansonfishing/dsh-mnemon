@@ -359,7 +359,13 @@ function safeFailureDetail(value: string): string {
 }
 
 /** Recover the contained DSH model/transport error without exposing the child transcript. */
-function subagentFailureDetail(run: HostSubagentRun): string | undefined {
+function subagentFailureDetail(run: HostSubagentRun, result: HostSubagentResult): string | undefined {
+  // rc.8 publishes a bounded provider diagnostic for both local and remote
+  // children. Prefer it over reaching into a local Agent's event history.
+  if (typeof result.diagnostic === 'string') {
+    const diagnostic = safeFailureDetail(result.diagnostic)
+    if (diagnostic !== '') return diagnostic
+  }
   const events = run.localAgent?.session.events ?? []
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index]
@@ -1016,10 +1022,9 @@ ${runtimeSnapshotContext('user', targetEntries)}`
     const provider = this.provider(preferredProvider)
     assertDshOutputSchema(outputSchema)
     if (this.resultRuntime === undefined) throw new Error('dsh-mnemon subagent result tool runtime is unavailable')
-    // DSH rc.6 attaches child-owned structured_output after applying the
-    // inherited-tool filter, which can leave the completion tool unreachable
-    // (#14). Register a unique inherited result tool first so the same hard
-    // allowlist can explicitly admit it without exposing any other capability.
+    // A child-owned structured-output tool can be unreachable through the
+    // inherited-tool filter. Register a unique inherited result tool first so
+    // the same hard allowlist can admit it without exposing another capability.
     const resultToolName = `${RESULT_TOOL_PREFIX}${randomUUID().replaceAll('-', '')}`
     let captured: CapturedSubagentResult | undefined
     let pending: (CapturedSubagentResult & { parent: symbol }) | undefined
@@ -1116,7 +1121,7 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
       }
       if (structured !== undefined) assertDshOutputValue(outputSchema, structured)
       if (result.stopReason !== 'completed') {
-        const detail = subagentFailureDetail(activeRun)
+        const detail = subagentFailureDetail(activeRun, result)
         throw new Error(`memory subagent stopped with ${result.stopReason}${detail === undefined ? '' : `: ${detail}`}`)
       }
       if (structured === undefined) throw new Error('memory subagent completed without recording its result')
