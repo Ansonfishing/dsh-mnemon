@@ -1,4 +1,4 @@
-import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { createContext, Fragment, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { IconChevronLeftOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { consumeMnemonAnchor, subscribeMnemonAnchor, type MnemonAnchor } from './anchor.ts'
 import Markdown from 'markdown-to-jsx'
@@ -315,9 +315,11 @@ function ProgressiveFooter(props: { visible: number; total: number; pageSize: nu
 }
 
 /** DSH-style action dialog shared by Sidebar add/write flows. */
-function SidebarModal(props: { title: string; description?: string; busy?: boolean; wide?: boolean; onClose: () => void; children: ReactNode }): JSX.Element {
+function SidebarModal(props: { title: string; description?: string; busy?: boolean; wide?: boolean; footer?: ReactNode; onClose: () => void; children: ReactNode }): JSX.Element {
   const t = useT()
   const appearance = useMnemonViewAppearance()
+  const titleId = useId()
+  const descriptionId = useId()
   const dialogRef = useRef<HTMLElement | null>(null)
   const returnFocusRef = useRef<HTMLElement | null>(null)
   const close = useCallback(() => { if (props.busy !== true) props.onClose() }, [props.busy, props.onClose])
@@ -325,7 +327,7 @@ function SidebarModal(props: { title: string; description?: string; busy?: boole
     returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const firstControl = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]')
       ?? dialogRef.current?.querySelector<HTMLElement>('input:not(:disabled), textarea:not(:disabled), select:not(:disabled)')
-      ?? dialogRef.current?.querySelector<HTMLElement>('div:last-child button:not(:disabled)')
+      ?? dialogRef.current?.querySelector<HTMLElement>('button:not(:disabled)')
     firstControl?.focus({ preventScroll: true })
     return () => { if (returnFocusRef.current?.isConnected === true) returnFocusRef.current.focus({ preventScroll: true }) }
   }, [])
@@ -356,9 +358,10 @@ function SidebarModal(props: { title: string; description?: string; busy?: boole
   }, [close])
   return (
     <div className={appearanceClass(css.modalBackdrop, appearance.classes.modalBackdrop)} onPointerDown={event => { if (event.target === event.currentTarget) close() }}>
-      <section ref={dialogRef} className={appearanceClass(appearanceClass(css.modal, appearance.classes.modal), props.wide === true ? css.modalWide : undefined)} role="dialog" aria-modal="true" aria-label={props.title}>
-        <header><div><h2>{props.title}</h2>{props.description !== undefined && <p>{props.description}</p>}</div><button type="button" className={css.iconButton} disabled={props.busy} onClick={close} aria-label={t('common.cancel')}>×</button></header>
-        <div>{props.children}</div>
+      <section ref={dialogRef} className={appearanceClass(appearanceClass(css.modal, appearance.classes.modal), props.wide === true ? css.modalWide : undefined)} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={props.description === undefined ? undefined : descriptionId}>
+        <header><div><h2 id={titleId}>{props.title}</h2>{props.description !== undefined && <p id={descriptionId}>{props.description}</p>}</div><button type="button" className={css.iconButton} disabled={props.busy} onClick={close} aria-label={t('common.cancel')}>×</button></header>
+        <div className={css.modalBody}>{props.children}</div>
+        {props.footer !== undefined && <footer className={css.modalFooter}>{props.footer}</footer>}
       </section>
     </div>
   )
@@ -1002,6 +1005,8 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
   const t = useT()
   const locale = useLocale()
   const appearance = useMnemonViewAppearance()
+  const bodyCreateFormId = useId()
+  const bodyEditFormId = useId()
   const [graph, setGraph] = useState<MemoryGraphSnapshot | null>(null)
   const [catalog, setCatalog] = useState<MemoryBodyCatalog | null>(null)
   const [selected, setSelected] = useState<MemoryGraphNode | null>(null)
@@ -1271,13 +1276,13 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
   const canDeleteBody = (body: MemoryBodyView): boolean => body.provider.id !== 'mnemon-native' || nativeBodyCount > 1
   const updateProviderDraft = (providerId: MemoryProviderId, key: string, value: string | number | boolean) => setProviderDrafts(current => ({ ...current, [providerId]: { ...(current[providerId] ?? {}), [key]: value } }))
   const placementReceipt = (body: MemoryBodyView) => body.placement === undefined ? null : <div className={css.placementReceipt} title={body.placement.reason}><span aria-hidden="true">✦</span><div><strong>{t(body.placement.decidedBy === 'llm' ? 'overview.placementByLlm' : 'overview.placementByRules')}</strong><small>{t('overview.placementConfidence', { confidence: t(`overview.confidence.${body.placement.confidence}`) })}</small><p>{body.placement.reason}</p></div></div>
-  const bodyEditForm = (body: MemoryBodyView) => <form className={css.bodyEdit} onSubmit={event => void saveEdit(event, body)}>
+  const bodyEditForm = (body: MemoryBodyView) => <form id={bodyEditFormId} className={css.bodyEdit} onSubmit={event => void saveEdit(event, body)}>
     <label>{t('overview.editName')}<input aria-label={t('overview.editName')} value={editName} onChange={event => setEditName(event.target.value)} maxLength={100} required /></label>
     <label>{t('overview.editDescription')}<textarea aria-label={t('overview.editDescription')} value={editDescription} onChange={event => setEditDescription(event.target.value)} rows={4} maxLength={1000} /></label>
     {body.provider.id !== 'mnemon-native' && (() => { const descriptor = providers.find(provider => provider.id === body.provider.id); return descriptor === undefined ? null : <ProviderMemoryFields provider={descriptor} connection={editConnection} onChange={(key, value) => setEditConnection(current => ({ ...current, [key]: value }))} body={body} clearSecrets={editClearSecrets} onClearSecretsChange={setEditClearSecrets} /> })()}
-    <div className={css.bodyEditActions}>{appearance.surface === 'sidebar' && <button type="button" className={css.ghostButton} disabled={savingBody === body.id} onClick={() => setEditingBody(null)}>{t('common.cancel')}</button>}<button type="submit" className={css.primaryButton} disabled={savingBody === body.id || editName.trim() === ''}>{savingBody === body.id ? t('overview.savingBody') : t('overview.saveBody')}</button>{appearance.surface === 'buildin' && <button type="button" className={css.ghostButton} onClick={() => setEditingBody(null)}>{t('common.cancel')}</button>}</div>
+    {appearance.surface === 'buildin' && <div className={css.bodyEditActions}><button type="submit" className={css.primaryButton} disabled={savingBody === body.id || editName.trim() === ''}>{savingBody === body.id ? t('overview.savingBody') : t('overview.saveBody')}</button><button type="button" className={css.ghostButton} onClick={() => setEditingBody(null)}>{t('common.cancel')}</button></div>}
   </form>
-  const bodyCreateForm = <form className={appearanceClass(css.bodyEdit, css.bodyCreateForm)} onSubmit={event => void create(event)}>
+  const bodyCreateForm = <form id={bodyCreateFormId} className={appearanceClass(css.bodyEdit, css.bodyCreateForm)} onSubmit={event => void create(event)}>
     <section className={css.createSection}>
       <div className={css.createSectionHeading}><span>01</span><div><strong>{t('overview.createIdentityTitle')}</strong><small>{t('overview.createIdentityHint')}</small></div></div>
       <div className={css.createIdentityGrid}>
@@ -1298,7 +1303,7 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
       })}</fieldset>
       {selectedProvider !== undefined && selectedProvider.id !== 'mnemon-native' && <ProviderMemoryFields provider={selectedProvider} connection={providerDrafts[selectedProvider.id] ?? {}} onChange={(key, value) => updateProviderDraft(selectedProvider.id, key, value)} />}
     </section>
-    <div className={appearanceClass(css.bodyEditActions, css.bodyCreateActions)}><button type="button" className={css.ghostButton} disabled={creating} onClick={() => setCreatingBodyOpen(false)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={creating || bodyName.trim() === '' || bodyDescription.trim() === '' || !providerDraftComplete(selectedProvider, providerDrafts[bodyProviderId])}>{creating ? t('overview.creating') : t('overview.createAction')}</button></div>
+    {appearance.surface === 'buildin' && <div className={appearanceClass(css.bodyEditActions, css.bodyCreateActions)}><button type="button" className={css.ghostButton} disabled={creating} onClick={() => setCreatingBodyOpen(false)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={creating || bodyName.trim() === '' || bodyDescription.trim() === '' || !providerDraftComplete(selectedProvider, providerDrafts[bodyProviderId])}>{creating ? t('overview.creating') : t('overview.createAction')}</button></div>}
   </form>
   const bodyToggle = (body: MemoryBodyView) => <button type="button" className={css.bodySwitch} role="switch" aria-checked={body.active} aria-label={t('overview.toggleAria', { name: body.name })} disabled={!props.activationEnabled || changing === body.id || deletingBody === body.id} onClick={() => void toggle(body)}><span className={css.bodySwitchTrack} aria-hidden="true"><i /></span><span>{changing === body.id ? t('overview.toggling') : body.active ? t('common.active') : t('common.inactive')}</span></button>
   const bodyEditActionClass = appearanceClass(css.ghostButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemEditAction))
@@ -1338,8 +1343,8 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
         {appearance.surface === 'buildin' && props.writeEnabled && !catalogUnavailable && <details className={css.bodyCreate} open={catalog?.total === 0 ? true : undefined}><summary>{t('overview.create')}</summary>{bodyCreateForm}</details>}
       </section>
       <div className={css.asyncRegion}><ReadSourcePanel title={t('overview.snapshotSources')} hint={t('overview.snapshotSourcesHint')} sources={graphSources} /></div>
-      {appearance.surface === 'sidebar' && creatingBodyOpen && <SidebarModal title={t('overview.createTitle')} description={t('overview.createDialogHint')} busy={creating} wide onClose={() => setCreatingBodyOpen(false)}>{bodyCreateForm}</SidebarModal>}
-      {metadataOpen && <SidebarModal title={t('overview.metadataTitle')} description={t('overview.metadataDescription')} busy={metadataBusy} wide onClose={() => setMetadataOpen(false)}><div className={css.metadataDialog}>
+      {appearance.surface === 'sidebar' && creatingBodyOpen && <SidebarModal title={t('overview.createTitle')} description={t('overview.createDialogHint')} busy={creating} wide onClose={() => setCreatingBodyOpen(false)} footer={<div className={css.modalFooterActions}><button type="button" className={css.ghostButton} disabled={creating} onClick={() => setCreatingBodyOpen(false)}>{t('common.cancel')}</button><button type="submit" form={bodyCreateFormId} className={css.primaryButton} disabled={creating || bodyName.trim() === '' || bodyDescription.trim() === '' || !providerDraftComplete(selectedProvider, providerDrafts[bodyProviderId])}>{creating ? t('overview.creating') : t('overview.createAction')}</button></div>}>{bodyCreateForm}</SidebarModal>}
+      {metadataOpen && <SidebarModal title={t('overview.metadataTitle')} description={t('overview.metadataDescription')} busy={metadataBusy} wide onClose={() => setMetadataOpen(false)} footer={<><p className={css.modalFooterNote}>{t('overview.metadataSafety')}</p><div className={css.modalFooterActions}><button type="button" className={css.ghostButton} disabled={metadataBusy} onClick={() => setMetadataOpen(false)}>{t('common.cancel')}</button><button type="button" className={css.primaryButton} disabled={!props.agentAvailable || metadataSelection.length === 0} title={!props.agentAvailable ? t('overview.metadataUnavailable') : undefined} onClick={maintainMetadata}>{t('overview.metadataGenerate', { count: metadataSelection.length })}</button></div></>}><div className={css.metadataDialog}>
         {!props.agentAvailable && <div className={css.inlineError} role="status">{t('overview.metadataUnavailable')}</div>}
         <div className={css.metadataToolbar}><span>{t('overview.metadataSelected', { count: metadataSelection.length })}{metadataRunningCount > 0 && <em>{t('overview.metadataRunningCount', { count: metadataRunningCount })}</em>}</span><button type="button" className={css.ghostButton} disabled={metadataSelectable.length === 0} onClick={() => setMetadataSelection(metadataAllSelected ? [] : metadataSelectable.map(body => body.id))}>{metadataAllSelected ? t('overview.metadataClear') : t('overview.metadataSelectAll')}</button></div>
         <div className={css.metadataList} aria-live="polite">{metadataCandidates.length === 0 && <div className={css.metadataEmpty}>{catalogLoading ? t('overview.metadataLoading') : t('overview.metadataEmpty')}</div>}{metadataCandidates.map(body => {
@@ -1347,9 +1352,8 @@ function OverviewPage(props: { client: MnemonClient; metadataClient: MnemonClien
           const task = metadataTasks[body.id]
           return <label key={body.id} data-provider={body.provider.id} data-selected={selected || undefined} data-refreshing={task?.status === 'running' || undefined} data-refreshed={task?.status === 'success' || undefined} data-failed={task?.status === 'error' || undefined}><input type="checkbox" checked={selected} disabled={task?.status === 'running'} onChange={event => setMetadataSelection(current => event.target.checked ? [...new Set([...current, body.id])] : current.filter(id => id !== body.id))} /><i className={css.choiceControl} data-kind="check" aria-hidden="true" /><span><strong>{body.name}</strong><small>{body.description || t('overview.noDescription')}</small><span><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} />{task === undefined ? <code>{body.id}</code> : <small className={css.metadataTaskStatus} data-status={task.status} title={task.error}>{task.status === 'running' ? t('overview.metadataTaskRunning') : task.status === 'success' ? t('overview.metadataTaskSuccess') : t('overview.metadataTaskError', { error: task.error ?? t('overview.metadataTaskUnknown') })}</small>}</span></span></label>
         })}</div>
-        <div className={css.metadataActions}><p>{t('overview.metadataSafety')}</p><div><button type="button" className={css.ghostButton} disabled={metadataBusy} onClick={() => setMetadataOpen(false)}>{t('common.cancel')}</button><button type="button" className={css.primaryButton} disabled={!props.agentAvailable || metadataSelection.length === 0} title={!props.agentAvailable ? t('overview.metadataUnavailable') : undefined} onClick={maintainMetadata}>{t('overview.metadataGenerate', { count: metadataSelection.length })}</button></div></div>
       </div></SidebarModal>}
-      {appearance.surface === 'sidebar' && editingBodyView !== undefined && <SidebarModal title={t('overview.editBodyAria', { name: editingBodyView.name })} description={editingBodyView.id} busy={savingBody === editingBodyView.id} onClose={() => setEditingBody(null)}>{bodyEditForm(editingBodyView)}</SidebarModal>}
+      {appearance.surface === 'sidebar' && editingBodyView !== undefined && <SidebarModal title={t('overview.editBodyAria', { name: editingBodyView.name })} description={editingBodyView.id} busy={savingBody === editingBodyView.id} onClose={() => setEditingBody(null)} footer={<div className={css.modalFooterActions}><button type="button" className={css.ghostButton} disabled={savingBody === editingBodyView.id} onClick={() => setEditingBody(null)}>{t('common.cancel')}</button><button type="submit" form={bodyEditFormId} className={css.primaryButton} disabled={savingBody === editingBodyView.id || editName.trim() === ''}>{savingBody === editingBodyView.id ? t('overview.savingBody') : t('overview.saveBody')}</button></div>}>{bodyEditForm(editingBodyView)}</SidebarModal>}
       {appearance.surface === 'sidebar' && deletingBodyView !== undefined && <SidebarModal title={t(deletingBodyView.provider.id !== 'mnemon-native' ? 'overview.disconnectTitle' : 'overview.deleteTitle', { name: deletingBodyView.name })} description={deletingBodyView.id} busy={deletingBody === deletingBodyView.id} onClose={() => setConfirmingDeleteBody(null)}><div className={css.bodyDeleteConfirm}><p>{t(deletingBodyView.provider.id !== 'mnemon-native' ? 'overview.disconnectWarning' : 'overview.deleteWarning', { provider: deletingBodyView.provider.label })}</p><div className={css.bodyDeleteSummary}><strong>{deletingBodyView.name}</strong><span>{deletingBodyView.provider.label} · {deletingBodyView.provider.location || t('common.memories', { count: deletingBodyView.stats?.totalInsights ?? 0 })}</span></div><div className={css.bodyEditActions}><button type="button" data-autofocus className={css.ghostButton} disabled={deletingBody === deletingBodyView.id} onClick={() => setConfirmingDeleteBody(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} title={canDeleteBody(deletingBodyView) ? undefined : t('overview.lastStoreDeleteHint')} disabled={deletingBody === deletingBodyView.id || !canDeleteBody(deletingBodyView)} onClick={() => void deleteBody(deletingBodyView)}>{deletingBody === deletingBodyView.id ? t('overview.deletingBody') : t(deletingBodyView.provider.id !== 'mnemon-native' ? 'overview.disconnectAction' : 'overview.deleteAction')}</button></div></div></SidebarModal>}
       {!catalogUnavailable && graph !== null && graph.nodes.length > 0 ? (
         <div className={css.graphLayout}>
@@ -1558,6 +1562,8 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
   const t = useT()
   const locale = useLocale()
   const appearance = useMnemonViewAppearance()
+  const runtimeAddFormId = useId()
+  const runtimeEditFormId = useId()
   const pageSize = 10
   const [snapshot, setSnapshot] = useState<RuntimeMemorySnapshot | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1679,17 +1685,17 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
     setContent('')
     setAdding(false)
   }
-  const composer = <form className={css.runtimeComposer} onSubmit={event => void add(event)}>
+  const composer = <form id={runtimeAddFormId} className={css.runtimeComposer} onSubmit={event => void add(event)}>
     <div className={css.runtimeComposerHeading}><div><h3>{t('runtime.addTitle')}</h3><p>{t('runtime.addDescription')}</p></div><span>{t('runtime.hotContext')}</span></div>
     <textarea aria-label={t('runtime.content')} value={content} onChange={event => setContent(event.target.value)} rows={3} placeholder={t('runtime.placeholder')} />
-    <div className={css.runtimeComposerActions}><label>{t('runtime.target')}<select value={target} onChange={event => setTarget(event.target.value as RuntimeMemoryTarget)}><option value="memory">{t('runtime.target.memory')}</option><option value="user">{t('runtime.target.user')}</option></select></label><label>{t('runtime.importance')}<select value={importance} onChange={event => setImportance(event.target.value as RuntimeMemoryImportance)}><option value="critical">{t('runtime.importance.critical')}</option><option value="normal">{t('runtime.importance.normal')}</option><option value="low">{t('runtime.importance.low')}</option></select></label>{appearance.surface === 'sidebar' && <button type="button" className={css.ghostButton} disabled={saving} onClick={closeComposer}>{t('common.cancel')}</button>}<button type="submit" className={css.primaryButton} disabled={saving || content.trim() === ''}>{saving ? t('runtime.saving') : t('runtime.addAction')}</button></div>
+    <div className={css.runtimeComposerActions}><label>{t('runtime.target')}<select value={target} onChange={event => setTarget(event.target.value as RuntimeMemoryTarget)}><option value="memory">{t('runtime.target.memory')}</option><option value="user">{t('runtime.target.user')}</option></select></label><label>{t('runtime.importance')}<select value={importance} onChange={event => setImportance(event.target.value as RuntimeMemoryImportance)}><option value="critical">{t('runtime.importance.critical')}</option><option value="normal">{t('runtime.importance.normal')}</option><option value="low">{t('runtime.importance.low')}</option></select></label>{appearance.surface === 'buildin' && <button type="submit" className={css.primaryButton} disabled={saving || content.trim() === ''}>{saving ? t('runtime.saving') : t('runtime.addAction')}</button>}</div>
   </form>
   const editingEntry = editing === null ? undefined : snapshot?.entries.find(entry => entryKey(entry) === editing)
   const removingEntry = removing === null ? undefined : snapshot?.entries.find(entry => entryKey(entry) === removing)
-  const editForm = editingEntry === undefined ? null : <form className={css.bodyEdit} onSubmit={event => { event.preventDefault(); void replace(editingEntry) }}>
+  const editForm = editingEntry === undefined ? null : <form id={runtimeEditFormId} className={css.bodyEdit} onSubmit={event => { event.preventDefault(); void replace(editingEntry) }}>
     <label>{t('runtime.editContent')}<textarea aria-label={t('runtime.editContent')} value={editContent} onChange={event => setEditContent(event.target.value)} rows={7} /></label>
     <label>{t('runtime.importance')}<select aria-label={t('runtime.importance')} value={editImportance} onChange={event => setEditImportance(event.target.value as RuntimeMemoryImportance)}><option value="critical">{t('runtime.importance.critical')}</option><option value="normal">{t('runtime.importance.normal')}</option><option value="low">{t('runtime.importance.low')}</option></select></label>
-    <div className={css.bodyEditActions}><button type="button" className={css.ghostButton} disabled={saving} onClick={() => setEditing(null)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving || editContent.trim() === ''}>{t('runtime.saveEdit')}</button></div>
+    {appearance.surface === 'buildin' && <div className={css.bodyEditActions}><button type="button" className={css.ghostButton} disabled={saving} onClick={() => setEditing(null)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving || editContent.trim() === ''}>{t('runtime.saveEdit')}</button></div>}
   </form>
 
   return (
@@ -1711,8 +1717,8 @@ function RuntimePage(props: { client: MnemonClient; revision: number; writeEnabl
         </section>
       </>}
       <p className={css.runtimeFootnote}>{t('runtime.footnote')}</p>
-      {appearance.surface === 'sidebar' && adding && <SidebarModal title={t('runtime.addTitle')} description={t('runtime.addDescription')} busy={saving} onClose={closeComposer}>{composer}</SidebarModal>}
-      {appearance.surface === 'sidebar' && editingEntry !== undefined && <SidebarModal title={t('runtime.editContent')} description={t(`runtime.target.${editingEntry.target}` as MnemonKey)} busy={saving} onClose={() => setEditing(null)}>{editForm}</SidebarModal>}
+      {appearance.surface === 'sidebar' && adding && <SidebarModal title={t('runtime.addTitle')} description={t('runtime.addDescription')} busy={saving} onClose={closeComposer} footer={<div className={css.modalFooterActions}><button type="button" className={css.ghostButton} disabled={saving} onClick={closeComposer}>{t('common.cancel')}</button><button type="submit" form={runtimeAddFormId} className={css.primaryButton} disabled={saving || content.trim() === ''}>{saving ? t('runtime.saving') : t('runtime.addAction')}</button></div>}>{composer}</SidebarModal>}
+      {appearance.surface === 'sidebar' && editingEntry !== undefined && <SidebarModal title={t('runtime.editContent')} description={t(`runtime.target.${editingEntry.target}` as MnemonKey)} busy={saving} onClose={() => setEditing(null)} footer={<div className={css.modalFooterActions}><button type="button" className={css.ghostButton} disabled={saving} onClick={() => setEditing(null)}>{t('common.cancel')}</button><button type="submit" form={runtimeEditFormId} className={css.primaryButton} disabled={saving || editContent.trim() === ''}>{t('runtime.saveEdit')}</button></div>}>{editForm}</SidebarModal>}
       {appearance.surface === 'sidebar' && removingEntry !== undefined && <SidebarModal title={t('runtime.removeTitle')} description={t(`runtime.target.${removingEntry.target}` as MnemonKey)} busy={saving} onClose={() => setRemoving(null)}><div className={css.bodyDeleteConfirm}><p>{t('runtime.removeWarning')}</p><div className={css.bodyDeleteSummary}><p className={css.bodyDeleteContent}>{removingEntry.content}</p><span>{t(`runtime.importance.${removingEntry.importance}` as MnemonKey)}</span></div><div className={css.bodyEditActions}><button type="button" data-autofocus className={css.ghostButton} disabled={saving} onClick={() => setRemoving(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void remove(removingEntry)}>{t('runtime.removeAction')}</button></div></div></SidebarModal>}
     </div>
   )
@@ -1727,6 +1733,7 @@ function PersistenceStrategyDialog(props: {
   onClose: () => void
 }): JSX.Element {
   const t = useT()
+  const strategyFormId = useId()
   const configured = props.config?.persistenceStrategy
   const [mode, setMode] = useState<MemoryPlacementMode>(configured?.mode ?? 'manual')
   const [providerId, setProviderId] = useState<MemoryProviderId>(configured?.providerId ?? 'mnemon-native')
@@ -1785,8 +1792,8 @@ function PersistenceStrategyDialog(props: {
     } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
   }
 
-  return <SidebarModal title={t('strategy.title')} description={t('strategy.description')} busy={saving} wide onClose={props.onClose}>
-    <form className={appearanceClass(css.bodyEdit, css.strategyForm)} onSubmit={event => void save(event)}>
+  return <SidebarModal title={t('strategy.title')} description={t('strategy.description')} busy={saving} wide onClose={props.onClose} footer={<div className={css.modalFooterActions}><button type="button" className={css.ghostButton} disabled={saving} onClick={props.onClose}>{t('common.cancel')}</button><button type="submit" form={strategyFormId} className={css.primaryButton} disabled={loading || saving || !props.writable || !selectedProvidersValid}>{saving ? t('strategy.saving') : t('strategy.save')}</button></div>}>
+    <form id={strategyFormId} className={appearanceClass(css.bodyEdit, css.strategyForm)} onSubmit={event => void save(event)}>
       {loading && <div className={css.strategyLoading}><SectionSpinner label={t('strategy.loading')} /><span>{t('strategy.loading')}</span></div>}
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
       {!loading && <>
@@ -1827,13 +1834,13 @@ function PersistenceStrategyDialog(props: {
           </section>}
         </section>
       </>}
-      <div className={appearanceClass(css.bodyEditActions, css.bodyCreateActions)}><button type="button" className={css.ghostButton} disabled={saving} onClick={props.onClose}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={loading || saving || !props.writable || !selectedProvidersValid}>{saving ? t('strategy.saving') : t('strategy.save')}</button></div>
     </form>
   </SidebarModal>
 }
 
 function RememberPage(props: { client: MnemonClient; agentAvailable: boolean; memoryBodies: MemoryBodyView[]; writeEnabled: boolean; seed: string; onMutate: () => void; onClose?: () => void; onComplete?: () => void }): JSX.Element {
   const t = useT()
+  const rememberFormId = useId()
   const [content, setContent] = useState(props.seed)
   const [category, setCategory] = useState<Category>('general')
   const [importance, setImportance] = useState(3)
@@ -1877,11 +1884,11 @@ function RememberPage(props: { client: MnemonClient; agentAvailable: boolean; me
   }
 
   const composer = <section className={css.supervisedComposer}>
-    <form className={css.supervisedForm} onSubmit={event => void supervise(event)}>
+    <form id={rememberFormId} className={css.supervisedForm} onSubmit={event => void supervise(event)}>
       <div className={css.supervisedHeading}><div><h3>{t('remember.delegateTitle')}</h3></div><span className={!props.agentAvailable ? css.sessionMissing : css.sessionReady}>{!props.agentAvailable ? t('remember.noTaskAgent') : t('remember.taskAgentReady')}</span></div>
       <label className={css.fieldWide}>{t('remember.candidate')}<textarea aria-label={t('remember.candidateAria')} value={content} onChange={event => setContent(event.target.value)} maxLength={8000} rows={8} placeholder={t('remember.placeholder')} /></label>
       {!props.agentAvailable && <p className={css.sessionHint}>{t('remember.taskAgentHint')}</p>}
-      <div className={css.formActions}>{props.onClose !== undefined && <button type="button" className={css.ghostButton} disabled={supervising || saving} onClick={props.onClose}>{t('common.cancel')}</button>}<button type="submit" className={css.primaryButton} disabled={supervising || content.trim() === '' || !props.agentAvailable}>{supervising ? t('remember.processing') : t('remember.action')}</button>{result !== null && <span role="status">{result}</span>}</div>
+      {props.onClose === undefined ? <div className={css.formActions}><button type="submit" className={css.primaryButton} disabled={supervising || content.trim() === '' || !props.agentAvailable}>{supervising ? t('remember.processing') : t('remember.action')}</button>{result !== null && <span role="status">{result}</span>}</div> : result !== null && <p className={css.modalInlineStatus} role="status">{result}</p>}
     </form>
     <details className={css.advancedWrite}>
       <summary><span><strong>{t('remember.advanced')}</strong><small>{t('remember.advancedHint')}</small></span><span>{t('remember.expand')}</span></summary>
@@ -1893,7 +1900,7 @@ function RememberPage(props: { client: MnemonClient; agentAvailable: boolean; me
   </section>
 
   if (props.onClose !== undefined) {
-    return <SidebarModal title={t('remember.title')} description={t('remember.description')} busy={supervising || saving} onClose={props.onClose}>{props.writeEnabled ? composer : <EmptyState glyph="⊘" title={t('remember.readOnlyTitle')}>{t('remember.readOnlyText')}</EmptyState>}</SidebarModal>
+    return <SidebarModal title={t('remember.title')} description={t('remember.description')} busy={supervising || saving} onClose={props.onClose} footer={props.writeEnabled ? <div className={css.modalFooterActions}><button type="button" className={css.ghostButton} disabled={supervising || saving} onClick={props.onClose}>{t('common.cancel')}</button><button type="submit" form={rememberFormId} className={css.primaryButton} disabled={supervising || content.trim() === '' || !props.agentAvailable}>{supervising ? t('remember.processing') : t('remember.action')}</button></div> : undefined}>{props.writeEnabled ? composer : <EmptyState glyph="⊘" title={t('remember.readOnlyTitle')}>{t('remember.readOnlyText')}</EmptyState>}</SidebarModal>
   }
 
   return <div className={css.page}>
@@ -1950,6 +1957,8 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
   const t = useT()
   const locale = useLocale()
   const appearance = useMnemonViewAppearance()
+  const documentCreateFormId = useId()
+  const documentEditFormId = useId()
   const pageSize = appearance.surface === 'sidebar' ? 8 : Number.MAX_SAFE_INTEGER
   const readerRef = useRef<HTMLElement | null>(null)
   const [snapshot, setSnapshot] = useState<DocumentSnapshot | null>(null)
@@ -2052,18 +2061,18 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
   const usage = snapshot === null ? 0 : Math.min(100, snapshot.activeBytes / snapshot.limitBytes * 100)
   const activeCount = snapshot?.activeCount ?? 0
   const archivedCount = snapshot?.archivedCount ?? 0
-  const composer = <form className={css.documentEditor} onSubmit={event => void create(event)}>
+  const composer = <form id={documentCreateFormId} className={css.documentEditor} onSubmit={event => void create(event)}>
     <header><div><h3>{t('documents.newTitle')}</h3><p>{t('documents.editorHint')}</p></div><span>{t('documents.managedCopy')}</span></header>
     <div className={css.documentEditorMeta}><label>{t('documents.name')}<input value={title} onChange={event => setTitle(event.target.value)} required /></label><label>{t('documents.routing')}<input value={description} onChange={event => setDescription(event.target.value)} /></label></div>
     <label>{t('documents.sources')}<input value={sources} onChange={event => setSources(event.target.value)} placeholder={t('documents.sourcesPlaceholder')} /></label>
     <label>{t('documents.markdown')}<textarea value={content} onChange={event => setContent(event.target.value)} rows={10} required /></label>
-    <footer><button type="button" className={css.ghostButton} disabled={saving} onClick={resetComposer}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving || title.trim() === '' || content.trim() === ''}>{saving ? t('documents.saving') : t('documents.create')}</button></footer>
+    {appearance.surface === 'buildin' && <footer><button type="button" className={css.ghostButton} disabled={saving} onClick={resetComposer}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving || title.trim() === '' || content.trim() === ''}>{saving ? t('documents.saving') : t('documents.create')}</button></footer>}
   </form>
-  const editComposer = selected === null ? null : <form className={css.documentEditor} onSubmit={event => void update(event)}>
+  const editComposer = selected === null ? null : <form id={documentEditFormId} className={css.documentEditor} onSubmit={event => void update(event)}>
     <header><div><h3>{t('documents.editTitle')}</h3><p>{t('documents.editorHint')}</p></div><code>{selected.id}</code></header>
     <div className={css.documentEditorMeta}><label>{t('documents.name')}<input value={title} onChange={event => setTitle(event.target.value)} required /></label><label>{t('documents.routing')}<input value={description} onChange={event => setDescription(event.target.value)} /></label></div>
     <label>{t('documents.sources')}<input value={sources} onChange={event => setSources(event.target.value)} /></label><label>{t('documents.markdown')}<textarea value={content} onChange={event => setContent(event.target.value)} rows={18} required /></label>
-    <footer><button type="button" className={css.ghostButton} disabled={saving} onClick={() => setEditing(false)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving}>{saving ? t('documents.saving') : t('documents.save')}</button></footer>
+    {appearance.surface === 'buildin' && <footer><button type="button" className={css.ghostButton} disabled={saving} onClick={() => setEditing(false)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving}>{saving ? t('documents.saving') : t('documents.save')}</button></footer>}
   </form>
   const documentEditActionClass = appearance.surface === 'sidebar'
     ? appearanceClass(css.ghostButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemEditAction))
@@ -2121,8 +2130,8 @@ function DocumentsPage(props: { client: MnemonClient; revision: number; writeEna
         </section>
       </div>
       <p className={css.runtimeFootnote}>{t('documents.footnote')}</p>
-      {composing && appearance.surface === 'sidebar' && <SidebarModal title={t('documents.newTitle')} description={t('documents.editorHint')} busy={saving} onClose={resetComposer}>{composer}</SidebarModal>}
-      {editing && appearance.surface === 'sidebar' && selected !== null && <SidebarModal title={t('documents.editTitle')} description={selected.title} busy={saving} onClose={() => setEditing(false)}>{editComposer}</SidebarModal>}
+      {composing && appearance.surface === 'sidebar' && <SidebarModal title={t('documents.newTitle')} description={t('documents.editorHint')} busy={saving} onClose={resetComposer} footer={<div className={css.modalFooterActions}><button type="button" className={css.ghostButton} disabled={saving} onClick={resetComposer}>{t('common.cancel')}</button><button type="submit" form={documentCreateFormId} className={css.primaryButton} disabled={saving || title.trim() === '' || content.trim() === ''}>{saving ? t('documents.saving') : t('documents.create')}</button></div>}>{composer}</SidebarModal>}
+      {editing && appearance.surface === 'sidebar' && selected !== null && <SidebarModal title={t('documents.editTitle')} description={selected.title} busy={saving} onClose={() => setEditing(false)} footer={<div className={css.modalFooterActions}><button type="button" className={css.ghostButton} disabled={saving} onClick={() => setEditing(false)}>{t('common.cancel')}</button><button type="submit" form={documentEditFormId} className={css.primaryButton} disabled={saving}>{saving ? t('documents.saving') : t('documents.save')}</button></div>}>{editComposer}</SidebarModal>}
       {confirmArchive && appearance.surface === 'sidebar' && selected !== null && <SidebarModal title={t('documents.archiveConfirm')} description={selected.title} busy={saving} onClose={() => setConfirmArchive(false)}><div className={css.bodyDeleteConfirm}><p>{t('documents.archiveDescription')}</p><div className={css.bodyDeleteSummary}><strong>{selected.title}</strong><span>{selected.relativePath} · {humanBytes(selected.sizeBytes)}</span></div><div className={css.bodyEditActions}><button type="button" data-autofocus className={css.ghostButton} disabled={saving} onClick={() => setConfirmArchive(false)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void archive()}>{saving ? t('documents.archiving') : t('documents.archiveNow')}</button></div></div></SidebarModal>}
     </div>
   )
@@ -2192,7 +2201,7 @@ function VersionDialog(props: { client: MnemonClient; writeEnabled: boolean; onC
     }
   }
   const busy = checking || updating !== null
-  return <SidebarModal title={t('versions.title')} description={t('versions.description')} busy={busy} onClose={props.onClose}>
+  return <SidebarModal title={t('versions.title')} description={t('versions.description')} busy={busy} onClose={props.onClose} footer={<><span className={css.modalFooterMeta}>{snapshot === null ? '' : t('versions.checkedAt', { time: new Date(snapshot.checkedAt).toLocaleTimeString() })}</span><div className={css.modalFooterActions}><button type="button" className={css.ghostButton} disabled={busy} onClick={props.onClose}>{t('common.cancel')}</button><button type="button" data-autofocus className={css.secondaryButton} disabled={busy} onClick={() => void check()}>{checking ? t('versions.checkingShort') : t('versions.recheck')}</button></div></>}>
     <div className={css.versionDialogBody}>
       {checking && snapshot === null && <div className={css.versionChecking} role="status"><span />{t('versions.checking')}</div>}
       {error !== null && <div className={css.versionError} role="alert"><strong>{t('versions.failed')}</strong><p>{error}</p></div>}
@@ -2208,7 +2217,6 @@ function VersionDialog(props: { client: MnemonClient; writeEnabled: boolean; onC
           <footer><p>{versionHint(t, component)}</p>{canUpdate && <button type="button" className={css.primaryButton} disabled={busy} onClick={() => void update(component)}>{updating === component.id ? t('versions.updating') : t('versions.update')}</button>}</footer>
         </article>
       })}</div>}
-      <div className={css.versionDialogActions}><span>{snapshot === null ? '' : t('versions.checkedAt', { time: new Date(snapshot.checkedAt).toLocaleTimeString() })}</span><div><button type="button" className={css.ghostButton} disabled={busy} onClick={props.onClose}>{t('common.cancel')}</button><button type="button" data-autofocus className={css.secondaryButton} disabled={busy} onClick={() => void check()}>{checking ? t('versions.checkingShort') : t('versions.recheck')}</button></div></div>
     </div>
   </SidebarModal>
 }

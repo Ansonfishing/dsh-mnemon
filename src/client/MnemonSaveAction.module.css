@@ -34,14 +34,15 @@
 }
 
 .modal {
-  width: min(640px, 100%);
-  max-height: calc(100vh - 48px);
+  width: min(640px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
 }
 
 .modalContent {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modalAction {
@@ -121,8 +122,34 @@
   overflow-wrap: anywhere;
 }
 
+@media (max-width: 640px), (max-height: 560px) {
+  .modal {
+    width: min(100%, calc(100vw - 16px));
+    max-height: calc(100vh - 16px);
+  }
+  .modal .modalAction {
+    min-width: 0;
+    min-height: 44px;
+  }
+  .candidate textarea {
+    min-height: clamp(140px, 32vh, 220px);
+    max-height: 42vh;
+  }
+}
+
+@media (max-width: 640px) and (pointer: coarse) {
+  .candidate textarea { font-size: 16px; }
+}
+
 @supports (height: 100dvh) {
   .modal {
-    max-height: calc(100dvh - 48px);
+    max-height: calc(100dvh - 24px);
+  }
+  @media (max-width: 640px), (max-height: 560px) {
+    .modal { max-height: calc(100dvh - 16px); }
+    .candidate textarea {
+      min-height: clamp(140px, 32dvh, 220px);
+      max-height: 42dvh;
+    }
   }
 }
