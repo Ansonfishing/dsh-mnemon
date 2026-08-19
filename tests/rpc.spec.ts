@@ -8,7 +8,7 @@ import { MnemonService } from '../src/service.ts'
 import type { MnemonPackManager } from '../src/pack.ts'
 import type { LiveMnemonRuntime, MnemonRuntimeGraph } from '../src/live-runtime.ts'
 import type { VersionUpdateManager } from '../src/version-updates.ts'
-import { MemoryCatalog, MemoryKernel, MemoryTopologyManager, registerDefaultMemorySystem } from '../src/memory-system/index.ts'
+import { DEFAULT_THREE_TIER_TOPOLOGY, MemoryCatalog, MemoryKernel, MemoryTopologyManager, registerDefaultMemorySystem } from '../src/memory-system/index.ts'
 
 function fakeService(writeEnabled = true): MnemonService {
   return {
@@ -48,7 +48,7 @@ describe('Mnemon RPC', () => {
     const service = fakeService()
     const catalog = new MemoryCatalog()
     registerDefaultMemorySystem(catalog)
-    const topology = new MemoryTopologyManager(catalog)
+    const topology = new MemoryTopologyManager(catalog, DEFAULT_THREE_TIER_TOPOLOGY)
     topology.configureLayer('memory-spaces', { enabled: false })
     const memoryKernel = new MemoryKernel(catalog, topology)
     const graph = {

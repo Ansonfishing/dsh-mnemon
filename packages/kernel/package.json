@@ -1,0 +1,9 @@
+{
+  "name": "@dsh-mnemon/kernel",
+  "version": "0.2.13",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

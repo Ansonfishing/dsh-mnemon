@@ -54,7 +54,7 @@ describe('composable memory system', () => {
   it('plans only compatible enabled layers and enforces automatic participation', async () => {
     const catalog = new MemoryCatalog()
     registerDefaultMemorySystem(catalog)
-    const topology = new MemoryTopologyManager(catalog)
+    const topology = new MemoryTopologyManager(catalog, DEFAULT_THREE_TIER_TOPOLOGY)
     topology.configureLayer('documents', { participation: { recall: 'manual' } })
     const kernel = new MemoryKernel(catalog, topology, { id: sequence(), now: () => new Date('2026-08-19T00:00:00.000Z') })
     const manual = await kernel.plan(request())
@@ -69,7 +69,7 @@ describe('composable memory system', () => {
   it('applies monotonic guards before invoking a strategy', async () => {
     const catalog = new MemoryCatalog()
     registerDefaultMemorySystem(catalog)
-    const topology = new MemoryTopologyManager(catalog)
+    const topology = new MemoryTopologyManager(catalog, DEFAULT_THREE_TIER_TOPOLOGY)
     const kernel = new MemoryKernel(catalog, topology)
     kernel.registerGuard({
       id: 'local-only',
@@ -81,7 +81,7 @@ describe('composable memory system', () => {
   it('rejects stale plans after a topology change', async () => {
     const catalog = new MemoryCatalog()
     registerDefaultMemorySystem(catalog)
-    const topology = new MemoryTopologyManager(catalog)
+    const topology = new MemoryTopologyManager(catalog, DEFAULT_THREE_TIER_TOPOLOGY)
     const kernel = new MemoryKernel(catalog, topology)
     const plannedRequest = request({ candidateLayerIds: ['memory-spaces'] })
     const plan = await kernel.plan(plannedRequest)
@@ -95,7 +95,7 @@ describe('composable memory system', () => {
       documents: { execute: async () => ({ evidence: ['document'] }) },
       'memory-spaces': { execute: async () => { throw new Error('provider unavailable') } },
     })
-    const topology = new MemoryTopologyManager(catalog)
+    const topology = new MemoryTopologyManager(catalog, DEFAULT_THREE_TIER_TOPOLOGY)
     const receipts: unknown[] = []
     const kernel = new MemoryKernel(catalog, topology, {
       id: sequence(),
@@ -114,8 +114,18 @@ describe('composable memory system', () => {
   it('rejects strategy fan-out beyond the request budget', async () => {
     const catalog = new MemoryCatalog()
     registerDefaultMemorySystem(catalog)
-    const topology = new MemoryTopologyManager(catalog)
+    const topology = new MemoryTopologyManager(catalog, DEFAULT_THREE_TIER_TOPOLOGY)
     const kernel = new MemoryKernel(catalog, topology)
     await expect(kernel.plan(request({ budget: { maxSteps: 1 } }))).rejects.toThrow('budget allows 1')
+  })
+
+  it('fails closed when no configured layer accepts an operation', async () => {
+    const catalog = new MemoryCatalog()
+    registerDefaultMemorySystem(catalog)
+    const topology = new MemoryTopologyManager(catalog, DEFAULT_THREE_TIER_TOPOLOGY)
+    topology.configureLayer('documents', { enabled: false })
+    topology.configureLayer('memory-spaces', { enabled: false })
+    const kernel = new MemoryKernel(catalog, topology)
+    await expect(kernel.plan(request())).rejects.toThrow('no executable steps')
   })
 })

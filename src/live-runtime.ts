@@ -12,6 +12,7 @@ import { MemoryKernel } from './memory-system/kernel.ts'
 import { registerDefaultMemorySystem } from './memory-system/defaults.ts'
 import { MemoryTopologyManager } from './memory-system/topology.ts'
 import { registerBuiltinMemoryAdapters } from './providers/memory-system.ts'
+import type { MemoryExtensionHost } from '../packages/extension-sdk/src/index.ts'
 
 export interface MnemonRuntimeGraph {
   config: ResolvedConfig
@@ -24,6 +25,8 @@ export interface MnemonRuntimeGraph {
   memoryCatalog: MemoryCatalog
   memoryTopology: MemoryTopologyManager
   memoryKernel: MemoryKernel
+  /** Detach this generation from future Host-global extension changes. */
+  dispose(): void
 }
 
 /**
@@ -31,25 +34,45 @@ export interface MnemonRuntimeGraph {
  * validate and initialize the selected storage root, so a failed candidate is
  * rejected by DSH settings validation without disturbing the active graph.
  */
-export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: string): MnemonRuntimeGraph {
+export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: string, extensions?: MemoryExtensionHost): MnemonRuntimeGraph {
   const memoryCatalog = new MemoryCatalog()
   registerDefaultMemorySystem(memoryCatalog)
   registerBuiltinMemoryAdapters(memoryCatalog)
-  const memoryTopology = new MemoryTopologyManager(memoryCatalog, {
-    id: config.memoryTopology.id,
-    strategyId: config.memoryTopology.strategyId,
-    layers: Object.entries(config.memoryTopology.layers).map(([id, layer]) => ({ id, ...layer })),
-  })
-  const memoryKernel = new MemoryKernel(memoryCatalog, memoryTopology)
-  const runner = createRunner(config, undefined, workspaceRoot)
-  const service = new MnemonService(runner, config)
-  const runtimeMemory = new RuntimeMemoryController(runner)
-  const documents = new DocumentManager(undefined, undefined, () => runner.effectiveDataDir())
-  const storage = new StorageScopeInspector(runner, config)
-  const packs = new MnemonPackManager(runner, config, components => {
-    if (components.includes('memory-spaces')) service.memoryBodies.reload()
-  })
-  return { config, runner, service, runtimeMemory, documents, storage, packs, memoryCatalog, memoryTopology, memoryKernel }
+  const extensionAttachment = extensions?.attach(memoryCatalog)
+  try {
+    const configuredLayers = Object.entries(config.memoryTopology.layers).map(([id, layer]) => ({ id, ...layer }))
+    const configuredIds = new Set(configuredLayers.map(layer => layer.id))
+    const discoveredLayers = memoryCatalog.snapshot().layers
+      .filter(layer => !configuredIds.has(layer.id))
+      .map(layer => ({
+        id: layer.id,
+        enabled: false,
+        participation: { recall: 'manual' as const, write: 'manual' as const, projection: 'manual' as const, maintenance: 'manual' as const },
+        adapterIds: [],
+      }))
+    const memoryTopology = new MemoryTopologyManager(memoryCatalog, {
+      id: config.memoryTopology.id,
+      strategyId: config.memoryTopology.strategyId,
+      layers: [...configuredLayers, ...discoveredLayers],
+    })
+    const memoryKernel = new MemoryKernel(memoryCatalog, memoryTopology)
+    extensionAttachment?.bindKernel(memoryKernel)
+    const runner = createRunner(config, undefined, workspaceRoot)
+    const service = new MnemonService(runner, config)
+    const runtimeMemory = new RuntimeMemoryController(runner)
+    const documents = new DocumentManager(undefined, undefined, () => runner.effectiveDataDir())
+    const storage = new StorageScopeInspector(runner, config)
+    const packs = new MnemonPackManager(runner, config, components => {
+      if (components.includes('memory-spaces')) service.memoryBodies.reload()
+    })
+    return {
+      config, runner, service, runtimeMemory, documents, storage, packs, memoryCatalog, memoryTopology, memoryKernel,
+      dispose: () => extensionAttachment?.release(),
+    }
+  } catch (error) {
+    extensionAttachment?.dispose()
+    throw error
+  }
 }
 
 /** Resolve every property access against one generation, binding methods to it. */
@@ -94,7 +117,7 @@ export class LiveMnemonRuntime {
   readonly memoryTopology: MemoryTopologyManager
   readonly memoryKernel: MemoryKernel
 
-  constructor(initial: MnemonRuntimeGraph, private readonly workspaceRegistry?: HostWorkspaceRegistry, private readonly agents?: HostAgentsService) {
+  constructor(initial: MnemonRuntimeGraph, private readonly workspaceRegistry?: HostWorkspaceRegistry, private readonly agents?: HostAgentsService, private readonly extensions?: MemoryExtensionHost) {
     this.current = initial
     this.config = liveProxy(() => this.current.config)
     this.runner = liveProxy(() => this.current.runner)
@@ -109,7 +132,10 @@ export class LiveMnemonRuntime {
   }
 
   swap(next: MnemonRuntimeGraph): void {
+    const previous = this.current
     this.current = next
+    previous.dispose()
+    for (const graph of this.workspaceGraphs.values()) graph.dispose()
     this.workspaceGraphs.clear()
   }
 
@@ -165,7 +191,7 @@ export class LiveMnemonRuntime {
     const key = resolve(workspaceRoot)
     let graph = this.workspaceGraphs.get(key)
     if (graph === undefined) {
-      graph = createRuntimeGraph(this.current.config, key)
+      graph = createRuntimeGraph(this.current.config, key, this.extensions)
       this.workspaceGraphs.set(key, graph)
     }
     return graph

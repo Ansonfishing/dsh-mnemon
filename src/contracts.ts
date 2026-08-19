@@ -212,6 +212,8 @@ export interface HostContextShape {
   /** Web workbench catalog; Agent execution routes by session cwd without it. */
   workspaceRegistry?: HostWorkspaceRegistry
   get(name: string): unknown
+  /** Cordis service publication; optional only for narrow test/headless shims. */
+  provide?(name: string, value?: unknown, check?: () => boolean): unknown
   inject(services: string[], callback: (ctx: HostContextShape) => void): unknown
   on(name: string, listener: (...args: never[]) => unknown): () => unknown
   effect(callback: () => (() => unknown) | void, label?: string): () => unknown

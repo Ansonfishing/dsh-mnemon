@@ -51,15 +51,51 @@
   },
   "type": "module",
   "main": "lib/index.js",
-  "types": "lib/types/index.d.ts",
+  "types": "lib/types/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
+      "types": "./lib/types/src/index.d.ts",
       "default": "./lib/index.js"
     },
     "./client": {
-      "types": "./lib/types/client/index.d.ts",
+      "types": "./lib/types/src/client/index.d.ts",
       "default": "./lib/client.js"
+    },
+    "./contracts": {
+      "types": "./lib/types/packages/contracts/src/index.d.ts",
+      "default": "./lib/contracts.js"
+    },
+    "./kernel": {
+      "types": "./lib/types/packages/kernel/src/index.d.ts",
+      "default": "./lib/kernel.js"
+    },
+    "./extension-sdk": {
+      "types": "./lib/types/packages/extension-sdk/src/index.d.ts",
+      "default": "./lib/extension-sdk.js"
+    },
+    "./provider-sdk": {
+      "types": "./lib/types/src/provider-sdk.d.ts",
+      "default": "./lib/provider-sdk.js"
+    },
+    "./strategy-sdk": {
+      "types": "./lib/types/packages/strategy-sdk/src/index.d.ts",
+      "default": "./lib/strategy-sdk.js"
+    },
+    "./strategy-default-three-tier": {
+      "types": "./lib/types/packages/strategy-default-three-tier/src/index.d.ts",
+      "default": "./lib/strategy-default-three-tier.js"
+    },
+    "./layers/runtime": {
+      "types": "./lib/types/packages/layer-runtime/src/index.d.ts",
+      "default": "./lib/layers/runtime.js"
+    },
+    "./layers/documents": {
+      "types": "./lib/types/packages/layer-documents/src/index.d.ts",
+      "default": "./lib/layers/documents.js"
+    },
+    "./layers/memory-spaces": {
+      "types": "./lib/types/packages/layer-memory-spaces/src/index.d.ts",
+      "default": "./lib/layers/memory-spaces.js"
     },
     "./package.json": "./package.json"
   },

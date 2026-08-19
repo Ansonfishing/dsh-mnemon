@@ -9,6 +9,7 @@ import { OpenVikingProvider } from './openviking.ts'
 import type { MemoryProviderAdapter } from './provider.ts'
 import { RetainDbProvider } from './retaindb.ts'
 import { SupermemoryProvider } from './supermemory.ts'
+import { MemoryAdapterFactoryRegistry, type MemoryAdapterFactory } from '../../packages/provider-sdk/src/index.ts'
 
 export interface MemoryProviderAdapterFactoryContext {
   memoryBodies: MemoryBodyRegistry
@@ -16,49 +17,14 @@ export interface MemoryProviderAdapterFactoryContext {
   nativeAdapter: MemoryProviderAdapter
 }
 
-export interface MemoryProviderAdapterFactory {
-  readonly id: MemoryProviderAdapter['id']
-  create(context: MemoryProviderAdapterFactoryContext): MemoryProviderAdapter
-}
+export interface MemoryProviderAdapterFactory extends MemoryAdapterFactory<MemoryProviderAdapter['id'], MemoryProviderAdapterFactoryContext, MemoryProviderAdapter> {}
 
 /**
  * Runtime adapter factory seam. The control plane owns registration and
  * provider implementations own construction; MnemonService depends only on
  * the resulting adapter contract.
  */
-export class MemoryProviderAdapterRegistry {
-  private readonly factories = new Map<MemoryProviderAdapter['id'], MemoryProviderAdapterFactory>()
-
-  constructor(factories: readonly MemoryProviderAdapterFactory[] = []) {
-    for (const factory of factories) this.register(factory)
-  }
-
-  register(factory: MemoryProviderAdapterFactory): () => void {
-    if (this.factories.has(factory.id)) throw new Error(`memory provider adapter factory is already registered: ${factory.id}`)
-    this.factories.set(factory.id, factory)
-    let active = true
-    return () => {
-      if (!active) return
-      active = false
-      if (this.factories.get(factory.id) === factory) this.factories.delete(factory.id)
-    }
-  }
-
-  create(context: MemoryProviderAdapterFactoryContext): Map<MemoryProviderAdapter['id'], MemoryProviderAdapter> {
-    const adapters = new Map<MemoryProviderAdapter['id'], MemoryProviderAdapter>()
-    for (const factory of this.factories.values()) {
-      const adapter = factory.create(context)
-      if (adapter.id !== factory.id) throw new Error(`memory provider adapter factory ${factory.id} returned ${adapter.id}`)
-      if (adapters.has(adapter.id)) throw new Error(`memory provider adapter is already created: ${adapter.id}`)
-      adapters.set(adapter.id, adapter)
-    }
-    return adapters
-  }
-
-  ids(): MemoryProviderAdapter['id'][] {
-    return [...this.factories.keys()]
-  }
-}
+export class MemoryProviderAdapterRegistry extends MemoryAdapterFactoryRegistry<MemoryProviderAdapter['id'], MemoryProviderAdapterFactoryContext, MemoryProviderAdapter> {}
 
 export const BUILTIN_MEMORY_PROVIDER_ADAPTER_FACTORIES: readonly MemoryProviderAdapterFactory[] = [
   { id: 'mnemon-native', create: context => context.nativeAdapter },
