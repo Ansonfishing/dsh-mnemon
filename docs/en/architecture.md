@@ -10,6 +10,57 @@
 - the plugin provides the control plane for three knowledge layers, routing policies, transactional barriers, and UI;
 - Mnemon Native uses the local `mnemon` CLI for named Stores, SQLite, four graph types, relationships, and soft deletion and remains the official prioritized implementation; eight third-party adapters provide Host-controlled HTTP, local-file, or CLI data planes.
 
+The three tiers are now the default topology rather than the only topology hard-coded into every surface. Five component kinds stay separate: a Layer defines memory semantics, an Adapter defines a concrete data plane, a Strategy proposes plans, a Guard may only narrow authority, and a Surface exposes DSH tools, commands, RPC, or WebUI.
+
+## Composable Memory Kernel
+
+```text
+Layer / Adapter / Strategy plugins
+              |
+              v
+      MemoryCatalog (generation)
+              |
+              v
+    MemoryTopology (generation)
+              |
+ request -> Guard -> Strategy -> MemoryPlan
+                              -> Kernel validation
+                              -> executor -> MemoryReceipt
+```
+
+- `MemoryCatalog` is the Host-global contribution directory. Registration and disposal are lifecycle-owned and monotonically advance its generation.
+- `MemoryTopologyManager` atomically stores one composition generation and follows the live Catalog by adding new Layers as disabled candidates and removing unloaded Layers from the candidate set. An operation pins Catalog/Topology/Guard generations; a Plan must be rebuilt after any of them changes.
+- `MemoryKernel` revalidates Layers, capabilities, Adapter bindings, participation, budgets, and non-bypassable Guards after Strategy planning. A Strategy receives no data-plane handle and cannot read or write memory directly.
+- An operation fails closed when a Strategy produces no executable steps. Execution receipts distinguish `succeeded`, `partial`, `failed`, and `cancelled` instead of presenting partial failure as success.
+- Disabling a Layer stops participation; it never deletes, migrates, or hides control-plane metadata. Re-enabling it uses the existing storage.
+
+Every Layer has independent `recall`, `write`, `projection`, and `maintenance` participation channels. `off` denies the channel, `manual` accepts only explicit user/control-plane operations, and `automatic` accepts both explicit and model/lifecycle/system operations. A model tool is an `automatic` trigger and cannot bypass `manual` merely because the model explicitly called a tool.
+
+Runtime, Documents, and Memory Spaces are three Layer workspace packages. The `default-three-tier` Strategy is only the default composition. A newly discovered extension Layer enters the candidate topology disabled and manual-only, so the user can inspect it in the descriptor-driven settings UI before enabling it.
+
+## Workspace with One Published Package
+
+Source is split by responsibility while users continue to install only `dsh-mnemon`. This keeps DSH profile install, upgrade, and rollback atomic and avoids imposing a multi-package version matrix on plugin authors prematurely.
+
+| Workspace | Published subpath | Responsibility |
+|---|---|---|
+| `packages/contracts` | `dsh-mnemon/contracts` | Pure JSON/wire contracts with no DSH, Cordis, React, or Provider SDK dependency |
+| `packages/kernel` | `dsh-mnemon/kernel` | Catalog, Topology, Plan, Receipt, Guard, and Kernel |
+| `packages/layer-*` | `dsh-mnemon/layers/*` | Three default Layer descriptors and lifecycle registration helpers |
+| `packages/strategy-sdk` | `dsh-mnemon/strategy-sdk` | Strategy definitions, permission manifests, and replay primitives |
+| `packages/strategy-default-three-tier` | `dsh-mnemon/strategy-default-three-tier` | Default topology and compatibility Strategy |
+| `packages/provider-sdk` | `dsh-mnemon/provider-sdk` | Adapter Factory Registry and third-tier Provider extension interfaces |
+| `packages/extension-sdk` | `dsh-mnemon/extension-sdk` | Host-global extension registration and per-runtime attachment |
+| root `src/` | `dsh-mnemon` / `dsh-mnemon/client` | DSH Host, existing controllers, Provider implementations, RPC, and WebUI composition roots |
+
+Internal workspaces remain `private`; the compatibility commitment applies to the `dsh-mnemon/*` exports. Separate npm artifacts should appear only if the ecosystem later needs genuinely independent release cadences.
+
+## Cordis Space-Time Composition and Extension Lifecycle
+
+The Host publishes a `mnemonMemory` Cordis service, while `dsh-mnemon/extension-sdk` also supports process-level pre-registration. Extensions may register before Host mount or register/unload while it is live. Every global/workspace runtime owns an independent Catalog, Topology, and Kernel but receives the same Host extension set. Live Catalog changes advance Topology generations; a settings update fully builds and validates the next runtime generation before stable proxies swap atomically.
+
+A Cordis isolate provides ownership, unloading, and scope composition; it is not a security sandbox. Layer executors, Provider Adapters, and ordinary JavaScript Strategies run in the Host process and therefore come only from trusted installed plugins. A model-generated Strategy must first pass an immutable `MemoryStrategyPlugin` manifest, Layer/Adapter/Capability/maxSteps permissions, and replay. The Kernel still performs authoritative validation afterward. This release does not execute arbitrary code immediately after a model writes it; future shadow, canary, signed-artifact, and rollback workflows build on these boundaries.
+
 ## Component Diagram
 
 [![dsh-mnemon runtime architecture](../assets/diagrams/en/project-architecture.svg)](../assets/diagrams/en/project-architecture.svg)
@@ -33,11 +84,10 @@ Creation-time provider placement is separate from recall routing. The Host first
 ```text
 settings.register("mnemon")
   -> resolveConfig
-  -> createRunner
-  -> MnemonService
-  -> RuntimeMemoryController
-  -> DocumentManager
-  -> StorageScopeInspector
+  -> attach MemoryExtensionHost contributions
+  -> MemoryCatalog / MemoryTopology / MemoryKernel
+  -> createRunner / MnemonService
+  -> RuntimeMemoryController / DocumentManager / StorageScopeInspector
   -> MnemonSubagentCoordinator
   -> MnemonLifecycle
   -> tools / commands / prompt sections

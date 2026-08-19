@@ -1,6 +1,6 @@
 {
   "name": "@dsh-mnemon/contracts",
-  "version": "0.2.13",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "exports": {

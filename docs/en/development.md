@@ -24,6 +24,16 @@ pnpm run verify     # typecheck + tests + reproducible build + package validatio
 ## Directory Structure
 
 ```text
+packages/
++-- contracts/                 # pure JSON/wire memory contracts
++-- kernel/                    # Catalog, Topology, Plan/Receipt, Guards
++-- layer-runtime/             # default Runtime Layer
++-- layer-documents/           # default Documents Layer
++-- layer-memory-spaces/       # default Memory Spaces Layer
++-- strategy-default-three-tier/ # default compatibility Strategy and topology
++-- strategy-sdk/              # Strategy manifests and replay
++-- provider-sdk/              # Adapter Factory Registry
++-- extension-sdk/             # Host extension lifecycle
 src/
 +-- index.ts                  # Host composition root
 +-- config.ts                 # settings schema
@@ -51,12 +61,18 @@ cordis.patch.yml              # DSH profile bundle patch
 ## Build Artifacts
 
 ```text
-tsdown (directly from src/)
-  -> lib/index.js             Node ES2024 ESM
+tsdown (from src/ and packages/)
+  -> lib/index.js             Node ES2024 ESM Host
   -> lib/client.js            DSH browser module wrapper
+  -> lib/contracts.js         wire-safe contracts
+  -> lib/kernel.js            composable memory kernel
+  -> lib/{extension,provider,strategy}-sdk.js
+  -> lib/layers/*.js          default Layer entries
+  -> lib/strategy-default-three-tier.js
 
 tsc -p tsconfig.types.json
-  -> lib/types/**/*.d.ts      declarations only
+  -> lib/types/src/**/*.d.ts
+  -> lib/types/packages/**/*.d.ts
 
 lightningcss plugin
   -> CSS Modules compiled and injected as scoped <style>
@@ -66,13 +82,21 @@ The Host keeps all package dependencies external. The client keeps React, ReactD
 
 `lib/` is a publishing input but is ignored by Git. Never edit it manually. `pnpm run verify:build` builds twice and compares every output hash, so unstable CSS export ordering or other generated churn fails verification.
 
-`src/shared/contracts.ts` is the canonical boundary for configuration shapes, RPC channels, settings protocol, and Client-visible DTOs. Files under `src/client/` may import parent modules only through that contract. Host modules may re-export shared types for compatibility, but must not redefine wire DTOs.
+`packages/contracts` is the pure-JSON source of truth at the composable-memory plugin boundary. It must not depend on Cordis, DSH, React, Node-only data planes, or Provider SDKs. `src/shared/contracts.ts` remains canonical for configuration shapes, RPC channels, settings protocol, and Client-visible DTOs and may reference the pure memory contracts. Files under `src/client/` may import parent modules only through these contracts. Host modules may re-export types for compatibility but must not redefine wire DTOs.
+
+## Workspace and publishing policy
+
+Every internal workspace stays `private` and is not published independently. Versioning, builds, and rollback are atomic at the root `dsh-mnemon` package. Compatibility applies to the `dsh-mnemon/*` subpaths in `package.json#exports`. A new public entry requires matching tsdown entries, declaration includes, package exports, package-content allowlists, publint / attw coverage, and bilingual extension documentation.
+
+Default Layers and Strategies must not depend on the root Host composition. Existing Runtime, Documents, and Memory Spaces controllers remain under `src/` as compatibility data planes assembled by the Host. New extensions register through Catalog and must not add hard-coded frontend enums. Every registration returns a disposer and needs tests for duplicate IDs, live registration, unloading, and stale-Plan rejection.
 
 ## Test Layers
 
 The existing Vitest suites cover:
 
 - configuration parsing, CLI discovery, and process serialization;
+- Catalog/Topology generations, participation, Strategy escape attempts, Guard changes, Plan/Receipt behavior, and stale Plans;
+- Extension Host pre-registration, live registration, unloading, Cordis lifecycle, and Strategy replay;
 - Memory Space discovery, activation, routing, and merge;
 - recall-payload compatibility and graph parsing;
 - Runtime JSON/Markdown consistency, locks, capacity, UTF-8, and revisions;
@@ -177,6 +201,8 @@ When the Web locale changes, the Chinese key set remains the type source of trut
 [ ] pnpm run verify
 [ ] confirm the worktree contains no generated lib changes
 [ ] confirm package validation reports only runtime files, declarations, root documents, and cordis.patch.yml
+[ ] import every public `dsh-mnemon/*` subpath from the packed artifact
+[ ] verify live extension registration/unloading advances generations and rejects stale Plans
 [ ] install the built/local bundle into an isolated Web profile
 [ ] confirm `verify:headless` activates the built bundle in an isolated Headless profile
 [ ] run real Mnemon CLI and WebUI smoke tests

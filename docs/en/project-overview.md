@@ -4,6 +4,8 @@
 
 `dsh-mnemon` integrates long-term Memory Spaces with DeepSeek Harness, then adds Runtime hot memory, Project Documents, lifecycle routing, independent task Agents, a deterministic control layer, and native DSH interfaces. The third tier is provider-backed: Mnemon Native is the official, prioritized, full-capability implementation, while eight third-party engines reuse the same workflow through explicit adapters.
 
+The three tiers are now the default Topology of a composable kernel: Layers define semantics, Adapters describe data planes, Strategies propose Plans, Guards may only narrow authority, and Surfaces connect DSH. A normal installation keeps the same three-tier mental model, while extensions and per-Layer switches need no duplicate Host or WebUI.
+
 Its goal is not to store more text. It balances long-term continuity, current-fact priority, context cost, and recoverable writes.
 
 [![Memory Space overview with catalog, activation boundary, and multi-space graph](../assets/screenshots/overview-memory-graph.png)](../assets/screenshots/overview-memory-graph.png)

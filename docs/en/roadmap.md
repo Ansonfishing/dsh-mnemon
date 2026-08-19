@@ -15,6 +15,9 @@ The Roadmap records work beyond the current implementation; it is not a commitme
 
 ## P1: Long-Term Maintenance and Data Operations
 
+- [ ] **Dynamic Memory Space Provider Catalog**: register Provider descriptors, connection schemas, credential redaction, discovery, and Factories together so a new Provider plugin needs no built-in union or WebUI edit.
+- [ ] **Kernelize every path and persist Receipts**: converge compatibility-controller flows on Plan/Execute/Receipt and persist bounded Receipts for audit, retry, and comparison across restarts.
+- [ ] **Strategy artifact promotion pipeline**: provide schema/type checks, golden replay, shadow, canary, signing, version rollback, and metric comparison so model-generated Strategies reach the active topology only as controlled artifacts.
 - [ ] **Long-term organization across sessions**: trigger an independent organization process based on time and the number of new sessions instead of reusing per-turn review.
 - [ ] **Mnemon GC / forget review**: generate candidates for decay, conflicts, obsolete content, and orphaned relationships, then present evidence before deletion.
 - [ ] **Consistent backup and recovery**: provide unified snapshots, checksums, and recovery rehearsals for the registry, multiple databases, Runtime, and Documents.
@@ -38,6 +41,8 @@ The Roadmap records work beyond the current implementation; it is not a commitme
 
 ## Explicitly Out of Scope
 
+- Automatically executing code in the Host immediately after a model generates it. The current release provides manifests, permission wrapping, replay, and Kernel-validation primitives only.
+- Treating a Cordis isolate as a security sandbox for untrusted plugins. Third-party executors and Strategies must still come from trusted packages.
 - A Runtime `daily` target; only `user` and `memory` are currently maintained.
 - A proactive notification daemon without explicit delivery semantics; Mnemon remains an on-demand pull system.
 - Declaring internal RPC or `MnemonClient` to be a stable public SDK.

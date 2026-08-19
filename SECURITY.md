@@ -6,7 +6,8 @@
 
 | Version | Supported |
 |---|---|
-| 0.1.x (npm `dsh-mnemon`) | ✅ |
+| 0.3.x (npm `dsh-mnemon`) | ✅ |
+| < 0.3 | ❌ |
 
 Only the latest published version receives security fixes. The plugin targets the DSH mainline snapshot it was verified against; see the compatibility baseline in [README.md](./README.md).
 
@@ -38,6 +39,7 @@ In scope:
 
 - The plugin bundle (`lib/`, `cordis.patch.yml`): data-loss, privilege-escalation, path-traversal, secret-leak, and memory-corruption style issues in plugin code.
 - The control plane: lock handling, revision conflict checks, atomic writes, and subagent isolation boundaries.
+- The composable-memory boundary: Catalog/Topology generation checks, Strategy permission enforcement, non-bypassable Kernel Guards, and Plan/Receipt integrity.
 - The WebUI: XSS or injection via rendered memory content.
 
 Out of scope:
@@ -49,7 +51,9 @@ Out of scope:
 ## Known limitations
 
 - There is no deterministic credential/secret detection today. Do not write keys, tokens, or private keys into Runtime Memory, Documents, or Memory Spaces.
-- Memory data is local; the plugin makes no remote calls, so remote-code-execution exposure is limited to what DSH and your providers already expose.
+- Cordis isolation provides lifecycle ownership and scope composition, not a security sandbox. Layer executors, Provider Adapters, Strategies, and Guards are ordinary JavaScript in the DSH Host process. Install extensions only from trusted sources.
+- Model-generated Strategy source is not executed automatically. Manifests, permission wrapping, replay, and Kernel validation reduce accidental authority but cannot make hostile in-process code safe.
+- Runtime Memory and Documents are local, and Mnemon Native is local by default. Enabled third-party Providers can make network or local-process calls and expose data according to their configured endpoints and credentials.
 
 ---
 
@@ -59,7 +63,8 @@ Out of scope:
 
 | 版本 | 支持 |
 |---|---|
-| 0.1.x（npm `dsh-mnemon`） | ✅ |
+| 0.3.x（npm `dsh-mnemon`） | ✅ |
+| < 0.3 | ❌ |
 
 仅最新发布版本获得安全修复。插件以验证时的 DSH mainline 快照为兼容基线，见 [README.zh-CN.md](./README.zh-CN.md)。
 
@@ -79,11 +84,13 @@ Out of scope:
 
 ### 范围
 
-**范围内**：插件 bundle 与 `cordis.patch.yml` 中的数据丢失、提权、路径穿越、秘密泄露类问题；控制面（锁、revision 冲突检查、原子写、子 Agent 隔离）；WebUI 对记忆内容渲染的 XSS/注入。
+**范围内**：插件 bundle 与 `cordis.patch.yml` 中的数据丢失、提权、路径穿越、秘密泄露类问题；控制面（锁、revision 冲突检查、原子写、子 Agent 隔离）；可组合记忆边界（Catalog/Topology generation、Strategy 权限约束、不可绕过的 Kernel Guard、Plan/Receipt 完整性）；WebUI 对记忆内容渲染的 XSS/注入。
 
 **范围外**：上游依赖（`mnemon`、`cordis`、DSH 核心、React）自身的问题（报告给上游，我们可协助定位与临时规避）；功能缺失、文档问题（走普通 issue）；你自行写入记忆数据中的凭据或秘密（插件当前没有秘密检测器，见 README 披露）。
 
 ### 已知限制
 
 - 当前没有确定性的凭据/秘密检测，请勿向热记忆、Documents 或 Memory Spaces 写入密钥、token、私钥。
-- 记忆数据全部本地存储，插件不发起远程调用；远程代码执行面受限于 DSH 与你的 provider 既有暴露面。
+- Cordis isolate 提供生命周期所有权和作用域组合，不是安全沙箱。Layer executor、Provider Adapter、Strategy 与 Guard 都是在 DSH Host 进程执行的普通 JavaScript，只能安装受信任来源的扩展。
+- 模型生成的 Strategy 源码不会自动执行。manifest、权限封装、replay 与 Kernel 校验可以降低意外越权，但无法让恶意同进程代码变安全。
+- Runtime Memory 与 Documents 为本地存储，Mnemon Native 默认本地；显式启用的三方 Provider 可能按配置 endpoint 与凭据发起网络调用或本地进程调用，并向对应服务暴露数据。

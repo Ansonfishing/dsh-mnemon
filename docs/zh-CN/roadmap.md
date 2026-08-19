@@ -15,6 +15,9 @@ Roadmap 记录当前实现之外的工作，不是已交付能力承诺。优先
 
 ## P1：长期维护与数据运维
 
+- [ ] **动态 Memory Space Provider Catalog**：把 Provider 描述符、连接 schema、凭据脱敏、发现与 Factory 一起注册，使新 Provider 插件无需修改内置 union 或 WebUI。
+- [ ] **全路径 Kernel 化与持久回执**：把现有兼容 controller 流逐步收敛到统一 Plan/Execute/Receipt，并为审计、重试和跨重启比较持久化有界回执。
+- [ ] **Strategy 制品晋级流水线**：提供 schema/类型检查、golden replay、shadow、canary、签名、版本回退和指标比较，让模型生成策略只能通过受控制品进入 active 拓扑。
 - [ ] **跨 session 长期整理**：基于时间和新增 session 数触发独立整理，而不是复用逐 turn 审查。
 - [ ] **Mnemon GC / forget 审阅**：生成衰减、冲突、过时内容和孤立关系候选，展示证据后再执行删除。
 - [ ] **一致性备份与恢复**：为 registry、多个数据库、Runtime 和 Documents 提供统一快照、校验和恢复演练。
@@ -38,6 +41,8 @@ Roadmap 记录当前实现之外的工作，不是已交付能力承诺。优先
 
 ## 当前明确不在范围内
 
+- 模型生成代码后立即在 Host 内自动执行；当前只提供 manifest、权限封装、replay 与 Kernel 校验原语。
+- 把 Cordis isolate 当作不可信插件的安全沙箱；第三方 executor 和 Strategy 仍须来自受信任包。
 - Runtime `daily` target；当前只维护 `user` 和 `memory`。
 - 没有明确触达语义的主动通知守护进程；Mnemon 仍是按需拉取系统。
 - 把内部 RPC 或 `MnemonClient` 宣布为稳定公共 SDK。

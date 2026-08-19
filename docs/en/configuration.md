@@ -12,7 +12,7 @@ $DSH_HOME/settings.yaml
 
 The default is commonly `~/.dsh/settings.yaml`. All current settings are marked `live`; after Save, the Host initializes a candidate runtime graph and then switches to it atomically.
 
-The Web settings page edits `displayMode`, `storageScope`, `dataDir`, the background task Agent model route, and the Turn memory and Save-to-memory switches under `mnemon-ui`. Global and Workspace define the scope of the complete three-tier system. Mnemon Native owns its Custom data location and ZIP backup/migration controls. Each external provider has a collapsible service configuration for reusable endpoints, credentials, or executables. Enabling or saving it discovers the provider's existing namespaces and maps them into Memory Spaces → Overview; disabling it removes those local mappings without deleting provider data. Other advanced settings must be changed directly in YAML.
+The Web settings page edits `displayMode`, `storageScope`, `dataDir`, the Layer topology generated from the live Catalog, the background task Agent model route, and the Turn memory and Save-to-memory switches under `mnemon-ui`. Global and Workspace define the scope of the complete memory system. Mnemon Native owns its Custom data location and ZIP backup/migration controls. Each external provider has a collapsible service configuration for reusable endpoints, credentials, or executables. Enabling or saving it discovers the provider's existing namespaces and maps them into Memory Spaces → Overview; disabling it removes those local mappings without deleting provider data. Other advanced settings must be changed directly in YAML.
 
 ## Complete Example
 
@@ -25,6 +25,19 @@ mnemon:
   # store: legacy-store          # compatibility discovery hint, not a regular routing target
   timeoutMs: 10000
   defaultRecallLimit: 10
+  memoryTopology:
+    id: default-three-tier
+    strategyId: default-three-tier
+    layers:
+      runtime:
+        enabled: true
+        participation: { recall: automatic, write: automatic, projection: automatic, maintenance: automatic }
+      documents:
+        enabled: true
+        participation: { recall: automatic, write: automatic, projection: automatic, maintenance: automatic }
+      memory-spaces:
+        enabled: true
+        participation: { recall: automatic, write: automatic, projection: automatic, maintenance: automatic }
   recallQuality:
     policy: strict-v1
     lowScoreThreshold: 0.25
@@ -57,6 +70,11 @@ mnemon:
 | `store` | unset | `[A-Za-z0-9][A-Za-z0-9_-]*` | Compatibility discovery/preference hint for legacy Stores; semantic operations are routed through Memory Spaces |
 | `timeoutMs` | `10000` | 100–120000 ms | Hard timeout for a single CLI call |
 | `defaultRecallLimit` | `10` | 1–50 | Default recall count for the service and UI; individual entry points may impose a lower limit |
+| `memoryTopology.id` | `default-three-tier` | component ID | Identity associated with descriptors, plans, and receipts |
+| `memoryTopology.strategyId` | `default-three-tier` | registered Strategy ID | Selects a Catalog Strategy; an unknown ID rejects the candidate runtime graph |
+| `memoryTopology.layers.<id>.enabled` | `true` for the three defaults | boolean | Whether the Layer participates; disabling never deletes or migrates existing data |
+| `memoryTopology.layers.<id>.participation.*` | `automatic` | `off` / `manual` / `automatic` | Independently controls `recall`, `write`, `projection`, and `maintenance`; a discovered extension Layer starts disabled and manual-only |
+| `memoryTopology.layers.<id>.adapterIds` | `[]` | registered Adapter IDs | Binds concrete Adapters to a Layer; unknown or capability-incompatible bindings fail graph construction/planning |
 | `recallQuality.policy` | `strict-v1` | registered policy id | Deterministic policy applied before recall content is serialized to an Agent or client |
 | `recallQuality.lowScoreThreshold` | `0.25` | 0–1, below high threshold | Normalized scores below this boundary are removed by `strict-v1` |
 | `recallQuality.highScoreThreshold` | `0.6` | 0–1, above low threshold | Retained normalized scores at or above this boundary are labeled high relevance |
@@ -76,6 +94,18 @@ mnemon:
 | `mnemon-ui.saveAction` | `true` | boolean | “Save to memory” icon and confirmation on finalized assistant replies; on by default, **applies live after saving** |
 
 Both the `mnemon` Host/storage namespace and the `mnemon-ui` browser-presentation namespace apply live. The storage root switches atomically only after the new runtime graph initializes successfully. Legacy `mnemon.conversationInteraction` values remain a migration default, but new saves write only to `mnemon-ui`.
+
+### Layer switches and participation modes
+
+`enabled=false` is routing state, not deletion. Status, Catalog, and management directories remain observable; model tools, context projection, and data-plane RPC are rejected at the Host boundary when participation is not allowed.
+
+| Mode | Explicit Web/control-plane operation | Model tool, lifecycle, or system automation |
+|---|---:|---:|
+| `off` | Denied | Denied |
+| `manual` | Allowed | Denied |
+| `automatic` | Allowed | Allowed |
+
+The WebUI reads the live `memory-system` descriptor, so a Layer contributed by an extension does not require a frontend enum change. Settings submit the complete topology atomically. If a candidate Catalog, Strategy, Layer, or Adapter cannot validate, the current runtime generation remains active.
 
 ### Recall quality policies
 

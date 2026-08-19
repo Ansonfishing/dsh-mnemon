@@ -30,6 +30,8 @@ Sidebar 与 Buildin 实时互斥挂载，共享功能、数据和 Host 服务。
 
 Headless 会获得完整模型工具面。它把命令行任务作为普通用户消息提交，不提供交互式斜杠命令分发；Agent 进入 idle 前已经完成的显式和模型引导写入会持久化。
 
+模型工具、生命周期 hook 与系统调度都使用 `automatic` trigger；Web/RPC 中由用户直接发起的数据面操作使用 `manual` trigger。因此把某层设为 `manual` 会保留人工管理能力，同时拒绝模型工具和自动投影。`memory-system` 与 `status` 属于控制面观察，即使某层关闭也仍可读取。
+
 ## 模型工具
 
 ### 只读工具
@@ -118,7 +120,8 @@ authority: trusted-host
 
 | Endpoint | 行为 |
 |---|---|
-| `status` | 服务、版本、生命周期、档案与存储上下文聚合状态 |
+| `status` | 服务、版本、生命周期、档案、存储上下文及当前 Memory System 描述符的聚合状态 |
+| `memory-system` | 当前 Catalog 与 Topology 快照，包含各自 generation、Layer/Adapter/Strategy 描述和参与模式 |
 | `versions` | 检查 Mnemon 与 dsh-mnemon 当前 / 最新版本和安装来源 |
 | `runtime-memory` | 运行时快照 |
 | `documents` / `document` / `document-search` | 档案目录、正文与确定性搜索 |
@@ -191,9 +194,9 @@ endpoints: get, mutate
 
 mutation 使用 settings revision 防止覆盖并发编辑。`mnemon` 管理 Host / 存储设置；`mnemon-ui` 管理 `turnBar` 与 `saveAction`。
 
-## npm 导出
+## npm 导出与扩展服务
 
-根包公开 Host 侧组合与核心类：
+根包继续公开 Host 侧组合与现有核心类：
 
 ```text
 apply
@@ -208,6 +211,20 @@ MnemonLifecycle
 ```
 
 `dsh-mnemon/client` 导出 DSH client bundle 的 `apply` 与 `inject`。客户端实现类与 RPC endpoint 目前均属于内部实现，不应当作稳定公共 SDK。
+
+可组合记忆 API 使用独立子路径：
+
+| 子路径 | 稳定职责 |
+|---|---|
+| `dsh-mnemon/contracts` | wire-safe 描述符、Topology、Plan 与 Receipt 类型 |
+| `dsh-mnemon/kernel` | Catalog、Topology Manager、Kernel 与 Guard API |
+| `dsh-mnemon/extension-sdk` | `MemoryExtensionHost`、扩展定义与进程级预注册 |
+| `dsh-mnemon/strategy-sdk` | Strategy 定义、权限清单和 replay |
+| `dsh-mnemon/provider-sdk` | Adapter Factory Registry 与当前 Provider Adapter 接口 |
+| `dsh-mnemon/layers/runtime`、`documents`、`memory-spaces` | 三个默认 Layer 描述符 |
+| `dsh-mnemon/strategy-default-three-tier` | 默认拓扑与调度策略 |
+
+Host 发布 Cordis 服务 `mnemonMemory: MemoryExtensionHost`。其他 DSH 插件声明 `inject = ['mnemonMemory']` 后，可以把 Layer、Adapter、Strategy 或 Guard 注册到同一生命周期；卸载 disposer 会推动 Catalog/Topology 新 generation，并使旧 Plan 失效。完整示例见[记忆扩展开发](./extensions.md)。内部 RPC 与 `MnemonClient` 仍不属于公开 SDK。
 
 ## 国际化范围
 

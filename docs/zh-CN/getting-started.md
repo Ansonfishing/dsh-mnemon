@@ -15,7 +15,7 @@
 
 普通语义任务优先使用名为 `spawn` 的 Provider，并要求 `toolFilter`、`persona` 与 `depthLimit`。Mnemon 会为每次运行提供一个经过 schema 校验的一次性结果工具，不依赖 Provider 的 `outputSchema` 路径。可选的评分后台审查还要求名为 `fork`、且 `inheritsParentContext=true` 的 Provider。缺少 `fork` 不影响确定性页面读取和普通手动操作。
 
-本文流程以 dsh-mnemon v0.2.15、DSH 0.1.1-rc.2 和 Mnemon 0.2.3 为推荐基线；部分保持兼容的界面截图拍摄于 dsh-mnemon v0.2.0。DSH rc.2 使用 `Promise.withResolvers` 和 Node Zstd API，因此 Node 20 无法启动完整 profile。DSH 0.1.1-rc.2 已发布到 npm 的 `latest` 与 `next` 标签。升级前先备份，并在隔离目录重复本页验证。
+本文流程以 dsh-mnemon v0.3.0、DSH 0.1.1-rc.2 和 Mnemon 0.2.3 为推荐基线；部分保持兼容的界面截图拍摄于 dsh-mnemon v0.2.0。DSH rc.2 使用 `Promise.withResolvers` 和 Node Zstd API，因此 Node 20 无法启动完整 profile。DSH 0.1.1-rc.2 已发布到 npm 的 `latest` 与 `next` 标签。升级前先备份，并在隔离目录重复本页验证。
 
 安装并核对已验证的 DSH 版本：
 
@@ -152,6 +152,10 @@ dsh --profile headless "回答前先检查持久化的项目上下文。"
 
 点击保存后会先初始化新运行图，再原子切换 Host；页面自动清理旧状态并重新读取，无需刷新浏览器。切换范围不会自动迁移、合并或删除旧数据。
 
+### Layer 拓扑
+
+首次安装应看到 Runtime、Documents、Memory Spaces 三个默认 Layer，均已启用且四个参与通道为“自动”。关闭 Layer 只停止路由与上下文参与，不删除数据；“仅手动”保留人工 Web/RPC 操作，但拒绝模型工具、生命周期和系统自动化。第一次使用建议保持默认值，确认完整流程后再收紧。
+
 在工作区模式下，对话 Agent、工具与生命周期使用当前会话的实际根；从工作台启动的独立任务 Agent 会显式使用正在查看的工作区，即使没有选中主 session 也一样。两者不一致时顶部会提示并提供一键对齐。
 
 ## 5. 打开 Sidebar 工作台
@@ -165,6 +169,7 @@ dsh --profile headless "回答前先检查持久化的项目上下文。"
 - 右上角显示“已连接”；
 - Mnemon 与 dsh-mnemon 能显示当前版本；
 - 存储根与刚才选择的范围一致；
+- Memory System 显示 `default-three-tier`，三个默认 Layer 与设置一致；
 - Runtime、Documents 和 Memory Spaces 没有错误提示。
 
 如果 Mnemon 不可用，macOS/Linux 先运行 `command -v mnemon` 与 `mnemon --version`；Windows PowerShell 运行 `Get-Command mnemon` 与 `Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"`。更多症状见[故障排查](./operations.md#故障排查)。
