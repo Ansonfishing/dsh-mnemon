@@ -315,14 +315,20 @@ function ProgressiveFooter(props: { visible: number; total: number; pageSize: nu
 }
 
 /** DSH-style action dialog shared by Sidebar add/write flows. */
-function SidebarModal(props: { title: string; description?: string; busy?: boolean; wide?: boolean; footer?: ReactNode; onClose: () => void; children: ReactNode }): JSX.Element {
+function SidebarModal(props: { title: string; description?: string; busy?: boolean; contentReady?: boolean; wide?: boolean; footer?: ReactNode; onClose: () => void; children: ReactNode }): JSX.Element {
   const t = useT()
   const appearance = useMnemonViewAppearance()
   const titleId = useId()
   const descriptionId = useId()
   const dialogRef = useRef<HTMLElement | null>(null)
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null)
   const returnFocusRef = useRef<HTMLElement | null>(null)
   const close = useCallback(() => { if (props.busy !== true) props.onClose() }, [props.busy, props.onClose])
+  const focusPreferredControl = useCallback(() => {
+    const control = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]')
+      ?? dialogRef.current?.querySelector<HTMLElement>('input:not(:disabled), textarea:not(:disabled), select:not(:disabled)')
+    control?.focus({ preventScroll: true })
+  }, [])
   useLayoutEffect(() => {
     returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const firstControl = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]')
@@ -331,6 +337,12 @@ function SidebarModal(props: { title: string; description?: string; busy?: boole
     firstControl?.focus({ preventScroll: true })
     return () => { if (returnFocusRef.current?.isConnected === true) returnFocusRef.current.focus({ preventScroll: true }) }
   }, [])
+  useLayoutEffect(() => {
+    if (props.contentReady !== true) return
+    const active = document.activeElement
+    if (active !== closeButtonRef.current && active !== dialogRef.current) return
+    focusPreferredControl()
+  }, [focusPreferredControl, props.contentReady])
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -358,8 +370,8 @@ function SidebarModal(props: { title: string; description?: string; busy?: boole
   }, [close])
   return (
     <div className={appearanceClass(css.modalBackdrop, appearance.classes.modalBackdrop)} onPointerDown={event => { if (event.target === event.currentTarget) close() }}>
-      <section ref={dialogRef} className={appearanceClass(appearanceClass(css.modal, appearance.classes.modal), props.wide === true ? css.modalWide : undefined)} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={props.description === undefined ? undefined : descriptionId}>
-        <header><div><h2 id={titleId}>{props.title}</h2>{props.description !== undefined && <p id={descriptionId}>{props.description}</p>}</div><button type="button" className={css.iconButton} disabled={props.busy} onClick={close} aria-label={t('common.cancel')}>×</button></header>
+      <section ref={dialogRef} className={appearanceClass(appearanceClass(css.modal, appearance.classes.modal), props.wide === true ? css.modalWide : undefined)} role="dialog" aria-modal="true" aria-busy={props.contentReady === false || props.busy === true ? true : undefined} aria-labelledby={titleId} aria-describedby={props.description === undefined ? undefined : descriptionId}>
+        <header><div><h2 id={titleId}>{props.title}</h2>{props.description !== undefined && <p id={descriptionId}>{props.description}</p>}</div><button ref={closeButtonRef} type="button" className={css.iconButton} disabled={props.busy} onClick={close} aria-label={t('common.cancel')}>×</button></header>
         <div className={css.modalBody}>{props.children}</div>
         {props.footer !== undefined && <footer className={css.modalFooter}>{props.footer}</footer>}
       </section>
@@ -1792,7 +1804,7 @@ function PersistenceStrategyDialog(props: {
     } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
   }
 
-  return <SidebarModal title={t('strategy.title')} description={t('strategy.description')} busy={saving} wide onClose={props.onClose} footer={<div className={css.modalFooterActions}><button type="button" className={css.ghostButton} disabled={saving} onClick={props.onClose}>{t('common.cancel')}</button><button type="submit" form={strategyFormId} className={css.primaryButton} disabled={loading || saving || !props.writable || !selectedProvidersValid}>{saving ? t('strategy.saving') : t('strategy.save')}</button></div>}>
+  return <SidebarModal title={t('strategy.title')} description={t('strategy.description')} busy={saving} contentReady={!loading} wide onClose={props.onClose} footer={<div className={css.modalFooterActions}><button type="button" className={css.ghostButton} disabled={saving} onClick={props.onClose}>{t('common.cancel')}</button><button type="submit" form={strategyFormId} className={css.primaryButton} disabled={loading || saving || !props.writable || !selectedProvidersValid}>{saving ? t('strategy.saving') : t('strategy.save')}</button></div>}>
     <form id={strategyFormId} className={appearanceClass(css.bodyEdit, css.strategyForm)} onSubmit={event => void save(event)}>
       {loading && <div className={css.strategyLoading}><SectionSpinner label={t('strategy.loading')} /><span>{t('strategy.loading')}</span></div>}
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
@@ -1800,8 +1812,8 @@ function PersistenceStrategyDialog(props: {
         <section className={css.createSection}>
           <div className={css.createSectionHeading}><span>01</span><div><strong>{t('strategy.modeTitle')}</strong><small>{t('strategy.modeHint')}</small></div></div>
           <fieldset className={css.placementMode}><legend>{t('overview.placementMode')}</legend>
-            <label data-selected={mode === 'manual' || undefined}><input type="radio" name="persistence-mode" value="manual" checked={mode === 'manual'} onChange={() => setMode('manual')} /><i className={css.choiceControl} data-kind="radio" aria-hidden="true" /><span><strong>{t('overview.placementManual')}</strong><small>{t('strategy.manualHint')}</small></span></label>
-            <label data-selected={mode === 'automatic' || undefined}><input type="radio" name="persistence-mode" value="automatic" checked={mode === 'automatic'} onChange={() => setMode('automatic')} /><i className={css.choiceControl} data-kind="radio" aria-hidden="true" /><span><strong>{t('overview.placementAutomatic')} <em>{t('overview.recommended')}</em></strong><small>{t('strategy.automaticHint')}</small></span></label>
+            <label data-selected={mode === 'manual' || undefined}><input type="radio" name="persistence-mode" value="manual" checked={mode === 'manual'} data-autofocus={mode === 'manual' || undefined} onChange={() => setMode('manual')} /><i className={css.choiceControl} data-kind="radio" aria-hidden="true" /><span><strong>{t('overview.placementManual')}</strong><small>{t('strategy.manualHint')}</small></span></label>
+            <label data-selected={mode === 'automatic' || undefined}><input type="radio" name="persistence-mode" value="automatic" checked={mode === 'automatic'} data-autofocus={mode === 'automatic' || undefined} onChange={() => setMode('automatic')} /><i className={css.choiceControl} data-kind="radio" aria-hidden="true" /><span><strong>{t('overview.placementAutomatic')} <em>{t('overview.recommended')}</em></strong><small>{t('strategy.automaticHint')}</small></span></label>
           </fieldset>
         </section>
         <section className={css.createSection}>

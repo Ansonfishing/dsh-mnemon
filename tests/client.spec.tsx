@@ -1000,6 +1000,8 @@ describe('MnemonView', () => {
     await waitFor(() => expect(within(dialog).getByRole('radio', { name: /智能选择/ })).toBeTruthy())
     const manualMode = within(dialog).getByRole('radio', { name: /手动指定/ }) as HTMLInputElement
     const saveStrategy = within(dialog).getByRole('button', { name: '保存策略' })
+    await waitFor(() => expect(document.activeElement).toBe(manualMode))
+    expect(dialog.getAttribute('aria-busy')).toBeNull()
     expect(manualMode.checked).toBe(true)
     expect(saveStrategy.getAttribute('form')).toBe(manualMode.closest('form')?.id)
     expect(saveStrategy.closest('footer')?.parentElement).toBe(dialog)
