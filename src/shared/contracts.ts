@@ -1,5 +1,12 @@
 import type { ConnectionHandle as DshClientConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
-import type { MemoryLayerParticipation } from '../memory-system/contracts.ts'
+import type { MemoryLayerParticipation, MemorySystemDescriptor } from '../memory-system/contracts.ts'
+export type {
+  MemoryLayerParticipation,
+  MemoryParticipationChannel,
+  MemoryParticipationMode,
+  MemorySystemDescriptor,
+  MemoryTopologyDefinition,
+} from '../memory-system/contracts.ts'
 
 export const MNEMON_READ_CHANNEL = '/dsh-mnemon-read'
 export const MNEMON_ACTIVATION_CHANNEL = '/dsh-mnemon-activation'
@@ -873,6 +880,7 @@ export interface StatusView {
   memoryBodyDirectory: string
   memoryBodies: MemoryBodyView[]
   providerServices?: MemoryProviderRuntimeStatus[]
+  memorySystem?: MemorySystemDescriptor
   lifecycle?: LifecycleSnapshot
   documents?: DocumentSnapshot
   storage?: StorageScopeCatalog

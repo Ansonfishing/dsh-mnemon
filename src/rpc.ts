@@ -8,6 +8,8 @@ import type { LiveMnemonRuntime, MnemonRuntimeGraph } from './live-runtime.ts'
 import { VersionUpdateManager, type VersionComponentId } from './version-updates.ts'
 import { MNEMON_ACTIVATION_CHANNEL, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from './channels.ts'
 import { isMemoryProviderId } from './providers/catalog.ts'
+import { assertMemoryLayerParticipation } from './memory-system/access.ts'
+import type { MemoryCapability } from './memory-system/contracts.ts'
 import type {
   CreateMemoryBodyRequest,
   MemoryPlacementCapability,
@@ -42,7 +44,7 @@ function runtimeFor(
   runtimeMemory?: RuntimeMemoryController,
   storage?: StorageScopeInspector,
 ): {
-  graph: Pick<MnemonRuntimeGraph, 'service' | 'runtimeMemory' | 'documents' | 'storage' | 'packs'>
+  graph: Pick<MnemonRuntimeGraph, 'service' | 'runtimeMemory' | 'documents' | 'storage' | 'packs'> & Partial<Pick<MnemonRuntimeGraph, 'memoryKernel'>>
   route?: ReturnType<LiveMnemonRuntime['route']>
   explicitWorkspace: boolean
 } {
@@ -61,6 +63,24 @@ function runtimeFor(
     },
     explicitWorkspace: false,
   }
+}
+
+function requireLayer(
+  graph: Pick<MnemonRuntimeGraph, 'service'> & Partial<Pick<MnemonRuntimeGraph, 'memoryKernel'>>,
+  layerId: string,
+  capability: MemoryCapability,
+): void {
+  if (graph.memoryKernel !== undefined) {
+    graph.memoryKernel.assertParticipation(layerId, capability, 'manual')
+    return
+  }
+  // Keep the direct-service compatibility seam usable for callers from before
+  // the topology contract existed.
+  const topology = graph.service.config.memoryTopology
+  if (topology === undefined) return
+  const configured = topology.layers[layerId]
+  if (configured === undefined) throw new Error(`memory layer is not configured in the active topology: ${layerId}`)
+  assertMemoryLayerParticipation({ id: layerId, ...configured }, capability, 'manual')
 }
 
 function requireAligned(route: ReturnType<LiveMnemonRuntime['route']> | undefined): void {
@@ -134,7 +154,11 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
         ? resolved.graph.documents.forWorkspace(selectedWorkspace.path)
         : undefined
       switch (endpoint) {
+        case 'memory-system':
+          if (resolved.graph.memoryKernel === undefined) throw new Error('memory system descriptor is unavailable')
+          return success(resolved.graph.memoryKernel.descriptor())
         case 'runtime-memory':
+          requireLayer(resolved.graph, 'runtime', 'read')
           if (resolved.graph.runtimeMemory === undefined) throw new Error('runtime memory is unavailable')
           return success(resolved.graph.runtimeMemory.snapshot())
         case 'status':
@@ -155,6 +179,7 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
                 : lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId)),
             }),
             ...(documents === undefined ? {} : { documents }),
+            ...(resolved.graph.memoryKernel === undefined ? {} : { memorySystem: resolved.graph.memoryKernel.descriptor() }),
             ...(resolved.graph.storage === undefined ? {} : { storage: resolved.graph.storage.catalog(selectedWorkspace?.path ?? lifecycle?.workspaceRoot(sessionId)) }),
             ...(resolved.route === undefined ? {} : {
               workspaceContext: {
@@ -186,6 +211,7 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
                   : lifecycle.snapshot(payload.sessionId === undefined ? undefined : String(payload.sessionId)),
               }),
               ...(documents === undefined ? {} : { documents }),
+              ...(resolved.graph.memoryKernel === undefined ? {} : { memorySystem: resolved.graph.memoryKernel.descriptor() }),
               ...(resolved.graph.storage === undefined ? {} : { storage: resolved.graph.storage.catalog(selectedWorkspace?.path ?? lifecycle?.workspaceRoot(sessionId)) }),
               ...(resolved.route === undefined ? {} : {
                 workspaceContext: {
@@ -200,14 +226,17 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
             })
           }
         case 'documents':
+          requireLayer(resolved.graph, 'documents', 'browse')
           if (documentController !== undefined) return success(documentController.snapshot())
           if (lifecycle === undefined) throw new Error('Mnemon Documents require lifecycle integration')
           return success(lifecycle.documents(String(payload.sessionId ?? '')))
         case 'document':
+          requireLayer(resolved.graph, 'documents', 'read')
           if (documentController !== undefined) return success(documentController.get(String(payload.id ?? '')))
           if (lifecycle === undefined) throw new Error('Mnemon Documents require lifecycle integration')
           return success(lifecycle.document(String(payload.sessionId ?? ''), String(payload.id ?? '')))
         case 'document-search':
+          requireLayer(resolved.graph, 'documents', 'search')
           if (documentController !== undefined) return success(await documentController.search(
             String(payload.query ?? ''),
             { includeArchived: payload.includeArchived === true, ...(payload.limit === undefined ? {} : { limit: Number(payload.limit) }) },
@@ -220,6 +249,7 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
             payload.limit === undefined ? undefined : Number(payload.limit),
           ))
         case 'graph':
+          requireLayer(resolved.graph, 'memory-spaces', 'graph')
           return success(await service.graph(undefined, Array.isArray(payload.memoryBodyIds) ? payload.memoryBodyIds.map(String) : undefined))
         case 'bodies':
           return success(await service.bodies())
@@ -230,6 +260,7 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
         case 'provider-services':
           return success(service.memoryBodies.providerServices())
         case 'list':
+          requireLayer(resolved.graph, 'memory-spaces', 'browse')
           return success(await service.list({
             ...(payload.query === undefined ? {} : { query: String(payload.query) }),
             ...(payload.category === undefined ? {} : { category: payload.category as Category }),
@@ -238,12 +269,14 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
           }))
         case 'entities':
           {
+            requireLayer(resolved.graph, 'memory-spaces', 'search')
             const entity = payload.entity === undefined ? '' : String(payload.entity).trim()
             const limit = payload.limit === undefined ? undefined : Number(payload.limit)
             return success(await service.entities(entity || undefined, limit))
           }
         case 'search':
           {
+            requireLayer(resolved.graph, 'memory-spaces', 'recall')
             const request = {
             query: String(payload.query ?? ''),
             ...(payload.mode === undefined ? {} : { mode: payload.mode as NonNullable<SearchRequest['mode']> }),
@@ -257,6 +290,7 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
           }
         case 'agent-search':
           {
+            requireLayer(resolved.graph, 'memory-spaces', 'recall')
             if (lifecycle === undefined) throw new Error('Mnemon Agent query is unavailable without lifecycle integration')
             const request = {
               query: String(payload.query ?? ''),
@@ -277,6 +311,7 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
             return success({ ...recalled, ...answer })
           }
         case 'related':
+          requireLayer(resolved.graph, 'memory-spaces', 'related')
           return success(await service.related(String(payload.id ?? ''), payload.depth === undefined ? 2 : Number(payload.depth), payload.edge as EdgeType | undefined, undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId)))
         case 'turn-activities':
           if (lifecycle === undefined) throw new Error('Mnemon turn activity requires lifecycle integration')
@@ -366,6 +401,7 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
             return success(service.memoryBodies.providerServices({ includeSecrets: true }).items.find(item => item.providerId === providerId) ?? updated)
           }
         case 'runtime-memory':
+          requireLayer(resolved.graph, 'runtime', 'write')
           if (resolved.graph.runtimeMemory === undefined) throw new Error('runtime memory is unavailable')
           {
             const request = {
@@ -381,6 +417,7 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
               : await lifecycle.runtime(sessionId, request))
           }
         case 'supervise':
+          requireLayer(resolved.graph, 'memory-spaces', 'write')
           if (lifecycle === undefined) throw new Error('Mnemon lifecycle integration is unavailable')
           {
             const sessionId = String(payload.sessionId ?? '')
@@ -391,6 +428,8 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
         case 'document':
           {
             const action = String(payload.action ?? '')
+            requireLayer(resolved.graph, 'documents', action === 'archive' ? 'archive' : 'write')
+            if (action === 'archive') requireLayer(resolved.graph, 'memory-spaces', 'write')
             const sessionId = String(payload.sessionId ?? '')
             if (documentController !== undefined && action !== 'archive' && (!alignedSession || lifecycle === undefined)) {
               const sessionIds = resolved.route?.aligned === true && sessionId.trim() !== '' ? [sessionId] : []
@@ -436,6 +475,7 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
           }
         case 'remember':
           {
+            requireLayer(resolved.graph, 'memory-spaces', 'write')
             const request = {
             content: String(payload.content ?? ''),
             ...(payload.category === undefined ? {} : { category: payload.category as Category }),
@@ -450,10 +490,12 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
               : await lifecycle.remember(String(payload.sessionId ?? ''), request))
           }
         case 'link':
+          requireLayer(resolved.graph, 'memory-spaces', 'link')
           return success(inspectionDiverged || lifecycle === undefined || (resolved.explicitWorkspace && !alignedSession)
             ? await service.link(String(payload.sourceId ?? ''), String(payload.targetId ?? ''), payload.type as EdgeType | undefined, payload.weight === undefined ? 0.5 : Number(payload.weight), payload.reason === undefined ? undefined : String(payload.reason), undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
             : await lifecycle.mutate(String(payload.sessionId ?? ''), 'link', payload))
         case 'forget':
+          requireLayer(resolved.graph, 'memory-spaces', 'forget')
           return success(inspectionDiverged || lifecycle === undefined || (resolved.explicitWorkspace && !alignedSession)
             ? await service.forget(String(payload.id ?? ''), undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
             : await lifecycle.mutate(String(payload.sessionId ?? ''), 'forget', { id: String(payload.id ?? ''), ...(payload.memoryBodyId === undefined ? {} : { memoryBodyId: String(payload.memoryBodyId) }) }))
@@ -537,6 +579,7 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
           }
         case 'body-metadata-maintain':
           {
+            requireLayer(resolved.graph, 'memory-spaces', 'maintain')
             if (lifecycle === undefined) throw new Error('AI metadata maintenance requires Mnemon lifecycle integration')
             if (!Array.isArray(payload.memoryBodyIds)) throw new Error('memoryBodyIds must be an array')
             const memoryBodyIds = [...new Set(payload.memoryBodyIds.map(String).map(id => id.trim()).filter(Boolean))]

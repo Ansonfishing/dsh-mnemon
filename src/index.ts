@@ -83,7 +83,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   registerTools(ctx, runtime, coordinator)
   registerCommands(ctx.commands, runtime, coordinator)
   registerGuidance(ctx, resolved)
-  registerRuntimeMemoryContext(ctx, runtime.runtimeMemory)
+  registerRuntimeMemoryContext(ctx, runtime.runtimeMemory, () => runtime.memoryKernel.allows('runtime', 'project', 'automatic'))
   ctx.inject(['connection'], (webContext) => {
     // `inject` guarantees the service at runtime; retain the defensive guard
     // because HostContextShape also models profiles where it is absent.

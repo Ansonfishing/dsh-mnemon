@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import type { MemoryCatalog, MemoryLayerExecutionContext } from './catalog.ts'
 import type {
+  MemoryCapability,
   MemoryGuardDecision,
+  MemoryOperationTrigger,
   MemoryPlan,
   MemoryPlanRequest,
   MemoryPlanStep,
@@ -10,6 +12,7 @@ import type {
   MemoryReceiptStep,
   MemorySystemDescriptor,
 } from './contracts.ts'
+import { assertMemoryLayerParticipation, decideMemoryLayerParticipation, type MemoryParticipationDecision } from './access.ts'
 import { participationChannel } from './defaults.ts'
 import type { MemoryTopologyManager } from './topology.ts'
 
@@ -75,6 +78,58 @@ export class MemoryKernel {
 
   descriptor(): MemorySystemDescriptor {
     return { catalog: this.catalog.snapshot(), topology: this.topology.snapshot() }
+  }
+
+  participation(layerId: string, capability: MemoryCapability, trigger: MemoryOperationTrigger): MemoryParticipationDecision {
+    const descriptor = this.catalog.layer(layerId)?.descriptor
+    if (descriptor === undefined) {
+      return {
+        allowed: false,
+        layerId,
+        capability,
+        trigger,
+        channel: participationChannel(capability),
+        mode: 'off',
+        reason: `memory layer is unavailable: ${layerId}`,
+      }
+    }
+    if (!descriptor.capabilities.includes(capability)) {
+      return {
+        allowed: false,
+        layerId,
+        capability,
+        trigger,
+        channel: participationChannel(capability),
+        mode: 'off',
+        reason: `memory layer ${layerId} does not support ${capability}`,
+      }
+    }
+    const layer = this.topology.snapshot().layers.find(item => item.id === layerId)
+    if (layer === undefined) {
+      return {
+        allowed: false,
+        layerId,
+        capability,
+        trigger,
+        channel: participationChannel(capability),
+        mode: 'off',
+        reason: `memory layer is not configured in the active topology: ${layerId}`,
+      }
+    }
+    return decideMemoryLayerParticipation(layer, capability, trigger)
+  }
+
+  allows(layerId: string, capability: MemoryCapability, trigger: MemoryOperationTrigger): boolean {
+    return this.participation(layerId, capability, trigger).allowed
+  }
+
+  assertParticipation(layerId: string, capability: MemoryCapability, trigger: MemoryOperationTrigger): MemoryParticipationDecision {
+    const layer = this.topology.snapshot().layers.find(item => item.id === layerId)
+    if (layer === undefined) throw new Error(`memory layer is not configured in the active topology: ${layerId}`)
+    const descriptor = this.catalog.layer(layerId)?.descriptor
+    if (descriptor === undefined) throw new Error(`memory layer is unavailable: ${layerId}`)
+    if (!descriptor.capabilities.includes(capability)) throw new Error(`memory layer ${layerId} does not support ${capability}`)
+    return assertMemoryLayerParticipation(layer, capability, trigger)
   }
 
   registerGuard(guard: MemoryGuardRegistration): () => void {

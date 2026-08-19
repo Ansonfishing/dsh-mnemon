@@ -5,6 +5,7 @@ import { MnemonSettingsCard } from '../src/client/MnemonSettingsCard.tsx'
 import { translateEn } from '../src/client/locales.ts'
 import type { ClientConnectionHandle, ClientSettingsScope } from '../src/contracts.ts'
 import type { Config, InteractionConfig } from '../src/config.ts'
+import type { MemorySystemDescriptor } from '../src/shared/contracts.ts'
 import { MEMORY_PROVIDER_CATALOG } from '../src/providers/catalog.ts'
 
 afterEach(cleanup)
@@ -16,6 +17,58 @@ function deferred<T>() {
 }
 
 describe('MnemonSettingsCard', () => {
+  it('renders the live Catalog topology and persists layer participation as one atomic setting', async () => {
+    const mutate = vi.fn(async () => {})
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}), mutate,
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+    const participation = { recall: 'automatic', write: 'automatic', projection: 'automatic', maintenance: 'automatic' } as const
+    const descriptor: MemorySystemDescriptor = {
+      catalog: {
+        generation: 4,
+        layers: [
+          { id: 'runtime', label: 'Runtime Memory', description: 'Hot context', role: 'working-context', order: 100, capabilities: ['read', 'write', 'project'] },
+          { id: 'documents', label: 'Documents', description: 'Narrative records', role: 'narrative', order: 200, capabilities: ['search', 'write'] },
+          { id: 'memory-spaces', label: 'Memory Spaces', description: 'Durable evidence', role: 'durable-evidence', order: 300, capabilities: ['recall', 'write'] },
+        ],
+        adapters: [],
+        strategies: [{ id: 'default-three-tier', version: '1', label: 'Default strategy', description: 'Stable routing', hooks: ['placement'], deterministic: true }],
+      },
+      topology: {
+        id: 'default-three-tier', strategyId: 'default-three-tier', generation: 1, catalogGeneration: 4, createdAt: '2026-08-19T00:00:00.000Z',
+        layers: ['runtime', 'documents', 'memory-spaces'].map(id => ({ id, enabled: true, participation: { ...participation }, adapterIds: [] })),
+      },
+    }
+    const call = vi.fn(async (channel: string, endpoint: string) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'memory-system') return { ok: true as const, value: descriptor }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') return { ok: true as const, value: { groups: [], failures: [] } }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [], items: [], generatedAt: '' } }
+      if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/root/.mnemon', scope: 'global' as const } }
+      throw new Error(`unexpected ${channel} ${endpoint}`)
+    })
+
+    render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call } } as ClientConnectionHandle} />)
+
+    const enabled = await screen.findByRole('checkbox', { name: '启用 Documents' })
+    fireEvent.click(enabled)
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([expect.objectContaining({
+      op: 'set',
+      path: ['memoryTopology'],
+      value: expect.objectContaining({
+        layers: expect.objectContaining({ documents: expect.objectContaining({ enabled: false }) }),
+      }),
+    })]))
+  })
+
   it('ignores a Provider catalog response from the previously selected workspace', async () => {
     const snapshot = {
       status: 'ready' as const,
