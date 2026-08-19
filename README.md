@@ -3,7 +3,7 @@
 <p align="center"><strong>English</strong> · <a href="./README.zh-CN.md">简体中文</a></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/release-v0.2.13-5b5bd6" alt="release v0.2.13">
+  <img src="https://img.shields.io/badge/release-v0.3.0-5b5bd6" alt="release v0.3.0">
   <img src="https://img.shields.io/badge/memory-3%20tiers-087c5b" alt="three memory tiers">
   <img src="https://img.shields.io/badge/providers-9-c66a09" alt="nine providers">
   <img src="https://img.shields.io/badge/Node.js-%E2%89%A520-43853d" alt="Node.js 20 or newer">
@@ -22,13 +22,15 @@
 <p align="center">
   <a href="./docs/en/capabilities.md"><strong>Explore the capability map</strong></a> ·
   <a href="./docs/en/getting-started.md">Start in five minutes</a> ·
-  <a href="./docs/en/releases/v0.2.13.md">Read the v0.2.13 notes</a> ·
+  <a href="./docs/en/releases/v0.3.0.md">Read the v0.3.0 notes</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">Watch the widescreen demo</a>
 </p>
 
 `dsh-mnemon` gives DSH one memory control plane without forcing every kind of knowledge into one database. Runtime Memory keeps compact context available every turn. Project Documents preserve complete narratives. Memory Spaces retrieve durable evidence on demand and can use **Mnemon, OpenViking, Honcho, Mem0, Hindsight, Holographic, RetainDB, ByteRover, or Supermemory**.
 
 Mnemon remains the official, prioritized native engine. The third tier is replaceable; the first two keep the same storage, workspace, and interaction model regardless of provider.
+
+Since v0.3.0, the three tiers are the **default topology** of a composable kernel rather than the only shape hard-coded into every entry point. Layers, Adapters, Strategies, Guards, and DSH Surfaces have separate contracts. Each Layer can be disabled or independently set to `off`, `manual`, or `automatic` participation for recall, writes, projection, and maintenance. Users still install one `dsh-mnemon` package, while extension authors contribute through stable subpaths. See the [composable architecture](./docs/en/architecture.md#composable-memory-kernel) and [extension guide](./docs/en/extensions.md).
 
 ## Understand the scope in 30 seconds
 
@@ -190,7 +192,8 @@ See [Operations, security, and troubleshooting](./docs/en/operations.md) for bac
 | Configure scope, routing, and model selection | [Configuration](./docs/en/configuration.md) |
 | Back up, update, or troubleshoot | [Operations](./docs/en/operations.md) |
 | Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |
-| Review the release | [v0.2.13 release notes](./docs/en/releases/v0.2.13.md) |
+| Build a Layer, Adapter, or Strategy extension | [Extension guide](./docs/en/extensions.md) |
+| Review the release | [v0.3.0 release notes](./docs/en/releases/v0.3.0.md) |
 
 See the [documentation hub](./docs/en/README.md) for the full map.
 

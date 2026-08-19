@@ -144,6 +144,7 @@ Content distinguishes enumerable, query-only, and unavailable surfaces. A Provid
 
 Settings owns reusable **service configuration** only:
 
+- Layer-topology cards come from the live Catalog. Runtime, Documents, and Memory Spaces can be disabled independently, with Off / Manual / Automatic participation for recall, writes, projection, and maintenance;
 - every external Provider has its own switch and is off by default;
 - endpoint, API Key, and Provider-specific fields appear only after enabling;
 - API Keys use a conventional password field whose eye button toggles visible/hidden; there is no clear-credential checkbox, dedicated Remove row, or saved-secret caption;
@@ -151,6 +152,8 @@ Settings owns reusable **service configuration** only:
 - global / workspace / custom tags show effective scope; Providers with the same scope semantics reuse Mnemon's configuration framework.
 
 Mnemon-specific custom directory, backup, and migration remain in Mnemon's own expandable area. Custom is an explicit-path global scope.
+
+Disabling a Layer does not delete data. A newly contributed extension Layer starts disabled and manual-only. The current runtime generation keeps serving until the complete topology validates and swaps, so a rejected candidate never leaves a partial configuration active.
 
 ### Background task Agent model route
 

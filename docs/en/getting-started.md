@@ -14,7 +14,7 @@ You need:
 
 Regular semantic work prefers a provider named `spawn` with `toolFilter`, `persona`, and `depthLimit`. Mnemon supplies a schema-validated, one-run result tool instead of depending on the Provider's `outputSchema` path. Optional score-based background review additionally requires a provider named `fork` with `inheritsParentContext=true`. Missing `fork` does not block deterministic pages or regular manual actions.
 
-This guide and its screenshots use dsh-mnemon v0.2.0, DSH 0.1.0-rc.8, and Mnemon 0.2.3 as the recommended baseline. Until rc.8 becomes the npm `latest` tag, install DSH through `@deepseek-ai/dsh@next`. Back up and repeat this verification against an isolated root before upgrading.
+This workflow uses dsh-mnemon v0.3.0, DSH 0.1.0-rc.8, and Mnemon 0.2.3 as the recommended baseline. Some compatible UI screenshots were captured on v0.2.0. Until rc.8 becomes the npm `latest` tag, install DSH through `@deepseek-ai/dsh@next`. Back up and repeat this verification against an isolated root before upgrading.
 
 ## 2. Install Mnemon
 
@@ -143,6 +143,10 @@ Open **Settings → Memory System**:
 
 Save initializes a candidate runtime graph before atomically switching the Host. The page clears stale state and reloads automatically—no browser refresh is needed. Changing scope never migrates, merges, or deletes old data.
 
+### Layer topology
+
+A first installation should show Runtime, Documents, and Memory Spaces enabled with all four participation channels set to Automatic. Disabling a Layer stops routing and context participation without deleting data. Manual-only preserves direct Web/RPC operations while rejecting model tools, lifecycle hooks, and system automation. Keep the defaults for the first complete workflow, then narrow them if needed.
+
 In Workspace mode, conversation Agents, tools, and lifecycle hooks use the current conversation's effective root. Independent task Agents launched by the workbench use the inspected workspace explicitly, including when no main session is selected. The header reports a mismatch and offers one-click alignment.
 
 ## 5. Open the Sidebar workbench
@@ -156,6 +160,7 @@ Confirm that:
 - the top right says Connected;
 - Mnemon and dsh-mnemon show installed versions;
 - the storage root matches your chosen scope;
+- Memory System reports `default-three-tier`, with the three default Layers matching Settings;
 - Runtime, Documents, and Memory Spaces report no errors.
 
 If Mnemon is unavailable, run `command -v mnemon` and `mnemon --version` on macOS/Linux, or `Get-Command mnemon` and `Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"` on Windows PowerShell. See [Troubleshooting](./operations.md#troubleshooting) for other symptoms.

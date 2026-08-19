@@ -3,7 +3,7 @@
 <p align="center"><a href="./README.md">English</a> · <strong>简体中文</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/release-v0.2.13-5b5bd6" alt="发布版本 v0.2.13">
+  <img src="https://img.shields.io/badge/release-v0.3.0-5b5bd6" alt="发布版本 v0.3.0">
   <img src="https://img.shields.io/badge/%E8%AE%B0%E5%BF%86-3%20%E5%B1%82-087c5b" alt="三层记忆">
   <img src="https://img.shields.io/badge/Provider-9-c66a09" alt="九种 Provider">
   <img src="https://img.shields.io/badge/Node.js-%E2%89%A520-43853d" alt="Node.js 20 或更新版本">
@@ -22,13 +22,15 @@
 <p align="center">
   <a href="./docs/zh-CN/capabilities.md"><strong>先看能力地图</strong></a> ·
   <a href="./docs/zh-CN/getting-started.md">5 分钟开始</a> ·
-  <a href="./docs/zh-CN/releases/v0.2.13.md">v0.2.13 升级说明</a> ·
+  <a href="./docs/zh-CN/releases/v0.3.0.md">v0.3.0 升级说明</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">观看宽屏实机演示</a>
 </p>
 
 `dsh-mnemon` 为 DSH 提供统一的记忆控制面，但不要求所有知识进入同一种数据库。运行时记忆让紧凑上下文每轮可用；项目档案保留完整叙事；记忆体按需召回长期证据，底层可选择 **Mnemon、OpenViking、Honcho、Mem0、Hindsight、Holographic、RetainDB、ByteRover 或 Supermemory**。
 
 Mnemon 仍是官方优先的原生引擎。可以替换的是第三层；无论选择哪个 Provider，前两层的存储、工作区和交互心智保持不变。
+
+从 v0.3.0 开始，三层是可组合内核中的**默认拓扑**，不再是各入口各自写死的唯一结构。Layer、Adapter、Strategy、Guard 与 DSH Surface 具有独立契约；每层可分别关闭，或把召回、写入、投影、维护设为 `off` / `manual` / `automatic`。用户仍只安装一个 `dsh-mnemon`，扩展作者则使用稳定子路径贡献新能力。参见[可组合架构](./docs/zh-CN/architecture.md#可组合记忆内核)与[扩展开发指南](./docs/zh-CN/extensions.md)。
 
 ## 30 秒理解能力边界
 
@@ -190,7 +192,8 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 | 配置范围、路由与模型 | [配置参考](./docs/zh-CN/configuration.md) |
 | 备份、更新或排障 | [运维指南](./docs/zh-CN/operations.md) |
 | 接入工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
-| 查看本次升级 | [v0.2.13 发布说明](./docs/zh-CN/releases/v0.2.13.md) |
+| 开发 Layer、Adapter 或 Strategy 扩展 | [扩展开发指南](./docs/zh-CN/extensions.md) |
+| 查看本次升级 | [v0.3.0 发布说明](./docs/zh-CN/releases/v0.3.0.md) |
 
 完整目录见[文档中心](./docs/zh-CN/README.md)。
 

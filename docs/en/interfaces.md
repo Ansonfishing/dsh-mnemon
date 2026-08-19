@@ -30,6 +30,8 @@ Sidebar and Buildin are live, mutually exclusive mounts that share functionality
 
 Headless receives the full model-tool surface. Its task argument is submitted as an ordinary user message, so it does not provide an interactive slash-command dispatcher. Explicit and model-guided writes that finish before the Agent becomes idle are durable.
 
+Model tools, lifecycle hooks, and system scheduling use an `automatic` trigger. User-initiated data-plane operations over Web/RPC use `manual`. Setting a Layer to `manual` therefore preserves direct management while denying model tools and automatic projection. `memory-system` and `status` are control-plane observations and remain readable even when a Layer is disabled.
+
 ## Model tools
 
 ### Read-only tools
@@ -118,7 +120,8 @@ authority: trusted-host
 
 | Endpoint | Behavior |
 |---|---|
-| `status` | Aggregated service, version, lifecycle, Documents, and workspace/storage context |
+| `status` | Aggregated service, version, lifecycle, Documents, workspace/storage context, and current Memory System descriptor |
+| `memory-system` | Current Catalog and Topology snapshots, including generations, Layer/Adapter/Strategy descriptors, and participation modes |
 | `versions` | Check installed/latest Mnemon and dsh-mnemon versions and installation sources |
 | `runtime-memory` | Runtime snapshot |
 | `documents` / `document` / `document-search` | Directory, body, and deterministic search |
@@ -191,9 +194,9 @@ endpoints: get, mutate
 
 Mutations use settings revisions to prevent overwriting concurrent edits. `mnemon` owns Host/storage settings; `mnemon-ui` owns `turnBar` and `saveAction`.
 
-## npm exports
+## npm exports and extension service
 
-The root package exposes Host composition and core classes:
+The root package continues to expose Host composition and existing core classes:
 
 ```text
 apply
@@ -208,6 +211,20 @@ MnemonLifecycle
 ```
 
 `dsh-mnemon/client` exports `apply` and `inject` for the DSH client bundle. Client implementation classes and RPC endpoints are internal and should not be treated as a stable public SDK.
+
+Composable-memory APIs use dedicated subpaths:
+
+| Subpath | Stable responsibility |
+|---|---|
+| `dsh-mnemon/contracts` | Wire-safe descriptors, Topology, Plan, and Receipt types |
+| `dsh-mnemon/kernel` | Catalog, Topology Manager, Kernel, and Guard APIs |
+| `dsh-mnemon/extension-sdk` | `MemoryExtensionHost`, extension definitions, and process-level pre-registration |
+| `dsh-mnemon/strategy-sdk` | Strategy definitions, permission manifests, and replay |
+| `dsh-mnemon/provider-sdk` | Adapter Factory Registry and current Provider Adapter interfaces |
+| `dsh-mnemon/layers/runtime`, `documents`, `memory-spaces` | The three default Layer descriptors |
+| `dsh-mnemon/strategy-default-three-tier` | Default topology and scheduling Strategy |
+
+The Host publishes `mnemonMemory: MemoryExtensionHost` as a Cordis service. Another DSH plugin can declare `inject = ['mnemonMemory']` and lifecycle-register Layers, Adapters, Strategies, or Guards. Disposal advances Catalog/Topology generations and invalidates stale Plans. See [Building Memory Extensions](./extensions.md) for a complete example. Internal RPC and `MnemonClient` remain outside the public SDK.
 
 ## Internationalization
 

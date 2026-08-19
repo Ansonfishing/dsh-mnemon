@@ -10,6 +10,57 @@
 - 插件提供三层知识控制面、路由策略、事务屏障和 UI；
 - Mnemon Native 通过本地 `mnemon` CLI 提供命名 Store、SQLite、四类图、关系和软删除，是官方优先实现；8 个三方适配器提供由 Host 控制的 HTTP、本地文件或 CLI 数据面。
 
+三层现在是默认拓扑，不再是写死在各入口里的唯一拓扑。系统把五类对象分开管理：Layer 表示记忆语义层，Adapter 表示具体数据面，Strategy 只提出计划，Guard 只能收紧权限，Surface 负责 DSH 工具、命令、RPC 与 WebUI。
+
+## 可组合记忆内核
+
+```text
+Layer / Adapter / Strategy 插件
+              |
+              v
+      MemoryCatalog (generation)
+              |
+              v
+    MemoryTopology (generation)
+              |
+ request -> Guard -> Strategy -> MemoryPlan
+                              -> Kernel validation
+                              -> executor -> MemoryReceipt
+```
+
+- `MemoryCatalog` 是 Host 全局的贡献目录；注册和卸载都由 Cordis 生命周期拥有，并单调增加 generation。
+- `MemoryTopologyManager` 原子保存某一代组合，并跟随运行中的 Catalog 把新 Layer 加为关闭候选、把已卸载 Layer 移出候选。一次操作固定同一组 Catalog/Topology/Guard generation；任一代变化后，旧计划必须重新规划。
+- `MemoryKernel` 在 Strategy 之后再次校验 Layer、能力、Adapter 绑定、参与模式、预算与不可绕过的 Guard。Strategy 没有数据面句柄，不能直接读写记忆。
+- Strategy 没有提出任何可执行步骤时操作失败关闭；执行结果使用 `succeeded / partial / failed / cancelled` 回执，不把部分失败伪装成成功。
+- 关闭 Layer 只停止参与，不删除、迁移或隐藏其控制面元数据。重新开启仍使用原有存储。
+
+每层有四个独立参与通道：`recall`、`write`、`projection`、`maintenance`。`off` 完全拒绝该通道；`manual` 只接受用户/控制面显式操作；`automatic` 同时允许显式操作和模型、生命周期或系统自动操作。模型工具属于 `automatic` 触发，不能借“工具调用是显式的”绕过 `manual`。
+
+Runtime、Documents、Memory Spaces 由三个 Layer workspace 包提供；`default-three-tier` Strategy 只是默认组合。扩展 Layer 首次被 Catalog 发现时以“关闭 + 仅手动”加入候选拓扑，用户可以在描述符驱动的设置页检查后再启用。
+
+## Workspace 与单包发布
+
+源码按职责拆分，但用户仍只安装一个 `dsh-mnemon`。这保持 DSH profile 的安装、升级和回退原子性，也避免插件作者现在就承担多个 npm 包的版本矩阵。
+
+| Workspace | 发布子路径 | 职责 |
+|---|---|---|
+| `packages/contracts` | `dsh-mnemon/contracts` | 纯 JSON/wire 契约；不依赖 DSH、Cordis、React 或 Provider SDK |
+| `packages/kernel` | `dsh-mnemon/kernel` | Catalog、Topology、Plan、Receipt、Guard 与 Kernel |
+| `packages/layer-*` | `dsh-mnemon/layers/*` | 三个默认 Layer 描述符与生命周期注册函数 |
+| `packages/strategy-sdk` | `dsh-mnemon/strategy-sdk` | Strategy 定义、权限清单与 replay 测试原语 |
+| `packages/strategy-default-three-tier` | `dsh-mnemon/strategy-default-three-tier` | 当前兼容行为的默认 Strategy 和拓扑 |
+| `packages/provider-sdk` | `dsh-mnemon/provider-sdk` | Adapter Factory Registry 与第三层 Provider 扩展接口 |
+| `packages/extension-sdk` | `dsh-mnemon/extension-sdk` | Host 全局扩展注册与每个运行图的生命周期附着 |
+| 根 `src/` | `dsh-mnemon` / `dsh-mnemon/client` | DSH Host、现有控制器、Provider 实现、RPC 与 WebUI 组合根 |
+
+内部 workspace 当前标记为 `private`；公开且受兼容承诺的是 `dsh-mnemon/*` exports。未来只有在生态确实需要独立发布节奏时，才将内部包拆成多个 npm 制品。
+
+## Cordis 时空组合与扩展生命周期
+
+Host 通过 Cordis 发布 `mnemonMemory` 服务，同时 `dsh-mnemon/extension-sdk` 提供进程级预注册入口。扩展可以在 Host 挂载前注册，也可以在运行中注册或卸载；每个 global/workspace 运行图拥有独立 Catalog、Topology 和 Kernel，但接收同一套 Host 扩展贡献。运行中的 Catalog 变更与 Topology 新代同步；设置切换则先完整构造并验证下一代运行图，再原子交换稳定代理。
+
+Cordis isolate 用于所有权、装卸和作用域组合，不是安全沙箱。Layer executor、Provider Adapter 和普通 JavaScript Strategy 都与 Host 同进程，只有受信任的已安装插件才能提供。模型生成的 Strategy 必须先经过 `MemoryStrategyPlugin` 不可变清单、Layer/Adapter/Capability/maxSteps 权限约束和 replay；Kernel 随后仍执行权威校验。当前版本不会自动执行模型刚写出的任意代码；未来的 shadow、canary、签名制品和回滚流程建立在这些边界之上。
+
 ## 组件图
 
 [![dsh-mnemon 运行时架构](../assets/diagrams/zh-CN/project-architecture.svg)](../assets/diagrams/zh-CN/project-architecture.svg)
@@ -33,11 +84,10 @@
 ```text
 settings.register("mnemon")
   -> resolveConfig
-  -> createRunner
-  -> MnemonService
-  -> RuntimeMemoryController
-  -> DocumentManager
-  -> StorageScopeInspector
+  -> attach MemoryExtensionHost contributions
+  -> MemoryCatalog / MemoryTopology / MemoryKernel
+  -> createRunner / MnemonService
+  -> RuntimeMemoryController / DocumentManager / StorageScopeInspector
   -> MnemonSubagentCoordinator
   -> MnemonLifecycle
   -> tools / commands / prompt sections

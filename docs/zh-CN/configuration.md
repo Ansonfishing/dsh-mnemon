@@ -12,7 +12,7 @@ $DSH_HOME/settings.yaml
 
 默认通常是 `~/.dsh/settings.yaml`。当前全部配置标记为 `live` 生效；保存后会先初始化候选运行图，再原子切换 Host 服务。
 
-Web 设置页编辑 `displayMode`、`storageScope`、`dataDir`、后台任务 Agent 的模型路由，以及 `mnemon-ui` 下的回合记忆条和存入记忆按钮。“全局 / 工作区”是整个三层记忆系统的范围；`custom` 数据位置与 ZIP 备份 / 迁移收纳在 Mnemon Native 折叠栏。每个第三方 Provider 有独立的服务配置折叠栏；这里保存的是 endpoint、凭据或可执行文件等可复用服务信息，不会创建记忆体。具体记忆体及其数据范围仍在“记忆体 → 概览”中创建。其他高级项需要直接修改 YAML。
+Web 设置页编辑 `displayMode`、`storageScope`、`dataDir`、由运行中 Catalog 生成的 Layer 拓扑、后台任务 Agent 的模型路由，以及 `mnemon-ui` 下的回合记忆条和存入记忆按钮。“全局 / 工作区”是整个记忆系统的范围；`custom` 数据位置与 ZIP 备份 / 迁移收纳在 Mnemon Native 折叠栏。每个第三方 Provider 有独立的服务配置折叠栏；这里保存的是 endpoint、凭据或可执行文件等可复用服务信息，不会创建记忆体。具体记忆体及其数据范围仍在“记忆体 → 概览”中创建。其他高级项需要直接修改 YAML。
 
 ## 完整示例
 
@@ -25,6 +25,19 @@ mnemon:
   # store: legacy-store          # 兼容发现提示，不是常规路由目标
   timeoutMs: 10000
   defaultRecallLimit: 10
+  memoryTopology:
+    id: default-three-tier
+    strategyId: default-three-tier
+    layers:
+      runtime:
+        enabled: true
+        participation: { recall: automatic, write: automatic, projection: automatic, maintenance: automatic }
+      documents:
+        enabled: true
+        participation: { recall: automatic, write: automatic, projection: automatic, maintenance: automatic }
+      memory-spaces:
+        enabled: true
+        participation: { recall: automatic, write: automatic, projection: automatic, maintenance: automatic }
   recallQuality:
     policy: strict-v1
     lowScoreThreshold: 0.25
@@ -57,6 +70,11 @@ mnemon:
 | `store` | 未设置 | `[A-Za-z0-9][A-Za-z0-9_-]*` | 用于旧 Store 的兼容发现/首选提示；语义操作由 Memory Space 路由 |
 | `timeoutMs` | `10000` | 100–120000 ms | 单次 CLI 硬超时 |
 | `defaultRecallLimit` | `10` | 1–50 | 服务和 UI 默认召回条数；不同入口可能再收紧 |
+| `memoryTopology.id` | `default-three-tier` | 组件 ID | 当前拓扑身份；用于描述符、计划与回执关联 |
+| `memoryTopology.strategyId` | `default-three-tier` | 已注册 Strategy ID | 选择由 Catalog 提供的调度策略；未知 ID 会拒绝候选运行图 |
+| `memoryTopology.layers.<id>.enabled` | 三个默认层为 `true` | boolean | 是否让该 Layer 参与；关闭不会删除或迁移已有数据 |
+| `memoryTopology.layers.<id>.participation.*` | `automatic` | `off` / `manual` / `automatic` | 分别控制 `recall`、`write`、`projection`、`maintenance`；扩展层首次发现时是关闭且仅手动 |
+| `memoryTopology.layers.<id>.adapterIds` | `[]` | 已注册 Adapter ID 数组 | 为该 Layer 绑定具体 Adapter；未知或能力不匹配的 Adapter 会在构图/规划时拒绝 |
 | `recallQuality.policy` | `strict-v1` | 已注册策略 ID | 在召回正文序列化给 Agent 或客户端前执行的确定性策略 |
 | `recallQuality.lowScoreThreshold` | `0.25` | 0–1，低于高分阈值 | `strict-v1` 会移除低于此边界的标准化分数结果 |
 | `recallQuality.highScoreThreshold` | `0.6` | 0–1，高于低分阈值 | 保留结果达到此边界时标记为高相关度 |
@@ -76,6 +94,18 @@ mnemon:
 | `mnemon-ui.saveAction` | `true` | boolean | 已定稿助手回复旁的「存入记忆」图标与确认弹窗；默认开启，**保存后实时生效** |
 
 `mnemon` Host/存储命名空间和 `mnemon-ui` 浏览器呈现命名空间都实时生效。存储根只会在新运行图初始化成功后原子切换；旧版 `mnemon.conversationInteraction` 仍会作为迁移默认值读取，但新保存只写入 `mnemon-ui`。
+
+### Layer 开关与参与模式
+
+`enabled=false` 是路由状态，不是删除操作。状态、Catalog 和管理目录仍可观察；模型工具、上下文投影和数据面 RPC 会在 Host 边界拒绝不允许的操作。
+
+| 模式 | 人工 Web/控制面操作 | 模型工具、生命周期与系统自动操作 |
+|---|---:|---:|
+| `off` | 拒绝 | 拒绝 |
+| `manual` | 允许 | 拒绝 |
+| `automatic` | 允许 | 允许 |
+
+WebUI 从 `memory-system` 描述符读取真实 Layer 和 Strategy，因此扩展插件新增 Layer 时不需要修改前端枚举。设置页把整份 topology 作为一个原子设置提交；候选 Catalog、Strategy、Layer 或 Adapter 无法验证时，当前运行代保持不变。
 
 ### 召回质量策略
 

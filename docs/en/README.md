@@ -28,7 +28,9 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 | Troubleshoot empty recall, misalignment, CLI, or provider errors | [Operations and troubleshooting](./operations.md#troubleshooting) |
 | Use model tools, `/mnemon` commands, or internal RPC | [Interface reference](./interfaces.md) |
 | Understand Host, workers, control plane, and data plane | [Architecture](./architecture.md) |
+| Build a Layer, Adapter, Strategy, or Guard plugin | [Building Memory Extensions](./extensions.md) |
 | Modify code, screenshots, tests, or releases | [Development and verification](./development.md) |
+| Upgrade from the previous release | [v0.3.0 release notes](./releases/v0.3.0.md) |
 | See planned work | [Roadmap](./roadmap.md) |
 
 ## Core terms
@@ -46,7 +48,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 
 ## Documentation boundaries
 
-- User documentation targets the v0.2.0 Sidebar-default experience while covering the compatible Buildin presentation.
+- User documentation targets the v0.3.0 Sidebar-default experience and composable three-tier topology while covering the compatible Buildin presentation.
 - Architecture diagrams describe stable execution boundaries, not live monitoring. Use Status for current counts and versions.
 - RPC is an internal Host-to-client protocol, not a promised stable external API.
 - There is no formal fixed DSH / Mnemon version matrix yet. Back up and validate in an isolated root before upgrading.

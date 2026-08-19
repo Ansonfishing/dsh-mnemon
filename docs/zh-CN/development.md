@@ -24,6 +24,16 @@ pnpm run verify     # typecheck + tests + reproducible build + package validatio
 ## 目录结构
 
 ```text
+packages/
++-- contracts/                 # 纯 JSON/wire 记忆契约
++-- kernel/                    # Catalog、Topology、Plan/Receipt、Guard
++-- layer-runtime/             # 默认 Runtime Layer
++-- layer-documents/           # 默认 Documents Layer
++-- layer-memory-spaces/       # 默认 Memory Spaces Layer
++-- strategy-default-three-tier/ # 默认兼容策略与拓扑
++-- strategy-sdk/              # Strategy manifest 与 replay
++-- provider-sdk/              # Adapter Factory Registry
++-- extension-sdk/             # Host 扩展生命周期
 src/
 +-- index.ts                  # Host composition root
 +-- config.ts                 # settings schema
@@ -51,12 +61,18 @@ cordis.patch.yml              # DSH profile bundle patch
 ## 构建产物
 
 ```text
-tsdown（直接读取 src/）
-  -> lib/index.js             Node ES2024 ESM
+tsdown（读取 src/ 与 packages/）
+  -> lib/index.js             Node ES2024 ESM Host
   -> lib/client.js            DSH browser module wrapper
+  -> lib/contracts.js         wire-safe contracts
+  -> lib/kernel.js            composable memory kernel
+  -> lib/{extension,provider,strategy}-sdk.js
+  -> lib/layers/*.js          default Layer entries
+  -> lib/strategy-default-three-tier.js
 
 tsc -p tsconfig.types.json
-  -> lib/types/**/*.d.ts      只生成声明
+  -> lib/types/src/**/*.d.ts
+  -> lib/types/packages/**/*.d.ts
 
 lightningcss plugin
   -> CSS Modules compiled and injected as scoped <style>
@@ -66,13 +82,21 @@ Host 将所有 package dependency 保持为 external。Client 将 React、ReactD
 
 `lib/` 是发布输入，但已被 Git 忽略，禁止手工编辑。`pnpm run verify:build` 会连续构建两次并比较每个输出文件的 hash；CSS export 顺序或其他非确定性变化会直接失败。
 
-`src/shared/contracts.ts` 是配置结构、RPC 通道、设置协议和 Client 可见 DTO 的唯一事实源。`src/client/` 下的文件只能通过该 contract 导入父级模块。Host 模块可以为兼容性 re-export shared 类型，但不应重新定义 wire DTO。
+`packages/contracts` 是可组合记忆插件边界的纯 JSON 事实源，不得依赖 Cordis、DSH、React、Node-only 数据面或 Provider SDK。`src/shared/contracts.ts` 仍是配置结构、RPC 通道、设置协议和 Client 可见 DTO 的唯一事实源；它可以引用纯记忆契约。`src/client/` 下的文件只能通过这些 contract 导入父级模块。Host 模块可以为兼容性 re-export 类型，但不应重新定义 wire DTO。
+
+## Workspace 与发布策略
+
+内部 workspace 全部保持 `private`，不单独发布。版本、构建与回退以根 `dsh-mnemon` 为原子单位；公开兼容承诺只针对 `package.json#exports` 中的 `dsh-mnemon/*` 子路径。增加公共入口时必须同时更新 tsdown entry、声明 include、package exports、发布包白名单、publint / attw 与双语扩展文档。
+
+默认 Layer 与 Strategy 不应依赖根 Host 组合。现有 Runtime、Documents、Memory Spaces 控制器继续位于 `src/`，作为兼容数据面由 Host 组装；新扩展通过 Catalog 注册，不得修改硬编码前端 enum。组件注册必须返回 disposer，并覆盖重复 ID、运行中注册、卸载与旧 Plan 失效测试。
 
 ## 测试层次
 
 现有 Vitest 套件覆盖：
 
 - 配置解析、CLI 查找、进程串行；
+- Catalog/Topology generation、参与模式、Strategy 越权、Guard 变化、Plan/Receipt 与 stale plan；
+- Extension Host 的预注册、运行中注册、热卸载、Cordis 生命周期和 Strategy replay；
 - Memory Space 发现、激活、路由与合并；
 - recall payload 兼容和图谱解析；
 - Runtime JSON/Markdown 一致性、锁、容量、UTF-8 和 revision；
@@ -177,6 +201,8 @@ Web locale 变更时，中文键集合仍是类型事实源；英文词典必须
 [ ] pnpm run verify
 [ ] 确认 worktree 中没有生成的 lib diff
 [ ] 确认发布包只包含运行时、声明、根文档和 cordis.patch.yml
+[ ] 从打包产物导入每个公开 `dsh-mnemon/*` 子路径
+[ ] 验证运行中注册/卸载扩展会更新 generation，且旧 Plan 被拒绝
 [ ] install the built/local bundle into an isolated Web profile
 [ ] confirm `verify:headless` activates the built bundle in an isolated Headless profile
 [ ] run real Mnemon CLI and WebUI smoke tests
