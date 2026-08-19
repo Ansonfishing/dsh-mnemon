@@ -18,8 +18,16 @@ describe('responsive dialog layout invariants', () => {
     expect(viewCss).toContain('.modal, .modalWide { width: 100vw;')
     expect(viewCss).toContain('max-height: calc(100dvh - max(10px, env(safe-area-inset-top, 0px)))')
     expect(viewCss).toContain('.modalFooterActions button { min-width: 0; min-height: 44px;')
+    expect(viewCss).toContain('.modalBody button { min-height: 44px; }')
     expect(sidebarCss).toContain('.shell .modal, .shell .modal.modalWide { width: 100vw;')
+    expect(sidebarCss).toContain(".shell .modal > [class*='modalBody'] button { min-height: 44px; }")
     expect(sidebarCss).toContain(".shell .modal > [class*='modalFooter'] [class*='modalFooterActions'] button { min-height: 44px;")
+  })
+
+  it('keeps every modal control touch-sized on coarse-pointer tablets', () => {
+    expect(viewCss).toContain('@media (pointer: coarse)')
+    expect(viewCss).toContain('.modalBody button, .modalFooter button { min-height: 44px; }')
+    expect(sidebarCss).toContain(".shell .modal > [class*='modalFooter'] button { min-height: 44px; }")
   })
 
   it('keeps dialog content and actions clear of landscape safe areas', () => {
@@ -40,5 +48,6 @@ describe('responsive dialog layout invariants', () => {
     expect(saveActionCss).toContain('max-height: calc(100dvh - 16px);')
     expect(saveActionCss).toContain('min-height: clamp(140px, 32dvh, 220px);')
     expect(saveActionCss).toContain('min-height: 44px;')
+    expect(saveActionCss).toContain('@media (pointer: coarse) and (max-width: 640px), (pointer: coarse) and (max-height: 560px)')
   })
 })

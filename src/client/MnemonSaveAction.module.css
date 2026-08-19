@@ -137,7 +137,7 @@
   }
 }
 
-@media (max-width: 640px) and (pointer: coarse) {
+@media (pointer: coarse) and (max-width: 640px), (pointer: coarse) and (max-height: 560px) {
   .candidate textarea { font-size: 16px; }
 }
 
