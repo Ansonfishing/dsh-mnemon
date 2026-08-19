@@ -676,8 +676,12 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 .compactListProgress { display: grid; justify-items: stretch; gap: 7px; margin-top: 8px; padding: 10px 2px 2px; border-top: 1px solid var(--mn-line); color: var(--mn-faint); font-size: 10px; text-align: center; }
 .compactListProgress button { width: 100%; }
 
-.modalBackdrop { position: fixed; z-index: 1300; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; overscroll-behavior: contain; padding: 24px; background: color-mix(in srgb, #020617 54%, transparent); touch-action: none; }
-.modal { display: flex; box-sizing: border-box; width: min(680px, calc(100vw - 48px)); min-height: 0; max-height: calc(100vh - 48px); flex-direction: column; overflow: hidden; border: 1px solid var(--mn-line); border-radius: 14px; background: var(--mn-layer-1); box-shadow: 0 22px 60px rgb(2 6 23 / 22%); touch-action: auto; }
+.modalPortal { position: fixed; z-index: 2147483647; inset: 0; isolation: isolate; pointer-events: none; }
+.modalTheme.modalTheme.modalTheme { position: absolute; inset: 0; display: block; width: auto; height: auto; min-width: 0; min-height: 0; overflow: visible; color: var(--mn-text); background: transparent; pointer-events: none; }
+.modalBackdrop { position: fixed; z-index: 0; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; overscroll-behavior: contain; padding: 24px; background: color-mix(in srgb, #020617 54%, transparent); touch-action: none; pointer-events: auto; animation: mnemon-dialog-backdrop-enter 180ms ease-out both; }
+.modal { display: flex; box-sizing: border-box; width: min(680px, calc(100vw - 48px)); min-height: 0; max-height: calc(100vh - 48px); flex-direction: column; overflow: hidden; border: 1px solid var(--mn-line); border-radius: 14px; background: var(--mn-layer-1); box-shadow: 0 22px 60px rgb(2 6 23 / 22%); touch-action: auto; transform-origin: 50% 100%; backface-visibility: hidden; will-change: transform, opacity; animation: mnemon-dialog-enter 220ms cubic-bezier(.2, .75, .2, 1) both; }
+.modalBackdrop[data-closing], .modal[data-closing] { pointer-events: none; }
+.modalDragHandle { display: none; }
 .modalWide { width: min(780px, calc(100vw - 48px)); }
 .modal > header { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 15px 18px; border-bottom: 1px solid var(--mn-line); }
 .modal > header > div { min-width: 0; }
@@ -691,6 +695,9 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 .modalFooterActions { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; }
 .modalInlineStatus { margin: 12px 0 0; color: var(--mn-muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
 @supports (height: 100dvh) { .modal { max-height: calc(100dvh - 48px); } }
+@keyframes mnemon-dialog-backdrop-enter { from { opacity: 0; } }
+@keyframes mnemon-dialog-enter { from { opacity: 0; transform: translate3d(0, 10px, 0) scale(.985); } }
+@keyframes mnemon-sheet-enter { from { transform: translate3d(0, calc(100% + 32px), 0); } to { transform: translate3d(0, var(--mn-modal-drag-y, 0px), 0); } }
 .metadataDialog { display: grid; gap: 12px; }
 .metadataToolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--mn-muted); font-size: 10px; }
 .metadataToolbar > span { display: flex; min-width: 0; align-items: center; gap: 7px; }
@@ -846,8 +853,11 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
   .workspacePicker select { width: min(170px, 32vw); }
   .statusCluster > span:not(.statusDot) { display: none; }
   .modalBackdrop { align-items: flex-end; padding: max(10px, env(safe-area-inset-top, 0px)) 0 0; }
-  .modal, .modalWide { width: 100vw; max-height: calc(100vh - max(10px, env(safe-area-inset-top, 0px))); border-radius: 18px 18px 0 0; border-bottom: 0; }
-  .modal::before { display: block; width: 36px; height: 4px; flex: none; margin: 8px auto 0; border-radius: 999px; background: var(--mn-line-strong); content: ''; }
+  .modal, .modalWide { width: 100vw; max-height: calc(100vh - max(10px, env(safe-area-inset-top, 0px))); border-radius: 18px 18px 0 0; border-bottom: 0; transform: translate3d(0, var(--mn-modal-drag-y, 0px), 0); animation-name: mnemon-sheet-enter; animation-duration: 340ms; animation-timing-function: cubic-bezier(.2, .82, .2, 1); }
+  .modalDragHandle { display: grid; width: 100%; height: 28px; flex: none; place-items: center; cursor: grab; touch-action: none; user-select: none; }
+  .modalDragHandle span { width: 36px; height: 4px; border-radius: 999px; background: var(--mn-line-strong); transition: width 140ms ease, background-color 140ms ease; }
+  .modal[data-dragging] .modalDragHandle { cursor: grabbing; }
+  .modal[data-dragging] .modalDragHandle span { width: 44px; background: color-mix(in srgb, var(--mn-accent) 52%, var(--mn-line-strong)); }
   .modal > header { gap: 12px; padding: 10px max(14px, env(safe-area-inset-right, 0px)) 12px max(14px, env(safe-area-inset-left, 0px)); }
   .modal > header p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
   .modal > header .iconButton { width: 44px; height: 44px; margin: -4px -5px -4px 0; }
@@ -995,6 +1005,7 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 
 @media (prefers-reduced-motion: reduce) {
   .shell *, .shell *::before, .shell *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+  .modalBackdrop, .modal { animation: none !important; }
   .insightCard:hover { transform: none; }
   .flowConnector[data-active] i::before { display: none; }
 }
