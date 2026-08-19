@@ -65,9 +65,15 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: strin
     const packs = new MnemonPackManager(runner, config, components => {
       if (components.includes('memory-spaces')) service.memoryBodies.reload()
     })
+    let disposed = false
     return {
       config, runner, service, runtimeMemory, documents, storage, packs, memoryCatalog, memoryTopology, memoryKernel,
-      dispose: () => extensionAttachment?.release(),
+      dispose: () => {
+        if (disposed) return
+        disposed = true
+        memoryTopology.dispose()
+        extensionAttachment?.release()
+      },
     }
   } catch (error) {
     extensionAttachment?.dispose()

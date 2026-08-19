@@ -156,6 +156,7 @@ export interface MemoryPlan {
   topologyId: string
   topologyGeneration: number
   catalogGeneration: number
+  guardGeneration: number
   strategyId: string
   strategyVersion: string
   operation: string
@@ -191,6 +192,7 @@ export interface MemoryReceipt {
   topologyId: string
   topologyGeneration: number
   catalogGeneration: number
+  guardGeneration: number
   strategyId: string
   strategyVersion: string
   operation: string

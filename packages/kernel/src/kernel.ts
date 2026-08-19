@@ -61,6 +61,7 @@ function checkBudget(request: MemoryPlanRequest): void {
 /** Plans and executes bounded operations without granting strategies direct data-plane access. */
 export class MemoryKernel {
   private readonly guards = new Map<string, MemoryGuardRegistration>()
+  private currentGuardGeneration = 0
   private readonly now: () => Date
   private readonly id: () => string
   private readonly receiptSink: MemoryReceiptSink | undefined
@@ -136,8 +137,14 @@ export class MemoryKernel {
     if (!/^[a-z][a-z0-9-]{0,127}$/u.test(id)) throw new Error('memory guard id must match [a-z][a-z0-9-]{0,127}')
     if (this.guards.has(id)) throw new Error(`memory guard is already registered: ${id}`)
     this.guards.set(id, guard)
+    this.currentGuardGeneration += 1
+    let active = true
     return () => {
-      if (this.guards.get(id) === guard) this.guards.delete(id)
+      if (!active) return
+      active = false
+      if (this.guards.get(id) !== guard) return
+      this.guards.delete(id)
+      this.currentGuardGeneration += 1
     }
   }
 
@@ -183,6 +190,7 @@ export class MemoryKernel {
       topologyId: descriptor.topology.id,
       topologyGeneration: descriptor.topology.generation,
       catalogGeneration: descriptor.catalog.generation,
+      guardGeneration: this.currentGuardGeneration,
       strategyId: proposal.strategyId,
       strategyVersion: proposal.strategyVersion,
       operation: request.operation,
@@ -199,6 +207,9 @@ export class MemoryKernel {
     const current = this.descriptor()
     if (plan.topologyGeneration !== current.topology.generation || plan.catalogGeneration !== current.catalog.generation) {
       throw new Error('memory plan is stale; re-plan against the active generation')
+    }
+    if (plan.guardGeneration !== this.currentGuardGeneration) {
+      throw new Error('memory plan is stale; re-plan against the active guards')
     }
     if (plan.operation !== request.operation || plan.trigger !== request.trigger) throw new Error('memory plan does not match the execution request')
     const startedAt = this.now().toISOString()
@@ -241,6 +252,7 @@ export class MemoryKernel {
       topologyId: plan.topologyId,
       topologyGeneration: plan.topologyGeneration,
       catalogGeneration: plan.catalogGeneration,
+      guardGeneration: plan.guardGeneration,
       strategyId: plan.strategyId,
       strategyVersion: plan.strategyVersion,
       operation: plan.operation,

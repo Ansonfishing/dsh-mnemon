@@ -75,6 +75,19 @@ describe('LiveMnemonRuntime workspace routing', () => {
     configured.dispose()
   })
 
+  it('reconciles extensions registered and unloaded after the runtime is live', () => {
+    const extensions = new MemoryExtensionHost()
+    const runtime = createRuntimeGraph(resolveConfig({ storageScope: 'global', cliPath: '/fake/mnemon' }), undefined, extensions)
+    const dispose = extensions.register({
+      descriptor: { id: 'late-extension', version: '1', label: 'Late', description: 'Late contribution.' },
+      layers: [{ descriptor: { id: 'late-layer', label: 'Late', description: 'Late memory layer.', role: 'late-memory', order: 500, capabilities: ['recall'] } }],
+    })
+    expect(runtime.memoryTopology.snapshot().layers.find(layer => layer.id === 'late-layer')).toMatchObject({ enabled: false })
+    dispose()
+    expect(runtime.memoryTopology.snapshot().layers.find(layer => layer.id === 'late-layer')).toBeUndefined()
+    runtime.dispose()
+  })
+
   it('separates the inspected workspace from the current session execution workspace', () => {
     const workspaceOne = temporaryDirectory('workspace-one')
     const workspaceTwo = temporaryDirectory('workspace-two')
