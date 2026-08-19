@@ -51,6 +51,29 @@ describe('composable memory system', () => {
     expect(initial.layers.find(layer => layer.id === 'documents')).toMatchObject({ enabled: true })
   })
 
+  it('reconciles live Catalog additions and removals as disabled topology candidates', () => {
+    const catalog = new MemoryCatalog()
+    registerDefaultMemorySystem(catalog)
+    const topology = new MemoryTopologyManager(catalog, DEFAULT_THREE_TIER_TOPOLOGY)
+    const disposeLayer = catalog.registerLayer({
+      descriptor: {
+        id: 'episodic',
+        label: 'Episodic',
+        description: 'External event memory.',
+        role: 'episodic',
+        order: 400,
+        capabilities: ['recall'],
+      },
+    })
+    expect(topology.snapshot().layers.find(layer => layer.id === 'episodic')).toMatchObject({
+      enabled: false,
+      participation: { recall: 'manual', write: 'manual', projection: 'manual', maintenance: 'manual' },
+    })
+    disposeLayer()
+    expect(topology.snapshot().layers.find(layer => layer.id === 'episodic')).toBeUndefined()
+    topology.dispose()
+  })
+
   it('plans only compatible enabled layers and enforces automatic participation', async () => {
     const catalog = new MemoryCatalog()
     registerDefaultMemorySystem(catalog)
@@ -87,6 +110,17 @@ describe('composable memory system', () => {
     const plan = await kernel.plan(plannedRequest)
     topology.configureLayer('documents', { enabled: false })
     await expect(kernel.execute(plan, plannedRequest)).rejects.toThrow('memory plan is stale')
+  })
+
+  it('rejects a plan when the authoritative Guard set changes', async () => {
+    const catalog = new MemoryCatalog()
+    registerDefaultMemorySystem(catalog)
+    const topology = new MemoryTopologyManager(catalog, DEFAULT_THREE_TIER_TOPOLOGY)
+    const kernel = new MemoryKernel(catalog, topology)
+    const plannedRequest = request({ candidateLayerIds: ['memory-spaces'] })
+    const plan = await kernel.plan(plannedRequest)
+    kernel.registerGuard({ id: 'late-guard', decide: () => ({ kind: 'allow' }) })
+    await expect(kernel.execute(plan, plannedRequest)).rejects.toThrow('active guards')
   })
 
   it('executes bounded steps and records a partial receipt', async () => {

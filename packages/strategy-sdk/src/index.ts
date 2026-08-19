@@ -36,15 +36,15 @@ export function defineMemoryStrategyPlugin(plugin: MemoryStrategyPlugin): Readon
     throw new Error('memory strategy plugin maxSteps must be an integer within 1..100')
   }
   const manifest = Object.freeze({
-      ...plugin.manifest,
-      metadata: Object.freeze({ ...plugin.manifest.metadata }),
-      permissions: Object.freeze({
-        ...plugin.manifest.permissions,
-        layerIds: Object.freeze([...new Set(plugin.manifest.permissions.layerIds)]) as unknown as string[],
-        adapterIds: Object.freeze([...new Set(plugin.manifest.permissions.adapterIds)]) as unknown as string[],
-        capabilities: Object.freeze([...new Set(plugin.manifest.permissions.capabilities)]) as unknown as MemoryPlanRequest['capability'][],
-      }),
-    })
+    ...plugin.manifest,
+    metadata: Object.freeze({ ...plugin.manifest.metadata }),
+    permissions: Object.freeze({
+      ...plugin.manifest.permissions,
+      layerIds: Object.freeze([...new Set(plugin.manifest.permissions.layerIds)]) as unknown as string[],
+      adapterIds: Object.freeze([...new Set(plugin.manifest.permissions.adapterIds)]) as unknown as string[],
+      capabilities: Object.freeze([...new Set(plugin.manifest.permissions.capabilities)]) as unknown as MemoryPlanRequest['capability'][],
+    }),
+  })
   const allowedLayers = new Set(manifest.permissions.layerIds)
   const allowedAdapters = new Set(manifest.permissions.adapterIds)
   const allowedCapabilities = new Set(manifest.permissions.capabilities)

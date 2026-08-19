@@ -1,5 +1,6 @@
 import type { MemoryCatalog } from './catalog.ts'
 import type {
+  MemoryCatalogSnapshot,
   MemoryLayerParticipation,
   MemoryParticipationMode,
   MemoryTopologyDefinition,
@@ -9,6 +10,12 @@ import type {
 
 const TOPOLOGY_ID = /^[a-z][a-z0-9-]{0,127}$/u
 const PARTICIPATION_MODES = new Set<MemoryParticipationMode>(['off', 'manual', 'automatic'])
+const DISCOVERED_LAYER_PARTICIPATION: MemoryLayerParticipation = {
+  recall: 'manual',
+  write: 'manual',
+  projection: 'manual',
+  maintenance: 'manual',
+}
 
 function cloneLayer(value: MemoryTopologyLayer): MemoryTopologyLayer {
   for (const [channel, mode] of Object.entries(value.participation)) {
@@ -39,6 +46,7 @@ export class MemoryTopologyManager {
   private current?: MemoryTopologySnapshot
   private currentGeneration = 0
   private readonly listeners = new Set<MemoryTopologyListener>()
+  private readonly unsubscribeCatalog: () => void
 
   constructor(
     private readonly catalog: MemoryCatalog,
@@ -46,6 +54,7 @@ export class MemoryTopologyManager {
     private readonly now: () => Date = () => new Date(),
   ) {
     this.replace(initial)
+    this.unsubscribeCatalog = catalog.subscribe(snapshot => this.reconcileCatalog(snapshot))
   }
 
   snapshot(): MemoryTopologySnapshot {
@@ -91,6 +100,47 @@ export class MemoryTopologyManager {
   subscribe(listener: MemoryTopologyListener): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  /** Stop following Catalog changes while preserving this generation for pinned operations. */
+  dispose(): void {
+    this.unsubscribeCatalog()
+    this.listeners.clear()
+  }
+
+  private reconcileCatalog(catalog: MemoryCatalogSnapshot): void {
+    if (this.current === undefined) return
+    const availableLayers = new Set(catalog.layers.map(layer => layer.id))
+    const availableAdapters = new Set(catalog.adapters.map(adapter => adapter.id))
+    const layers = this.current.layers
+      .filter(layer => availableLayers.has(layer.id))
+      .map(layer => ({
+        ...layer,
+        participation: { ...layer.participation },
+        adapterIds: layer.adapterIds.filter(id => availableAdapters.has(id)),
+      }))
+    const configured = new Set(layers.map(layer => layer.id))
+    for (const descriptor of catalog.layers) {
+      if (configured.has(descriptor.id)) continue
+      layers.push({
+        id: descriptor.id,
+        enabled: false,
+        participation: { ...DISCOVERED_LAYER_PARTICIPATION },
+        adapterIds: [],
+      })
+    }
+    const previous = this.current
+    this.currentGeneration += 1
+    this.current = {
+      id: previous.id,
+      strategyId: previous.strategyId,
+      layers,
+      generation: this.currentGeneration,
+      catalogGeneration: catalog.generation,
+      createdAt: this.now().toISOString(),
+    }
+    const snapshot = this.snapshot()
+    for (const listener of this.listeners) listener(snapshot, previous)
   }
 
   private validate(definition: MemoryTopologyDefinition): void {
