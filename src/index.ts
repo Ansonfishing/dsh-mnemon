@@ -16,6 +16,7 @@ import { StorageScopeInspector } from './storage-scope.ts'
 import { MnemonPackManager } from './pack.ts'
 import { VersionUpdateManager } from './version-updates.ts'
 import type { HostWorkspaceRegistry } from './contracts.ts'
+import { MemoryExtensionHost, memoryExtensions } from '../packages/extension-sdk/src/index.ts'
 
 export {
   BALANCED_RECALL_QUALITY_POLICY,
@@ -33,10 +34,11 @@ export type {
 } from './recall-quality/index.ts'
 
 export const name = 'dsh-mnemon'
+export const provide = ['mnemonMemory']
 // workspaceRegistry belongs to the Web profile. Core tools, lifecycle hooks,
 // and per-Agent cwd routing must also mount in profiles such as Headless.
 export const inject = ['tools', 'settings', 'commands', 'agents', 'subagents']
-export { Config, InteractionConfig, resolveConfig, resolveInteractionConfig, DocumentManager, LiveMnemonRuntime, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, StorageScopeInspector, MnemonPackManager, VersionUpdateManager, createRunner, createRuntimeGraph }
+export { Config, InteractionConfig, resolveConfig, resolveInteractionConfig, DocumentManager, LiveMnemonRuntime, MemoryExtensionHost, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, StorageScopeInspector, MnemonPackManager, VersionUpdateManager, createRunner, createRuntimeGraph }
 export type { MnemonConfig }
 
 /** Resolve the optional Web workspace service at call time, not plugin-mount time. */
@@ -51,20 +53,22 @@ function optionalWorkspaceRegistry(ctx: HostContextShape): HostWorkspaceRegistry
 /** Mount native model tools on every DSH surface and UI RPC only when Web connection exists. */
 export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   const ctx = rawContext as unknown as HostContextShape
+  const extensions = memoryExtensions
+  ctx.provide?.('mnemonMemory', extensions)
   const prepared = new WeakMap<object, MnemonRuntimeGraph>()
   const settings = ctx.settings.register<Config>('mnemon', Config, {
     base: config,
     applies: 'live',
     validate: value => {
-      prepared.set(value, createRuntimeGraph(resolveConfig(value)))
+      prepared.set(value, createRuntimeGraph(resolveConfig(value), undefined, extensions))
     },
   })
   const initialSettings = settings.get()
-  const runtime = new LiveMnemonRuntime(prepared.get(initialSettings) ?? createRuntimeGraph(resolveConfig(initialSettings)), optionalWorkspaceRegistry(ctx), ctx.agents)
+  const runtime = new LiveMnemonRuntime(prepared.get(initialSettings) ?? createRuntimeGraph(resolveConfig(initialSettings), undefined, extensions), optionalWorkspaceRegistry(ctx), ctx.agents, extensions)
   const resolved = runtime.config
   ctx.on('settings/updated', ((namespace: string, next: Config) => {
     if (namespace !== 'mnemon') return
-    runtime.swap(prepared.get(next) ?? createRuntimeGraph(resolveConfig(next)))
+    runtime.swap(prepared.get(next) ?? createRuntimeGraph(resolveConfig(next), undefined, extensions))
   }) as never)
   ctx.settings.register('mnemon-ui', InteractionConfig, {
     base: resolveInteractionConfig(resolved.conversationInteraction),

@@ -17,7 +17,18 @@ const CSS_VIRTUAL_SUFFIX = '.mjs'
 
 const host: UserConfig = {
   name: PLUGIN_ID,
-  entry: ['src/index.ts'],
+  entry: {
+    index: 'src/index.ts',
+    contracts: 'packages/contracts/src/index.ts',
+    kernel: 'packages/kernel/src/index.ts',
+    'extension-sdk': 'packages/extension-sdk/src/index.ts',
+    'provider-sdk': 'src/provider-sdk.ts',
+    'strategy-sdk': 'packages/strategy-sdk/src/index.ts',
+    'strategy-default-three-tier': 'packages/strategy-default-three-tier/src/index.ts',
+    'layers/runtime': 'packages/layer-runtime/src/index.ts',
+    'layers/documents': 'packages/layer-documents/src/index.ts',
+    'layers/memory-spaces': 'packages/layer-memory-spaces/src/index.ts',
+  },
   outDir: 'lib',
   format: ['esm'],
   platform: 'node',

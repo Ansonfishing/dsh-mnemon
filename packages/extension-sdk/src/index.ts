@@ -1,0 +1,176 @@
+import type { MemoryAdapterRegistration, MemoryCatalog, MemoryLayerRegistration, MemoryStrategyRegistration } from '../../kernel/src/catalog.ts'
+import type { MemoryGuardRegistration, MemoryKernel } from '../../kernel/src/kernel.ts'
+
+const EXTENSION_ID = /^[a-z][a-z0-9-]{0,127}$/u
+
+export interface MemoryExtensionDescriptor {
+  id: string
+  version: string
+  label: string
+  description: string
+}
+
+export interface MemoryExtension {
+  descriptor: MemoryExtensionDescriptor
+  layers?: readonly MemoryLayerRegistration[]
+  adapters?: readonly MemoryAdapterRegistration[]
+  strategies?: readonly MemoryStrategyRegistration[]
+  /** Guards can only deny; strategies and data-plane executors cannot bypass them. */
+  guards?: readonly MemoryGuardRegistration[]
+}
+
+export interface MemoryExtensionAttachment {
+  bindKernel(kernel: MemoryKernel): void
+  dispose(): void
+  release(): void
+}
+
+interface AttachedTarget {
+  catalog: MemoryCatalog
+  kernel?: MemoryKernel
+  releases: Map<string, () => void>
+  released: boolean
+}
+
+function reverseDispose(disposers: Array<() => void>): void {
+  for (const dispose of disposers.reverse()) dispose()
+}
+
+/**
+ * Host-global extension control plane. Every runtime graph receives the same
+ * contribution set while retaining its own Catalog, Topology and Kernel state.
+ */
+export class MemoryExtensionHost {
+  private readonly extensions = new Map<string, MemoryExtension>()
+  private readonly targets = new Set<AttachedTarget>()
+
+  register(extension: MemoryExtension): () => void {
+    const id = extension.descriptor.id.trim()
+    if (!EXTENSION_ID.test(id)) throw new Error('memory extension id must match [a-z][a-z0-9-]{0,127}')
+    if (this.extensions.has(id)) throw new Error(`memory extension is already registered: ${id}`)
+    const normalized: MemoryExtension = {
+      ...extension,
+      descriptor: { ...extension.descriptor, id },
+    }
+    const applied: AttachedTarget[] = []
+    try {
+      for (const target of this.targets) {
+        target.releases.set(id, this.apply(normalized, target))
+        applied.push(target)
+      }
+    } catch (error) {
+      for (const target of applied.reverse()) {
+        target.releases.get(id)?.()
+        target.releases.delete(id)
+      }
+      throw error
+    }
+    this.extensions.set(id, normalized)
+    let active = true
+    return () => {
+      if (!active) return
+      active = false
+      if (this.extensions.get(id) !== normalized) return
+      this.extensions.delete(id)
+      for (const target of this.targets) {
+        target.releases.get(id)?.()
+        target.releases.delete(id)
+      }
+    }
+  }
+
+  attach(catalog: MemoryCatalog): MemoryExtensionAttachment {
+    const target: AttachedTarget = { catalog, releases: new Map(), released: false }
+    try {
+      for (const extension of this.extensions.values()) {
+        target.releases.set(extension.descriptor.id, this.apply(extension, target))
+      }
+    } catch (error) {
+      reverseDispose([...target.releases.values()])
+      throw error
+    }
+    this.targets.add(target)
+    return {
+      bindKernel: kernel => {
+        if (target.released) throw new Error('memory extension attachment is released')
+        if (target.kernel !== undefined) throw new Error('memory extension attachment already has a kernel')
+        target.kernel = kernel
+        const guardReleases = new Map<string, () => void>()
+        try {
+          for (const extension of this.extensions.values()) {
+            const disposers: Array<() => void> = []
+            try {
+              for (const guard of extension.guards ?? []) disposers.push(kernel.registerGuard(guard))
+              guardReleases.set(extension.descriptor.id, () => reverseDispose(disposers))
+            } catch (error) {
+              reverseDispose(disposers)
+              throw error
+            }
+          }
+          for (const [id, releaseGuards] of guardReleases) {
+            const releaseCatalog = target.releases.get(id) ?? (() => {})
+            target.releases.set(id, () => {
+              releaseGuards()
+              releaseCatalog()
+            })
+          }
+        } catch (error) {
+          reverseDispose([...guardReleases.values()])
+          delete target.kernel
+          throw error
+        }
+      },
+      dispose: () => {
+        if (target.released) return
+        target.released = true
+        this.targets.delete(target)
+        reverseDispose([...target.releases.values()])
+        target.releases.clear()
+      },
+      // Releasing a retired runtime stops future extension updates but keeps
+      // its registrations intact for operations already pinned to that graph.
+      release: () => {
+        if (target.released) return
+        target.released = true
+        this.targets.delete(target)
+        target.releases.clear()
+      },
+    }
+  }
+
+  descriptors(): MemoryExtensionDescriptor[] {
+    return [...this.extensions.values()]
+      .map(extension => ({ ...extension.descriptor }))
+      .sort((left, right) => left.id.localeCompare(right.id))
+  }
+
+  private apply(extension: MemoryExtension, target: AttachedTarget): () => void {
+    const disposers: Array<() => void> = []
+    try {
+      for (const layer of extension.layers ?? []) disposers.push(target.catalog.registerLayer(layer))
+      for (const adapter of extension.adapters ?? []) disposers.push(target.catalog.registerAdapter(adapter))
+      for (const strategy of extension.strategies ?? []) disposers.push(target.catalog.registerStrategy(strategy))
+      if (target.kernel !== undefined) {
+        for (const guard of extension.guards ?? []) disposers.push(target.kernel.registerGuard(guard))
+      }
+      return () => reverseDispose(disposers)
+    } catch (error) {
+      reverseDispose(disposers)
+      throw error
+    }
+  }
+}
+
+export function defineMemoryExtension<T extends MemoryExtension>(extension: T): T {
+  return extension
+}
+
+/** Process-global registry, allowing extension modules to contribute before the DSH Host mounts. */
+export const memoryExtensions = new MemoryExtensionHost()
+
+export function registerMemoryExtension(extension: MemoryExtension): () => void {
+  return memoryExtensions.register(extension)
+}
+
+export type { MemoryAdapterRegistration, MemoryLayerRegistration, MemoryStrategyRegistration } from '../../kernel/src/catalog.ts'
+export type { MemoryGuardRegistration } from '../../kernel/src/kernel.ts'

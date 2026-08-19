@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveConfig } from '../src/config.ts'
 import type { HostAgent, HostAgentsService, HostWorkspaceRegistry } from '../src/contracts.ts'
 import { createRuntimeGraph, LiveMnemonRuntime } from '../src/live-runtime.ts'
+import { MemoryExtensionHost } from '../packages/extension-sdk/src/index.ts'
 
 const directories: string[] = []
 
@@ -50,6 +51,28 @@ describe('LiveMnemonRuntime workspace routing', () => {
       },
     })
     expect(descriptor.catalog.adapters.map(adapter => adapter.id)).toEqual(expect.arrayContaining(['mnemon-native', 'openviking', 'supermemory']))
+  })
+
+  it('discovers extension layers as disabled topology candidates until explicitly configured', () => {
+    const extensions = new MemoryExtensionHost()
+    extensions.register({
+      descriptor: { id: 'episodic-extension', version: '1', label: 'Episodic', description: 'External episodic layer.' },
+      layers: [{ descriptor: { id: 'episodic', label: 'Episodic', description: 'External event memory.', role: 'episodic', order: 400, capabilities: ['recall', 'write'] } }],
+    })
+    const discovered = createRuntimeGraph(resolveConfig({ storageScope: 'global', cliPath: '/fake/mnemon' }), undefined, extensions)
+    expect(discovered.memoryTopology.snapshot().layers.find(layer => layer.id === 'episodic')).toMatchObject({
+      enabled: false,
+      participation: { recall: 'manual', write: 'manual' },
+    })
+    discovered.dispose()
+
+    const configured = createRuntimeGraph(resolveConfig({
+      storageScope: 'global',
+      cliPath: '/fake/mnemon',
+      memoryTopology: { layers: { episodic: { enabled: true, participation: { recall: 'automatic' } } } },
+    }), undefined, extensions)
+    expect(configured.memoryTopology.snapshot().layers.find(layer => layer.id === 'episodic')).toMatchObject({ enabled: true, participation: { recall: 'automatic' } })
+    configured.dispose()
   })
 
   it('separates the inspected workspace from the current session execution workspace', () => {
