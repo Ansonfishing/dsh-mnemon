@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest'
 const viewCss = readFileSync(new URL('../src/client/MnemonView.module.css', import.meta.url), 'utf8')
 const sidebarCss = readFileSync(new URL('../src/client/MnemonSidebarView.module.css', import.meta.url), 'utf8')
 const saveActionCss = readFileSync(new URL('../src/client/MnemonSaveAction.module.css', import.meta.url), 'utf8')
+const dialogSource = readFileSync(new URL('../src/client/MnemonDialog.tsx', import.meta.url), 'utf8')
+const viewSource = readFileSync(new URL('../src/client/MnemonView.tsx', import.meta.url), 'utf8')
 
 describe('responsive dialog layout invariants', () => {
   it('keeps the dialog body as the only scrollport and the action footer outside it', () => {
@@ -22,6 +24,33 @@ describe('responsive dialog layout invariants', () => {
     expect(sidebarCss).toContain('.shell .modal, .shell .modal.modalWide { width: 100vw;')
     expect(sidebarCss).toContain(".shell .modal > [class*='modalBody'] button { min-height: 44px; }")
     expect(sidebarCss).toContain(".shell .modal > [class*='modalFooter'] [class*='modalFooterActions'] button { min-height: 44px;")
+  })
+
+  it('escapes host stacking contexts through one body-level top layer', () => {
+    expect(dialogSource).toContain("import { createPortal } from 'react-dom'")
+    expect(dialogSource).toContain('document.body,')
+    expect(dialogSource).toContain('data-mnemon-dialog-portal')
+    expect(viewCss).toContain('.modalPortal { position: fixed; z-index: 2147483647; inset: 0; isolation: isolate; pointer-events: none; }')
+    expect(viewCss).toContain('.modalTheme.modalTheme.modalTheme { position: absolute; inset: 0;')
+  })
+
+  it('uses compositor motion and a real drag surface for mobile sheets', () => {
+    expect(dialogSource).toContain('data-dialog-drag-handle')
+    expect(dialogSource).toContain("dialog.style.setProperty('--mn-modal-drag-y'")
+    expect(dialogSource).toContain('setPointerCapture?.(event.pointerId)')
+    expect(dialogSource).toContain("window.addEventListener('pointermove', moveDrag, { passive: false })")
+    expect(dialogSource).toContain('onLostPointerCapture={event =>')
+    expect(viewCss).toContain('@keyframes mnemon-sheet-enter')
+    expect(viewCss).toContain('transform: translate3d(0, var(--mn-modal-drag-y, 0px), 0);')
+    expect(viewCss).toContain('.modalDragHandle { display: grid; width: 100%; height: 28px;')
+    expect(viewCss).toContain('.modalBackdrop, .modal { animation: none !important; }')
+    expect(sidebarCss).toContain('.shell .modalDragHandle span { background: var(--dsw-alias-border-l2); }')
+  })
+
+  it('routes every shared footer cancel action through the exit animation', () => {
+    const dialogCallsWithCancel = viewSource.split('\n').filter(line => line.includes('<SidebarModal') && line.includes("t('common.cancel')"))
+    expect(dialogCallsWithCancel.length).toBeGreaterThan(10)
+    for (const call of dialogCallsWithCancel) expect(call).toContain('data-dialog-close')
   })
 
   it('keeps every modal control touch-sized on coarse-pointer tablets', () => {
