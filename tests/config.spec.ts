@@ -11,6 +11,15 @@ describe('Mnemon config and resolution', () => {
       storageScope: 'global',
       timeoutMs: 10_000,
       defaultRecallLimit: 10,
+      memoryTopology: {
+        id: 'default-three-tier',
+        strategyId: 'default-three-tier',
+        layers: {
+          runtime: { enabled: true, participation: { recall: 'automatic', write: 'automatic', projection: 'automatic', maintenance: 'automatic' }, adapterIds: [] },
+          documents: { enabled: true, participation: { recall: 'automatic', write: 'automatic', projection: 'automatic', maintenance: 'automatic' }, adapterIds: [] },
+          'memory-spaces': { enabled: true, participation: { recall: 'automatic', write: 'automatic', projection: 'automatic', maintenance: 'automatic' }, adapterIds: [] },
+        },
+      },
       recallQuality: {
         policy: 'strict-v1',
         lowScoreThreshold: 0.25,
@@ -43,6 +52,25 @@ describe('Mnemon config and resolution', () => {
       },
       taskAgentModel: { mode: 'inherit' },
     })
+  })
+
+  it('resolves independently switchable memory layer participation without deleting bindings', () => {
+    expect(resolveConfig({
+      memoryTopology: {
+        layers: {
+          documents: {
+            enabled: false,
+            participation: { recall: 'manual', write: 'off' },
+            adapterIds: ['openviking', 'openviking'],
+          },
+        },
+      },
+    }).memoryTopology.layers.documents).toEqual({
+      enabled: false,
+      participation: { recall: 'manual', write: 'off', projection: 'automatic', maintenance: 'automatic' },
+      adapterIds: ['openviking'],
+    })
+    expect(() => resolveConfig({ memoryTopology: { strategyId: '../unsafe' } })).toThrow('memory strategy id')
   })
 
   it('validates configurable recall quality policy thresholds and expansion', () => {

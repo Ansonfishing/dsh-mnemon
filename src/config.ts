@@ -16,6 +16,7 @@ import type {
   CustomPackConfig as SharedCustomPackConfig,
   InteractionConfig as SharedInteractionConfig,
   MemoryPersistenceStrategy,
+  MemoryTopologyConfig,
   MemoryPlacementCapability,
   MemoryPlacementPreference,
   MemoryProviderConnection,
@@ -81,6 +82,23 @@ const RecallQualitySchema: z<RecallQualityConfig> = z.object({
   maxUnknownResults: z.number().step(1).min(0).max(50).default(DEFAULT_RECALL_MAX_UNKNOWN_RESULTS),
 })
 
+const MemoryParticipationModeSchema = z.union(['off', 'manual', 'automatic'] as const)
+const MemoryLayerConfigSchema = z.object({
+  enabled: z.boolean(),
+  participation: z.object({
+    recall: MemoryParticipationModeSchema,
+    write: MemoryParticipationModeSchema,
+    projection: MemoryParticipationModeSchema,
+    maintenance: MemoryParticipationModeSchema,
+  }),
+  adapterIds: z.array(z.string()),
+})
+const MemoryTopologySchema: z<MemoryTopologyConfig> = z.object({
+  id: z.string(),
+  strategyId: z.string(),
+  layers: z.dict(MemoryLayerConfigSchema),
+})
+
 export const Config: z<Config> = z.object({
   // Keep this optional in the schema so legacy dataDir-only installs still
   // resolve to the custom scope instead of being silently reset to global.
@@ -96,6 +114,7 @@ export const Config: z<Config> = z.object({
   store: z.string(),
   timeoutMs: z.number().step(1).min(100).max(120_000).default(DEFAULT_TIMEOUT_MS),
   defaultRecallLimit: z.number().step(1).min(1).max(50).default(DEFAULT_RECALL_LIMIT),
+  memoryTopology: MemoryTopologySchema,
   recallQuality: RecallQualitySchema.default({
     policy: DEFAULT_RECALL_QUALITY_POLICY,
     lowScoreThreshold: DEFAULT_RECALL_LOW_SCORE_THRESHOLD,
@@ -236,6 +255,45 @@ function resolveRecallQuality(value: RecallQualityConfig | undefined): SharedRes
   return { policy, lowScoreThreshold, highScoreThreshold, candidateMultiplier, maxMediumResults, maxUnknownResults }
 }
 
+const MEMORY_COMPONENT_ID = /^[a-z][a-z0-9-]{0,127}$/u
+const MEMORY_PARTICIPATION_MODES = new Set(['off', 'manual', 'automatic'])
+
+function memoryComponentId(value: string | undefined, fallback: string, label: string): string {
+  const id = optionalText(value) ?? fallback
+  if (!MEMORY_COMPONENT_ID.test(id)) throw new Error(`dsh-mnemon: ${label} must match [a-z][a-z0-9-]{0,127}`)
+  return id
+}
+
+function resolveMemoryTopology(value: MemoryTopologyConfig | undefined): SharedResolvedConfig['memoryTopology'] {
+  const defaults: NonNullable<MemoryTopologyConfig['layers']> = {
+    runtime: {},
+    documents: {},
+    'memory-spaces': {},
+  }
+  const candidates = { ...defaults, ...value?.layers }
+  const entries = Object.entries(candidates)
+  if (entries.length > 64) throw new Error('dsh-mnemon: memory topology accepts at most 64 layers')
+  const layers = Object.fromEntries(entries.map(([rawId, candidate]) => {
+    const id = memoryComponentId(rawId, rawId, 'memory layer id')
+    const participation = {
+      recall: candidate?.participation?.recall ?? 'automatic',
+      write: candidate?.participation?.write ?? 'automatic',
+      projection: candidate?.participation?.projection ?? 'automatic',
+      maintenance: candidate?.participation?.maintenance ?? 'automatic',
+    }
+    for (const [channel, mode] of Object.entries(participation)) {
+      if (!MEMORY_PARTICIPATION_MODES.has(mode)) throw new Error(`dsh-mnemon: unsupported ${channel} participation mode: ${String(mode)}`)
+    }
+    const adapterIds = [...new Set(candidate?.adapterIds?.map(adapterId => memoryComponentId(adapterId, adapterId, 'memory adapter id')) ?? [])]
+    return [id, { enabled: candidate?.enabled ?? true, participation, adapterIds }]
+  }))
+  return {
+    id: memoryComponentId(value?.id, 'default-three-tier', 'memory topology id'),
+    strategyId: memoryComponentId(value?.strategyId, 'default-three-tier', 'memory strategy id'),
+    layers,
+  }
+}
+
 export function resolveConfig(config: Config = {}): ResolvedConfig {
   const cliPath = optionalText(config.cliPath)
   const legacyDataDir = optionalText(config.dataDir)
@@ -260,6 +318,7 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     ...(store === undefined ? {} : { store }),
     timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     defaultRecallLimit: config.defaultRecallLimit ?? DEFAULT_RECALL_LIMIT,
+    memoryTopology: resolveMemoryTopology(config.memoryTopology),
     recallQuality: resolveRecallQuality(config.recallQuality),
     routingGuidance: config.routingGuidance ?? true,
     displayMode: config.displayMode ?? 'sidebar',
