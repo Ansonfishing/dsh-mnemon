@@ -61,6 +61,9 @@ describe('composable memory system', () => {
     const automatic = await kernel.plan(request({ trigger: 'automatic' }))
     expect(manual.steps.map(step => step.layerId)).toEqual(['documents', 'memory-spaces'])
     expect(automatic.steps.map(step => step.layerId)).toEqual(['memory-spaces'])
+    expect(kernel.allows('documents', 'recall', 'manual')).toBe(true)
+    expect(kernel.allows('documents', 'recall', 'automatic')).toBe(false)
+    expect(() => kernel.assertParticipation('documents', 'recall', 'automatic')).toThrow('only for manual operations')
   })
 
   it('applies monotonic guards before invoking a strategy', async () => {

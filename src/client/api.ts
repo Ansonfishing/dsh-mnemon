@@ -23,6 +23,7 @@ import {
   type MemoryListRequest,
   type MemoryListView,
   type MemoryProviderId,
+  type MemorySystemDescriptor,
   type MemoryReadSource,
   type MnemonPackExport,
   type MnemonPackImportResult,
@@ -135,6 +136,10 @@ export class MnemonClient {
 
   statusSummary(): Promise<StatusView> {
     return this.call<StatusView>(MNEMON_READ_CHANNEL, 'status-summary', this.scoped()).catch(() => this.status())
+  }
+
+  memorySystem(): Promise<MemorySystemDescriptor> {
+    return this.call(MNEMON_READ_CHANNEL, 'memory-system', this.scoped())
   }
 
   taskAgentModels(includeCatalog?: boolean): Promise<TaskAgentModelCatalog> {

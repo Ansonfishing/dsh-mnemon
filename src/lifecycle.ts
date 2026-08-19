@@ -21,9 +21,10 @@ import type { RuntimeMemoryController } from './runtime-memory.ts'
 import { registerAgentRuntimeMemoryContext } from './guidance.ts'
 import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot, ReviewActivityScore, TaskAgentModelCatalog } from './shared/contracts.ts'
 import type { PreparedMemoryPlacement } from './provider-placement.ts'
+import type { MemoryKernel } from './memory-system/kernel.ts'
 
 interface AgentRuntimeSource {
-  forAgent(agent: HostAgent): { runtimeMemory: RuntimeMemoryController }
+  forAgent(agent: HostAgent): { runtimeMemory: RuntimeMemoryController; memoryKernel?: MemoryKernel }
 }
 
 interface HostDefaultModelService {
@@ -739,7 +740,11 @@ export class MnemonLifecycle {
       const stop = lifecycle.start()
       const stopRuntimeContext = this.runtimeSource === undefined
         ? () => {}
-        : registerAgentRuntimeMemoryContext(agent, () => this.runtimeSource!.forAgent(agent).runtimeMemory)
+        : registerAgentRuntimeMemoryContext(
+            agent,
+            () => this.runtimeSource!.forAgent(agent).runtimeMemory,
+            () => this.runtimeSource!.forAgent(agent).memoryKernel?.allows('runtime', 'project', 'automatic') ?? true,
+          )
       return () => {
         stopRuntimeContext()
         stop()

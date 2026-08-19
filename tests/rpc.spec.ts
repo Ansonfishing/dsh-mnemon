@@ -8,6 +8,7 @@ import { MnemonService } from '../src/service.ts'
 import type { MnemonPackManager } from '../src/pack.ts'
 import type { LiveMnemonRuntime, MnemonRuntimeGraph } from '../src/live-runtime.ts'
 import type { VersionUpdateManager } from '../src/version-updates.ts'
+import { MemoryCatalog, MemoryKernel, MemoryTopologyManager, registerDefaultMemorySystem } from '../src/memory-system/index.ts'
 
 function fakeService(writeEnabled = true): MnemonService {
   return {
@@ -43,6 +44,39 @@ function fakeService(writeEnabled = true): MnemonService {
 }
 
 describe('Mnemon RPC', () => {
+  it('exposes the active descriptor and enforces manual data-plane participation', async () => {
+    const service = fakeService()
+    const catalog = new MemoryCatalog()
+    registerDefaultMemorySystem(catalog)
+    const topology = new MemoryTopologyManager(catalog)
+    topology.configureLayer('memory-spaces', { enabled: false })
+    const memoryKernel = new MemoryKernel(catalog, topology)
+    const graph = {
+      config: service.config,
+      service,
+      runtimeMemory: {},
+      documents: {},
+      storage: {},
+      packs: {},
+      memoryKernel,
+    } as unknown as MnemonRuntimeGraph
+    const runtime = {
+      route: vi.fn(() => ({ graph, selectedRoot: '/tmp', effectiveRoot: '/tmp', aligned: true })),
+    } as unknown as LiveMnemonRuntime
+    const read = createReadHandler(runtime)
+
+    await expect(read('memory-system', {})).resolves.toMatchObject({
+      ok: true,
+      value: { topology: { layers: expect.arrayContaining([expect.objectContaining({ id: 'memory-spaces', enabled: false })]) } },
+    })
+    await expect(read('search', { query: 'blocked' })).resolves.toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('memory layer memory-spaces is disabled') },
+    })
+    await expect(read('bodies', {})).resolves.toMatchObject({ ok: true })
+    expect(service.search).not.toHaveBeenCalled()
+  })
+
   it('exposes runtime snapshots and routes hot-memory writes through its controller', async () => {
     const runtimeMemory = {
       snapshot: vi.fn(() => ({ entries: [], targets: {} })),

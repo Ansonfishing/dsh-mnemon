@@ -9,6 +9,7 @@ import { assertDshOutputSchema, MnemonSubagentCoordinator } from '../src/subagen
 import { prepareMemoryPlacement, type MemoryPlacementCandidate } from '../src/provider-placement.ts'
 import { registerTools } from '../src/tools.ts'
 import { RuntimeMemoryCapacityError, type RuntimeMemoryController } from '../src/runtime-memory.ts'
+import { resolveConfig } from '../src/config.ts'
 
 const capabilities = { outputSchema: true, depthLimit: true, toolFilter: true, persona: true }
 const temporaryDirectories: string[] = []
@@ -704,5 +705,42 @@ describe('Mnemon root/child tool split', () => {
       memoryBodyId: 'project',
       results: [{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }],
     })
+  })
+
+  it('enforces automatic topology participation without hiding the management catalog', async () => {
+    const registered: ToolDefinition[] = []
+    const memoryService = {
+      ...service(),
+      config: resolveConfig({
+        memoryTopology: {
+          layers: {
+            runtime: { participation: { write: 'manual' } },
+            'memory-spaces': { enabled: false },
+          },
+        },
+      }),
+    } as MnemonService
+    const coordinator = {
+      recall: vi.fn(),
+      runtime: vi.fn(),
+    } as unknown as MnemonSubagentCoordinator
+    const runtimeMemory = { mutate: vi.fn() } as unknown as RuntimeMemoryController
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, memoryService, coordinator, runtimeMemory, { forAgent: vi.fn() } as never)
+    const signal = new AbortController().signal
+
+    await expect(registered.find(tool => tool.name === 'mnemon_recall')!.execute(
+      { query: 'blocked' } as never,
+      { agent: parent(), signal },
+    )).rejects.toThrow('memory layer memory-spaces is disabled')
+    expect(() => registered.find(tool => tool.name === 'mnemon_runtime_memory')!.execute(
+      { action: 'add', target: 'memory', content: 'blocked' } as never,
+      { agent: parent(), signal },
+    )).toThrow('allows write only for manual operations')
+    await expect(registered.find(tool => tool.name === 'mnemon_memory_bodies')!.execute(
+      {} as never,
+      { agent: parent(), signal },
+    )).resolves.toMatchObject({ total: 1 })
+    expect(coordinator.recall).not.toHaveBeenCalled()
+    expect(coordinator.runtime).not.toHaveBeenCalled()
   })
 })

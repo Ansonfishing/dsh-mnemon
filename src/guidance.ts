@@ -38,7 +38,7 @@ export function registerGuidance(ctx: HostContextShape, config?: Pick<ResolvedCo
 }
 
 /** Project the latest committed USER.md/MEMORY.md as DSH's durable runtime-context snapshot. */
-export function registerRuntimeMemoryContext(ctx: HostContextShape, runtimeMemory: RuntimeMemoryController): void {
+export function registerRuntimeMemoryContext(ctx: HostContextShape, runtimeMemory: RuntimeMemoryController, enabled: () => boolean = () => true): void {
   const prompt = systemPrompt(ctx)
   // Runtime Memory is quoted user data, so every interpolation opener must be
   // restored through a non-recursive variable substitution instead of parsed.
@@ -46,16 +46,16 @@ export function registerRuntimeMemoryContext(ctx: HostContextShape, runtimeMemor
   prompt?.context?.({
     name: RUNTIME_MEMORY_CONTEXT_NAME,
     order: 145,
-    text: () => runtimeMemoryPromptText(runtimeMemory),
+    text: () => enabled() ? runtimeMemoryPromptText(runtimeMemory) : '',
   })
 }
 
 /** Shadow the global fallback with the current Agent workspace's hot memory. */
-export function registerAgentRuntimeMemoryContext(agent: HostAgent, runtimeMemory: () => RuntimeMemoryController): () => void {
+export function registerAgentRuntimeMemoryContext(agent: HostAgent, runtimeMemory: () => RuntimeMemoryController, enabled: () => boolean = () => true): () => void {
   const dispose = scopedSystemPrompt(agent)?.context?.({
     name: RUNTIME_MEMORY_CONTEXT_NAME,
     order: 145,
-    text: () => runtimeMemoryPromptText(runtimeMemory()),
+    text: () => enabled() ? runtimeMemoryPromptText(runtimeMemory()) : '',
   })
   return typeof dispose === 'function' ? dispose as () => void : () => {}
 }

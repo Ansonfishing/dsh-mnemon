@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type JSX } from 'react'
-import type { ClientConnectionHandle, ClientSettingsScope, ClientSettingsSnapshot, Config, InteractionConfig, SettingsOperation, TaskAgentModelCatalog } from '../shared/contracts.ts'
+import type {
+  ClientConnectionHandle,
+  ClientSettingsScope,
+  ClientSettingsSnapshot,
+  Config,
+  InteractionConfig,
+  MemoryParticipationChannel,
+  MemoryParticipationMode,
+  MemorySystemDescriptor,
+  MemoryTopologyDefinition,
+  SettingsOperation,
+  TaskAgentModelCatalog,
+} from '../shared/contracts.ts'
 import { MnemonClient } from './api.ts'
 import css from './MnemonSettingsCard.module.css'
 import { GlobalLocationSetting } from './GlobalLocationSetting.tsx'
@@ -23,7 +35,9 @@ export interface MnemonSettingsCardProps {
 type CoreField = 'displayMode' | 'storageScope' | 'dataDir'
 type TaskAgentField = 'taskAgentModelMode' | 'taskAgentProvider' | 'taskAgentModel'
 type InteractionField = 'turnBar' | 'saveAction'
-type Field = CoreField | TaskAgentField | InteractionField
+type TopologyField = `memoryTopology.${string}`
+type DraftField = CoreField | TaskAgentField | InteractionField
+type Field = DraftField | TopologyField
 interface Draft extends Record<InteractionField, boolean> {
   displayMode: 'sidebar' | 'buildin'
   storageScope: string
@@ -36,6 +50,8 @@ interface Draft extends Record<InteractionField, boolean> {
 const CORE_FIELDS: CoreField[] = ['displayMode', 'storageScope', 'dataDir']
 const INTERACTION_FIELDS: InteractionField[] = ['turnBar', 'saveAction']
 const TASK_AGENT_FIELDS: TaskAgentField[] = ['taskAgentModelMode', 'taskAgentProvider', 'taskAgentModel']
+const PARTICIPATION_CHANNELS: MemoryParticipationChannel[] = ['recall', 'write', 'projection', 'maintenance']
+const PARTICIPATION_MODES: MemoryParticipationMode[] = ['off', 'manual', 'automatic']
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -72,6 +88,31 @@ function draftOf(core: Config | undefined, interaction: InteractionConfig | unde
   return { ...coreDraft(core), ...interactionDraft(interaction) }
 }
 
+function topologyOf(descriptor: MemorySystemDescriptor): MemoryTopologyDefinition {
+  return {
+    id: descriptor.topology.id,
+    strategyId: descriptor.topology.strategyId,
+    layers: descriptor.topology.layers.map(layer => ({
+      id: layer.id,
+      enabled: layer.enabled,
+      participation: { ...layer.participation },
+      adapterIds: [...layer.adapterIds],
+    })),
+  }
+}
+
+function topologyValue(topology: MemoryTopologyDefinition): NonNullable<Config['memoryTopology']> {
+  return {
+    id: topology.id,
+    strategyId: topology.strategyId,
+    layers: Object.fromEntries(topology.layers.map(layer => [layer.id, {
+      enabled: layer.enabled,
+      participation: { ...layer.participation },
+      adapterIds: [...layer.adapterIds],
+    }])),
+  }
+}
+
 function validation(t: MnemonTranslate, draft: Draft): string | null {
   if (!['global', 'workspace', 'custom'].includes(draft.storageScope)) return t('config.invalidScope')
   if (draft.storageScope === 'custom') {
@@ -93,7 +134,7 @@ function useScope<T>(scope: ClientSettingsScope<T>): ClientSettingsSnapshot<T> {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
-function operations(fields: readonly Field[], dirty: ReadonlySet<Field>, draft: Draft): SettingsOperation[] {
+function operations(fields: readonly DraftField[], dirty: ReadonlySet<Field>, draft: Draft): SettingsOperation[] {
   return fields.flatMap((field): SettingsOperation[] => {
     if (!dirty.has(field)) return []
     if (field === 'dataDir' && draft.dataDir.trim() === '') return [{ op: 'unset', path: [field] }]
@@ -129,6 +170,10 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const [modelCatalogError, setModelCatalogError] = useState<string | null>(null)
   const [fullModelCatalogLoaded, setFullModelCatalogLoaded] = useState(false)
   const modelCatalogRequest = useRef(0)
+  const [memorySystem, setMemorySystem] = useState<MemorySystemDescriptor | null>(null)
+  const [topologyDraft, setTopologyDraft] = useState<MemoryTopologyDefinition | null>(null)
+  const [topologyState, setTopologyState] = useState<'unavailable' | 'loading' | 'ready' | 'error'>(connection === undefined ? 'unavailable' : 'loading')
+  const topologyRequest = useRef(0)
   const configuredTaskAgentMode = coreSnapshot.value?.taskAgentModel?.mode === 'fixed' ? 'fixed' : 'inherit'
 
   useEffect(() => {
@@ -182,6 +227,31 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
     return () => { modelCatalogRequest.current += 1 }
   }, [configuredTaskAgentMode, loadModelCatalog])
 
+  useEffect(() => {
+    if (connection === undefined) {
+      topologyRequest.current += 1
+      setMemorySystem(null)
+      setTopologyDraft(null)
+      setTopologyState('unavailable')
+      return
+    }
+    const request = topologyRequest.current + 1
+    topologyRequest.current = request
+    setTopologyState('loading')
+    void new MnemonClient(connection, sessionId, workspaceId).memorySystem().then(descriptor => {
+      if (topologyRequest.current !== request) return
+      setMemorySystem(descriptor)
+      setTopologyDraft(topologyOf(descriptor))
+      setTopologyState('ready')
+    }, () => {
+      if (topologyRequest.current !== request) return
+      setMemorySystem(null)
+      setTopologyDraft(null)
+      setTopologyState('error')
+    })
+    return () => { topologyRequest.current += 1 }
+  }, [connection, sessionId, workspaceId, targetRevision])
+
   const coreUser = useMemo(() => record(coreSnapshot.user), [coreSnapshot.user])
   const activeScope = coreDraft(coreSnapshot.value).storageScope === 'workspace' ? 'workspace' : 'global'
   const error = validation(t, draft)
@@ -211,6 +281,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
 
   const discard = (): void => {
     setDraft(draftOf(coreSnapshot.value, interactionSnapshot.value))
+    setTopologyDraft(memorySystem === null ? null : topologyOf(memorySystem))
     setDirty(new Set()); setFailed(null); setApplied(false)
   }
 
@@ -221,6 +292,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
       const coreOps = operations(CORE_FIELDS, dirty, draft)
       const regularCoreChanged = coreOps.length > 0
       const taskAgentChanged = TASK_AGENT_FIELDS.some(field => dirty.has(field))
+      const topologyChanged = [...dirty].some(field => field.startsWith('memoryTopology.'))
       if (regularCoreChanged) {
         if (Object.hasOwn(coreUser, 'customPackId')) coreOps.push({ op: 'unset', path: ['customPackId'] })
         if (Object.hasOwn(coreUser, 'customPacks')) coreOps.push({ op: 'unset', path: ['customPacks'] })
@@ -234,6 +306,9 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
             : { mode: 'fixed', provider: draft.taskAgentProvider.trim(), model: draft.taskAgentModel.trim() },
         })
       }
+      if (topologyChanged && topologyDraft !== null) {
+        coreOps.push({ op: 'set', path: ['memoryTopology'], value: topologyValue(topologyDraft) })
+      }
       const interactionOps = operations(INTERACTION_FIELDS, dirty, draft)
       await Promise.all([
         ...(coreOps.length === 0 ? [] : [commit(scope, coreOps)]),
@@ -241,7 +316,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
       ])
       setDirty(new Set())
       setApplied(true)
-      if (regularCoreChanged) setTargetRevision(revision => revision + 1)
+      if (regularCoreChanged || topologyChanged) setTargetRevision(revision => revision + 1)
     } catch (reason) {
       setFailed(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -252,6 +327,27 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const coreDisabled = loading || saving || !coreSnapshot.writable
   const interactionDisabled = loading || saving || !interactionSnapshot.writable
   const scopeChanging = dirty.has('storageScope') || dirty.has('dataDir')
+  const editLayerEnabled = (layerId: string, enabled: boolean): void => {
+    setTopologyDraft(current => current === null ? current : {
+      ...current,
+      layers: current.layers.map(layer => layer.id === layerId ? { ...layer, enabled } : layer),
+    })
+    setDirty(current => new Set(current).add(`memoryTopology.${layerId}.enabled`))
+    setFailed(null)
+    setApplied(false)
+  }
+  const editLayerParticipation = (layerId: string, channel: MemoryParticipationChannel, mode: MemoryParticipationMode): void => {
+    setTopologyDraft(current => current === null ? current : {
+      ...current,
+      layers: current.layers.map(layer => layer.id === layerId ? {
+        ...layer,
+        participation: { ...layer.participation, [channel]: mode },
+      } : layer),
+    })
+    setDirty(current => new Set(current).add(`memoryTopology.${layerId}.${channel}`))
+    setFailed(null)
+    setApplied(false)
+  }
   return (
     <section className={css.page} aria-label={t('config.aria')} aria-busy={saving || loading}>
       {loading ? <p className={css.loading} role="status">{t('common.loading')}</p> : <>
@@ -279,6 +375,16 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
             <ChoiceCard id="mnemon-storage-workspace" name="mnemon-storage" label={t('config.workspace')} detail="<workspace>/.mnemon" checked={draft.storageScope === 'workspace'} disabled={coreDisabled} onChange={() => edit('storageScope', 'workspace')} />
           </div>
         </section>
+
+        <MemoryTopologySection
+          descriptor={memorySystem}
+          topology={topologyDraft}
+          state={topologyState}
+          disabled={coreDisabled}
+          onEnabled={editLayerEnabled}
+          onParticipation={editLayerParticipation}
+          t={t}
+        />
 
         <section className={css.section} aria-labelledby="mnemon-providers-heading">
           <div className={css.sectionHeading}>
@@ -378,6 +484,78 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
       </>}
     </section>
   )
+}
+
+function MemoryTopologySection(props: {
+  descriptor: MemorySystemDescriptor | null
+  topology: MemoryTopologyDefinition | null
+  state: 'unavailable' | 'loading' | 'ready' | 'error'
+  disabled: boolean
+  onEnabled: (layerId: string, enabled: boolean) => void
+  onParticipation: (layerId: string, channel: MemoryParticipationChannel, mode: MemoryParticipationMode) => void
+  t: MnemonTranslate
+}): JSX.Element {
+  const layerDescriptors = new Map(props.descriptor?.catalog.layers.map(layer => [layer.id, layer]) ?? [])
+  const strategy = props.descriptor?.catalog.strategies.find(candidate => candidate.id === props.topology?.strategyId)
+  const channelLabel = (channel: MemoryParticipationChannel): string => {
+    if (channel === 'recall') return props.t('config.topologyRecall')
+    if (channel === 'write') return props.t('config.topologyWrite')
+    if (channel === 'projection') return props.t('config.topologyProjection')
+    return props.t('config.topologyMaintenance')
+  }
+  const modeLabel = (mode: MemoryParticipationMode): string => {
+    if (mode === 'off') return props.t('config.topologyModeOff')
+    if (mode === 'manual') return props.t('config.topologyModeManual')
+    return props.t('config.topologyModeAutomatic')
+  }
+
+  return <section className={css.section} aria-labelledby="mnemon-topology-heading">
+    <div className={css.sectionHeading}>
+      <div><h2 id="mnemon-topology-heading">{props.t('config.topologyTitle')}</h2><p>{props.t('config.topologyDescription')}</p></div>
+      {props.state === 'loading' && <span className={css.miniSpinner} aria-hidden="true" />}
+    </div>
+    {props.topology === null
+      ? <p className={css.topologyUnavailable}>{props.state === 'loading' ? props.t('config.topologyLoading') : props.t('config.topologyUnavailable')}</p>
+      : <>
+        <div className={css.topologyMeta}>
+          <span>{props.t('config.topologyStrategy')}</span>
+          <code>{strategy?.label ?? props.topology.strategyId}</code>
+        </div>
+        <div className={css.topologyList}>
+          {props.topology.layers.map(layer => {
+            const descriptor = layerDescriptors.get(layer.id)
+            const label = descriptor?.label ?? layer.id
+            return <article className={css.topologyLayer} data-enabled={layer.enabled} key={layer.id}>
+              <header>
+                <span><strong>{label}</strong><small>{descriptor?.description ?? layer.id}</small></span>
+                <label className={css.topologyToggle} htmlFor={`mnemon-layer-${layer.id}`}>
+                  <span>{layer.enabled ? props.t('config.topologyEnabled') : props.t('config.topologyDisabled')}</span>
+                  <input id={`mnemon-layer-${layer.id}`} type="checkbox" aria-label={props.t('config.topologyLayerToggle', { layer: label })} checked={layer.enabled} disabled={props.disabled} onChange={event => props.onEnabled(layer.id, event.target.checked)} />
+                  <i aria-hidden="true" />
+                </label>
+              </header>
+              <div className={css.topologyChannels}>
+                {PARTICIPATION_CHANNELS.map(channel => <label key={channel}>
+                  <span>{channelLabel(channel)}</span>
+                  <select
+                    aria-label={props.t('config.topologyChannelAria', { layer: label, channel: channelLabel(channel) })}
+                    value={layer.participation[channel]}
+                    disabled={props.disabled || !layer.enabled}
+                    onChange={event => props.onParticipation(layer.id, channel, event.target.value as MemoryParticipationMode)}
+                  >
+                    {PARTICIPATION_MODES.map(mode => <option key={mode} value={mode}>{modeLabel(mode)}</option>)}
+                  </select>
+                </label>)}
+              </div>
+              <footer>
+                <span>{props.t('config.topologyRole')}: <code>{descriptor?.role ?? layer.id}</code></span>
+                <span>{props.t('config.topologyAdapters', { count: layer.adapterIds.length })}</span>
+              </footer>
+            </article>
+          })}
+        </div>
+      </>}
+  </section>
 }
 
 function TaskAgentModelSection(props: {

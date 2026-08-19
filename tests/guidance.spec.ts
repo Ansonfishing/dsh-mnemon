@@ -80,4 +80,20 @@ describe('agent-scoped runtime memory context', () => {
     stop()
     expect(dispose).toHaveBeenCalledTimes(1)
   })
+
+  it('projects no hot memory while automatic projection is disabled', () => {
+    const context = vi.fn()
+    const agent = {
+      ctx: { get: vi.fn((name: string) => name === 'systemPrompt' ? { context } : undefined) },
+    } as unknown as HostAgent
+    const controller = { contextText: vi.fn(() => 'private workspace memory') } as unknown as RuntimeMemoryController
+    let enabled = false
+
+    registerAgentRuntimeMemoryContext(agent, () => controller, () => enabled)
+    const registered = context.mock.calls[0]![0]
+    expect(registered?.text()).toBe('')
+    expect(controller.contextText).not.toHaveBeenCalled()
+    enabled = true
+    expect(registered?.text()).toBe('private workspace memory')
+  })
 })
