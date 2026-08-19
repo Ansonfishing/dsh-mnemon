@@ -2175,18 +2175,36 @@ function VersionDialog(props: { client: MnemonClient; writeEnabled: boolean; onC
   const [updating, setUpdating] = useState<VersionComponentStatus['id'] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<VersionUpdateResult | null>(null)
+  const checkRequestRef = useRef(0)
+  const checkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const check = useCallback(async () => {
+    const requestVersion = ++checkRequestRef.current
     setChecking(true)
     setError(null)
     let timeout: ReturnType<typeof setTimeout> | undefined
     try {
-      const deadline = new Promise<never>((_resolve, reject) => { timeout = setTimeout(() => reject(new Error(t('versions.timeout'))), 15_000) })
-      setSnapshot(await Promise.race([props.client.versions(), deadline]))
+      const deadline = new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => reject(new Error(t('versions.timeout'))), 15_000)
+        checkTimeoutRef.current = timeout
+      })
+      const next = await Promise.race([props.client.versions(), deadline])
+      if (checkRequestRef.current === requestVersion) setSnapshot(next)
     }
-    catch (reason) { setError(message(reason)) }
-    finally { if (timeout !== undefined) clearTimeout(timeout); setChecking(false) }
+    catch (reason) { if (checkRequestRef.current === requestVersion) setError(message(reason)) }
+    finally {
+      if (timeout !== undefined) clearTimeout(timeout)
+      if (checkTimeoutRef.current === timeout) checkTimeoutRef.current = null
+      if (checkRequestRef.current === requestVersion) setChecking(false)
+    }
   }, [props.client, t])
-  useEffect(() => { void check() }, [check])
+  useEffect(() => {
+    void check()
+    return () => {
+      checkRequestRef.current += 1
+      if (checkTimeoutRef.current !== null) clearTimeout(checkTimeoutRef.current)
+      checkTimeoutRef.current = null
+    }
+  }, [check])
   const update = async (component: VersionComponentStatus) => {
     setUpdating(component.id)
     setError(null)

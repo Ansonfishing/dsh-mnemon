@@ -602,6 +602,8 @@ describe('MnemonView', () => {
     expect(screen.queryByRole('dialog', { name: '检查与更新版本' })).toBeNull()
     expect(document.activeElement).toBe(trigger)
     await act(async () => { resolveVersions(1) })
+    expect(screen.queryByRole('dialog', { name: '检查与更新版本' })).toBeNull()
+    expect(document.activeElement).toBe(trigger)
   })
 
   it('keeps shared functionality but applies the minimal unbranded sidebar appearance', async () => {
