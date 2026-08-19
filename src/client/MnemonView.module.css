@@ -961,6 +961,10 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
   .modalFooterActions { grid-template-columns: 1fr; }
 }
 
+@media (max-height: 420px) {
+  .modal > header p { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+}
+
 @media (min-width: 761px) and (max-height: 560px) {
   .modalBackdrop { padding: 8px; }
   .modal { max-height: calc(100vh - 16px); }

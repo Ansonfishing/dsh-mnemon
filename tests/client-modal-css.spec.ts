@@ -30,6 +30,12 @@ describe('responsive dialog layout invariants', () => {
     expect(saveActionCss).toContain('max(12px, env(safe-area-inset-right, 0px))')
   })
 
+  it('preserves body space by truncating descriptions in very short viewports', () => {
+    expect(viewCss).toContain('@media (max-height: 420px)')
+    expect(viewCss).toContain('.modal > header p { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }')
+    expect(sidebarCss).toContain(".shell .modal > header p { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }")
+  })
+
   it('bounds the conversation save dialog against dynamic and short viewports', () => {
     expect(saveActionCss).toContain('max-height: calc(100dvh - 16px);')
     expect(saveActionCss).toContain('min-height: clamp(140px, 32dvh, 220px);')

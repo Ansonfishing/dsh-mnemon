@@ -788,6 +788,10 @@
   .shell .statusCluster [class*='iconButton'] { display: none; }
 }
 
+@media (max-height: 420px) {
+  .shell .modal > header p { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .shell [class*='primaryButton'],
   .shell [class*='secondaryButton'],
