@@ -39,6 +39,8 @@ Checking is read-only and never installs automatically. Update appears only when
 
 The Host fixes update commands and arguments. The browser cannot supply either; shell is disabled and execution/output are bounded. After an update, the UI rechecks both components and refreshes Status automatically. Mnemon applies on the next CLI call. Restart `dsh web` after updating dsh-mnemon.
 
+DSH rc.8's incompatible SQLite notice applies only to the opt-in `@deepseek-ai/dsh-session-persistence-sqlite` session backend, which shipped profiles do not select. That backend has no migration path from its old schema: deployments that mounted it manually should back up and recreate the DSH session database. dsh-mnemon's Runtime, Documents, Memory Spaces, and Provider data use separate storage roots and are unaffected.
+
 ## Backup and recovery
 
 ### Recommended: Settings ZIP

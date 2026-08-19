@@ -163,6 +163,8 @@ export interface HostWorkspaceRegistry {
 export interface HostSubagentResult {
   output: Array<{ type: string; text?: string; [key: string]: unknown }>
   structured?: unknown
+  /** DSH rc.8 provider-authored failure detail, including for remote children. */
+  diagnostic?: string
   stopReason: string
 }
 
