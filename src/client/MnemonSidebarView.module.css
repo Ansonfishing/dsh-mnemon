@@ -314,8 +314,7 @@
 .shell [class*='bodyEditButton'],
 .shell [class*='inspectorEye'],
 .shell [class*='inspectorHeading'] button,
-.shell [class*='sectionHeading'] button,
-.shell [class*='previewHeading'] button {
+.shell [class*='sectionHeading'] button {
   display: inline-flex;
   width: 26px;
   height: 26px;
@@ -333,8 +332,7 @@
 .shell [class*='bodyEditButton']:hover:not(:disabled),
 .shell [class*='inspectorEye']:hover:not(:disabled),
 .shell [class*='inspectorHeading'] button:hover:not(:disabled),
-.shell [class*='sectionHeading'] button:hover:not(:disabled),
-.shell [class*='previewHeading'] button:hover:not(:disabled) {
+.shell [class*='sectionHeading'] button:hover:not(:disabled) {
   border: 0;
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-interactive-bg-hover);
@@ -349,8 +347,7 @@
 .shell [class*='bodyEditButton'],
 .shell [class*='inspectorEye'],
 .shell [class*='inspectorHeading'] button,
-.shell [class*='sectionHeading'] button,
-.shell [class*='previewHeading'] button {
+.shell [class*='sectionHeading'] button {
   cursor: pointer;
   transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, outline-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
@@ -363,8 +360,7 @@
 .shell [class*='bodyEditButton']:active:not(:disabled),
 .shell [class*='inspectorEye']:active:not(:disabled),
 .shell [class*='inspectorHeading'] button:active:not(:disabled),
-.shell [class*='sectionHeading'] button:active:not(:disabled),
-.shell [class*='previewHeading'] button:active:not(:disabled) {
+.shell [class*='sectionHeading'] button:active:not(:disabled) {
   transform: translateY(1px);
 }
 .shell [class*='primaryButton']:disabled,
@@ -802,8 +798,7 @@
   .shell [class*='bodyEditButton'],
   .shell [class*='inspectorEye'],
   .shell [class*='inspectorHeading'] button,
-  .shell [class*='sectionHeading'] button,
-  .shell [class*='previewHeading'] button {
+  .shell [class*='sectionHeading'] button {
     transition: none;
   }
 }

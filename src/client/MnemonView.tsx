@@ -460,21 +460,11 @@ function MemoryNavigation(props: { page: Page; activationEnabled: boolean; write
 /** Full-text popup for a selected graph node whose inspector preview is clamped. */
 function ContentPreview(props: { node: MemoryGraphNode; kind: string; onClose: () => void }): JSX.Element {
   const t = useT()
-  const close = useCallback(() => props.onClose(), [props])
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') props.onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [props])
   const meta = [props.kind, props.node.id, props.node.memoryBodyName].filter((entry): entry is string => entry !== undefined).join(' · ')
   return (
-    <div className={css.previewOverlay} onPointerDown={event => { if (event.target === event.currentTarget) props.onClose() }}>
-      <div className={css.previewDialog} role="dialog" aria-modal="true" aria-label={t('overview.previewTitle')}>
-        <header className={css.previewHeading}><span>{t('overview.previewTitle')}</span><button type="button" onClick={close} aria-label={t('common.cancel')}>×</button></header>
-        <div className={css.previewMeta}>{meta}</div>
-        <div className={css.previewBody}><p>{props.node.content}</p></div>
-      </div>
-    </div>
+    <SidebarModal title={t('overview.previewTitle')} description={meta} onClose={props.onClose}>
+      <p className={css.previewContent}>{props.node.content}</p>
+    </SidebarModal>
   )
 }
 

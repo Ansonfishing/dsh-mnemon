@@ -424,15 +424,7 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 .inspectorMeta dt { color: var(--mn-faint); font: 9px var(--mn-code); text-transform: uppercase; }
 .inspectorMeta dd { margin: 0; overflow-wrap: anywhere; color: var(--mn-muted); font-size: 11px; }
 .inspectorActions { display: grid; gap: 8px; margin-top: 20px; }
-.previewOverlay { position: fixed; z-index: 40; inset: 0; display: grid; place-items: center; padding: clamp(16px, 4vw, 48px); background: color-mix(in srgb, var(--mn-bg) 58%, transparent); backdrop-filter: blur(4px); }
-.previewDialog { display: flex; width: min(680px, 100%); max-height: min(76vh, 640px); max-height: min(76dvh, 640px); flex-direction: column; overflow: hidden; border: 1px solid var(--mn-line-strong); border-radius: 13px; background: var(--mn-layer-1); box-shadow: 0 24px 64px color-mix(in srgb, var(--mn-text) 20%, transparent); }
-.previewHeading { display: flex; min-height: 46px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; padding: 0 14px 0 16px; border-bottom: 1px solid var(--mn-line); }
-.previewHeading > span { color: var(--mn-accent); font: 650 9px/1.2 var(--mn-code); letter-spacing: .08em; text-transform: uppercase; }
-.previewHeading button { display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: 7px; color: var(--mn-muted); background: transparent; font-size: 15px; cursor: pointer; }
-.previewHeading button:hover { background: var(--mn-hover); }
-.previewMeta { flex: 0 0 auto; overflow: hidden; padding: 8px 16px; border-bottom: 1px solid var(--mn-line); color: var(--mn-faint); font: 9px var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
-.previewBody { min-height: 0; overflow: auto; padding: 14px 16px 18px; -webkit-overflow-scrolling: touch; }
-.previewBody p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--mn-text); font-size: 13px; line-height: 1.7; }
+.previewContent { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--mn-text); font-size: 13px; line-height: 1.7; }
 
 .searchBar { margin-bottom: 18px; padding: 13px; border: 1px solid var(--mn-line); border-radius: 13px; background: var(--mn-layer-1); }
 .queryField { display: grid; grid-template-columns: 24px minmax(0, 1fr) 24px; align-items: center; gap: 5px; padding: 0 10px; border: 1px solid var(--mn-line-strong); border-radius: 9px; background: var(--mn-input); }
@@ -690,7 +682,7 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 .modal > header { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 15px 18px; border-bottom: 1px solid var(--mn-line); }
 .modal > header > div { min-width: 0; }
 .modal > header h2 { margin: 0; font-size: 15px; line-height: 22px; }
-.modal > header p { max-width: 64ch; margin: 3px 0 0; color: var(--mn-muted); font-size: 12px; line-height: 1.5; }
+.modal > header p { max-width: 64ch; margin: 3px 0 0; overflow-wrap: anywhere; color: var(--mn-muted); font-size: 12px; line-height: 1.5; }
 .modal > header .iconButton { flex: none; }
 .modalBody { min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 18px; scrollbar-gutter: stable; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
 .modalFooter { display: flex; flex: none; align-items: center; justify-content: flex-end; gap: 14px; padding: 12px 18px; border-top: 1px solid var(--mn-line); background: color-mix(in srgb, var(--mn-layer-1) 94%, var(--mn-layer-2)); }
@@ -908,8 +900,6 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
   .graphSvg { height: 390px; }
   .graphCanvasControls { right: 7px; top: 7px; }
   .graphCanvasControls span { display: none; }
-  .previewOverlay { padding: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
-  .previewDialog { max-height: min(84vh, 640px); max-height: min(84dvh, 640px); }
   .healthStrip { grid-template-columns: 1fr; }
   .nativeProviderHealth { align-items: flex-start; }
   .nativeProviderMeta { justify-items: end; }

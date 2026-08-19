@@ -1267,12 +1267,18 @@ describe('MnemonView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^决策: 这是一段非常长的记忆内容/ }))
     const eye = await screen.findByRole('button', { name: '查看全文' })
+    eye.focus()
     fireEvent.click(eye)
 
     const dialog = screen.getByRole('dialog', { name: '内容全文' })
     expect(dialog.textContent).toContain('全文预览窗口的打开与关闭')
-    fireEvent.click(within(dialog).getByRole('button', { name: '取消' }))
+    expect(dialog.getAttribute('aria-labelledby')).toBeTruthy()
+    expect(dialog.getAttribute('aria-describedby')).toBeTruthy()
+    const close = within(dialog).getByRole('button', { name: '取消' })
+    expect(document.activeElement).toBe(close)
+    fireEvent.click(close)
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(document.activeElement).toBe(eye)
   })
 
   it('resets the shared canvas scroll position when switching pages', async () => {
