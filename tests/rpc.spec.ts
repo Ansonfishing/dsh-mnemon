@@ -260,6 +260,24 @@ describe('Mnemon RPC', () => {
     expect(service.updateBodyMetadata).toHaveBeenCalledWith(maintained.updates)
   })
 
+  it('does not commit when metadata maintenance returns no valid updates', async () => {
+    const service = fakeService()
+    const maintained = {
+      delegated: true as const,
+      runId: 'metadata-2',
+      provider: 'spawn',
+      summary: 'No valid metadata.',
+      updates: [],
+    }
+    const lifecycle = { maintainMetadata: vi.fn(async () => maintained) } as unknown as MnemonLifecycle
+
+    await expect(createWriteHandler(service, lifecycle)('body-metadata-maintain', {
+      sessionId: 'session-1', memoryBodyIds: ['project'],
+    })).resolves.toMatchObject({ ok: true, value: { runId: 'metadata-2', updates: [] } })
+
+    expect(service.updateBodyMetadata).not.toHaveBeenCalled()
+  })
+
   it('routes supervised Tab writeback through an independent task Agent', async () => {
     const service = fakeService()
     const lifecycle = {

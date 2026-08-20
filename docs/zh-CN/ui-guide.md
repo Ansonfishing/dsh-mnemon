@@ -108,7 +108,7 @@
 
 [![AI 维护元信息：跨 Provider 多选与独立异步任务](../assets/screenshots/ai-metadata-dialog.png)](../assets/screenshots/ai-metadata-dialog.png)
 
-可多选已激活记忆体。每个任务先调用对应 Provider 最快的原生查询方式读取少量样本，再按 system prompt 的长度和能力约束生成 title / description。任务互不共享状态；一个失败只在自己的卡片显示错误。生成过程不关闭弹窗，卡片向右播放同色调刷新动画并原位更新。
+可多选已激活记忆体。每个任务先调用对应 Provider 最快的原生查询方式读取少量样本，再按 system prompt 的长度和能力约束生成 title / description。任务互不共享状态；一个失败只在自己的卡片显示错误。如果模型生成的标题或说明未通过本地长度校验，该卡片会保留原有元数据，同时其他合法结果仍会更新。生成过程不关闭弹窗，卡片向右播放同色调刷新动画并原位更新。
 
 人工生成的标题与说明属于本地目录元数据，普通重连不会覆盖；关闭 Provider 会清理映射和元数据，重新启用后从 Provider 重建，映射不到的字段用最近似默认值补充。
 

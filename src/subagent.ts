@@ -732,18 +732,17 @@ Traversal depth: 2`
     if (!Array.isArray(value.updates)) throw new Error('metadata subagent returned no updates')
     const allowed = new Set(selected)
     const seen = new Set<string>()
-    const updates = value.updates.map((entry): MemoryBodyMetadataUpdate => {
+    const updates: MemoryBodyMetadataUpdate[] = []
+    for (const entry of value.updates) {
       const item = object(entry)
       const memoryBodyId = typeof item.memoryBodyId === 'string' ? item.memoryBodyId.trim() : ''
       const title = typeof item.title === 'string' ? item.title.trim() : ''
       const description = typeof item.description === 'string' ? item.description.trim() : ''
       if (!allowed.has(memoryBodyId) || seen.has(memoryBodyId)) throw new Error('metadata subagent returned an unexpected or duplicate Memory Space')
-      if (title.length < 2 || title.length > 48) throw new Error(`metadata title for ${memoryBodyId} must contain 2 through 48 characters`)
-      if (description.length < 12 || description.length > 200) throw new Error(`metadata description for ${memoryBodyId} must contain 12 through 200 characters`)
       seen.add(memoryBodyId)
-      return { memoryBodyId, title, description }
-    })
-    if (seen.size !== allowed.size) throw new Error('metadata subagent omitted a selected Memory Space')
+      if (title.length < 2 || title.length > 48 || description.length < 12 || description.length > 200) continue
+      updates.push({ memoryBodyId, title, description })
+    }
     return {
       delegated: true,
       runId,

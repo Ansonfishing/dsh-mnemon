@@ -108,7 +108,7 @@ The receipt keeps decision source, confidence, and reason. Provider credentials 
 
 [![AI metadata across Providers with multi-select isolated tasks](../assets/screenshots/ai-metadata-dialog.png)](../assets/screenshots/ai-metadata-dialog.png)
 
-Select several active spaces. Each task uses that Provider's fastest native query to fetch a small sample, then follows system-prompt length and capability constraints for title and description. Tasks share no state; a failure appears only on its card. The dialog stays open and each card plays a rightward same-tone refresh animation before updating in place.
+Select several active spaces. Each task uses that Provider's fastest native query to fetch a small sample, then follows system-prompt length and capability constraints for title and description. Tasks share no state; a failure appears only on its card. If a model-generated title or description fails the local length check, that card keeps its previous metadata while valid results still update. The dialog stays open and each card plays a rightward same-tone refresh animation before updating in place.
 
 Generated title and description are local catalog metadata and survive ordinary reconnects. Disabling a Provider clears mapping and metadata. Re-enabling rebuilds them from Provider data, using the closest default only for unmapped fields.
 

@@ -428,12 +428,12 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(coordinator.snapshot()).toMatchObject({ placements: 1, lastOperation: 'placement' })
   })
 
-  it('curates metadata in a read-only child and validates exact selected-space coverage', async () => {
+  it('curates metadata in a read-only child and keeps valid entries when another candidate is invalid', async () => {
     const host = subagents({
-      summary: 'Updated both scopes.',
+      summary: 'Updated one scope.',
       updates: [
         { memoryBodyId: 'product', title: '产品决策', description: '记录稳定的产品范围、取舍与依据，在规划和复盘产品方向时召回。' },
-        { memoryBodyId: 'release', title: '发布运行手册', description: '沉淀发布门禁、部署约束和回滚经验，在准备上线或处理故障时召回。' },
+        { memoryBodyId: 'release', title: 'x'.repeat(49), description: '沉淀发布门禁、部署约束和回滚经验，在准备上线或处理故障时召回。' },
       ],
     })
     const memoryService = service()
@@ -443,7 +443,7 @@ describe('Mnemon memory subagent coordinator', () => {
     await expect(coordinator.maintainMetadata(parent(), ['product', 'release'], new AbortController().signal)).resolves.toMatchObject({
       delegated: true,
       runId: 'child-run-1',
-      updates: [{ memoryBodyId: 'product', title: '产品决策' }, { memoryBodyId: 'release', title: '发布运行手册' }],
+      updates: [{ memoryBodyId: 'product', title: '产品决策' }],
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
       toolFilter: { allow: [expect.stringMatching(/^mnemon_subagent_result_/)] },
@@ -459,7 +459,12 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(coordinator.snapshot()).toMatchObject({ metadataMaintenances: 1, lastOperation: 'metadata-maintenance' })
 
     const incomplete = subagents({ summary: 'Only one.', updates: [{ memoryBodyId: 'product', title: '产品决策', description: '记录稳定的产品范围与取舍，在规划和复盘产品方向时召回。' }] })
-    await expect(createCoordinator(incomplete.value, runtime).maintainMetadata(parent(), ['product', 'release'], new AbortController().signal)).rejects.toThrow('omitted')
+    await expect(createCoordinator(incomplete.value, runtime).maintainMetadata(parent(), ['product', 'release'], new AbortController().signal)).resolves.toMatchObject({
+      updates: [{ memoryBodyId: 'product' }],
+    })
+
+    const invalid = subagents({ summary: 'No valid metadata.', updates: [{ memoryBodyId: 'product', title: 'x', description: 'too short' }] })
+    await expect(createCoordinator(invalid.value, runtime).maintainMetadata(parent(), ['product'], new AbortController().signal)).resolves.toMatchObject({ updates: [] })
   })
 
   it('reviews a completed full-context checkpoint through fork with a maintenance-only tool set', async () => {
