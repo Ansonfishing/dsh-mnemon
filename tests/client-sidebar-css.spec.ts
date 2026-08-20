@@ -2,8 +2,19 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const sidebarCss = readFileSync(new URL('../src/client/MnemonSidebarView.module.css', import.meta.url), 'utf8')
+const viewCss = readFileSync(new URL('../src/client/MnemonView.module.css', import.meta.url), 'utf8')
+const workspaceCss = readFileSync(new URL('../src/client/MnemonWorkspace.module.css', import.meta.url), 'utf8')
+
+const sidebarSurface = 'var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base))'
 
 describe('Sidebar layout invariants', () => {
+  it('keeps the workspace surfaces opaque under transparent-base skins with a default-theme fallback', () => {
+    expect(workspaceCss).toContain(`background: ${sidebarSurface};`)
+    expect(viewCss).toContain(`--mn-bg: ${sidebarSurface};`)
+    expect(sidebarCss).toContain(`.shell.shell {\n  background: ${sidebarSurface};`)
+    expect(sidebarCss).not.toContain('background: var(--dsw-alias-bg-base);')
+  })
+
   it('pins primary page headers at the canvas origin without an initial sticky settling distance', () => {
     expect(sidebarCss).toContain(".shell .canvas[data-lock-page-header] [class*='pageHeader'] {\n  position: sticky;\n  z-index: 12;\n  top: 0;")
     expect(sidebarCss).not.toContain("top: -14px")
