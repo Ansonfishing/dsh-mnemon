@@ -3,7 +3,7 @@
  * host tokens. Buildin never receives these classes and retains its original UI.
  */
 .shell.shell {
-  background: var(--dsw-alias-bg-base);
+  background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base));
   font-family: var(--dsw-font-family);
 }
 
@@ -14,7 +14,7 @@
   gap: 12px;
   padding: 10px 16px 6px;
   border-bottom: 0;
-  background: var(--dsw-alias-bg-base);
+  background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base));
 }
 
 .shell .brand { flex: 1 1 auto; gap: 8px; overflow: hidden; }
@@ -90,7 +90,7 @@
   border-radius: 6px;
   padding: 0 8px;
   color: var(--dsw-alias-state-business-primary);
-  background: var(--dsw-alias-bg-base);
+  background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base));
   font-size: 11px;
   cursor: pointer;
 }
@@ -101,7 +101,7 @@
   gap: 0;
   padding: 0 16px;
   border-bottom: 0;
-  background: var(--dsw-alias-bg-base);
+  background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base));
 }
 
 .shell .topNavigation::after { display: none; }
@@ -131,7 +131,7 @@
   flex: 0 0 auto;
   padding: 12px 16px 0;
   border-bottom: 1px solid var(--dsw-alias-border-l1);
-  background: var(--dsw-alias-bg-base);
+  background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base));
 }
 .shell .memoryWorkspace > [class*='pageHeader'] { margin-bottom: 8px; }
 
@@ -194,7 +194,7 @@
   overflow: hidden;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 14px;
-  background: var(--dsw-alias-bg-base);
+  background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base));
   box-shadow: var(--dsw-shadow-lv3);
 }
 .shell .modal.modalWide { width: min(780px, calc(100vw - 48px)); }
@@ -216,7 +216,7 @@
   line-height: 1.5;
 }
 .shell .modal > [class*='modalBody'] { min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 18px; scrollbar-gutter: stable; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
-.shell .modal > [class*='modalFooter'] { border-top-color: var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-base); }
+.shell .modal > [class*='modalFooter'] { border-top-color: var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base)); }
 @supports (height: 100dvh) { .shell .modal { max-height: calc(100dvh - 48px); } }
 .shell .modal form[class*='runtimeComposer'],
 .shell .modal form[class*='documentEditor'] {
@@ -375,7 +375,7 @@
   opacity: .45;
 }
 
-.shell .canvas { background: var(--dsw-alias-bg-base); }
+.shell .canvas { background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base)); }
 .shell button,
 .shell input,
 .shell select,
@@ -408,7 +408,7 @@
   margin: -14px -16px 12px;
   padding: 14px 16px 10px;
   border-bottom: 1px solid var(--dsw-alias-border-l1);
-  background: var(--dsw-alias-bg-base);
+  background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base));
 }
 
 /*

@@ -1,5 +1,5 @@
 .shell {
-  --mn-bg: var(--dsw-alias-bg-base);
+  --mn-bg: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base));
   --mn-layer-1: var(--dsw-alias-bg-layer-1);
   --mn-layer-2: var(--dsw-alias-bg-layer-2);
   --mn-input: var(--dsw-specific-input-major, var(--dsw-alias-bg-layer-2));
