@@ -209,7 +209,7 @@ mnemon:
     model: deepseek-v4-flash-vision-exp
 ```
 
-DSH 0.1.1-rc.1 includes each model's declared input modalities in the live catalog. dsh-mnemon preserves that metadata and labels image-capable choices as **Image input**; the route above is rc.1's first-party image-capable entry. Selecting it does not make current Mnemon background jobs ingest images: AI metadata, Agent Query, distillation, smart selection, and Document archive still submit text and bounded evidence. In the main conversation, DSH-owned image blocks keep their durable attachment references when dsh-mnemon appends lifecycle guidance, while activity thresholds count text blocks only. Raw image bytes are not copied into Runtime, Documents, or Memory Spaces.
+DSH 0.1.1-rc.2 includes each model's declared input modalities in the live catalog. dsh-mnemon preserves that metadata and labels image-capable choices as **Image input**; the route above is the 0.1.1 prerelease line's first-party image-capable entry. Selecting it does not make current Mnemon background jobs ingest images: AI metadata, Agent Query, distillation, smart selection, and Document archive still submit text and bounded evidence. In the main conversation, DSH-owned image blocks keep their durable attachment references when dsh-mnemon appends lifecycle guidance, while activity thresholds count text blocks only. Raw image bytes are not copied into Runtime, Documents, or Memory Spaces.
 
 ## Provider Requirements
 

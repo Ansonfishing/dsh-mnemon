@@ -161,7 +161,7 @@ Mnemon 自己的自定义目录、备份与迁移留在 Mnemon 专属折叠区�
 
 “跟随主链路”使用 DSH 新建 session 的默认模型；“指定模型 Provider”保存完整 Provider + Model 路由。这个设置只影响 AI 元信息、Agent 查询、沉淀记忆、智能 Provider 选择和档案归档，不改变当前主会话模型。推理强度由所选模型 Provider 能力与 DSH 路由支持共同决定。
 
-在 DSH 0.1.1-rc.1 中，模型能力会进入该选择器。支持图片的路由会显示**图片输入**标记，包括第一方 `deepseek-official/deepseek-v4-flash-vision-exp` 模型。该标记表示模型能力；当前 Mnemon 后台任务仍只发送文本 Prompt。
+在 DSH 0.1.1-rc.2 中，模型能力会进入该选择器。支持图片的路由会显示**图片输入**标记，包括第一方 `deepseek-official/deepseek-v4-flash-vision-exp` 模型。该标记表示模型能力；当前 Mnemon 后台任务仍只发送文本 Prompt。
 
 开关、单选项与眼睛按钮都允许重复点击；即使点击当前已选值，也不会让设置页卸载或白屏。
 

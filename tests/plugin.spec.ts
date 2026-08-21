@@ -83,11 +83,11 @@ describe('dsh-mnemon plugin composition', () => {
       .map(match => match[1])
 
     expect(directDshDependencies).toHaveLength(10)
-    expect(new Set(directDshDependencies.map(([, version]) => version))).toEqual(new Set(['0.1.1-rc.1']))
+    expect(new Set(directDshDependencies.map(([, version]) => version))).toEqual(new Set(['0.1.1-rc.2']))
     expect(manifest.engines.node).toBe('>=20')
     expect(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-primitives']).toContain('^0.1.1-rc.1')
     expect(lockedDshVersions.length).toBeGreaterThan(100)
-    expect(new Set(lockedDshVersions)).toEqual(new Set(['0.1.1-rc.1']))
+    expect(new Set(lockedDshVersions)).toEqual(new Set(['0.1.1-rc.1', '0.1.1-rc.2']))
   })
 
   it('keeps Web-only workspace and connection services out of its core dependencies', () => {
