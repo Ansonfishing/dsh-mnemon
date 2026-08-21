@@ -39,7 +39,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
       { id: 'deepseek', name: 'DeepSeek' },
       { id: 'openai', name: 'OpenAI' },
     ]),
-    listModels: vi.fn(async (provider: string) => provider === 'openai'
+    listModels: vi.fn(async (provider: string): Promise<Array<{ id: string; name: string; description?: string; inputModalities?: readonly string[] }>> => provider === 'openai'
       ? [{ id: 'gpt-5', name: 'GPT-5', description: 'General reasoning' }]
       : [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }]),
   }
@@ -224,6 +224,26 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.llm.listModels).toHaveBeenCalledTimes(2)
   })
 
+  it('preserves first-party model modality metadata in the task Agent catalog', async () => {
+    const value = fixture()
+    value.llm.listProviders.mockReturnValue([{ id: 'deepseek-official', name: 'DeepSeek' }])
+    value.llm.listModels.mockResolvedValue([{
+      id: 'deepseek-v4-flash-vision-exp',
+      name: 'DeepSeek-V4-Flash-Vision-Exp',
+      inputModalities: ['text', 'image'],
+    }])
+
+    await expect(value.lifecycle.taskAgentModels()).resolves.toMatchObject({
+      groups: [{
+        id: 'deepseek-official',
+        models: [{
+          id: 'deepseek-v4-flash-vision-exp',
+          inputModalities: ['text', 'image'],
+        }],
+      }],
+    })
+  })
+
   it('resolves the inherited task route without loading the full model directory', async () => {
     const value = fixture()
 
@@ -287,6 +307,40 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(second.messages).toHaveLength(2)
     expect(value.coordinator.recall).not.toHaveBeenCalled()
     expect(value.lifecycle.snapshot('session-1').counters).toMatchObject({ primes: 1, recallCues: 2, writebackCues: 2 })
+  })
+
+  it('keeps durable image references intact while scoring only text from a multimodal prompt', async () => {
+    const value = fixture()
+    const prompt: HostUserMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: [
+        {
+          type: 'image',
+          attachment: {
+            attachmentId: 'image:sha256:fixture',
+            mediaType: 'image/png',
+            bytes: 128,
+            width: 16,
+            height: 8,
+            name: 'architecture.png',
+          },
+        },
+        { type: 'text', text: 'Inspect this diagram.' },
+      ],
+      source: { kind: 'user' },
+    }
+
+    const decision = await value.preStep([prompt], 1)
+    await value.turnStopping(1)
+
+    if (decision.kind !== 'enter') throw new Error('unexpected rejection')
+    expect(decision.messages[0]).toBe(prompt)
+    expect(decision.messages[0]?.content[0]).toEqual(prompt.content[0])
+    expect(value.lifecycle.snapshot('session-1').current?.reviewActivity).toMatchObject({
+      totalUserTextLength: 'Inspect this diagram.'.length,
+      turnCount: 1,
+    })
   })
 
   it('waits for the QoderWork score threshold, then debounces a full-checkpoint review', async () => {

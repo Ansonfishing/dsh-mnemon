@@ -3,7 +3,7 @@
 <p align="center"><a href="./README.md">English</a> · <strong>简体中文</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/release-v0.2.14-5b5bd6" alt="发布版本 v0.2.14">
+  <img src="https://img.shields.io/badge/release-v0.2.15-5b5bd6" alt="发布版本 v0.2.15">
   <img src="https://img.shields.io/badge/%E8%AE%B0%E5%BF%86-3%20%E5%B1%82-087c5b" alt="三层记忆">
   <img src="https://img.shields.io/badge/Provider-9-c66a09" alt="九种 Provider">
   <img src="https://img.shields.io/badge/Node.js-%E2%89%A520-43853d" alt="Node.js 20 或更新版本">
@@ -22,7 +22,7 @@
 <p align="center">
   <a href="./docs/zh-CN/capabilities.md"><strong>先看能力地图</strong></a> ·
   <a href="./docs/zh-CN/getting-started.md">5 分钟开始</a> ·
-  <a href="./docs/zh-CN/releases/v0.2.14.md">v0.2.14 升级说明</a> ·
+  <a href="./docs/zh-CN/releases/v0.2.15.md">v0.2.15 升级说明</a> ·
   <a href="https://github.com/Grivn/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">观看宽屏实机演示</a>
 </p>
 
@@ -52,7 +52,7 @@
 | **归档档案** | 任务 Agent 先建立可检索冷引用，Host 验证后移动原文 | 受监督迁移 |
 | **本回合记忆** | 展开本轮召回、写入和档案检索；点击条目精确跳转 | 只读 |
 
-这些任务不会复用或挤占主对话历史。默认跟随 DSH 新建会话时的模型路由；也可以在**设置 → 记忆系统 → 后台任务 Agent**单独指定 Provider 与模型。该固定路由同时作用于 coordinator 派发的所有子代理委托（空闲复盘、召回、写入、问答、Provider 选择、记忆迁移、USER 压缩、档案归档、元信息维护）。
+这些任务不会复用或挤占主对话历史。默认跟随 DSH 新建会话时的模型路由；也可以在**设置 → 记忆系统 → 后台任务 Agent**单独指定 Provider 与模型。该固定路由同时作用于 coordinator 派发的所有子代理委托（空闲复盘、召回、写入、问答、Provider 选择、记忆迁移、USER 压缩、档案归档、元信息维护）。在 DSH 0.1.1-rc.2 中，第一方 `deepseek-official/deepseek-v4-flash-vision-exp` 路由会标记为**图片输入**。Mnemon 后台任务目前仍只发送文本 Prompt；多模态对话消息在生命周期处理中保留 DSH attachment 引用，不会把原始图片字节复制到记忆。
 
 ## 一套记忆体工作流，九种 Provider
 
@@ -98,7 +98,14 @@ mnemon --version
 
 Windows 推荐安装 v0.2.3 或更高版本的官方 ZIP；标准安装目录与 checksum 步骤见[快速开始](./docs/zh-CN/getting-started.md#2-安装-mnemon)。
 
-### 2. 安装 DSH 插件
+### 2. 安装 DSH 与插件
+
+本版本已验证 DSH 0.1.1-rc.2；其完整 profile 需要 Node.js `^22.19.0 || >=24.0.0`，Node 20 缺少 rc.2 使用的宿主原语。dsh-mnemon 包本身仍为较旧且兼容的 DSH Host 保留 Node.js 20 支持。DSH rc.2 已发布到 npm 的 `latest` 与 `next` 标签；为了可复现安装，下面显式指定版本：
+
+```sh
+npm install -g @deepseek-ai/dsh@0.1.1-rc.2
+dsh --version
+```
 
 ```sh
 dsh plugin --profile web add dsh-mnemon
@@ -190,7 +197,7 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 | 配置范围、路由与模型 | [配置参考](./docs/zh-CN/configuration.md) |
 | 备份、更新或排障 | [运维指南](./docs/zh-CN/operations.md) |
 | 接入工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
-| 查看本次升级 | [v0.2.14 发布说明](./docs/zh-CN/releases/v0.2.14.md) |
+| 查看本次升级 | [v0.2.15 发布说明](./docs/zh-CN/releases/v0.2.15.md) |
 
 完整目录见[文档中心](./docs/zh-CN/README.md)。
 

@@ -8,13 +8,22 @@ This guide goes from a blank environment to the first verified recall. It uses S
 
 You need:
 
+- Node.js `^22.19.0 || >=24.0.0` for the DSH 0.1.1-rc.2 baseline;
 - a DSH Web or Headless profile that starts successfully;
 - a locally executable `mnemon` CLI;
 - a DSH model route capable of creating independent task Agents.
 
 Regular semantic work prefers a provider named `spawn` with `toolFilter`, `persona`, and `depthLimit`. Mnemon supplies a schema-validated, one-run result tool instead of depending on the Provider's `outputSchema` path. Optional score-based background review additionally requires a provider named `fork` with `inheritsParentContext=true`. Missing `fork` does not block deterministic pages or regular manual actions.
 
-This guide and its screenshots use dsh-mnemon v0.2.0, DSH 0.1.0-rc.8, and Mnemon 0.2.3 as the recommended baseline. Until rc.8 becomes the npm `latest` tag, install DSH through `@deepseek-ai/dsh@next`. Back up and repeat this verification against an isolated root before upgrading.
+This workflow uses dsh-mnemon v0.2.15, DSH 0.1.1-rc.2, and Mnemon 0.2.3 as the recommended baseline. Some compatible UI screenshots were captured on dsh-mnemon v0.2.0. DSH rc.2 uses `Promise.withResolvers` and the Node Zstd API, so Node 20 cannot boot its complete profile. DSH 0.1.1-rc.2 is published on npm's `latest` and `next` tags. Back up and repeat this verification against an isolated root before upgrading.
+
+Install and verify the tested DSH release with:
+
+```sh
+npm install -g @deepseek-ai/dsh@0.1.1-rc.2
+dsh --version
+npm view @deepseek-ai/dsh dist-tags
+```
 
 ## 2. Install Mnemon
 
