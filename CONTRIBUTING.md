@@ -26,7 +26,7 @@ Documentation-only PRs from external contributors are not accepted directly. Ope
 ## Quick start
 
 ```sh
-git clone https://github.com/omdsh-dev/dsh-mnemon.git
+git clone https://github.com/Grivn/dsh-mnemon.git
 cd dsh-mnemon
 pnpm install
 pnpm run verify

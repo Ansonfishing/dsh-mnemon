@@ -8,7 +8,7 @@ body:
         请保持本模板完整并填写所有必填部分。删除必填部分的 Issue 将被自动关闭。可复现的 Bug 请使用“Bug 报告 / Bug report”表单。
         Keep this template intact and complete every required field. Issues with required sections removed will be closed automatically. Use the “Bug 报告 / Bug report” form for reproducible bugs.
 
-        提交前请先搜索确认没有重复 / Search for existing issues before submitting: [Issues](https://github.com/omdsh-dev/dsh-mnemon/issues?q=is%3Aissue)
+        提交前请先搜索确认没有重复 / Search for existing issues before submitting: [Issues](https://github.com/Grivn/dsh-mnemon/issues?q=is%3Aissue)
 
         不要公开提交漏洞、token、密钥、私有记忆内容或未脱敏日志。安全问题请按 [SECURITY.md](../../SECURITY.md) 私下报告。
         Do not post vulnerabilities, tokens, credentials, private memory, or unredacted logs. Report security concerns privately through [SECURITY.md](../../SECURITY.md).
