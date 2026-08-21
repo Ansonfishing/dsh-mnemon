@@ -71,7 +71,7 @@ Memory Space removal is a separate dangerous action. Mnemon Native invokes `stor
 
 ## Independent Task Agents and Internal Workers
 
-AI metadata, Agent Query, memory distillation, and document archiving initiated by the Web workbench first create a new top-level task Agent. It borrows no conversation history, binds its cwd explicitly to the selected workbench workspace, composes the default DSH preset, and is disposed after completion. Its model route follows the DSH new-session default unless `taskAgentModel` pins a complete Provider + Model.
+AI metadata, Agent Query, memory distillation, and document archiving initiated by the Web workbench first create a new top-level task Agent. It borrows no conversation history, binds its cwd explicitly to the selected workbench workspace, composes the default DSH preset, and is disposed after completion. Its model route follows the DSH new-session default unless `taskAgentModel` pins a complete Provider + Model. The same `taskAgentModel` route also applies to every Mnemon subagent delegation issued by the coordinator (idle checkpoint review, recall, write, answer, provider placement, migration, compaction, document archive, and metadata maintenance), so a fixed route covers both the top-level task Agent and all of its internal workers.
 
 The top-level task Agent is the user-visible execution unit. The `spawn` / `fork` providers below are bounded internal workers. When semantic judgment is needed, the task Agent may still dispatch a worker, which inherits its parent task Agent's model route. UI copy therefore says **independent task Agent**, while diagnostics and architecture retain worker / subagent terminology.
 

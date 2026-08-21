@@ -71,7 +71,7 @@ root Agent calls mnemon_recall
 
 ## 独立任务 Agent 与内部 Worker
 
-Web 工作台发起的 AI 元信息、Agent 查询、记忆沉淀和档案归档先创建一个新的顶层任务 Agent。这个 Agent 不借用对话历史，cwd 明确绑定工作台选中的工作区，并组合 DSH 的默认 preset；任务完成后立即释放。它的模型路由默认跟随 DSH 新会话默认值，也可以用 `taskAgentModel` 固定完整 Provider + Model。
+Web 工作台发起的 AI 元信息、Agent 查询、记忆沉淀和档案归档先创建一个新的顶层任务 Agent。这个 Agent 不借用对话历史，cwd 明确绑定工作台选中的工作区，并组合 DSH 的默认 preset；任务完成后立即释放。它的模型路由默认跟随 DSH 新会话默认值，也可以用 `taskAgentModel` 固定完整 Provider + Model。同一 `taskAgentModel` 路由也会作用到 coordinator 派发的所有子代理委托（空闲复盘、召回、写入、问答、Provider 选择、迁移、压缩、档案归档、元信息维护），因此 `fixed` 模式下顶层任务 Agent 与所有内部 worker 共用同一条模型路由。
 
 顶层任务 Agent 是用户可感知的执行单元；下述 `spawn` / `fork` 是插件内部受限 Worker Provider。任务 Agent 需要语义判断时仍会调度 bounded worker，worker 继承其父任务 Agent 的模型路由。因此，界面统一使用“独立任务 Agent”，而诊断与架构文档保留 worker / subagent 术语。
 

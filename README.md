@@ -52,7 +52,7 @@ The tiers are not copies. A useful rule is: **every-turn context goes to Runtime
 | **Archive Document** | A task Agent creates a searchable cold reference before the Host moves the original | Supervised move |
 | **Turn memory** | Expands exact recall, write, and Document-search activity; each item navigates to its source | Read-only |
 
-These tasks do not reuse or consume the main conversation history. By default they follow DSH's new-session model route; **Settings → Memory System → Background task Agent** can select a dedicated Provider and model.
+These tasks do not reuse or consume the main conversation history. By default they follow DSH's new-session model route; **Settings → Memory System → Background task Agent** can select a dedicated Provider and model. That fixed route also applies to every Mnemon subagent delegation (idle checkpoint review, recall, write, answer, provider placement, memory migration, USER compaction, document archive, and metadata maintenance).
 
 ## One Memory Space workflow, nine providers
 
