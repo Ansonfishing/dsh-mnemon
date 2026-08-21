@@ -182,6 +182,15 @@ describe('MnemonSettingsCard', () => {
           defaultSelection: { provider: 'deepseek', model: 'deepseek-chat' },
           groups: [
             { id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] },
+            {
+              id: 'deepseek-official',
+              name: 'DeepSeek',
+              models: [{
+                id: 'deepseek-v4-flash-vision-exp',
+                name: 'DeepSeek-V4-Flash-Vision-Exp',
+                inputModalities: ['text', 'image'],
+              }],
+            },
             { id: 'openai', name: 'OpenAI', models: [{ id: 'gpt-5', name: 'GPT-5' }] },
           ],
           failures: [],
@@ -197,6 +206,9 @@ describe('MnemonSettingsCard', () => {
     expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'task-agent-models', { includeCatalog: false })
     fireEvent.click(screen.getByRole('radio', { name: '指定模型 Provider' }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'task-agent-models', { includeCatalog: true }))
+    fireEvent.change(screen.getByRole('combobox', { name: '模型 Provider' }), { target: { value: 'deepseek-official' } })
+    expect(screen.getByRole('option', { name: 'DeepSeek-V4-Flash-Vision-Exp · 图片输入' })).toBeTruthy()
+    expect((screen.getByRole('combobox', { name: '模型' }) as HTMLSelectElement).value).toBe('deepseek-v4-flash-vision-exp')
     fireEvent.change(screen.getByRole('combobox', { name: '模型 Provider' }), { target: { value: 'openai' } })
     expect((screen.getByRole('combobox', { name: '模型' }) as HTMLSelectElement).value).toBe('gpt-5')
     fireEvent.click(screen.getByRole('button', { name: '保存' }))

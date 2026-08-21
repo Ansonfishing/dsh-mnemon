@@ -39,7 +39,7 @@ Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"
 
 更新命令由 Host 固定选择：浏览器不能传入命令或参数，执行禁用 shell，并限制时间与输出。更新完成后界面自动重新检查两个组件并刷新状态。Mnemon CLI 从下一次调用起生效；dsh-mnemon 仍需重启 `dsh web` 才能加载新插件代码。
 
-DSH rc.8 的 SQLite 不兼容提示只针对可选的 `@deepseek-ai/dsh-session-persistence-sqlite` 会话后端，内置 profile 默认不启用。该后端不提供旧 schema 迁移；手工挂载过它的部署应先备份，再重建 DSH 会话数据库。dsh-mnemon 的 Runtime、Documents、Memory Spaces 与 Provider 数据位于独立存储根，不受影响。
+DSH rc.8 首次说明的可选 SQLite 不兼容性在 DSH 0.1.1-rc.1 中仍然存在。它只针对 `@deepseek-ai/dsh-session-persistence-sqlite`，内置 profile 默认不启用。rc.1 后端使用 schema 17，会拒绝旧 schema，且不提供迁移路径；手工挂载过它的部署应先备份，再重建 DSH 会话数据库。dsh-mnemon 的 Runtime、Documents、Memory Spaces 与 Provider 数据位于独立存储根，不受影响。
 
 ## 备份与恢复
 

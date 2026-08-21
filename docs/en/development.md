@@ -4,7 +4,7 @@
 
 ## Environment
 
-`package.json` requires Node.js 20 or newer. CI uses Node.js 24 and pnpm 10.13.1. Verify DSH and Mnemon compatibility through the full validation chain whenever dependencies are upgraded.
+The published plugin retains its Node.js 20 engine floor for older compatible DSH hosts. This source checkout's DSH 0.1.1-rc.1 verification toolchain requires Node.js `^22.19.0 || >=24.0.0`: rc.1 imports the Node Zstd API and uses `Promise.withResolvers`, so Node 20 cannot load a complete rc.1 profile. CI runs the full Linux chain on Node.js 22.19 and 24, plus the Windows chain on Node.js 24, all with pnpm 10.13.1. Verify DSH and Mnemon compatibility through the full validation chain whenever dependencies are upgraded.
 
 Install dependencies:
 

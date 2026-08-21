@@ -205,9 +205,11 @@ AI 元信息、Agent 查询、工作台/对话区的记忆沉淀和档案归档�
 mnemon:
   taskAgentModel:
     mode: fixed
-    provider: deepseek
-    model: deepseek-chat
+    provider: deepseek-official
+    model: deepseek-v4-flash-vision-exp
 ```
+
+DSH 0.1.1-rc.1 会在实时模型目录中提供各模型声明的输入模态。dsh-mnemon 保留这些元数据，并为支持图片的选项标记**图片输入**；上述路由是 rc.1 提供的第一方图片输入项。选中它不代表当前 Mnemon 后台任务会摄取图片：AI 元信息、Agent 查询、记忆沉淀、智能选择与档案归档仍只提交文本和有界证据。在主对话中，dsh-mnemon 追加生命周期指引时会保留 DSH 管理的图片块及其持久 attachment 引用，活动阈值只计算文本块。原始图片字节不会复制进 Runtime、Documents 或 Memory Spaces。
 
 ## Provider 要求
 

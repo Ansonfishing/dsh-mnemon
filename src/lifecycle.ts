@@ -110,7 +110,12 @@ function memoryToolCalls(events: readonly HostSessionEvent[], turn?: number): nu
 function textLength(messages: readonly HostUserMessage[]): number {
   return messages
     .filter(message => message.source.kind === 'user')
-    .map(message => message.content.map(block => block.text).join('\n').trim().length)
+    .map(message => message.content
+      .filter(block => block.type === 'text' && 'text' in block && typeof block.text === 'string')
+      .map(block => block.text)
+      .join('\n')
+      .trim()
+      .length)
     .reduce((total, length) => total + length, 0)
 }
 
@@ -449,7 +454,12 @@ export class MnemonLifecycle {
           value: {
             id: provider.id,
             name: provider.name,
-            models: models.map(model => ({ id: model.id, name: model.name, ...(model.description === undefined ? {} : { description: model.description }) })),
+            models: models.map(model => ({
+              id: model.id,
+              name: model.name,
+              ...(model.description === undefined ? {} : { description: model.description }),
+              ...(model.inputModalities === undefined ? {} : { inputModalities: [...model.inputModalities] }),
+            })),
           },
         }
       } catch (error) {

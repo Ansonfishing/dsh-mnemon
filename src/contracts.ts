@@ -93,10 +93,40 @@ export interface HostMessageSource {
   summary?: string
 }
 
+/** Minimum shape shared by DSH content blocks, including merge-added blocks. */
+export interface HostOpaqueContentBlock {
+  type: string
+  /** Present on text-like blocks; omitted by images and other merge-added blocks. */
+  text?: string
+}
+
+export interface HostTextContentBlock extends HostOpaqueContentBlock {
+  type: 'text'
+  text: string
+}
+
+/** Durable image metadata introduced by DSH 0.1.1-rc.1. */
+export interface HostImageAttachmentRef {
+  attachmentId: string
+  mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
+  bytes: number
+  width: number
+  height: number
+  name?: string
+}
+
+export interface HostImageContentBlock extends HostOpaqueContentBlock {
+  type: 'image'
+  attachment: HostImageAttachmentRef
+}
+
+/** User content is open to DSH/plugin blocks while documenting first-party text and image shapes. */
+export type HostUserContentBlock = HostTextContentBlock | HostImageContentBlock | HostOpaqueContentBlock
+
 export interface HostUserMessage {
   id: string
   role: 'user'
-  content: Array<{ type: 'text'; text: string }>
+  content: HostUserContentBlock[]
   source: HostMessageSource
 }
 
@@ -163,7 +193,7 @@ export interface HostWorkspaceRegistry {
 export interface HostSubagentResult {
   output: Array<{ type: string; text?: string; [key: string]: unknown }>
   structured?: unknown
-  /** DSH rc.8 provider-authored failure detail, including for remote children. */
+  /** DSH rc.8+ provider-authored failure detail, including for remote children. */
   diagnostic?: string
   stopReason: string
 }
@@ -198,7 +228,13 @@ export interface HostSubagentsService {
 
 export interface HostLlmService {
   listProviders(): Array<{ id: string; name: string }>
-  listModels(provider: string): Promise<Array<{ id: string; name: string; description?: string }>>
+  listModels(provider: string): Promise<Array<{
+    id: string
+    name: string
+    description?: string
+    /** Absent means unknown; an explicit list declares the accepted request modalities. */
+    inputModalities?: readonly string[]
+  }>>
 }
 
 export interface HostContextShape {
