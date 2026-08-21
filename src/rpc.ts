@@ -548,7 +548,7 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
               if (!body.active || body.providerEnabled === false) throw new Error(`metadata maintenance requires an active Memory Space: ${id}`)
             }
             const maintained = await lifecycle.maintainMetadata(String(payload.sessionId ?? ''), memoryBodyIds, selectedWorkspace?.path)
-            service.updateBodyMetadata(maintained.updates)
+            if (maintained.updates.length > 0) service.updateBodyMetadata(maintained.updates)
             return success(maintained)
           }
         // Compatibility route for clients released before card reconnect was
