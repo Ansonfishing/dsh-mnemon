@@ -70,7 +70,7 @@ mnemon:
 | `idleReviewMs` | `30000` | 5000–600000 ms | Required continuous idle time after the threshold is reached |
 | `tabEnabled` | `true` | boolean | Whether to mount the Web entry selected by `displayMode`; Host RPC, commands, and Agent tools remain registered when off |
 | `writeEnabled` | `true` | boolean | Whether to expose semantic write tools, write RPC, and write commands |
-| `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed` | Model route for independent task Agents used by AI metadata, Agent Query, memory distillation, and document archiving; `fixed` requires both `provider` and `model` |
+| `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed` | Model route for independent task Agents used by AI metadata, Agent Query, memory distillation, document archiving, and the idle checkpoint review subagent; `fixed` requires both `provider` and `model` and also pins every Mnemon subagent delegation (recall, write, answer, provider placement, migration, compaction, document archive, metadata maintenance) to the same route |
 | `remoteAccess` | `read-only` | `read-only` / `trusted-host` | Whether non-loopback Web pages stay read-only or may use every Mnemon management RPC; this startup authority must be changed locally and requires a Host restart |
 | `mnemon-ui.turnBar` | `true` | boolean | Turn-tail memory activity bar; on by default, **applies live after saving** |
 | `mnemon-ui.saveAction` | `true` | boolean | “Save to memory” icon and confirmation on finalized assistant replies; on by default, **applies live after saving** |

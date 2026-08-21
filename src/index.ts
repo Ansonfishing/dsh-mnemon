@@ -70,7 +70,14 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     base: resolveInteractionConfig(resolved.conversationInteraction),
     applies: 'live',
   })
-  const coordinator = new MnemonSubagentCoordinator(ctx.subagents, runtime, undefined, ctx)
+  const coordinator = new MnemonSubagentCoordinator(ctx.subagents, runtime, undefined, ctx, () => {
+    const taskAgentModel = runtime.config.taskAgentModel
+    if (taskAgentModel.mode !== 'fixed') return undefined
+    const provider = taskAgentModel.provider?.trim()
+    const model = taskAgentModel.model?.trim()
+    if (provider === undefined || provider === '' || model === undefined || model === '') return undefined
+    return { provider, model }
+  })
   const lifecycle = new MnemonLifecycle(ctx, coordinator, runtime.config, runtime)
   ctx.effect(() => lifecycle.start(), 'dsh-mnemon.lifecycle-root()')
   registerTools(ctx, runtime, coordinator)

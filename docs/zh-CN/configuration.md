@@ -70,7 +70,7 @@ mnemon:
 | `idleReviewMs` | `30000` | 5000–600000 ms | 达标后需要连续空闲的时间 |
 | `tabEnabled` | `true` | boolean | 是否挂载 `displayMode` 指定的 Web 入口；关闭后 Host RPC、命令和 Agent 工具保持注册 |
 | `writeEnabled` | `true` | boolean | 是否暴露语义写工具、写 RPC 和写命令 |
-| `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed` | AI 元信息、Agent 查询、记忆沉淀和档案归档所用独立任务 Agent 的模型路由；`fixed` 必须同时保存 `provider` 与 `model` |
+| `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed` | AI 元信息、Agent 查询、记忆沉淀、档案归档以及空闲复盘子代理的模型路由；`fixed` 必须同时保存 `provider` 与 `model`，并会同时钉住 coordinator 派发的所有子代理委托（召回、写入、问答、Provider 选择、迁移、压缩、档案归档、元信息维护） |
 | `remoteAccess` | `read-only` | `read-only` / `trusted-host` | 非 loopback Web 页面是否只能读取，或可访问全部 Mnemon 管理 RPC；这是启动时权限边界，必须本地修改并重启 Host |
 | `mnemon-ui.turnBar` | `true` | boolean | 回合尾记忆活动条；默认开启，**保存后实时生效** |
 | `mnemon-ui.saveAction` | `true` | boolean | 已定稿助手回复旁的「存入记忆」图标与确认弹窗；默认开启，**保存后实时生效** |

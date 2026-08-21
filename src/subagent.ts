@@ -643,6 +643,7 @@ export class MnemonSubagentCoordinator {
     private readonly runtimeMemoryOrSource?: RuntimeMemoryController | AgentRuntimeSource,
     private readonly documents?: DocumentManager,
     private readonly resultRuntime?: HostResultToolRuntime,
+    private readonly taskAgentModelResolver?: () => { provider: string; model: string } | undefined,
   ) {}
 
   snapshot(): SubagentCounters {
@@ -1100,12 +1101,19 @@ ${runtimeSnapshotContext('user', targetEntries)}`
       const completionPersona = `${persona}
 
 Completion protocol: call \`${resultToolName}\` exactly once with the final result matching its parameter schema. This is the only completion channel for this run. Do not finish with a plain-text answer.`
+      const perOpMaxTokens = operation === 'migration' ? 16_384
+        : operation === 'compaction' || operation === 'document-archive' ? 8_192
+        : operation === 'metadata-maintenance' ? 4_096
+        : undefined
+      const fixed = this.taskAgentModelResolver?.()
+      const baseAgentOptions = perOpMaxTokens === undefined ? undefined : { maxTokens: perOpMaxTokens }
+      const resolvedAgentOptions = fixed === undefined ? baseAgentOptions : { ...(baseAgentOptions ?? {}), provider: fixed.provider, model: fixed.model }
       run = await this.subagents.start(provider, {
         label,
         prompt: [{ type: 'text', text: prompt }],
         parent,
         signal,
-        ...(operation === 'migration' ? { agentOptions: { maxTokens: 16_384 } } : operation === 'compaction' || operation === 'document-archive' ? { agentOptions: { maxTokens: 8_192 } } : operation === 'metadata-maintenance' ? { agentOptions: { maxTokens: 4_096 } } : {}),
+        ...(resolvedAgentOptions === undefined ? {} : { agentOptions: resolvedAgentOptions }),
         maxDepth: 1,
         toolFilter: { allow: [...tools, resultToolName] },
         persona: completionPersona,

@@ -663,6 +663,88 @@ describe('Mnemon memory subagent coordinator', () => {
       .rejects.toThrow('stopped with error: REMOTE_GATEWAY: rejected [redacted]')
     expect(host.dispose).toHaveBeenCalledOnce()
   })
+
+  it('pins a fixed task Agent model onto the fork-based idle review delegation', async () => {
+    const host = subagents({ summary: 'No mutation needed.', action: 'skipped', memoryBodyIds: [] }, 'completed', ['spawn', 'fork'])
+    const resultTools = toolRegistry()
+    const coordinator = new MnemonSubagentCoordinator(
+      host.value,
+      undefined,
+      undefined,
+      resultTools.value,
+      () => ({ provider: 'pinned-provider', model: 'pinned-model' }),
+    )
+
+    await expect(coordinator.review(parent(), new AbortController().signal)).resolves.toMatchObject({
+      delegated: true,
+      provider: 'fork',
+      action: 'skipped',
+    })
+    expect(host.start).toHaveBeenCalledWith('fork', expect.objectContaining({
+      toolFilter: { allow: expect.arrayContaining(['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_runtime_memory', 'mnemon_document_manage']) },
+      agentOptions: { provider: 'pinned-provider', model: 'pinned-model' },
+    }))
+  })
+
+  it('omits provider/model from agentOptions when the task Agent model is inherited', async () => {
+    const host = subagents({ summary: 'No mutation needed.', action: 'skipped', memoryBodyIds: [] }, 'completed', ['spawn', 'fork'])
+    const resultTools = toolRegistry()
+    const coordinator = new MnemonSubagentCoordinator(
+      host.value,
+      undefined,
+      undefined,
+      resultTools.value,
+      () => undefined,
+    )
+
+    await expect(coordinator.review(parent(), new AbortController().signal)).resolves.toMatchObject({
+      delegated: true,
+      provider: 'fork',
+    })
+    const reviewCall = (host.start.mock.calls[0] as unknown as [string, { agentOptions?: unknown }])[1]
+    expect(reviewCall.agentOptions).toBeUndefined()
+  })
+
+  it('merges a fixed task Agent model with the per-op maxTokens for short-lived delegates', async () => {
+    const host = subagents({
+      summary: 'Merged two compatible profile preferences locally.',
+      action: 'compacted',
+      compactedEntries: [{
+        content: 'User prefers concise Chinese release notes with blockers first.',
+        importance: 'critical',
+        sourceIndexes: [1, 2],
+      }],
+    })
+    const runtime = {
+      mutate: vi.fn()
+        .mockRejectedValueOnce(new RuntimeMemoryCapacityError('user', 4_090, 4_180, 4_096))
+        .mockResolvedValueOnce({ success: true, message: 'Entry added.', target: 'user', entryCount: 2, usage: { used: 180, limit: 4_096 }, added: 'User prefers direct answers.' }),
+      snapshot: vi.fn(() => ({
+        revision: 'user-revision',
+        entries: [
+          { content: 'User prefers concise {{language}} Chinese release notes.', target: 'user', importance: 'critical' },
+          { content: 'User wants blockers listed first in release notes.', target: 'user', importance: 'normal' },
+        ],
+        targets: { user: { used: 4_090, limit: 4_096 } },
+      })),
+      compactTarget: vi.fn(async () => ({})),
+    } as unknown as RuntimeMemoryController
+    const resultTools = toolRegistry()
+    const coordinator = new MnemonSubagentCoordinator(
+      host.value,
+      runtime,
+      undefined,
+      resultTools.value,
+      () => ({ provider: 'pinned-provider', model: 'pinned-model' }),
+    )
+
+    await expect(coordinator.runtime(parent(), { action: 'add', target: 'user', content: 'User prefers direct answers.' }, new AbortController().signal)).resolves.toMatchObject({
+      maintenance: { kind: 'local-compaction' },
+    })
+    expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
+      agentOptions: { provider: 'pinned-provider', model: 'pinned-model', maxTokens: 8_192 },
+    }))
+  })
 })
 
 describe('Mnemon root/child tool split', () => {
