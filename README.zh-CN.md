@@ -28,7 +28,7 @@
 
 `dsh-mnemon` 为 DSH 提供统一的记忆控制面，但不要求所有知识进入同一种数据库。运行时记忆让紧凑上下文每轮可用；项目档案保留完整叙事；记忆体按需召回长期证据，底层可选择 **Mnemon、OpenViking、Honcho、Mem0、Hindsight、Holographic、RetainDB、ByteRover 或 Supermemory**。
 
-Mnemon 仍是官方优先的原生引擎。可以替换的是第三层；无论选择哪个 Provider，前两层的存储、工作区和交互心智保持不变。
+[Mnemon](https://github.com/mnemon-dev/mnemon) 仍是官方优先的原生引擎。可以替换的是第三层；无论选择哪个 Provider，前两层的存储、工作区和交互心智保持不变。
 
 ## 30 秒理解能力边界
 
@@ -58,15 +58,15 @@ Mnemon 仍是官方优先的原生引擎。可以替换的是第三层；无论�
 
 | Provider | 形态 | 适合场景 |
 |---|---|---|
-| **Mnemon** | 官方原生，本地 CLI + SQLite | 精确写入、实体、类型关系、本地优先共享 |
-| **OpenViking** | HTTP + `viking://` | 资源树与异步提炼 |
-| **Honcho** | HTTP workspace / peers | 团队与 Agent peer conclusions |
-| **Mem0** | Platform 或自托管 HTTP | 已有用户 / Agent 记忆 |
-| **Hindsight** | HTTP memory bank | bank、实体与 Provider 原生图谱 |
-| **Holographic** | 本地结构化事实文件 | 可审计事实、信任评分、本地实体 |
-| **RetainDB** | HTTP project / user | 项目与用户双作用域画像 |
-| **ByteRover** | 本地 `brv` CLI | 代码知识树与 curate 流程 |
-| **Supermemory** | HTTP container | 文档摄取与容器级共享 |
+| **[Mnemon](https://github.com/mnemon-dev/mnemon)** | 官方原生，本地 CLI + SQLite | 精确写入、实体、类型关系、本地优先共享 |
+| **[OpenViking](https://github.com/volcengine/OpenViking)** | HTTP + `viking://` | 资源树与异步提炼 |
+| **[Honcho](https://github.com/plastic-labs/honcho)** | HTTP workspace / peers | 团队与 Agent peer conclusions |
+| **[Mem0](https://github.com/mem0ai/mem0)** | Platform 或自托管 HTTP | 已有用户 / Agent 记忆 |
+| **[Hindsight](https://github.com/vectorize-io/hindsight)** | HTTP memory bank | bank、实体与 Provider 原生图谱 |
+| **[Holographic](https://github.com/NousResearch/hermes-agent/tree/main/plugins/memory/holographic)** | 本地结构化事实文件 | 可审计事实、信任评分、本地实体 |
+| **[RetainDB](https://github.com/RetainDB/RetainDB)** | HTTP project / user | 项目与用户双作用域画像 |
+| **[ByteRover](https://github.com/campfirein/byterover-cli)** | 本地 `brv` CLI | 代码知识树与 curate 流程 |
+| **[Supermemory](https://github.com/supermemoryai/supermemory)** | HTTP container | 文档摄取与容器级共享 |
 
 Provider 能力差异会如实展示：引擎没有图谱边、删除语义或可枚举内容时，dsh-mnemon 不会伪造。**设置页管理可复用的 Provider 服务；记忆体页管理具体实例、激活、作用域与元信息。**三方 Provider 默认关闭。
 
