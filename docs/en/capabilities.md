@@ -63,7 +63,7 @@ These user-visible capabilities do not reuse the main conversation history or co
 - **Document archive** creates a cold reference before the Host may move the original;
 - **Smart Provider selection** calls a model only when hard rules leave multiple candidates.
 
-Tasks follow the DSH new-session model route by default. **Settings → Memory System → Background task Agent** can select a separate Provider and model. Tasks are isolated: one failure is reported on its own Memory Space or operation surface instead of blocking the page.
+Tasks follow the DSH new-session model route by default. **Settings → Memory System → Background task Agent** can select a separate Provider and model. On DSH 0.1.1-rc.2, image-capable catalog entries are labeled **Image input**, including `deepseek-official/deepseek-v4-flash-vision-exp`; current Mnemon task prompts remain text-only. Tasks are isolated: one failure is reported on its own Memory Space or operation surface instead of blocking the page.
 
 Bounded workers may still perform structured judgment internally, but that is an implementation detail. The UI and product documentation consistently call the user-visible unit an **independent task Agent**.
 

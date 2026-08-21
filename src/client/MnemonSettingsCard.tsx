@@ -442,7 +442,7 @@ function TaskAgentModelSection(props: {
           <select aria-label={props.t('config.taskAgentModel')} value={props.draft.taskAgentModel} disabled={props.disabled || props.state !== 'ready' || group === undefined} onChange={event => props.onEdit('taskAgentModel', event.target.value)}>
             <option value="">{props.t('config.taskAgentChooseModel')}</option>
             {props.draft.taskAgentModel !== '' && !group?.models.some(model => model.id === props.draft.taskAgentModel) && <option value={props.draft.taskAgentModel}>{props.draft.taskAgentModel}</option>}
-            {(group?.models ?? []).map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
+            {(group?.models ?? []).map(model => <option key={model.id} value={model.id}>{model.name}{model.inputModalities?.includes('image') === true ? ` · ${props.t('config.taskAgentImageInput')}` : ''}</option>)}
           </select>
         </label>
       </div>}

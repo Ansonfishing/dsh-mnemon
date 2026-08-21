@@ -3,7 +3,7 @@
 <p align="center"><strong>English</strong> · <a href="./README.zh-CN.md">简体中文</a></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/release-v0.2.14-5b5bd6" alt="release v0.2.14">
+  <img src="https://img.shields.io/badge/release-v0.2.15-5b5bd6" alt="release v0.2.15">
   <img src="https://img.shields.io/badge/memory-3%20tiers-087c5b" alt="three memory tiers">
   <img src="https://img.shields.io/badge/providers-9-c66a09" alt="nine providers">
   <img src="https://img.shields.io/badge/Node.js-%E2%89%A520-43853d" alt="Node.js 20 or newer">
@@ -22,7 +22,7 @@
 <p align="center">
   <a href="./docs/en/capabilities.md"><strong>Explore the capability map</strong></a> ·
   <a href="./docs/en/getting-started.md">Start in five minutes</a> ·
-  <a href="./docs/en/releases/v0.2.14.md">Read the v0.2.14 notes</a> ·
+  <a href="./docs/en/releases/v0.2.15.md">Read the v0.2.15 notes</a> ·
   <a href="https://github.com/Grivn/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">Watch the widescreen demo</a>
 </p>
 
@@ -52,7 +52,7 @@ The tiers are not copies. A useful rule is: **every-turn context goes to Runtime
 | **Archive Document** | A task Agent creates a searchable cold reference before the Host moves the original | Supervised move |
 | **Turn memory** | Expands exact recall, write, and Document-search activity; each item navigates to its source | Read-only |
 
-These tasks do not reuse or consume the main conversation history. By default they follow DSH's new-session model route; **Settings → Memory System → Background task Agent** can select a dedicated Provider and model. That fixed route also applies to every Mnemon subagent delegation (idle checkpoint review, recall, write, answer, provider placement, memory migration, USER compaction, document archive, and metadata maintenance).
+These tasks do not reuse or consume the main conversation history. By default they follow DSH's new-session model route; **Settings → Memory System → Background task Agent** can select a dedicated Provider and model. That fixed route applies to every Mnemon subagent delegation (idle checkpoint review, recall, write, answer, provider placement, memory migration, USER compaction, document archive, and metadata maintenance). With DSH 0.1.1-rc.2, the first-party `deepseek-official/deepseek-v4-flash-vision-exp` route appears with an **Image input** label. Mnemon background jobs still send text-only prompts; multimodal conversation messages keep their DSH attachment references through lifecycle processing, and raw image bytes are never copied into memory.
 
 ## One Memory Space workflow, nine providers
 
@@ -98,7 +98,14 @@ mnemon --version
 
 Windows users can install the official v0.2.3-or-newer release ZIP. The expected installation path and checksum procedure are in [Getting Started](./docs/en/getting-started.md#2-install-mnemon).
 
-### 2. Install the DSH plugin
+### 2. Install DSH and the plugin
+
+This release is verified against DSH 0.1.1-rc.2, whose complete profiles require Node.js `^22.19.0 || >=24.0.0`; Node 20 lacks host primitives used by rc.2. The dsh-mnemon package itself retains Node.js 20 compatibility for older compatible DSH hosts. DSH rc.2 is published on npm's `latest` and `next` tags; use the exact version below for a reproducible installation:
+
+```sh
+npm install -g @deepseek-ai/dsh@0.1.1-rc.2
+dsh --version
+```
 
 ```sh
 dsh plugin --profile web add dsh-mnemon
@@ -190,7 +197,7 @@ See [Operations, security, and troubleshooting](./docs/en/operations.md) for bac
 | Configure scope, routing, and model selection | [Configuration](./docs/en/configuration.md) |
 | Back up, update, or troubleshoot | [Operations](./docs/en/operations.md) |
 | Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |
-| Review the release | [v0.2.14 release notes](./docs/en/releases/v0.2.14.md) |
+| Review the release | [v0.2.15 release notes](./docs/en/releases/v0.2.15.md) |
 
 See the [documentation hub](./docs/en/README.md) for the full map.
 

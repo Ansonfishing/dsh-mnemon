@@ -158,6 +158,8 @@ Mnemon-specific custom directory, backup, and migration remain in Mnemon's own e
 
 **Follow main route** uses DSH's default for a new session. **Choose model provider** stores a complete Provider + Model route. It affects AI metadata, Agent Query, Remember, smart Provider selection, and Document archive only; it never changes the current main conversation model. Reasoning strength depends on both selected Provider capability and DSH route support.
 
+On DSH 0.1.1-rc.2, model capabilities flow into this picker. Image-capable routes carry an **Image input** label, including the first-party `deepseek-official/deepseek-v4-flash-vision-exp` model. The label describes model capability; current Mnemon background jobs still send text-only prompts.
+
 Switches, radio options, and eye buttons tolerate repeated clicks—including clicking the already-selected value—without unmounting or blanking the page.
 
 ## 6. In-conversation interaction

@@ -122,6 +122,8 @@ export interface TaskAgentModelCatalogModel {
   id: string
   name: string
   description?: string
+  /** DSH's merge-extensible model modality ids; absent means capability is unknown. */
+  inputModalities?: string[]
 }
 
 export interface TaskAgentModelCatalogGroup {
