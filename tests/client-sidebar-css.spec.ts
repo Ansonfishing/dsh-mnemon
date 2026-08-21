@@ -15,6 +15,11 @@ describe('Sidebar layout invariants', () => {
     expect(sidebarCss).not.toContain('background: var(--dsw-alias-bg-base);')
   })
 
+  it('anchors and hides the takeover inside the DSH advanced-mode conversation surface', () => {
+    expect(workspaceCss).toContain('.dshDesktopConversationSurface {\n  position: relative;')
+    expect(workspaceCss).toContain("html[data-dsh-mnemon-active]:not([data-dsh-taskboard-active]):not([data-dsh-ssh-active]) .dshDesktopConversationSurface > :not([data-dsh-mnemon-view])")
+  })
+
   it('pins primary page headers at the canvas origin without an initial sticky settling distance', () => {
     expect(sidebarCss).toContain(".shell .canvas[data-lock-page-header] [class*='pageHeader'] {\n  position: sticky;\n  z-index: 12;\n  top: 0;")
     expect(sidebarCss).not.toContain("top: -14px")

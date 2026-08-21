@@ -182,6 +182,32 @@ describe('Mnemon sidebar workspace', () => {
     expect(document.querySelector('[data-dsh-mnemon-view]')).toBeNull()
   })
 
+  it('mounts inside the DSH advanced-mode frame classes when the classic panes are absent', async () => {
+    document.body.innerHTML = `
+      <div class="dshDesktopFrame">
+        <aside class="dshDesktopUpstreamSidebar">
+          <div class="logoRow"><button class="newSession">New</button></div>
+          <button data-dsh-taskboard-entry>Tasks</button>
+          <button data-dsh-ssh-entry>SSH</button>
+        </aside>
+        <main class="dshDesktopConversationSurface"><div data-chat-content>Chat stays mounted</div></main>
+      </div>`
+    const dispose = currentDispose = mountMnemonWorkspace(context() as never, {} as never, key => String(key))
+    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')
+    expect(entry).not.toBeNull()
+    await waitFor(() => expect(document.querySelector('[data-testid="mnemon-panel-content"]')).not.toBeNull())
+    expect(document.querySelector('[data-testid="mnemon-panel-content"]')?.getAttribute('data-surface')).toBe('sidebar')
+    expect(document.querySelector('[data-chat-content]')).not.toBeNull()
+
+    fireEvent.click(entry!)
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
+
+    fireEvent.click(document.querySelector('[aria-label="header.backToConversation"]')!)
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
+    dispose()
+    currentDispose = undefined
+  })
+
   it('updates the custom sidebar entry and workspace when the DSH locale changes', async () => {
     let active: 'zh' | 'en' = 'zh'
     let revision = 0

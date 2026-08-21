@@ -3,6 +3,12 @@
   position: relative;
 }
 
+/* DSH advanced mode replaces the layout with the .dshDesktop* frame classes;
+   the conversation surface needs the same positioning anchor there. */
+.dshDesktopConversationSurface {
+  position: relative;
+}
+
 [data-dsh-mnemon-view] {
   position: absolute;
   z-index: 60;
@@ -23,7 +29,8 @@ html[data-dsh-mnemon-active]:not([data-dsh-taskboard-active]):not([data-dsh-ssh-
 }
 
 html[data-dsh-mnemon-active]:not([data-dsh-taskboard-active]):not([data-dsh-ssh-active]) [data-pane='conversation'] > :not([data-dsh-mnemon-view]),
-html[data-dsh-mnemon-active]:not([data-dsh-taskboard-active]):not([data-dsh-ssh-active]) [class*='centerCol'] > :not([data-dsh-mnemon-view]) {
+html[data-dsh-mnemon-active]:not([data-dsh-taskboard-active]):not([data-dsh-ssh-active]) [class*='centerCol'] > :not([data-dsh-mnemon-view]),
+html[data-dsh-mnemon-active]:not([data-dsh-taskboard-active]):not([data-dsh-ssh-active]) .dshDesktopConversationSurface > :not([data-dsh-mnemon-view]) {
   display: none !important;
 }
 

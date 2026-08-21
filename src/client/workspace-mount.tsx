@@ -11,7 +11,7 @@ import { MnemonWorkspaceController } from './workspace-controller.ts'
 
 export const MNEMON_VIEW_SELECTOR = '[data-dsh-mnemon-view]'
 
-const CONVERSATION_COLUMN_SELECTOR = '[data-pane="conversation"], [class*="centerCol"]'
+const CONVERSATION_COLUMN_SELECTOR = '[data-pane="conversation"], [class*="centerCol"], .dshDesktopConversationSurface'
 const ACTIVE_ATTR = 'data-dsh-mnemon-active'
 const TASKBOARD_ACTIVE_ATTR = 'data-dsh-taskboard-active'
 const SSH_ACTIVE_ATTR = 'data-dsh-ssh-active'
