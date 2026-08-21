@@ -28,7 +28,7 @@
 
 `dsh-mnemon` gives DSH one memory control plane without forcing every kind of knowledge into one database. Runtime Memory keeps compact context available every turn. Project Documents preserve complete narratives. Memory Spaces retrieve durable evidence on demand and can use **Mnemon, OpenViking, Honcho, Mem0, Hindsight, Holographic, RetainDB, ByteRover, or Supermemory**.
 
-Mnemon remains the official, prioritized native engine. The third tier is replaceable; the first two keep the same storage, workspace, and interaction model regardless of provider.
+[Mnemon](https://github.com/mnemon-dev/mnemon) remains the official, prioritized native engine. The third tier is replaceable; the first two keep the same storage, workspace, and interaction model regardless of provider.
 
 Since v0.3.0, the three tiers are the **default topology** of a composable kernel rather than the only shape hard-coded into every entry point. Layers, Adapters, Strategies, Guards, and DSH Surfaces have separate contracts. Each Layer can be disabled or independently set to `off`, `manual`, or `automatic` participation for recall, writes, projection, and maintenance. Users still install one `dsh-mnemon` package, while extension authors contribute through stable subpaths. See the [composable architecture](./docs/en/architecture.md#composable-memory-kernel) and [extension guide](./docs/en/extensions.md).
 
@@ -60,15 +60,15 @@ These tasks do not reuse or consume the main conversation history. By default th
 
 | Provider | Shape | Best fit |
 |---|---|---|
-| **Mnemon** | Official native local CLI + SQLite | Exact writes, entities, typed relationships, local-first sharing |
-| **OpenViking** | HTTP + `viking://` | Resource trees and asynchronous extraction |
-| **Honcho** | HTTP workspace / peers | Team and Agent-peer conclusions |
-| **Mem0** | Platform or self-hosted HTTP | Existing user / Agent memory |
-| **Hindsight** | HTTP memory bank | Banks, entities, provider-native graph |
-| **Holographic** | Local structured fact files | Auditable facts, trust scores, local entities |
-| **RetainDB** | HTTP project / user | Project- and user-scoped profiles |
-| **ByteRover** | Local `brv` CLI | Code knowledge trees and curate workflows |
-| **Supermemory** | HTTP container | Document ingestion and container sharing |
+| **[Mnemon](https://github.com/mnemon-dev/mnemon)** | Official native local CLI + SQLite | Exact writes, entities, typed relationships, local-first sharing |
+| **[OpenViking](https://github.com/volcengine/OpenViking)** | HTTP + `viking://` | Resource trees and asynchronous extraction |
+| **[Honcho](https://github.com/plastic-labs/honcho)** | HTTP workspace / peers | Team and Agent-peer conclusions |
+| **[Mem0](https://github.com/mem0ai/mem0)** | Platform or self-hosted HTTP | Existing user / Agent memory |
+| **[Hindsight](https://github.com/vectorize-io/hindsight)** | HTTP memory bank | Banks, entities, provider-native graph |
+| **[Holographic](https://github.com/NousResearch/hermes-agent/tree/main/plugins/memory/holographic)** | Local structured fact files | Auditable facts, trust scores, local entities |
+| **[RetainDB](https://github.com/RetainDB/RetainDB)** | HTTP project / user | Project- and user-scoped profiles |
+| **[ByteRover](https://github.com/campfirein/byterover-cli)** | Local `brv` CLI | Code knowledge trees and curate workflows |
+| **[Supermemory](https://github.com/supermemoryai/supermemory)** | HTTP container | Document ingestion and container sharing |
 
 Provider capability differences stay visible. dsh-mnemon never invents graph edges, deletion semantics, or enumerable content for an engine that does not provide them. **Settings owns reusable Provider services; Memory Spaces owns concrete instances, activation, scope, and metadata.** External Providers are off by default.
 
