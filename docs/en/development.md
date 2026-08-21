@@ -204,4 +204,4 @@ Credential convention: write NPM_TOKEN only to the user-level `~/.npmrc` (`npm c
 
 2FA note: when the npm account has publish-level two-factor authentication, an interactive `pnpm publish --access public` prompts for the OTP; scripted/CI publishing needs a Classic **Automation** token or a Granular token allowed to bypass 2FA (a plain token from `npm login` cannot publish and fails with 403 Two-factor authentication required).
 
-Before publishing, check that `package.json` `repository`/`homepage`/`bugs` point at `Grivn/dsh-mnemon` (npm page consistent with GitHub) and that the version has been bumped.
+Before publishing, check that `package.json` `repository`/`homepage`/`bugs` point at `omdsh-dev/dsh-mnemon` (npm page consistent with GitHub) and that the version has been bumped.
