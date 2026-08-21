@@ -4,7 +4,7 @@
 
 ## 环境
 
-`package.json` 要求 Node.js 20 或更高版本。CI 使用 Node.js 24 和 pnpm 10.13.1。升级依赖时，应通过完整验证链路确认 DSH 与 Mnemon 兼容性。
+发布的插件仍为较旧且兼容的 DSH Host 保留 Node.js 20 engine 下限。当前源码检出中的 DSH 0.1.1-rc.2 验证工具链需要 Node.js `^22.19.0 || >=24.0.0`：rc.2 会导入 Node Zstd API 并使用 `Promise.withResolvers`，因此 Node 20 无法加载完整 rc.2 profile。CI 在 Node.js 22.19 和 24 上运行完整 Linux 验证链，并在 Node.js 24 上运行 Windows 验证链，均使用 pnpm 10.13.1。升级依赖时，应通过完整验证链路确认 DSH 与 Mnemon 兼容性。
 
 安装依赖：
 

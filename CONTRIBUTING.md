@@ -18,7 +18,7 @@ Documentation-only PRs from external contributors are not accepted directly. Ope
 
 ## Prerequisites
 
-- Node.js 20 or later; CI uses Node.js 24 and pnpm 10.13.1;
+- Node.js `^22.19.0 || >=24.0.0`; DSH 0.1.1-rc.2 uses host primitives unavailable on Node 20, and CI covers Node.js 22.19 plus 24 with pnpm 10.13.1;
 - use only published `@deepseek-ai/*` NPM contracts; do not modify DSH source or point tsconfig at a DSH source checkout;
 - do not commit tokens, credentials, private memory, sensitive paths, or unredacted logs in repository configuration, fixtures, screenshots, or PR descriptions;
 - `lib/` is generated build output and must not be committed or edited manually.

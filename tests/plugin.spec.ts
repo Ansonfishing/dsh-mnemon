@@ -6,7 +6,11 @@ import { apply, inject } from '../src/index.ts'
 
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
   dsh: { client: { inject: string[]; platform: string } }
+  devDependencies: Record<string, string>
+  engines: { node: string }
+  peerDependencies: Record<string, string>
 }
+const lockfile = readFileSync(new URL('../pnpm-lock.yaml', import.meta.url), 'utf8')
 
 const directories: string[] = []
 
@@ -72,6 +76,20 @@ function context(options: { connection?: boolean; workspaceRegistry?: boolean } 
 }
 
 describe('dsh-mnemon plugin composition', () => {
+  it('keeps the installed DSH prerelease family coherent', () => {
+    const directDshDependencies = Object.entries(manifest.devDependencies)
+      .filter(([name]) => name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-'))
+    const lockedDshVersions = [...lockfile.matchAll(/@deepseek-ai\/dsh(?:-[a-z0-9-]+)?@(\d+\.\d+\.\d+-rc\.\d+)/g)]
+      .map(match => match[1])
+
+    expect(directDshDependencies).toHaveLength(10)
+    expect(new Set(directDshDependencies.map(([, version]) => version))).toEqual(new Set(['0.1.1-rc.2']))
+    expect(manifest.engines.node).toBe('>=20')
+    expect(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-primitives']).toContain('^0.1.1-rc.1')
+    expect(lockedDshVersions.length).toBeGreaterThan(100)
+    expect(new Set(lockedDshVersions)).toEqual(new Set(['0.1.1-rc.1', '0.1.1-rc.2']))
+  })
+
   it('keeps Web-only workspace and connection services out of its core dependencies', () => {
     expect(inject).toEqual(['tools', 'settings', 'commands', 'agents', 'subagents'])
   })
