@@ -204,4 +204,4 @@ npm publish dsh-mnemon-<version>.tgz --access public --ignore-scripts
 
 2FA 注意：若 npm 账号开启发布级两步验证，交互发布直接执行 `pnpm publish --access public`，按提示输入 OTP；脚本/CI 发布需改用 Classic **Automation** 令牌或允许 bypass 2FA 的 Granular 令牌（`npm login` 生成的普通令牌无法发布，会报 403 Two-factor authentication required）。
 
-发布前核对 `package.json` 的 `repository`/`homepage`/`bugs` 指向 `omdsh-dev/dsh-mnemon`（npm 页面与 GitHub 保持一致），并确认版本号已递增。
+发布前核对 `package.json` 的 `repository`/`homepage`/`bugs` 指向 `Grivn/dsh-mnemon`（npm 页面与 GitHub 保持一致），并确认版本号已递增。
