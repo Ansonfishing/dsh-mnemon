@@ -7,7 +7,7 @@ export const MNEMON_ENTRY_SELECTOR = '[data-dsh-mnemon-entry]'
 const FAMILY_SELECTOR = '[data-dsh-taskboard-entry], [data-dsh-ssh-entry], [data-dsh-mnemon-entry]'
 
 function sidebarRoot(): HTMLElement | undefined {
-  const column = document.querySelector<HTMLElement>('[data-pane="sidebar"], [class*="sidebarCol"]')
+  const column = document.querySelector<HTMLElement>('[data-pane="sidebar"], [class*="sidebarCol"], .dshDesktopUpstreamSidebar')
   if (column === null) return undefined
   return column.querySelector<HTMLElement>('[class*="logoRow"]')?.parentElement
     ?? (column.firstElementChild as HTMLElement | undefined)
