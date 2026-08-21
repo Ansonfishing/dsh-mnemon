@@ -9,7 +9,7 @@ body:
         请保持本模板完整并填写所有必填部分。缺少复现信息、证据、冒烟测试、代码引用或补丁草案的 Bug 报告将被自动关闭。
         Keep this template intact and complete every required field. Bug reports missing reproduction details, evidence, smoke tests, code references, or a patch proposal will be closed automatically.
 
-        提交前请先搜索确认没有重复 / Search for existing reports before submitting: [Issues](https://github.com/Grivn/dsh-mnemon/issues?q=is%3Aissue)
+        提交前请先搜索确认没有重复 / Search for existing reports before submitting: [Issues](https://github.com/omdsh-dev/dsh-mnemon/issues?q=is%3Aissue)
 
         不要粘贴 token、密钥、私有记忆内容或未脱敏日志。安全漏洞请按 [SECURITY.md](../../SECURITY.md) 私下报告。
         Do not post tokens, credentials, private memory, or unredacted logs. Report security vulnerabilities privately through [SECURITY.md](../../SECURITY.md).

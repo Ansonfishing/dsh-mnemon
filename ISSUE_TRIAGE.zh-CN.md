@@ -56,12 +56,12 @@
 ## 维护者操作速查
 
 ```sh
-gh issue edit <n> -R Grivn/dsh-mnemon --add-label "bug,good first issue"
-gh issue comment <n> -R Grivn/dsh-mnemon --body "说明"
-gh api -X PATCH repos/Grivn/dsh-mnemon/issues/<n> \
+gh issue edit <n> -R omdsh-dev/dsh-mnemon --add-label "bug,good first issue"
+gh issue comment <n> -R omdsh-dev/dsh-mnemon --body "说明"
+gh api -X PATCH repos/omdsh-dev/dsh-mnemon/issues/<n> \
   -f state=closed -f state_reason=completed
 
-gh issue list -R Grivn/dsh-mnemon --state open \
+gh issue list -R omdsh-dev/dsh-mnemon --state open \
   --json number,title,labels --jq '.[] | select(.labels|length==0)'
 ```
 
