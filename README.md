@@ -3,7 +3,7 @@
 <p align="center"><strong>English</strong> · <a href="./README.zh-CN.md">简体中文</a></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/release-v0.2.15-5b5bd6" alt="release v0.2.15">
+  <img src="https://img.shields.io/badge/release-v0.2.16-5b5bd6" alt="release v0.2.16">
   <img src="https://img.shields.io/badge/memory-3%20tiers-087c5b" alt="three memory tiers">
   <img src="https://img.shields.io/badge/providers-9-c66a09" alt="nine providers">
   <img src="https://img.shields.io/badge/Node.js-%E2%89%A520-43853d" alt="Node.js 20 or newer">
@@ -22,7 +22,7 @@
 <p align="center">
   <a href="./docs/en/capabilities.md"><strong>Explore the capability map</strong></a> ·
   <a href="./docs/en/getting-started.md">Start in five minutes</a> ·
-  <a href="./docs/en/releases/v0.2.15.md">Read the v0.2.15 notes</a> ·
+  <a href="./docs/en/releases/v0.2.16.md">Read the v0.2.16 notes</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">Watch the widescreen demo</a>
 </p>
 
@@ -197,7 +197,7 @@ See [Operations, security, and troubleshooting](./docs/en/operations.md) for bac
 | Configure scope, routing, and model selection | [Configuration](./docs/en/configuration.md) |
 | Back up, update, or troubleshoot | [Operations](./docs/en/operations.md) |
 | Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |
-| Review the release | [v0.2.15 release notes](./docs/en/releases/v0.2.15.md) |
+| Review the release | [v0.2.16 release notes](./docs/en/releases/v0.2.16.md) |
 
 See the [documentation hub](./docs/en/README.md) for the full map.
 
