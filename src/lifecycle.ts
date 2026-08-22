@@ -199,10 +199,7 @@ class MnemonAgentLifecycle {
         this.mark('prime')
       }) as never),
       this.agent.ctx.on('agent/pre-step', ((payload: PreStepPayload, next: () => Promise<HostPreStepDecision>) => this.preStep(payload, next)) as never),
-      this.agent.ctx.on('agent/turn-stopping', ((payload: TurnStoppingPayload) => {
-        this.releaseView(payload.turn)
-        this.scheduleIdleReview(payload.turn)
-      }) as never),
+      this.agent.ctx.on('agent/turn-stopping', ((payload: TurnStoppingPayload) => this.finishTurn(payload)) as never),
     ]
     return () => {
       this.releaseView()
@@ -307,6 +304,13 @@ class MnemonAgentLifecycle {
     if (pinned === undefined || (turn !== undefined && pinned.turn !== turn)) return
     this.pinnedView = undefined
     pinned.manager.endTurn(pinned.context.turnId)
+  }
+
+  private async finishTurn(payload: TurnStoppingPayload): Promise<void> {
+    const pinned = this.pinnedView?.turn === payload.turn ? this.pinnedView : undefined
+    this.releaseView(payload.turn)
+    if (pinned !== undefined) await pinned.manager.reconcile(pinned.context.scope)
+    this.scheduleIdleReview(payload.turn)
   }
 
   private scheduleIdleReview(turn: number): void {

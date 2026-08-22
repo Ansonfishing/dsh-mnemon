@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MemoryReceipt } from '../packages/contracts/src/index.ts'
+import { MemoryReceiptBridge } from '../src/memory-receipts.ts'
 import {
   DEFAULT_THREE_TIER_TOPOLOGY,
   MemoryCatalog,
@@ -52,6 +53,39 @@ function receipt(id: string, capability: MemoryReceipt['capability'] = 'write'):
 }
 
 describe('MemoryViewManager', () => {
+  it('normalizes committed compatibility operations into the existing MemoryReceipt contract', async () => {
+    const { kernel, views } = harness([{
+      layerId: 'runtime',
+      mode: 'exact',
+      project: () => ({ revision: 'runtime-1', nodes: [{ key: 'runtime', kind: 'content', label: 'Runtime', content: 'runtime' }] }),
+    }])
+    const bridge = new MemoryReceiptBridge(
+      kernel,
+      views,
+      () => new Date('2026-08-23T00:00:00.000Z'),
+      () => 'authority-1',
+    )
+
+    const committed = bridge.record({
+      layerId: 'runtime',
+      capability: 'write',
+      operation: 'runtime-add',
+      checkpoint: { afterRevision: 'runtime-1' },
+    })
+    expect(committed).toMatchObject({
+      id: 'authority-1',
+      planId: 'committed-authority-1',
+      strategyId: 'host-authority-bridge',
+      operation: 'runtime-add',
+      capability: 'write',
+      status: 'succeeded',
+      steps: [{ layerId: 'runtime', status: 'succeeded', output: { afterRevision: 'runtime-1' } }],
+    })
+    expect(views.pendingReceiptCount()).toBe(1)
+    await views.publish()
+    expect(views.pendingReceiptCount()).toBe(0)
+  })
+
   it('publishes an immutable deterministic View and renders exact Wake plus a bounded map', async () => {
     const { views } = harness([
       {

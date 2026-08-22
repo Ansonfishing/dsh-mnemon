@@ -328,7 +328,7 @@ export class MemoryBodyRegistry {
         providerId,
         connection,
         createdAt: previous?.createdAt ?? timestamp,
-        updatedAt: timestamp,
+        updatedAt: this.nextTimestamp(previous?.updatedAt, timestamp),
       } satisfies StoredMemoryBody
     })
     // ByteRover cannot enumerate arbitrary working directories. Once its
@@ -456,7 +456,7 @@ export class MemoryBodyRegistry {
       ...(request.active === undefined ? {} : { active: request.active }),
       ...(current.providerId === 'mnemon-native' || (request.name === undefined && request.description === undefined) ? {} : { metadataSource: 'manual' as const }),
       ...(connection === undefined ? {} : { connection }),
-      updatedAt: this.now().toISOString(),
+      updatedAt: this.nextTimestamp(current.updatedAt),
     }
     this.bodies[index] = body
     this.save()
@@ -480,7 +480,7 @@ export class MemoryBodyRegistry {
           name: requiredText(update.title, 'title', 48),
           description: requiredText(update.description, 'description', 200),
           metadataSource: 'ai',
-          updatedAt: this.now().toISOString(),
+          updatedAt: this.nextTimestamp(this.bodies[index]!.updatedAt),
         } satisfies StoredMemoryBody,
       }
     })
@@ -530,6 +530,17 @@ export class MemoryBodyRegistry {
 
   setActive(id: string, active: boolean): MemoryBody {
     return this.update(id, { active })
+  }
+
+  /** Advance the safe catalog checkpoint after provider-backed content changes. */
+  touch(id: string): MemoryBody {
+    const normalized = validateMemoryBodyId(id)
+    const index = this.bodies.findIndex(body => body.id === normalized)
+    if (index < 0) throw new Error(`unknown memory body: ${normalized}`)
+    const body = { ...this.bodies[index]!, updatedAt: this.nextTimestamp(this.bodies[index]!.updatedAt) }
+    this.bodies[index] = body
+    this.save()
+    return this.view(body)
   }
 
   /** Refresh metadata after an atomic Pack import replaced the data component. */
@@ -676,6 +687,14 @@ export class MemoryBodyRegistry {
       .filter(entry => entry.isDirectory() && ID_PATTERN.test(entry.name))
       .map(entry => entry.name)
       .sort()
+  }
+
+  private nextTimestamp(previous?: string, candidate = this.now().toISOString()): string {
+    if (previous === undefined) return candidate
+    const previousTime = Date.parse(previous)
+    const candidateTime = Date.parse(candidate)
+    if (!Number.isFinite(previousTime) || !Number.isFinite(candidateTime) || candidateTime > previousTime) return candidate
+    return new Date(previousTime + 1).toISOString()
   }
 
   private view(body: StoredMemoryBody): MemoryBody {

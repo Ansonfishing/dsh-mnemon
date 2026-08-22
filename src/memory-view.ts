@@ -113,17 +113,8 @@ function memorySpacesProjector(service: MnemonService): MemoryViewProjector {
         const active = bodies.filter(body => body.active)
         const selected = active.slice(0, MAX_MEMORY_SPACES_IN_WAKE)
         const omitted = Math.max(0, active.length - selected.length)
-        const revisionInput = bodies.map(body => ({
-          id: body.id,
-          name: body.name,
-          description: body.description,
-          active: body.active,
-          providerId: body.provider.id,
-          updatedAt: body.updatedAt,
-          capabilities: body.provider.capabilities,
-        }))
         return {
-          revision: hash(JSON.stringify(revisionInput)),
+          revision: service.memoryRevision(),
           nodes: [{
             key: 'memory-spaces',
             kind: 'root',

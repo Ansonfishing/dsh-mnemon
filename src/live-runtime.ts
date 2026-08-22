@@ -15,6 +15,7 @@ import { registerBuiltinMemoryAdapters } from './providers/memory-system.ts'
 import type { MemoryExtensionHost } from '../packages/extension-sdk/src/index.ts'
 import type { MemoryViewManager } from '../packages/kernel/src/index.ts'
 import { createDefaultMemoryViewManager } from './memory-view.ts'
+import { MemoryReceiptBridge, type AuthorityCommitRecorder } from './memory-receipts.ts'
 
 export interface MnemonRuntimeGraph {
   config: ResolvedConfig
@@ -61,20 +62,36 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: strin
     const memoryKernel = new MemoryKernel(memoryCatalog, memoryTopology)
     extensionAttachment?.bindKernel(memoryKernel)
     const runner = createRunner(config, undefined, workspaceRoot)
-    const service = new MnemonService(runner, config)
-    const runtimeMemory = new RuntimeMemoryController(runner)
-    const documents = new DocumentManager(undefined, undefined, () => runner.effectiveDataDir())
+    let receiptBridge: MemoryReceiptBridge | undefined
+    const recordCommit: AuthorityCommitRecorder = operation => {
+      if (receiptBridge === undefined) throw new Error('memory receipt bridge is unavailable during runtime construction')
+      return receiptBridge.record(operation)
+    }
+    const service = new MnemonService(runner, config, undefined, undefined, undefined, recordCommit)
+    const runtimeMemory = new RuntimeMemoryController(runner, undefined, recordCommit)
+    const documents = new DocumentManager(undefined, undefined, () => runner.effectiveDataDir(), recordCommit)
     const storage = new StorageScopeInspector(runner, config)
     const packs = new MnemonPackManager(runner, config, components => {
       if (components.includes('memory-spaces')) service.memoryBodies.reload()
+      for (const component of components) {
+        recordCommit({
+          layerId: component,
+          capability: 'import',
+          operation: 'memory-pack-import',
+          checkpoint: { component },
+        })
+      }
     })
     const memoryViews = createDefaultMemoryViewManager(memoryKernel, { runtimeMemory, documents, service })
+    receiptBridge = new MemoryReceiptBridge(memoryKernel, memoryViews)
+    const detachReceiptSink = memoryKernel.registerReceiptSink(receiptBridge)
     let disposed = false
     return {
       config, runner, service, runtimeMemory, documents, storage, packs, memoryCatalog, memoryTopology, memoryKernel, memoryViews,
       dispose: () => {
         if (disposed) return
         disposed = true
+        detachReceiptSink()
         memoryTopology.dispose()
         extensionAttachment?.release()
       },

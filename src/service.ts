@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { JsonValue } from './contracts.ts'
@@ -10,6 +11,7 @@ import {
   type UpdateMemoryBodyRequest,
 } from './memory-bodies.ts'
 import type { MnemonRunner } from './runner.ts'
+import type { AuthorityCommitRecorder } from './memory-receipts.ts'
 import { finalizeLlmPlacement, prepareMemoryPlacement, rulesOnlyPlacement, type LlmMemoryPlacementSelection, type PreparedMemoryPlacement } from './provider-placement.ts'
 import { MEMORY_PROVIDER_CATALOG, memoryProviderDescriptor } from './providers/catalog.ts'
 import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus, type ProviderSearchResult } from './providers/provider.ts'
@@ -250,6 +252,12 @@ function commaList(values: string[] | undefined, label: string, limit: number): 
   return normalized.length === 0 ? undefined : normalized.join(',')
 }
 
+function mutationCommitted(result: JsonValue): boolean {
+  const value = record(result)
+  if (value === undefined) return true
+  return value.action !== 'skipped' && value.status !== 'skipped'
+}
+
 export class MnemonService {
   readonly memoryBodies: MemoryBodyRegistry
   private readonly providers: Map<MemoryBody['provider']['id'], MemoryProviderAdapter>
@@ -262,6 +270,7 @@ export class MnemonService {
     memoryBodies?: MemoryBodyRegistry,
     recallQualityPolicyRegistry: RecallQualityPolicyRegistry = recallQualityPolicies,
     providerAdapterRegistry: MemoryProviderAdapterRegistry = memoryProviderAdapterFactories,
+    private readonly recordCommit?: AuthorityCommitRecorder,
   ) {
     this.memoryBodies = memoryBodies ?? new MemoryBodyRegistry(runner)
     this.recallQualityPolicy = recallQualityPolicyRegistry.resolve(config.recallQuality.policy)
@@ -337,6 +346,25 @@ export class MnemonService {
       directory: this.memoryBodies.directory,
       generatedAt: new Date().toISOString(),
     }
+  }
+
+  /** Stable, secret-free checkpoint for the projected Memory Space authority. */
+  memoryRevision(): string {
+    const bodies = this.memoryBodies.list()
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map(body => ({
+        id: body.id,
+        name: body.name,
+        description: body.description,
+        active: body.active,
+        providerId: body.provider.id,
+        updatedAt: body.updatedAt,
+        capabilities: body.provider.capabilities,
+      }))
+    const services = this.memoryBodies.providerServices().items
+      .map(service => ({ providerId: service.providerId, enabled: service.enabled, configured: service.configured }))
+      .sort((left, right) => left.providerId.localeCompare(right.providerId))
+    return createHash('sha256').update(JSON.stringify({ bodies, services })).digest('hex')
   }
 
   /** Return a usable system snapshot without waiting for any Provider I/O. */
@@ -755,7 +783,7 @@ export class MnemonService {
       ...(tags === undefined ? {} : { tags }),
       ...(entities === undefined ? {} : { entities }),
     }, signal)
-    this.activateAfterWrite(body)
+    if (this.activateAfterWrite(body, mutationCommitted(result))) this.recordMemoryCommit('memory-space-remember', 'write', [body.id])
     return this.annotateResult(result, body)
   }
 
@@ -784,7 +812,7 @@ export class MnemonService {
       reason === undefined || reason.trim() === '' ? undefined : required(reason, 'reason', 1000),
       signal,
     )
-    this.activateAfterWrite(body)
+    if (this.activateAfterWrite(body, mutationCommitted(result))) this.recordMemoryCommit('memory-space-link', 'link', [body.id])
     return this.annotateResult(result, body)
   }
 
@@ -794,7 +822,7 @@ export class MnemonService {
     const provider = this.providerFor(body)
     if (provider.forget === undefined || !body.provider.capabilities.forget) throw new Error(`${body.provider.label} does not expose safe forget semantics in this integration`)
     const result = await provider.forget(body, required(id, 'id', 2000), signal)
-    this.activateAfterWrite(body)
+    if (this.activateAfterWrite(body, mutationCommitted(result))) this.recordMemoryCommit('memory-space-forget', 'forget', [body.id])
     return this.annotateResult(result, body)
   }
 
@@ -806,7 +834,9 @@ export class MnemonService {
 
   async createBody(request: CreateMemoryBodyRequest, signal?: AbortSignal, placement?: MemoryPlacementDecision): Promise<MemoryBody> {
     this.assertWritable()
-    return this.memoryBodies.create(request, signal, placement)
+    const body = await this.memoryBodies.create(request, signal, placement)
+    this.recordMemoryCommit('memory-space-create', 'write', [body.id])
+    return body
   }
 
   /**
@@ -848,27 +878,39 @@ export class MnemonService {
   async updateProviderService(providerId: MemoryBody['provider']['id'], settings: Record<string, string | number | boolean>, clearSecrets: readonly string[] = [], enabled = true, signal?: AbortSignal) {
     this.assertWritable()
     if (providerId === 'mnemon-native') throw new Error('Mnemon Native service settings are managed by the native configuration')
-    if (!enabled) return this.memoryBodies.updateProviderService(providerId, settings, clearSecrets, false)
+    if (!enabled) {
+      const service = this.memoryBodies.updateProviderService(providerId, settings, clearSecrets, false)
+      this.recordMemoryCommit('memory-provider-service-update', 'maintain')
+      return service
+    }
     const connection = this.memoryBodies.resolveProviderService(providerId, settings, clearSecrets)
     const provider = this.providers.get(providerId)
     if (provider?.discover === undefined) throw new Error(`${memoryProviderDescriptor(providerId).label} does not support Memory Space discovery`)
     const discovered = await provider.discover(connection, signal)
-    return this.memoryBodies.syncProviderService(providerId, connection, discovered)
+    const service = this.memoryBodies.syncProviderService(providerId, connection, discovered)
+    this.recordMemoryCommit('memory-provider-service-update', 'maintain')
+    return service
   }
 
   updateBody(id: string, request: UpdateMemoryBodyRequest): MemoryBody {
     this.assertWritable()
-    return this.memoryBodies.update(id, request)
+    const body = this.memoryBodies.update(id, request)
+    this.recordMemoryCommit('memory-space-update', 'write', [body.id])
+    return body
   }
 
   updateBodyMetadata(updates: readonly MemoryBodyMetadataUpdate[]): MemoryBody[] {
     this.assertWritable()
-    return this.memoryBodies.updateMetadata(updates)
+    const bodies = this.memoryBodies.updateMetadata(updates)
+    this.recordMemoryCommit('memory-space-metadata', 'maintain', bodies.map(body => body.id))
+    return bodies
   }
 
   async deleteBody(id: string, signal?: AbortSignal): Promise<MemoryBody> {
     this.assertWritable()
-    return this.memoryBodies.remove(id, signal)
+    const body = await this.memoryBodies.remove(id, signal)
+    this.recordMemoryCommit('memory-space-delete', 'forget', [body.id])
+    return body
   }
 
   async mergeBodies(targetBodyId: string, sourceBodyIds: string[], deactivateSources = true, signal?: AbortSignal): Promise<JsonValue> {
@@ -906,8 +948,15 @@ export class MnemonService {
       }
     }
     if (insights.length === 0) {
-      this.activateAfterWrite(target)
-      if (deactivateSources) for (const source of sources) this.memoryBodies.setActive(source.id, false)
+      let changed = this.activateAfterWrite(target, false)
+      if (deactivateSources) {
+        for (const source of sources) {
+          if (!source.active) continue
+          this.memoryBodies.setActive(source.id, false)
+          changed = true
+        }
+      }
+      if (changed) this.recordMemoryCommit('memory-space-merge', 'import', [target.id, ...sourceIds])
       return { imported: 0, updated: 0, skipped: 0, edges_inserted: 0, targetMemoryBodyId: target.id }
     }
     const temporary = mkdtempSync(join(tmpdir(), 'dsh-mnemon-merge-'))
@@ -915,8 +964,15 @@ export class MnemonService {
     try {
       writeFileSync(draftPath, JSON.stringify({ schema_version: '1', source: 'dsh-mnemon-merge', insights, edges }), { encoding: 'utf8', mode: 0o600 })
       const result = await this.runner.runJson(['import', draftPath], { ...(signal === undefined ? {} : { signal }), store: target.id })
-      this.activateAfterWrite(target)
-      if (deactivateSources) for (const source of sources) this.memoryBodies.setActive(source.id, false)
+      let changed = this.activateAfterWrite(target, mutationCommitted(result))
+      if (deactivateSources) {
+        for (const source of sources) {
+          if (!source.active) continue
+          this.memoryBodies.setActive(source.id, false)
+          changed = true
+        }
+      }
+      if (changed) this.recordMemoryCommit('memory-space-merge', 'import', [target.id, ...sourceIds])
       return this.annotateResult(result, target)
     } finally {
       rmSync(temporary, { recursive: true, force: true })
@@ -1099,8 +1155,26 @@ export class MnemonService {
     return value === undefined ? result : { ...value, memoryBodyId: body.id, memoryBodyName: body.name, memoryProviderId: body.provider.id }
   }
 
-  private activateAfterWrite(body: MemoryBody): void {
-    if (!body.active) this.memoryBodies.setActive(body.id, true)
+  private activateAfterWrite(body: MemoryBody, providerChanged: boolean): boolean {
+    if (!body.active) {
+      this.memoryBodies.setActive(body.id, true)
+      return true
+    }
+    if (!providerChanged) return false
+    this.memoryBodies.touch(body.id)
+    return true
+  }
+
+  private recordMemoryCommit(operation: string, capability: 'write' | 'link' | 'forget' | 'maintain' | 'import', memoryBodyIds: string[] = []): void {
+    this.recordCommit?.({
+      layerId: 'memory-spaces',
+      capability,
+      operation,
+      checkpoint: {
+        sourceRevision: this.memoryRevision(),
+        ...(memoryBodyIds.length === 0 ? {} : { memoryBodyIds }),
+      },
+    })
   }
 
   private assertWritable(): void {

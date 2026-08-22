@@ -64,7 +64,7 @@ export class MemoryKernel {
   private currentGuardGeneration = 0
   private readonly now: () => Date
   private readonly id: () => string
-  private readonly receiptSink: MemoryReceiptSink | undefined
+  private readonly receiptSinks = new Set<MemoryReceiptSink>()
 
   constructor(
     readonly catalog: MemoryCatalog,
@@ -73,11 +73,21 @@ export class MemoryKernel {
   ) {
     this.now = options.now ?? (() => new Date())
     this.id = options.id ?? randomUUID
-    this.receiptSink = options.receiptSink
+    if (options.receiptSink !== undefined) this.receiptSinks.add(options.receiptSink)
   }
 
   get guardGeneration(): number {
     return this.currentGuardGeneration
+  }
+
+  registerReceiptSink(sink: MemoryReceiptSink): () => void {
+    this.receiptSinks.add(sink)
+    let active = true
+    return () => {
+      if (!active) return
+      active = false
+      this.receiptSinks.delete(sink)
+    }
   }
 
   descriptor(): MemorySystemDescriptor {
@@ -266,7 +276,7 @@ export class MemoryKernel {
       finishedAt: this.now().toISOString(),
       steps,
     }
-    await this.receiptSink?.append(receipt)
+    for (const sink of this.receiptSinks) await sink.append(receipt)
     return receipt
   }
 

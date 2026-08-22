@@ -144,6 +144,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     }),
     wake: vi.fn((viewId: string) => ({ viewId, viewDigest: viewId.replace('view-', 'digest-'), text: `Pinned Wake ${viewId}`, sections: [] })),
     endTurn: vi.fn(() => true),
+    reconcile: vi.fn(async () => ({ id: 'next-view' })),
   }
   const runtimeSource = {
     forAgent: vi.fn(() => ({ runtimeMemory: {}, memoryViews })),
@@ -188,6 +189,7 @@ describe('Mnemon DSH lifecycle integration', () => {
 
     await value.turnStopping(7)
     expect(value.memoryViews.endTurn).toHaveBeenCalledWith('session-1:7')
+    expect(value.memoryViews.reconcile).toHaveBeenCalledWith({ storage: 'global', sessionId: 'session-1', agentId: 'session-1' })
     expect(context?.text()).toBe('')
 
     await value.preStep([userMessage('Next turn')], 8, 1)

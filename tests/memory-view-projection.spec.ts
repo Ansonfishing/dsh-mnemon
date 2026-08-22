@@ -56,18 +56,38 @@ describe('default three-tier Memory View projectors', () => {
     runtime.dispose()
   })
 
-  it('keeps an already published exact Runtime projection immutable after Authority changes', async () => {
+  it('captures Authority receipts, keeps the pinned turn immutable, and coalesces the next View', async () => {
     const workspace = temporaryDirectory('immutable-workspace')
     const dataDir = temporaryDirectory('immutable-data')
     const runtime = createRuntimeGraph(resolveConfig({ storageScope: 'custom', dataDir, cliPath: '/fake/mnemon' }), workspace)
+    runtime.service.memoryBodies.updateProviderService('openviking', { endpoint: 'http://127.0.0.1:1933' })
+    const body = await runtime.service.memoryBodies.create({
+      name: 'Receipt integration',
+      description: 'Memory Space metadata used to verify receipt coalescing.',
+      active: true,
+      providerId: 'openviking',
+      connection: { targetUri: 'viking://user/receipts/memories' },
+    })
     await runtime.runtimeMemory.mutate({ action: 'add', target: 'memory', content: 'First runtime revision.' })
-    const first = await runtime.memoryViews.publish({ storage: 'custom', workspaceId: workspace, sessionId: 'session-1' })
-    const firstWake = runtime.memoryViews.wake(first.id)
+    const scope = { storage: 'custom' as const, workspaceId: workspace, sessionId: 'session-1', agentId: 'session-1' }
+    const firstTurn = await runtime.memoryViews.beginTurn('session-1:1', scope)
+    const firstWake = runtime.memoryViews.wake(firstTurn.viewId)
+    expect(runtime.memoryViews.pendingReceiptCount()).toBe(0)
+
     await runtime.runtimeMemory.mutate({ action: 'add', target: 'memory', content: 'Second runtime revision.' })
-    expect(runtime.memoryViews.wake(first.id)).toEqual(firstWake)
-    const second = await runtime.memoryViews.publish({ storage: 'custom', workspaceId: workspace, sessionId: 'session-2' })
-    expect(second.id).not.toBe(first.id)
-    expect(runtime.memoryViews.wake(second.id).text).toContain('Second runtime revision.')
+    await runtime.runtimeMemory.mutate({ action: 'add', target: 'memory', content: 'Second runtime revision.' })
+    await runtime.documents.forWorkspace(workspace).mutate({ action: 'create', title: 'Next View', content: 'Visible only after the turn boundary.' })
+    runtime.service.updateBody(body.id, { description: 'Updated routing metadata for the next View.' })
+    expect(runtime.memoryViews.pendingReceiptCount()).toBe(3)
+    expect((await runtime.memoryViews.beginTurn('session-1:1', scope)).viewId).toBe(firstTurn.viewId)
+    expect(runtime.memoryViews.wake(firstTurn.viewId)).toEqual(firstWake)
+
+    runtime.memoryViews.endTurn('session-1:1')
+    const secondTurn = await runtime.memoryViews.beginTurn('session-1:2', scope)
+    expect(secondTurn.viewId).not.toBe(firstTurn.viewId)
+    expect(runtime.memoryViews.pendingReceiptCount()).toBe(0)
+    expect(runtime.memoryViews.wake(secondTurn.viewId).text).toContain('Second runtime revision.')
+    expect(runtime.memoryViews.wake(secondTurn.viewId).text).toContain('Next View')
     runtime.dispose()
   })
 })

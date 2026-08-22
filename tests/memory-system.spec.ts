@@ -145,6 +145,27 @@ describe('composable memory system', () => {
     expect(receipts).toEqual([result.receipt])
   })
 
+  it('fans receipts out to live sinks and detaches them without replacing the constructor sink', async () => {
+    const catalog = new MemoryCatalog()
+    registerDefaultMemorySystem(catalog, {
+      'memory-spaces': { execute: async () => ({ evidence: [] }) },
+    })
+    const topology = new MemoryTopologyManager(catalog, DEFAULT_THREE_TIER_TOPOLOGY)
+    topology.configureLayer('documents', { enabled: false })
+    const constructorSink = { append: vi.fn() }
+    const liveSink = { append: vi.fn() }
+    const kernel = new MemoryKernel(catalog, topology, { receiptSink: constructorSink })
+    const detach = kernel.registerReceiptSink(liveSink)
+
+    const first = await kernel.run(request())
+    expect(constructorSink.append).toHaveBeenCalledWith(first.receipt)
+    expect(liveSink.append).toHaveBeenCalledWith(first.receipt)
+    detach()
+    await kernel.run(request())
+    expect(constructorSink.append).toHaveBeenCalledTimes(2)
+    expect(liveSink.append).toHaveBeenCalledOnce()
+  })
+
   it('rejects strategy fan-out beyond the request budget', async () => {
     const catalog = new MemoryCatalog()
     registerDefaultMemorySystem(catalog)

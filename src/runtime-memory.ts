@@ -12,6 +12,7 @@ import {
 import { createHash } from 'node:crypto'
 import { basename, join } from 'node:path'
 import type { MnemonRunner } from './runner.ts'
+import type { AuthorityCommitRecorder } from './memory-receipts.ts'
 import type {
   RuntimeMemoryAction,
   RuntimeMemoryCompactedEntry,
@@ -146,6 +147,7 @@ export class RuntimeMemoryController {
   constructor(
     runner: Pick<MnemonRunner, 'effectiveDataDir'>,
     private readonly now: () => Date = () => new Date(),
+    private readonly recordCommit?: AuthorityCommitRecorder,
   ) {
     this.directory = join(runner.effectiveDataDir(), 'runtime')
     this.sourcePath = join(this.directory, 'memories.json')
@@ -235,7 +237,22 @@ IMPORTANT: USER.md and MEMORY.md above are always relevant when applicable. Foll
   }
 
   mutate(request: RuntimeMemoryMutation): Promise<RuntimeMemoryMutationResult> {
-    const operation = this.queue.then(() => this.withLock(() => this.mutateLocked(request)))
+    const operation = this.queue.then(() => this.withLock(() => {
+      const beforeRevision = revision(this.readSource())
+      const result = this.mutateLocked(request)
+      const afterRevision = revision(this.readSource())
+      return { result, beforeRevision, afterRevision }
+    })).then(({ result, beforeRevision, afterRevision }) => {
+      if (beforeRevision !== afterRevision) {
+        this.recordCommit?.({
+          layerId: 'runtime',
+          capability: 'write',
+          operation: `runtime-${request.action}`,
+          checkpoint: { beforeRevision, afterRevision, target: request.target },
+        })
+      }
+      return result
+    })
     this.queue = operation.catch(() => undefined)
     return operation
   }
@@ -249,7 +266,8 @@ IMPORTANT: USER.md and MEMORY.md above are always relevant when applicable. Foll
   ): Promise<RuntimeMemorySnapshot> {
     const operation = this.queue.then(() => this.withLock(() => {
       const file = this.readSource()
-      if (revision(file) !== expectedRevision) throw new RuntimeMemoryConflictError()
+      const beforeRevision = revision(file)
+      if (beforeRevision !== expectedRevision) throw new RuntimeMemoryConflictError()
       if (!Number.isInteger(maxBytes) || maxBytes < 0 || maxBytes > RUNTIME_MEMORY_LIMITS[target]) throw new Error('compaction byte budget is invalid')
       const now = this.now().toISOString()
       const existing = file.entries.filter(entry => entry.target === target)
@@ -287,8 +305,19 @@ IMPORTANT: USER.md and MEMORY.md above are always relevant when applicable. Foll
       const limit = RUNTIME_MEMORY_LIMITS[target]
       if (used > limit) throw new RuntimeMemoryCapacityError(target, byteCount(file.entries, target), used, limit)
       this.persist({ version: RUNTIME_MEMORY_VERSION, entries })
-      return this.snapshotUnlocked({ version: RUNTIME_MEMORY_VERSION, entries })
-    }))
+      const snapshot = this.snapshotUnlocked({ version: RUNTIME_MEMORY_VERSION, entries })
+      return { snapshot, beforeRevision }
+    })).then(({ snapshot, beforeRevision }) => {
+      if (beforeRevision !== snapshot.revision) {
+        this.recordCommit?.({
+          layerId: 'runtime',
+          capability: 'maintain',
+          operation: 'runtime-compact',
+          checkpoint: { beforeRevision, afterRevision: snapshot.revision, target },
+        })
+      }
+      return snapshot
+    })
     this.queue = operation.catch(() => undefined)
     return operation
   }

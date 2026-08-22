@@ -8,6 +8,7 @@ import type { ProcessRunner } from '../src/process.ts'
 import { createRunner } from '../src/runner.ts'
 import { MnemonService, parseMemoryGraph } from '../src/service.ts'
 import { RecallQualityPolicyRegistry, STRICT_RECALL_QUALITY_POLICY, type RecallQualityPolicy } from '../src/recall-quality/index.ts'
+import type { AuthorityCommitRecorder } from '../src/memory-receipts.ts'
 
 const VIZ_HTML = `<script>
 var nodes = new vis.DataSet([{id:"m2",label:"m2: [fact] Four graph memory",title:"Four graph memory",color:"#3498db",font:{color:"white"}},
@@ -31,7 +32,7 @@ function populatedDataDir(): string {
   return dataDir
 }
 
-function fixture(writeEnabled = true): { service: MnemonService; process: ReturnType<typeof vi.fn<ProcessRunner>>; dataDir: string } {
+function fixture(writeEnabled = true, recordCommit?: AuthorityCommitRecorder): { service: MnemonService; process: ReturnType<typeof vi.fn<ProcessRunner>>; dataDir: string } {
   const process = vi.fn<ProcessRunner>(async (_command, args) => {
     if (args.includes('--version')) return { stdout: 'mnemon version 0.1.2\n', stderr: '', exitCode: 0 }
     if (args.includes('status')) return {
@@ -73,7 +74,7 @@ function fixture(writeEnabled = true): { service: MnemonService; process: Return
     writeEnabled,
   })
   const runner = createRunner(config, process)
-  return { service: new MnemonService(runner, config, new MemoryBodyRegistry(runner, true)), process, dataDir }
+  return { service: new MnemonService(runner, config, new MemoryBodyRegistry(runner, true), undefined, undefined, recordCommit), process, dataDir }
 }
 
 describe('MnemonService', () => {
@@ -464,6 +465,31 @@ describe('MnemonService', () => {
       expect.arrayContaining(['remember', 'Use SQLite for local-first storage.', '--cat', 'decision', '--imp', '5', '--tags', 'storage,local']),
       expect.anything(),
     )
+  })
+
+  it('records only committed provider mutations and advances the safe Memory Space checkpoint', async () => {
+    const recordCommit = vi.fn() as unknown as AuthorityCommitRecorder
+    const { service, process } = fixture(true, recordCommit)
+    const before = service.memoryRevision()
+
+    await service.remember({ content: 'Receipt-backed provider mutation.' })
+    const committed = service.memoryRevision()
+    expect(committed).not.toBe(before)
+    expect(recordCommit).toHaveBeenCalledWith({
+      layerId: 'memory-spaces',
+      capability: 'write',
+      operation: 'memory-space-remember',
+      checkpoint: { sourceRevision: committed, memoryBodyIds: ['work'] },
+    })
+
+    vi.mocked(recordCommit).mockClear()
+    process.mockImplementation(async (_command, args) => args.includes('remember')
+      ? { stdout: JSON.stringify({ action: 'skipped' }), stderr: '', exitCode: 0 }
+      : { stdout: '{}', stderr: '', exitCode: 0 })
+    const beforeSkipped = service.memoryRevision()
+    await service.remember({ content: 'Duplicate provider mutation.' })
+    expect(service.memoryRevision()).toBe(beforeSkipped)
+    expect(recordCommit).not.toHaveBeenCalled()
   })
 
   it('refuses mutations in read-only plugin mode', async () => {

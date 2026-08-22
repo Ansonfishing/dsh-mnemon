@@ -13,6 +13,7 @@ import {
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { HostAgent } from './contracts.ts'
 import type { DocumentMutation, DocumentMutationResult, DocumentRecord, DocumentSearchResult, DocumentSnapshot, DocumentStatus, DocumentView } from './shared/contracts.ts'
+import type { AuthorityCommitRecorder } from './memory-receipts.ts'
 
 export type { DocumentMutation, DocumentMutationResult, DocumentRecord, DocumentSearchResult, DocumentSnapshot, DocumentStatus, DocumentView } from './shared/contracts.ts'
 
@@ -176,6 +177,7 @@ export class DocumentController {
     readonly limitBytes = DOCUMENTS_ACTIVE_LIMIT_BYTES,
     private readonly now: () => Date = () => new Date(),
     storageRoot?: string,
+    private readonly recordCommit?: AuthorityCommitRecorder,
   ) {
     this.workspaceRoot = resolve(workspaceRoot)
     if (!existsSync(this.workspaceRoot) || !statSync(this.workspaceRoot).isDirectory()) throw new Error(`document workspace is unavailable: ${this.workspaceRoot}`)
@@ -244,6 +246,7 @@ export class DocumentController {
   search(query: string, options: { includeArchived?: boolean; limit?: number } = {}): Promise<DocumentSearchResult> {
     const operation = this.queue.then(() => this.withLock(() => {
       const index = this.readIndex()
+      const beforeRevision = indexRevision(index)
       const normalized = query.trim().normalize('NFKC').toLocaleLowerCase()
       const tokens = normalized.match(/[\p{L}\p{N}_-]+/gu) ?? []
       const includeArchived = options.includeArchived === true
@@ -268,14 +271,38 @@ export class DocumentController {
         index.documents = index.documents.map(record => ids.has(record.id) ? { ...record, lastAccessedAt: accessedAt } : record)
         this.persistIndex(index)
       }
-      return { query: query.trim(), includeArchived, total: ranked.length, generatedAt: this.now().toISOString(), results: ranked }
-    }))
+      const result = { query: query.trim(), includeArchived, total: ranked.length, generatedAt: this.now().toISOString(), results: ranked }
+      return { result, beforeRevision, afterRevision: indexRevision(index) }
+    })).then(({ result, beforeRevision, afterRevision }) => {
+      if (beforeRevision !== afterRevision) {
+        this.recordCommit?.({
+          layerId: 'documents',
+          capability: 'maintain',
+          operation: 'document-access-update',
+          checkpoint: { workspaceRoot: this.workspaceRoot, beforeRevision, afterRevision },
+        })
+      }
+      return result
+    })
     this.queue = operation.catch(() => undefined)
     return operation
   }
 
   mutate(request: DocumentMutation): Promise<DocumentMutationResult> {
-    const operation = this.queue.then(() => this.withLock(() => this.mutateLocked(request)))
+    const operation = this.queue.then(() => this.withLock(() => this.mutateLocked(request))).then(result => {
+      this.recordCommit?.({
+        layerId: 'documents',
+        capability: 'write',
+        operation: `document-${result.action}`,
+        checkpoint: {
+          workspaceRoot: this.workspaceRoot,
+          documentId: result.document.id,
+          documentRevision: result.document.revision,
+          sourceRevision: result.snapshot.revision,
+        },
+      })
+      return result
+    })
     this.queue = operation.catch(() => undefined)
     return operation
   }
@@ -313,7 +340,20 @@ export class DocumentController {
         throw error
       }
       return { success: true, action: 'archived', document: { ...updated, content }, snapshot: this.snapshotUnlocked(index) }
-    }))
+    })).then(result => {
+      this.recordCommit?.({
+        layerId: 'documents',
+        capability: 'archive',
+        operation: 'document-archived',
+        checkpoint: {
+          workspaceRoot: this.workspaceRoot,
+          documentId: result.document.id,
+          documentRevision: result.document.revision,
+          sourceRevision: result.snapshot.revision,
+        },
+      })
+      return result
+    })
     this.queue = operation.catch(() => undefined)
     return operation
   }
@@ -502,6 +542,7 @@ export class DocumentManager {
     private readonly limitBytes = DOCUMENTS_ACTIVE_LIMIT_BYTES,
     private readonly now: () => Date = () => new Date(),
     private readonly storageRoot?: () => string,
+    private readonly recordCommit?: AuthorityCommitRecorder,
   ) {}
 
   forWorkspace(workspaceRoot: string): DocumentController {
@@ -510,7 +551,7 @@ export class DocumentManager {
     const key = storageRoot === undefined ? root : `${resolve(storageRoot)}\0${root}`
     let controller = this.controllers.get(key)
     if (controller === undefined) {
-      controller = new DocumentController(root, this.limitBytes, this.now, storageRoot)
+      controller = new DocumentController(root, this.limitBytes, this.now, storageRoot, this.recordCommit)
       this.controllers.set(key, controller)
     }
     return controller
