@@ -5,6 +5,7 @@ import type { RuntimeMemoryController, RuntimeMemoryImportance, RuntimeMemoryTar
 import { assertMemoryLayerParticipation } from './memory-system/access.ts'
 import type { MemoryCapability } from './memory-system/contracts.ts'
 import type { MemoryKernel } from './memory-system/kernel.ts'
+import type { MemoryViewManager } from '../packages/kernel/src/index.ts'
 import { isSubagent, MnemonSubagentCoordinator } from './subagent.ts'
 import {
   CATEGORIES,
@@ -39,7 +40,7 @@ function requireAgent(exec: ToolExecution) {
 
 interface AgentRuntimeSource {
   readonly config: MnemonService['config']
-  forAgent(agent: HostAgent): { service: MnemonService; runtimeMemory: RuntimeMemoryController; documents: DocumentManager; memoryKernel?: MemoryKernel }
+  forAgent(agent: HostAgent): { service: MnemonService; runtimeMemory: RuntimeMemoryController; documents: DocumentManager; memoryKernel?: MemoryKernel; memoryViews?: MemoryViewManager }
 }
 
 interface ToolRuntime {
@@ -47,6 +48,7 @@ interface ToolRuntime {
   runtimeMemory: RuntimeMemoryController
   documents: DocumentManager
   memoryKernel?: MemoryKernel
+  memoryViews?: MemoryViewManager
 }
 
 function isAgentRuntimeSource(value: MnemonService | AgentRuntimeSource): value is AgentRuntimeSource {
@@ -86,6 +88,29 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
       : runtimeFor(exec).service.bodies(exec.signal),
     presentCall: () => ({ card: 'generic', title: 'Inspect Mnemon Memory Spaces', kind: 'search' }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon Memory Spaces ready' }),
+  } as never))
+
+  ctx.tools.register(definition({
+    name: 'mnemon_memory_zoom',
+    description: 'Expand one node from the immutable Mnemon Memory View pinned to the current user turn. Pass the exact viewId and nodeId shown in the Mnemon Memory Map. Zoom is deterministic and query-free: it reads only the sealed View and never starts recall, a provider, a strategy, or a subagent.',
+    parameters: {
+      type: 'object',
+      properties: {
+        viewId: { type: 'string', description: 'Pinned View id shown in the current Mnemon Memory Map.' },
+        nodeId: { type: 'string', description: 'Stable node id listed in that same View.' },
+      },
+      required: ['viewId', 'nodeId'],
+    },
+    output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
+    execute: (args: { viewId: string; nodeId: string }, exec: ToolExecution) => {
+      const agent = requireAgent(exec)
+      if (isSubagent(agent)) throw new Error('Mnemon View navigation is available only to the root agent')
+      const memoryViews = runtimeFor(exec).memoryViews
+      if (memoryViews === undefined) throw new Error('Mnemon Memory View control plane is unavailable')
+      return memoryViews.zoom(args.viewId, args.nodeId)
+    },
+    presentCall: (args: { nodeId: string }) => ({ card: 'generic', title: 'Zoom Mnemon Memory View', kind: 'search', rawInput: args.nodeId }),
+    presentResult: () => ({ card: 'generic', title: 'Mnemon Memory View expanded' }),
   } as never))
 
   ctx.tools.register(definition({

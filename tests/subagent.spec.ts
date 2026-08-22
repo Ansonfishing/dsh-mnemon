@@ -794,6 +794,45 @@ describe('Mnemon root/child tool split', () => {
     })
   })
 
+  it('zooms only the sealed root View without delegation or provider access', async () => {
+    const registered: ToolDefinition[] = []
+    const memoryService = service()
+    const coordinator = {
+      recall: vi.fn(),
+      runtime: vi.fn(),
+    } as unknown as MnemonSubagentCoordinator
+    const zoomResult = {
+      viewId: 'view-stable',
+      viewDigest: 'digest-stable',
+      node: { id: 'node-documents', layerId: 'documents', kind: 'root', label: 'Documents', childIds: [] },
+      children: [],
+    }
+    const memoryViews = { zoom: vi.fn(() => zoomResult) }
+    const source = {
+      config: memoryService.config,
+      forAgent: vi.fn(() => ({
+        service: memoryService,
+        runtimeMemory: { mutate: vi.fn() },
+        documents: { forAgent: vi.fn() },
+        memoryViews,
+      })),
+    }
+    registerTools(
+      { tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape,
+      source as never,
+      coordinator,
+    )
+    const zoom = registered.find(tool => tool.name === 'mnemon_memory_zoom')!
+    const signal = new AbortController().signal
+
+    expect(zoom.execute({ viewId: 'view-stable', nodeId: 'node-documents' } as never, { agent: parent(), signal })).toEqual(zoomResult)
+    expect(memoryViews.zoom).toHaveBeenCalledWith('view-stable', 'node-documents')
+    expect(coordinator.recall).not.toHaveBeenCalled()
+    expect(memoryService.search).not.toHaveBeenCalled()
+    expect(() => zoom.execute({ viewId: 'view-stable', nodeId: 'node-documents' } as never, { agent: parent('subagent'), signal })).toThrow('root agent')
+    expect(memoryViews.zoom).toHaveBeenCalledOnce()
+  })
+
   it('enforces automatic topology participation without hiding the management catalog', async () => {
     const registered: ToolDefinition[] = []
     const memoryService = {

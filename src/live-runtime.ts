@@ -13,6 +13,8 @@ import { registerDefaultMemorySystem } from './memory-system/defaults.ts'
 import { MemoryTopologyManager } from './memory-system/topology.ts'
 import { registerBuiltinMemoryAdapters } from './providers/memory-system.ts'
 import type { MemoryExtensionHost } from '../packages/extension-sdk/src/index.ts'
+import type { MemoryViewManager } from '../packages/kernel/src/index.ts'
+import { createDefaultMemoryViewManager } from './memory-view.ts'
 
 export interface MnemonRuntimeGraph {
   config: ResolvedConfig
@@ -25,6 +27,7 @@ export interface MnemonRuntimeGraph {
   memoryCatalog: MemoryCatalog
   memoryTopology: MemoryTopologyManager
   memoryKernel: MemoryKernel
+  memoryViews: MemoryViewManager
   /** Detach this generation from future Host-global extension changes. */
   dispose(): void
 }
@@ -65,9 +68,10 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: strin
     const packs = new MnemonPackManager(runner, config, components => {
       if (components.includes('memory-spaces')) service.memoryBodies.reload()
     })
+    const memoryViews = createDefaultMemoryViewManager(memoryKernel, { runtimeMemory, documents, service })
     let disposed = false
     return {
-      config, runner, service, runtimeMemory, documents, storage, packs, memoryCatalog, memoryTopology, memoryKernel,
+      config, runner, service, runtimeMemory, documents, storage, packs, memoryCatalog, memoryTopology, memoryKernel, memoryViews,
       dispose: () => {
         if (disposed) return
         disposed = true
@@ -122,6 +126,7 @@ export class LiveMnemonRuntime {
   readonly memoryCatalog: MemoryCatalog
   readonly memoryTopology: MemoryTopologyManager
   readonly memoryKernel: MemoryKernel
+  readonly memoryViews: MemoryViewManager
 
   constructor(initial: MnemonRuntimeGraph, private readonly workspaceRegistry?: HostWorkspaceRegistry, private readonly agents?: HostAgentsService, private readonly extensions?: MemoryExtensionHost) {
     this.current = initial
@@ -135,6 +140,7 @@ export class LiveMnemonRuntime {
     this.memoryCatalog = liveProxy(() => this.current.memoryCatalog)
     this.memoryTopology = liveProxy(() => this.current.memoryTopology)
     this.memoryKernel = liveProxy(() => this.current.memoryKernel)
+    this.memoryViews = liveProxy(() => this.current.memoryViews)
   }
 
   swap(next: MnemonRuntimeGraph): void {

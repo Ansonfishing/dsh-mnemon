@@ -42,6 +42,11 @@ export const RUNTIME_MEMORY_VERSION = 1
 export const RUNTIME_ENTRY_DELIMITER = '\n§\n'
 export const RUNTIME_MEMORY_LIMITS = { memory: 10 * 1024, user: 4 * 1024 } as const
 
+export interface RuntimeMemoryContextProjection {
+  revision: string
+  text: string
+}
+
 const LOCK_TIMEOUT_MS = 5_000
 const LOCK_STALE_MS = 30_000
 const LOCK_RETRY_MS = 20
@@ -167,6 +172,11 @@ export class RuntimeMemoryController {
   }
 
   contextText(): string {
+    return this.contextProjection().text
+  }
+
+  /** Read the exact Runtime revision and its prompt projection under one lock. */
+  contextProjection(): RuntimeMemoryContextProjection {
     const { snapshot, user, memory } = this.withLock(() => {
       const file = this.readSource()
       this.repairProjections(file)
@@ -189,7 +199,9 @@ export class RuntimeMemoryController {
     })
     const userUsage = snapshot.targets.user
     const memoryUsage = snapshot.targets.memory
-    return `MNEMON RUNTIME MEMORY PROTOCOL
+    return {
+      revision: snapshot.revision,
+      text: `MNEMON RUNTIME MEMORY PROTOCOL
 You are operating with compact hot memory. The system has loaded USER.md and MEMORY.md below for every turn. They are always relevant when their subject matches the current task; comply implicitly and do not recite this protocol or the files merely to prove that you read them.
 
 SEMANTICS AND PRIORITY
@@ -218,7 +230,8 @@ Contents of MEMORY.md (working reference; ${memoryUsage.used}/${memoryUsage.limi
 ${memory || '(empty)'}
 </runtime-memory-file>
 
-IMPORTANT: USER.md and MEMORY.md above are always relevant when applicable. Follow the current user's request first, use mnemon_runtime_memory proactively only when the write criteria are met, and otherwise continue without a memory mutation.`
+IMPORTANT: USER.md and MEMORY.md above are always relevant when applicable. Follow the current user's request first, use mnemon_runtime_memory proactively only when the write criteria are met, and otherwise continue without a memory mutation.`,
+    }
   }
 
   mutate(request: RuntimeMemoryMutation): Promise<RuntimeMemoryMutationResult> {

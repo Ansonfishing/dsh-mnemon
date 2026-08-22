@@ -418,7 +418,12 @@ export class MemoryViewManager {
       const roots = source.nodeIds.map(id => nodes.get(id)!).filter(Boolean)
       const sectionText = source.mode === 'exact'
         ? roots.map(node => node.content ?? node.summary ?? node.label).join('\n\n')
-        : roots.map(node => `- [${node.id}] ${node.label}${node.summary === undefined ? '' : ` — ${node.summary}`}`).join('\n')
+        : roots.flatMap(node => [
+            `- [${node.id}] ${node.label}${node.summary === undefined ? '' : ` — ${node.summary}`}`,
+            ...node.childIds.map(id => nodes.get(id)!).filter(Boolean).map(child => (
+              `  - [${child.id}] ${child.label}${child.summary === undefined ? '' : ` — ${child.summary}`}`
+            )),
+          ]).join('\n')
       return {
         layerId: source.layerId,
         mode: source.mode,
