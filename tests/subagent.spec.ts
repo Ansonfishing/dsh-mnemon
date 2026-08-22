@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -105,13 +106,14 @@ function observedSubagents(
   resultTools: ReturnType<typeof toolRegistry>,
   publish: (child: HostAgent) => void,
   stopReason = 'completed',
+  structured?: object,
 ) {
   const dispose = vi.fn(async () => {})
   const child = parent('subagent')
   child.id = 'child-run-1'
   const start = vi.fn(async () => {
     publish(child)
-    return { id: child.id, result: Promise.resolve({ output: [], stopReason }), dispose, localAgent: child }
+    return { id: child.id, result: Promise.resolve({ output: [], stopReason, ...(structured === undefined ? {} : { structured }) }), dispose, localAgent: child }
   })
   const value = {
     list: vi.fn(() => ['spawn']),
@@ -538,6 +540,9 @@ describe('Mnemon memory subagent coordinator', () => {
       persona: expect.stringContaining('idle checkpoint reviewer'),
       prompt: [{ type: 'text', text: 'Review the inherited completed checkpoint now.' }],
     }))
+    const reviewCall = (host.start.mock.calls[0] as unknown as [string, { persona: string; toolFilter: { allow: string[] } }])[1]
+    expect(reviewCall.persona).toContain('Never move a document to cold archive in this pass or publish a Memory View')
+    expect(reviewCall.toolFilter.allow).not.toContain('mnemon_memory_zoom')
     expect(coordinator.snapshot()).toMatchObject({ reviews: 1, writes: 0, lastOperation: 'review' })
   })
 
@@ -565,8 +570,27 @@ describe('Mnemon memory subagent coordinator', () => {
     const documents = new DocumentManager(1_000)
     const controller = documents.forWorkspace(workspace)
     const old = await controller.mutate({ action: 'create', title: 'Old architecture', content: 'a'.repeat(220) })
-    const host = subagents({ summary: 'Archived with exact cold path.', action: 'archived', memoryBodyIds: ['architecture'] })
-    const coordinator = createCoordinator(host.value, undefined, documents)
+    const resultTools = toolRegistry()
+    const indexedContent = `Old architecture index. Cold path: .mnemon/documents/archived/${old.document.filename}. Content SHA-256: ${old.document.contentHash}`
+    const structured = {
+      summary: 'Archived with exact cold path.',
+      action: 'archived',
+      memoryBodyIds: ['architecture'],
+      lineage: [{
+        sourceIndex: 1,
+        sourceDigest: old.document.contentHash,
+        destinationReceiptIndex: 1,
+        destinationMemoryBodyId: 'architecture',
+        destinationId: 'document-index-1',
+      }],
+    }
+    const host = observedSubagents(resultTools, child => {
+      emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: indexedContent, memoryBodyId: 'architecture' }, {
+        action: 'added', id: 'document-index-1', memoryBodyId: 'architecture', memoryBodyName: 'Architecture',
+      })
+    }, 'completed', structured)
+    const archive = vi.spyOn(controller, 'archive')
+    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, documents, resultTools.value)
     const agent = { ...parent(), session: { header: { cwd: workspace }, events: [] } } as HostAgent
 
     const result = await coordinator.document(agent, { action: 'create', title: 'New architecture', content: 'b'.repeat(220) }, new AbortController().signal)
@@ -575,6 +599,17 @@ describe('Mnemon memory subagent coordinator', () => {
       maintenance: { archivedDocumentIds: [old.document.id], memoryBodyIds: ['architecture'] },
     })
     expect(controller.get(old.document.id)).toMatchObject({ status: 'archived', archiveSummary: 'Archived with exact cold path.' })
+    expect(archive).toHaveBeenCalledWith(old.document.id, old.document.revision, expect.objectContaining({
+      memoryBodyIds: ['architecture'],
+      lineage: [{
+        source: { layerId: 'documents', reference: `document:${old.document.id}:${old.document.revision}`, digest: old.document.contentHash },
+        destination: {
+          layerId: 'memory-spaces',
+          reference: 'memory-space:architecture/item:document-index-1',
+          digest: createHash('sha256').update(indexedContent).digest('hex'),
+        },
+      }],
+    }))
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
       persona: expect.stringContaining('cold-document archive worker'),
       toolFilter: { allow: expect.arrayContaining(['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_remember', 'mnemon_memory_body_create']) },
@@ -585,25 +620,73 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(coordinator.snapshot()).toMatchObject({ documentArchives: 1, lastOperation: 'document-archive' })
   })
 
+  it('keeps a document active when its destination receipt omits the exact cold reference', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'dsh-mnemon-document-lineage-'))
+    temporaryDirectories.push(workspace)
+    const documents = new DocumentManager()
+    const controller = documents.forWorkspace(workspace)
+    const created = await controller.mutate({ action: 'create', title: 'Release gates', content: 'Canary before production.' })
+    const resultTools = toolRegistry()
+    const host = observedSubagents(resultTools, child => {
+      emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'An unrelated release note.', memoryBodyId: 'release' }, {
+        action: 'added', id: 'release-note-1', memoryBodyId: 'release', memoryBodyName: 'Release',
+      })
+    }, 'completed', {
+      summary: 'Indexed.',
+      action: 'archived',
+      memoryBodyIds: ['release'],
+      lineage: [{
+        sourceIndex: 1,
+        sourceDigest: created.document.contentHash,
+        destinationReceiptIndex: 1,
+        destinationMemoryBodyId: 'release',
+        destinationId: 'release-note-1',
+      }],
+    })
+    const archive = vi.spyOn(controller, 'archive')
+    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, documents, resultTools.value)
+    const agent = { ...parent(), session: { header: { cwd: workspace }, events: [] } } as HostAgent
+
+    await expect(coordinator.archiveDocument(agent, created.document.id, new AbortController().signal))
+      .rejects.toThrow('does not contain the exact cold path and content digest')
+    expect(archive).not.toHaveBeenCalled()
+    expect(controller.get(created.document.id).status).toBe('active')
+  })
+
   it('archives before compacting and retrying a capacity-blocked runtime write', async () => {
-    const host = subagents({
+    const sourceEntry = { content: 'Project uses {{package_manager}} pnpm and has a long history.', importance: 'normal' }
+    const sourceDigest = createHash('sha256').update(JSON.stringify(sourceEntry)).digest('hex')
+    const structured = {
       summary: 'Archived and compacted hot memory.',
       action: 'archived',
       memoryBodyIds: ['project'],
+      lineage: [{
+        sourceIndex: 1,
+        sourceDigest,
+        destinationReceiptIndex: 1,
+        destinationMemoryBodyId: 'project',
+        destinationId: 'project-memory-1',
+      }],
       compactedEntries: [{ content: 'Project uses pnpm.', importance: 'normal' }],
-    })
+    }
+    const resultTools = toolRegistry()
+    const host = observedSubagents(resultTools, child => {
+      emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Project uses pnpm.', memoryBodyId: 'project' }, {
+        action: 'added', id: 'project-memory-1', memoryBodyId: 'project', memoryBodyName: 'Project',
+      })
+    }, 'completed', structured)
     const runtime = {
       mutate: vi.fn()
         .mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', 10_200, 10_300, 10_240))
         .mockResolvedValueOnce({ success: true, message: 'Entry added.', target: 'memory', entryCount: 2, usage: { used: 120, limit: 10_240 }, added: 'New durable fact.' }),
       snapshot: vi.fn(() => ({
         revision: 'reviewed-revision',
-        entries: [{ content: 'Project uses {{package_manager}} pnpm and has a long history.', created_at: 'now', updated_at: 'now', target: 'memory', importance: 'normal' }],
+        entries: [{ ...sourceEntry, created_at: 'now', updated_at: 'now', target: 'memory' }],
         targets: { memory: { target: 'memory', entryCount: 1, used: 10_200, limit: 10_240, markdownPath: '/tmp/MEMORY.md' } },
       })),
       compactTarget: vi.fn(async () => ({})),
     } as unknown as RuntimeMemoryController
-    const coordinator = createCoordinator(host.value, runtime)
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtime, undefined, resultTools.value)
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: 'New durable fact.' }, new AbortController().signal)).resolves.toMatchObject({
       added: 'New durable fact.',
       maintenance: { kind: 'mnemon-archive', provider: 'spawn', memoryBodyIds: ['project'] },
@@ -612,23 +695,174 @@ describe('Mnemon memory subagent coordinator', () => {
       toolFilter: { allow: expect.arrayContaining(['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_remember', 'mnemon_memory_body_create']) },
       agentOptions: { maxTokens: 16_384 },
     }))
-    const migrationCall = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }>; persona: string }])[1]
+    const migrationCall = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }>; persona: string; toolFilter: { allow: string[] } }])[1]
     const migrationPrompt = migrationCall.prompt[0]!.text
     expect(migrationPrompt).toContain('Run the MEMORY.md capacity archive now')
     expect(migrationPrompt).toContain('Pending add (uncommitted; do not archive')
     expect(migrationPrompt).toContain('New durable fact.')
     expect(migrationPrompt).toContain('Project uses {{package_manager}} pnpm and has a long history.')
+    expect(migrationPrompt).toContain(`sourceDigest=${sourceDigest}`)
     expect(migrationPrompt).toContain('<runtime-memory-snapshot target="memory">')
     expect(migrationCall.persona).toContain('Do not count characters, bytes, tokens')
     expect(migrationCall.persona).toContain('Route each cluster independently')
     expect(migrationCall.persona).toContain('host generates the UUID, so never propose an id')
     expect(migrationCall.persona).toContain('USER.md preferences are outside this task and must never enter')
+    expect(migrationCall.persona).toContain('Do not narrate an extended plan, delegate again, or publish a View')
+    expect(migrationCall.toolFilter.allow).not.toContain('mnemon_memory_zoom')
     expect(migrationCall.persona).not.toContain('{{package_manager}}')
     expect(migrationCall.persona).not.toContain('<runtime-memory-snapshot')
     expect(migrationPrompt).not.toMatch(/catalog_json|runtime_entries_json|pending_mutation_json|current_usage_json|created_at|markdownPath|dbPath/)
-    expect(runtime.compactTarget).toHaveBeenCalledWith('reviewed-revision', 'memory', [{ content: 'Project uses pnpm.', importance: 'normal' }], 7_143)
+    expect(runtime.compactTarget).toHaveBeenCalledWith(
+      'reviewed-revision',
+      'memory',
+      [{ content: 'Project uses pnpm.', importance: 'normal' }],
+      7_143,
+      [{
+        source: { layerId: 'runtime', reference: 'runtime:reviewed-revision:memory:1', digest: sourceDigest },
+        destination: {
+          layerId: 'memory-spaces',
+          reference: 'memory-space:project/item:project-memory-1',
+          digest: createHash('sha256').update('Project uses pnpm.').digest('hex'),
+        },
+      }],
+    )
     expect(runtime.mutate).toHaveBeenCalledTimes(2)
     expect(coordinator.snapshot()).toMatchObject({ migrations: 1, lastOperation: 'migration' })
+  })
+
+  it('refuses runtime compaction when lineage omits any committed source entry', async () => {
+    const entries = [
+      { content: 'Use pnpm.', importance: 'normal' },
+      { content: 'Run canary releases.', importance: 'critical' },
+    ]
+    const firstDigest = createHash('sha256').update(JSON.stringify(entries[0])).digest('hex')
+    const resultTools = toolRegistry()
+    const host = observedSubagents(resultTools, child => {
+      emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Use pnpm.', memoryBodyId: 'project' }, {
+        action: 'added', id: 'project-memory-1', memoryBodyId: 'project', memoryBodyName: 'Project',
+      })
+    }, 'completed', {
+      summary: 'Incomplete lineage.',
+      action: 'archived',
+      memoryBodyIds: ['project'],
+      lineage: [{
+        sourceIndex: 1,
+        sourceDigest: firstDigest,
+        destinationReceiptIndex: 1,
+        destinationMemoryBodyId: 'project',
+        destinationId: 'project-memory-1',
+      }],
+      compactedEntries: [],
+    })
+    const runtime = {
+      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', 10_200, 10_300, 10_240)),
+      snapshot: vi.fn(() => ({
+        revision: 'two-entry-revision',
+        entries: entries.map(entry => ({ ...entry, target: 'memory' })),
+        targets: { memory: { used: 10_200, limit: 10_240 } },
+      })),
+      compactTarget: vi.fn(async () => ({})),
+    } as unknown as RuntimeMemoryController
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtime, undefined, resultTools.value)
+
+    await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: 'Pending.' }, new AbortController().signal))
+      .rejects.toThrow('exactly one target for every source entry')
+    expect(runtime.compactTarget).not.toHaveBeenCalled()
+    expect(runtime.mutate).toHaveBeenCalledOnce()
+  })
+
+  it('accepts an exact recalled insight as committed duplicate lineage', async () => {
+    const sourceEntry = { content: 'Use SQLite for local storage.', importance: 'normal' }
+    const sourceDigest = createHash('sha256').update(JSON.stringify(sourceEntry)).digest('hex')
+    const resultTools = toolRegistry()
+    const host = observedSubagents(resultTools, child => {
+      emitSuccessfulToolResult(resultTools, child, 'mnemon_recall', { query: 'SQLite local storage', memoryBodyIds: ['project'] }, {
+        query: 'SQLite local storage',
+        mode: 'smart',
+        results: [{ id: 'sqlite-1', content: sourceEntry.content, memoryBodyId: 'project', memoryBodyName: 'Project' }],
+      })
+    }, 'completed', {
+      summary: 'Verified existing durable insight.',
+      action: 'archived',
+      memoryBodyIds: ['project'],
+      lineage: [{
+        sourceIndex: 1,
+        sourceDigest,
+        destinationReceiptIndex: 1,
+        destinationMemoryBodyId: 'project',
+        destinationId: 'sqlite-1',
+      }],
+      compactedEntries: [],
+    })
+    const runtime = {
+      mutate: vi.fn()
+        .mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', 10_200, 10_300, 10_240))
+        .mockResolvedValueOnce({ success: true, target: 'memory', added: 'Pending.', usage: { used: 20, limit: 10_240 } }),
+      snapshot: vi.fn(() => ({
+        revision: 'duplicate-revision',
+        entries: [{ ...sourceEntry, target: 'memory' }],
+        targets: { memory: { used: 10_200, limit: 10_240 } },
+      })),
+      compactTarget: vi.fn(async () => ({})),
+    } as unknown as RuntimeMemoryController
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtime, undefined, resultTools.value)
+
+    await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: 'Pending.' }, new AbortController().signal))
+      .resolves.toMatchObject({ maintenance: { kind: 'mnemon-archive', memoryBodyIds: ['project'] } })
+    expect(runtime.compactTarget).toHaveBeenCalledWith('duplicate-revision', 'memory', [], expect.any(Number), [{
+      source: { layerId: 'runtime', reference: 'runtime:duplicate-revision:memory:1', digest: sourceDigest },
+      destination: {
+        layerId: 'memory-spaces',
+        reference: 'memory-space:project/item:sqlite-1',
+        digest: createHash('sha256').update(sourceEntry.content).digest('hex'),
+      },
+    }])
+  })
+
+  it('refuses runtime compaction when source digest or destination commit evidence is invalid', async () => {
+    const sourceEntry = { content: 'Use pnpm.', importance: 'normal' }
+    const runtime = {
+      mutate: vi.fn().mockRejectedValue(new RuntimeMemoryCapacityError('memory', 10_200, 10_300, 10_240)),
+      snapshot: vi.fn(() => ({
+        revision: 'source-revision',
+        entries: [{ ...sourceEntry, target: 'memory' }],
+        targets: { memory: { used: 10_200, limit: 10_240 } },
+      })),
+      compactTarget: vi.fn(async () => ({})),
+    } as unknown as RuntimeMemoryController
+
+    const digestTools = toolRegistry()
+    const digestHost = observedSubagents(digestTools, child => {
+      emitSuccessfulToolResult(digestTools, child, 'mnemon_remember', { content: 'Use pnpm.', memoryBodyId: 'project' }, {
+        action: 'added', id: 'memory-1', memoryBodyId: 'project', memoryBodyName: 'Project',
+      })
+    }, 'completed', {
+      summary: 'Wrong digest.', action: 'archived', memoryBodyIds: ['project'], compactedEntries: [],
+      lineage: [{ sourceIndex: 1, sourceDigest: '0'.repeat(64), destinationReceiptIndex: 1, destinationMemoryBodyId: 'project', destinationId: 'memory-1' }],
+    })
+    await expect(new MnemonSubagentCoordinator(digestHost.value, runtime, undefined, digestTools.value)
+      .runtime(parent(), { action: 'add', target: 'memory', content: 'Pending.' }, new AbortController().signal))
+      .rejects.toThrow('source digest does not match')
+
+    const skippedTools = toolRegistry()
+    const skippedHost = observedSubagents(skippedTools, child => {
+      emitSuccessfulToolResult(skippedTools, child, 'mnemon_remember', { content: 'Use pnpm.', memoryBodyId: 'project' }, {
+        action: 'skipped', id: 'memory-1', memoryBodyId: 'project', memoryBodyName: 'Project',
+      })
+    }, 'completed', {
+      summary: 'Skipped write.', action: 'archived', memoryBodyIds: ['project'], compactedEntries: [],
+      lineage: [{
+        sourceIndex: 1,
+        sourceDigest: createHash('sha256').update(JSON.stringify(sourceEntry)).digest('hex'),
+        destinationReceiptIndex: 1,
+        destinationMemoryBodyId: 'project',
+        destinationId: 'memory-1',
+      }],
+    })
+    await expect(new MnemonSubagentCoordinator(skippedHost.value, runtime, undefined, skippedTools.value)
+      .runtime(parent(), { action: 'add', target: 'memory', content: 'Pending.' }, new AbortController().signal))
+      .rejects.toThrow('uncommitted remember receipt')
+    expect(runtime.compactTarget).not.toHaveBeenCalled()
   })
 
   it('compacts USER.md locally with complete source coverage and never grants Mnemon tools', async () => {

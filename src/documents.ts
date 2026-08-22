@@ -14,6 +14,7 @@ import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { HostAgent } from './contracts.ts'
 import type { DocumentMutation, DocumentMutationResult, DocumentRecord, DocumentSearchResult, DocumentSnapshot, DocumentStatus, DocumentView } from './shared/contracts.ts'
 import type { AuthorityCommitRecorder } from './memory-receipts.ts'
+import type { MemoryMigrationLineage } from '../packages/contracts/src/index.ts'
 
 export type { DocumentMutation, DocumentMutationResult, DocumentRecord, DocumentSearchResult, DocumentSnapshot, DocumentStatus, DocumentView } from './shared/contracts.ts'
 
@@ -307,7 +308,7 @@ export class DocumentController {
     return operation
   }
 
-  archive(id: string, expectedRevision: number, details: { summary: string; memoryBodyIds: string[] }): Promise<DocumentMutationResult> {
+  archive(id: string, expectedRevision: number, details: { summary: string; memoryBodyIds: string[]; lineage?: readonly MemoryMigrationLineage[] }): Promise<DocumentMutationResult> {
     const operation: Promise<DocumentMutationResult> = this.queue.then(() => this.withLock((): DocumentMutationResult => {
       const index = this.readIndex()
       const current = this.requireDocument(index, id)
@@ -350,6 +351,10 @@ export class DocumentController {
           documentId: result.document.id,
           documentRevision: result.document.revision,
           sourceRevision: result.snapshot.revision,
+          ...(details.lineage === undefined || details.lineage.length === 0 ? {} : { lineage: details.lineage.map(entry => ({
+            source: { ...entry.source },
+            destination: { ...entry.destination },
+          })) }),
         },
       })
       return result

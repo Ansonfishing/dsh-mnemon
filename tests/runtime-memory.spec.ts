@@ -167,6 +167,31 @@ describe('RuntimeMemoryController', () => {
     expect(readFileSync(controller.memoryPath, 'utf8')).toBe('Project uses pnpm for workspace dependency management.\n')
   })
 
+  it('records validated migration lineage only in the compaction receipt checkpoint', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-mnemon-runtime-lineage-'))
+    directories.push(directory)
+    const commits: Array<Record<string, unknown>> = []
+    const controller = new RuntimeMemoryController(
+      { effectiveDataDir: () => directory },
+      undefined,
+      operation => {
+        commits.push(operation as unknown as Record<string, unknown>)
+        return {} as never
+      },
+    )
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Project uses pnpm.' })
+    const reviewed = controller.snapshot()
+    const lineage = [{
+      source: { layerId: 'runtime', reference: `runtime:${reviewed.revision}:memory:1`, digest: 'a'.repeat(64) },
+      destination: { layerId: 'memory-spaces', reference: 'memory-space:project/item:m1', digest: 'b'.repeat(64) },
+    }]
+
+    await controller.compactTarget(reviewed.revision, 'memory', [{ content: 'Project package manager is pnpm.', importance: 'normal' }], undefined, lineage)
+
+    expect(commits.at(-1)).toMatchObject({ operation: 'runtime-compact', checkpoint: { lineage } })
+    expect(readFileSync(controller.sourcePath, 'utf8')).not.toContain('memory-space:project')
+  })
+
   it('never overwrites a concurrent mutation with an obsolete compaction plan', async () => {
     const { controller } = fixture()
     await controller.mutate({ action: 'add', target: 'user', content: 'User prefers concise replies.' })

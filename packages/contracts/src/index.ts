@@ -203,6 +203,18 @@ export interface MemoryReceipt {
   steps: MemoryReceiptStep[]
 }
 
+export interface MemoryMigrationLineageEndpoint {
+  layerId: MemoryLayerId
+  reference: string
+  digest: string
+}
+
+/** Auditable proof that one exact source item reached one committed destination. */
+export interface MemoryMigrationLineage {
+  source: MemoryMigrationLineageEndpoint
+  destination: MemoryMigrationLineageEndpoint
+}
+
 export interface MemorySystemDescriptor {
   catalog: MemoryCatalogSnapshot
   topology: MemoryTopologySnapshot

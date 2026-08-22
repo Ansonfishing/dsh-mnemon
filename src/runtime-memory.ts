@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto'
 import { basename, join } from 'node:path'
 import type { MnemonRunner } from './runner.ts'
 import type { AuthorityCommitRecorder } from './memory-receipts.ts'
+import type { MemoryMigrationLineage } from '../packages/contracts/src/index.ts'
 import type {
   RuntimeMemoryAction,
   RuntimeMemoryCompactedEntry,
@@ -263,6 +264,7 @@ IMPORTANT: USER.md and MEMORY.md above are always relevant when applicable. Foll
     target: RuntimeMemoryTarget,
     compacted: RuntimeMemoryCompactedEntry[],
     maxBytes = RUNTIME_MEMORY_LIMITS[target],
+    lineage: readonly MemoryMigrationLineage[] = [],
   ): Promise<RuntimeMemorySnapshot> {
     const operation = this.queue.then(() => this.withLock(() => {
       const file = this.readSource()
@@ -313,7 +315,15 @@ IMPORTANT: USER.md and MEMORY.md above are always relevant when applicable. Foll
           layerId: 'runtime',
           capability: 'maintain',
           operation: 'runtime-compact',
-          checkpoint: { beforeRevision, afterRevision: snapshot.revision, target },
+          checkpoint: {
+            beforeRevision,
+            afterRevision: snapshot.revision,
+            target,
+            ...(lineage.length === 0 ? {} : { lineage: lineage.map(entry => ({
+              source: { ...entry.source },
+              destination: { ...entry.destination },
+            })) }),
+          },
         })
       }
       return snapshot
