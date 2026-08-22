@@ -115,7 +115,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_recall',
-    description: 'Recall durable knowledge from one or more active provider-backed Memory Spaces. Choose spaces whose name and routing description match the task; omit memoryBodyIds only when federated cross-space search is intentionally useful. Provider-native scores are not directly comparable, so cross-provider results are rank-fused. Use one focused query when prior decisions, preferences, rationale, conventions, pitfalls, or earlier work could materially change the answer.',
+    description: 'Recall query-dependent durable evidence under the immutable Memory View pinned to this turn. Prefer passing the parentViewId and relevant Memory Spaces viewNodeId shown in the current Memory Map; the Host always derives and enforces the pinned parent View. Choose spaces whose routing description matches the task. Provider-native scores are rank-fused rather than compared directly.',
     parameters: {
       type: 'object',
       properties: {
@@ -126,6 +126,8 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
         source: { type: 'string', enum: [...SOURCES] },
         intent: { type: 'string', enum: [...INTENTS] },
         memoryBodyIds: { type: 'array', items: { type: 'string' }, description: 'One or more active Memory Space ids. Omit to search every active space; the service accepts at most 20 ids.' },
+        parentViewId: { type: 'string', description: 'Pinned View id shown in the current Mnemon Memory Map. The Host rejects a stale or different View.' },
+        viewNodeId: { type: 'string', description: 'Relevant Memory Spaces node id from that View. Narrows Recall to the selected branch.' },
       },
       required: ['query'],
     },
@@ -133,10 +135,10 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
       schema: JSON_OBJECT_OUTPUT,
       render: (_args: unknown, value: unknown) => text(value),
     },
-    async execute(args: { query: string; mode?: 'smart' | 'keyword' | 'basic'; limit?: number; category?: Category; source?: Source; intent?: Intent; memoryBodyIds?: string[] }, exec: ToolExecution) {
+    async execute(args: { query: string; mode?: 'smart' | 'keyword' | 'basic'; limit?: number; category?: Category; source?: Source; intent?: Intent; memoryBodyIds?: string[]; parentViewId?: string; viewNodeId?: string }, exec: ToolExecution) {
       const runtime = requireLayer(exec, 'memory-spaces', 'recall')
       return isSubagent(exec.agent)
-        ? runtime.service.search(args, exec.signal)
+        ? runtime.service.search(coordinator.scopeRecallRequest(requireAgent(exec), args), exec.signal)
         : coordinator.recall(requireAgent(exec), args, exec.signal)
     },
     presentCall: (args: { query: string }) => ({ card: 'generic', title: 'Recall Mnemon memory', kind: 'search', rawInput: args.query }),
@@ -160,14 +162,15 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
     async execute(args: { id: string; depth?: number; edge?: EdgeType; memoryBodyId?: string }, exec: ToolExecution) {
       const runtime = requireLayer(exec, 'memory-spaces', 'related')
       if (!isSubagent(exec.agent)) return coordinator.related(requireAgent(exec), args.id, args.memoryBodyId, exec.signal)
-      const results = await runtime.service.related(args.id, args.depth, args.edge, exec.signal, args.memoryBodyId)
+      const memoryBodyId = coordinator.scopeRelatedMemoryBody(requireAgent(exec), args.memoryBodyId)
+      const results = await runtime.service.related(args.id, args.depth, args.edge, exec.signal, memoryBodyId)
       // DSH tool output validation requires the declared object shape. Keep the
       // underlying service array internal and expose a stable traversal receipt.
       return {
         id: args.id,
         depth: args.depth ?? 2,
         ...(args.edge === undefined ? {} : { edge: args.edge }),
-        ...(args.memoryBodyId === undefined ? {} : { memoryBodyId: args.memoryBodyId }),
+        ...(memoryBodyId === undefined ? {} : { memoryBodyId }),
         results,
       }
     },

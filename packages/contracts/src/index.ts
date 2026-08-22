@@ -267,6 +267,25 @@ export interface MemoryZoomResult {
   children: MemoryViewNode[]
 }
 
+export interface MemoryRecallSliceNode {
+  id: string
+  layerId: MemoryLayerId
+  kind: MemoryViewNodeKind
+  label: string
+  summary?: string
+  reference?: string
+  memoryBodyId?: string
+  providerId?: string
+}
+
+export interface MemoryRecallSlice {
+  parentViewId: string
+  viewDigest: string
+  nodeIds: string[]
+  nodes: MemoryRecallSliceNode[]
+  memoryBodyIds: string[]
+}
+
 export interface MemoryTurnContext {
   turnId: string
   viewId: string

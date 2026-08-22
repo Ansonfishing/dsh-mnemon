@@ -173,6 +173,43 @@ describe('MemoryViewManager', () => {
     expect(views.wake(view.id).text).toContain(`[${root.id}] Documents`)
   })
 
+  it('derives a provider-safe Recall slice from one sealed Memory Spaces branch', async () => {
+    const { views } = harness([{
+      layerId: 'memory-spaces',
+      mode: 'outline',
+      project: () => ({ revision: 'spaces-1', nodes: [
+        { key: 'spaces', kind: 'root', label: 'Memory Spaces', summary: 'Two active spaces.' },
+        { key: 'project', parentKey: 'spaces', kind: 'query', label: 'Project', summary: 'Architecture decisions.', reference: 'memory-space:project', metadata: { memoryBodyId: 'project', providerId: 'mnemon-native', secret: 'must-not-leak' } },
+        { key: 'release', parentKey: 'spaces', kind: 'query', label: 'Release', summary: 'Release gates.', reference: 'memory-space:release', metadata: { memoryBodyId: 'release', providerId: 'openviking' } },
+      ] }),
+    }])
+    const turn = await views.beginTurn('root:1', { storage: 'global', sessionId: 'root', agentId: 'root' })
+    const view = views.get(turn.viewId)!
+    const project = view.nodes.find(node => node.metadata?.memoryBodyId === 'project')!
+    const documents = view.nodes.find(node => node.label === 'Memory Spaces')!
+
+    expect(views.activeTurn('root')).toBe(turn)
+    expect(views.recallSlice(view.id, project.id)).toEqual({
+      parentViewId: view.id,
+      viewDigest: view.digest,
+      nodeIds: [project.id],
+      nodes: [{
+        id: project.id,
+        layerId: 'memory-spaces',
+        kind: 'query',
+        label: 'Project',
+        summary: 'Architecture decisions.',
+        reference: 'memory-space:project',
+        memoryBodyId: 'project',
+        providerId: 'mnemon-native',
+      }],
+      memoryBodyIds: ['project'],
+    })
+    expect(JSON.stringify(views.recallSlice(view.id, project.id))).not.toContain('must-not-leak')
+    expect(views.recallSlice(view.id, documents.id).memoryBodyIds).toEqual(['project', 'release'])
+    expect(() => views.recallSlice(view.id, undefined, ['outside'])).toThrow('outside the parent View')
+  })
+
   it('keeps the last valid View when a later projection fails validation', async () => {
     let invalid = false
     const { views } = harness([{

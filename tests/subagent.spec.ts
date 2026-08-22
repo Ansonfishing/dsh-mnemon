@@ -187,6 +187,62 @@ describe('Mnemon memory subagent coordinator', () => {
     for (const disposer of resultTools.disposers) expect(disposer).toHaveBeenCalledOnce()
   })
 
+  it('passes only the pinned View slice to Recall and enforces it at the child tool boundary', async () => {
+    let finish!: (value: { output: never[]; structured: object; stopReason: string }) => void
+    const childResult = new Promise<{ output: never[]; structured: object; stopReason: string }>(resolve => { finish = resolve })
+    const dispose = vi.fn(async () => undefined)
+    const start = vi.fn(async (_provider: string, _request: { prompt: Array<{ text: string }>; persona: string }) => ({ id: 'child-run-1', result: childResult, dispose }))
+    const host = {
+      list: vi.fn(() => ['spawn']),
+      getProvider: vi.fn(() => ({ capabilities, inheritsParentContext: false })),
+      start,
+    } as unknown as HostSubagentsService
+    const resultTools = toolRegistry()
+    const memoryViews = {
+      activeTurn: vi.fn(() => ({ viewId: 'view-pinned' })),
+      recallSlice: vi.fn(() => ({
+        parentViewId: 'view-pinned',
+        viewDigest: 'digest-pinned',
+        nodeIds: ['node-project'],
+        nodes: [{ id: 'node-project', layerId: 'memory-spaces', kind: 'query', label: 'Project', summary: 'Architecture decisions.', memoryBodyId: 'project', providerId: 'mnemon-native' }],
+        memoryBodyIds: ['project'],
+      })),
+    }
+    const source = {
+      forAgent: vi.fn(() => ({ service: service(), runtimeMemory: {}, documents: {}, memoryViews })),
+    }
+    const coordinator = new MnemonSubagentCoordinator(host, source as never, undefined, resultTools.value)
+    const root = parent()
+    await expect(coordinator.recall(root, { query: 'stale request', parentViewId: 'view-stale' }, new AbortController().signal)).rejects.toThrow('does not match the View pinned')
+    expect(start).not.toHaveBeenCalled()
+    const pending = coordinator.recall(root, { query: 'database choice', viewNodeId: 'node-project' }, new AbortController().signal)
+    await vi.waitFor(() => expect(start).toHaveBeenCalledOnce())
+    const child = parent('subagent')
+    child.id = 'child-run-1'
+
+    expect(coordinator.scopeRecallRequest(child, { query: 'database choice' })).toEqual({ query: 'database choice', memoryBodyIds: ['project'] })
+    expect(() => coordinator.scopeRecallRequest(child, { query: 'database choice', memoryBodyIds: ['outside'] })).toThrow('outside parent View')
+    expect(coordinator.scopeRelatedMemoryBody(child)).toBe('project')
+    expect(() => coordinator.scopeRelatedMemoryBody(child, 'outside')).toThrow('outside parent View')
+    const request = start.mock.calls[0]![1] as { prompt: Array<{ text: string }>; persona: string }
+    expect(request.prompt[0]!.text).toContain('Parent Memory View: view-pinned')
+    expect(request.prompt[0]!.text).toContain('[node-project] Project (Memory Space project)')
+    expect(request.prompt[0]!.text).not.toContain('Runtime Memory')
+    expect(request.persona).toContain('never the parent\'s full Wake')
+
+    finish({ output: [], structured: { summary: '', selectedMemoryBodyIds: ['project'], results: [] }, stopReason: 'completed' })
+    await expect(pending).resolves.toMatchObject({ delegation: { selectedMemoryBodyIds: ['project'] } })
+    expect(dispose).toHaveBeenCalledOnce()
+  })
+
+  it('refuses an inheriting provider for isolated Recall workers', async () => {
+    const host = subagents({ summary: '', selectedMemoryBodyIds: [], results: [] }, 'completed', ['fork'])
+    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, undefined, toolRegistry().value)
+
+    await expect(coordinator.recall(parent(), { query: 'private context' }, new AbortController().signal)).rejects.toThrow('non-inheriting')
+    expect(host.start).not.toHaveBeenCalled()
+  })
+
   it('captures a schema-validated result through the one-run tool without DSH structured output', async () => {
     const resultTools = toolRegistry()
     const dispose = vi.fn(async () => {})
@@ -759,6 +815,8 @@ describe('Mnemon root/child tool split', () => {
     const memoryService = service()
     const coordinator = {
       recall: vi.fn(async () => ({ query: 'x', mode: 'smart', results: [], delegation: { runId: 'child', provider: 'spawn', summary: '', selectedMemoryBodyIds: [] } })),
+      scopeRecallRequest: vi.fn((_agent, request) => request),
+      scopeRelatedMemoryBody: vi.fn((_agent, memoryBodyId) => memoryBodyId),
       runtime: vi.fn(async () => ({ success: true, message: 'Entry added.', target: 'user', entryCount: 1, usage: { used: 20, limit: 4096 } })),
     } as unknown as MnemonSubagentCoordinator
     const runtimeMemory = { mutate: vi.fn() } as unknown as RuntimeMemoryController
@@ -777,8 +835,9 @@ describe('Mnemon root/child tool split', () => {
     await hotMemory.execute({ action: 'add', target: 'memory', content: 'Child fact' } as never, { agent: parent('subagent'), signal })
     expect(runtimeMemory.mutate).toHaveBeenCalledWith({ action: 'add', target: 'memory', content: 'Child fact' })
 
-    await recall.execute({ query: 'root query' } as never, { agent: parent(), signal })
+    await recall.execute({ query: 'root query', parentViewId: 'view-1', viewNodeId: 'node-project' } as never, { agent: parent(), signal })
     expect(coordinator.recall).toHaveBeenCalledOnce()
+    expect(coordinator.recall).toHaveBeenCalledWith(parent(), { query: 'root query', parentViewId: 'view-1', viewNodeId: 'node-project' }, signal)
     expect(memoryService.search).not.toHaveBeenCalled()
 
     await recall.execute({ query: 'child query', memoryBodyIds: ['project'] } as never, { agent: parent('subagent'), signal })

@@ -3,6 +3,8 @@ import type {
   MemoryJsonValue,
   MemoryOperationScope,
   MemoryReceipt,
+  MemoryRecallSlice,
+  MemoryRecallSliceNode,
   MemoryView,
   MemoryViewNode,
   MemoryViewNodeKind,
@@ -235,6 +237,11 @@ export class MemoryViewManager {
     return this.turns.get(turnId)
   }
 
+  activeTurn(agentId: string): MemoryTurnContext | undefined {
+    const id = text(agentId, 'memory agent id', 300)
+    return [...this.turns.values()].findLast(turn => turn.scope.agentId === id)
+  }
+
   endTurn(turnId: string): boolean {
     const deleted = this.turns.delete(turnId)
     if (deleted) this.collect()
@@ -256,6 +263,68 @@ export class MemoryViewManager {
       viewDigest: view.digest,
       node,
       children: node.childIds.map(id => nodes.get(id)!),
+    })
+  }
+
+  /** Build the smallest provider-safe slice that can authorize one Recall worker. */
+  recallSlice(viewId: string, nodeId?: string, requestedMemoryBodyIds: readonly string[] = []): MemoryRecallSlice {
+    const view = this.requireView(viewId)
+    const nodes = new Map(view.nodes.map(node => [node.id, node]))
+    const requested = [...new Set(requestedMemoryBodyIds.map(id => id.trim()).filter(Boolean))]
+    const bodyId = (node: MemoryViewNode): string | undefined => {
+      const value = node.metadata?.memoryBodyId
+      return typeof value === 'string' && value.trim() !== '' ? value : undefined
+    }
+    const providerId = (node: MemoryViewNode): string | undefined => {
+      const value = node.metadata?.providerId
+      return typeof value === 'string' && value.trim() !== '' ? value : undefined
+    }
+    const memoryNodes = view.nodes.filter(node => node.layerId === 'memory-spaces')
+    let selected: MemoryViewNode[]
+    if (nodeId !== undefined && nodeId.trim() !== '') {
+      const node = nodes.get(nodeId.trim())
+      if (node === undefined) throw new Error(`memory view node is unavailable in ${view.id}: ${nodeId.trim()}`)
+      if (node.layerId !== 'memory-spaces') throw new Error('Recall View scope must select a Memory Spaces node')
+      const children = node.childIds.map(id => nodes.get(id)!).filter(Boolean)
+      selected = requested.length === 0
+        ? [node, ...children]
+        : [node, ...children.filter(child => {
+            const id = bodyId(child)
+            return id !== undefined && requested.includes(id)
+          })]
+    } else if (requested.length > 0) {
+      const byBodyId = new Map(memoryNodes.flatMap(node => {
+        const id = bodyId(node)
+        return id === undefined ? [] : [[id, node] as const]
+      }))
+      const missing = requested.filter(id => !byBodyId.has(id))
+      if (missing.length > 0) throw new Error(`Memory Space is outside the parent View: ${missing.join(', ')}`)
+      selected = requested.map(id => byBodyId.get(id)!)
+    } else {
+      const roots = view.sources.find(source => source.layerId === 'memory-spaces')?.nodeIds.map(id => nodes.get(id)!).filter(Boolean) ?? []
+      selected = roots.flatMap(node => [node, ...node.childIds.map(id => nodes.get(id)!).filter(Boolean)])
+    }
+    const selectedBodyIds = [...new Set(selected.flatMap(node => {
+      const id = bodyId(node)
+      return id === undefined ? [] : [id]
+    }))]
+    if (requested.length > 0 && requested.some(id => !selectedBodyIds.includes(id))) throw new Error('requested Memory Space is outside the selected View node')
+    const sliceNodes: MemoryRecallSliceNode[] = selected.map(node => ({
+      id: node.id,
+      layerId: node.layerId,
+      kind: node.kind,
+      label: node.label,
+      ...(node.summary === undefined ? {} : { summary: node.summary }),
+      ...(node.reference === undefined ? {} : { reference: node.reference }),
+      ...(bodyId(node) === undefined ? {} : { memoryBodyId: bodyId(node)! }),
+      ...(providerId(node) === undefined ? {} : { providerId: providerId(node)! }),
+    }))
+    return deepFreeze({
+      parentViewId: view.id,
+      viewDigest: view.digest,
+      nodeIds: sliceNodes.map(node => node.id),
+      nodes: sliceNodes,
+      memoryBodyIds: requested.length === 0 ? selectedBodyIds : requested,
     })
   }
 
@@ -439,6 +508,7 @@ export class MemoryViewManager {
       `MNEMON MEMORY MAP (${view.id})`,
       ...mapped.flatMap(section => [`${section.layerId}:`, section.text]),
       `Use mnemon_memory_zoom with this viewId and a listed nodeId to expand one branch. Use mnemon_recall only when query-dependent durable evidence is needed.`,
+      `For mnemon_recall, pass parentViewId=${view.id} and the most relevant Memory Spaces node as viewNodeId; the Host will enforce this pinned View even if those fields are omitted.`,
     ].join('\n')
     const rendered = [...exact, memoryMap].filter(Boolean).join('\n\n')
     if (rendered.length > this.maxWakeCharacters) throw new Error(`memory View Wake is ${rendered.length} characters; limit is ${this.maxWakeCharacters}`)

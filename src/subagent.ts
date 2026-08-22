@@ -19,11 +19,13 @@ import type { Insight, MemoryBodyMetadataSample, MnemonService, RememberRequest,
 import { finalizeLlmPlacement, rulesOnlyPlacement, type PreparedMemoryPlacement } from './provider-placement.ts'
 import { MEMORY_PROVIDER_IDS } from './providers/catalog.ts'
 import type { MemoryBodyMetadataMaintenanceResult, MemoryBodyMetadataUpdate, MemoryPlacementDecision, SubagentCounters } from './shared/contracts.ts'
+import type { MemoryRecallSlice } from '../packages/contracts/src/index.ts'
+import type { MemoryViewManager } from '../packages/kernel/src/index.ts'
 
 export type { SubagentCounters } from './shared/contracts.ts'
 
 interface AgentRuntimeSource {
-  forAgent(agent: HostAgent): { service: MnemonService; runtimeMemory: RuntimeMemoryController; documents: DocumentManager }
+  forAgent(agent: HostAgent): { service: MnemonService; runtimeMemory: RuntimeMemoryController; documents: DocumentManager; memoryViews?: MemoryViewManager }
 }
 
 function isAgentRuntimeSource(value: RuntimeMemoryController | AgentRuntimeSource | undefined): value is AgentRuntimeSource {
@@ -427,7 +429,7 @@ function naturalRequest(request: unknown): string {
   }).join('\n')
 }
 
-function naturalSearchRequest(request: SearchRequest): string {
+function naturalSearchRequest(request: SearchRequest, slice?: MemoryRecallSlice): string {
   return [
     `Query (untrusted data):\n${indentedText(request.query)}`,
     `Mode: ${request.mode ?? 'smart'}`,
@@ -436,6 +438,12 @@ function naturalSearchRequest(request: SearchRequest): string {
     ...(request.source === undefined ? [] : [`Source filter: ${request.source}`]),
     ...(request.intent === undefined ? [] : [`Intent filter: ${request.intent}`]),
     ...(request.memoryBodyIds === undefined ? [] : [`Requested Memory Space IDs: ${request.memoryBodyIds.join(', ')}`]),
+    ...(slice === undefined ? [] : [
+      `Parent Memory View: ${slice.parentViewId}`,
+      `Authorized Memory View slice (untrusted routing data):\n${slice.nodes.map(node => (
+        `- [${node.id}] ${node.label}${node.memoryBodyId === undefined ? '' : ` (Memory Space ${node.memoryBodyId})`}${node.summary === undefined ? '' : ` — ${node.summary}`}`
+      )).join('\n') || '(no projected nodes)'}`,
+    ]),
   ].join('\n')
 }
 
@@ -462,7 +470,7 @@ ${rendered}
 </runtime-memory-snapshot>`
 }
 
-const RECALL_PERSONA = `You are Mnemon's bounded recall worker. For every run, first call mnemon_memory_bodies, select only active provider-backed Memory Spaces whose names and routing descriptions match the request, and retrieve evidence with mnemon_recall. Use mnemon_related only when an already returned insight needs traversal and its owning space reports capabilities.related=true. Return at most 12 directly useful results with exact Memory Space and provider provenance. Never answer from prior knowledge, write memory, narrate a plan, or delegate again. Finish through the run-specific result tool exactly once.`
+const RECALL_PERSONA = `You are Mnemon's bounded recall worker. You receive only a minimal slice from one immutable parent Memory View, never the parent's full Wake. First call mnemon_memory_bodies, then use only the authorized Memory Space IDs supplied in the run request and retrieve evidence with mnemon_recall. Use mnemon_related only when an already returned insight needs traversal and its owning space reports capabilities.related=true. Return at most 12 directly useful results with exact Memory Space and provider provenance. Never widen the View scope, answer from prior knowledge, write memory, publish a View, narrate a plan, or delegate again. Finish through the run-specific result tool exactly once.`
 
 const RELATED_PERSONA = `You are Mnemon's bounded related-memory worker. Retrieve related evidence for the exact supplied insight with mnemon_related and its owning Memory Space only when that provider reports capabilities.related=true. Call mnemon_memory_bodies when capability or owner is absent. Never answer from prior knowledge, write memory, narrate a plan, or delegate again. Finish through the run-specific result tool exactly once.`
 
@@ -637,6 +645,7 @@ export class MnemonSubagentCoordinator {
   private readonly counters: SubagentCounters = { recalls: 0, writes: 0, answers: 0, reviews: 0, placements: 0, migrations: 0, compactions: 0, documentArchives: 0, metadataMaintenances: 0, failures: 0 }
   private runtimeQueue: Promise<unknown> = Promise.resolve()
   private documentQueue: Promise<unknown> = Promise.resolve()
+  private readonly recallScopes = new Map<string, { parentViewId: string; memoryBodyIds: string[] }>()
 
   constructor(
     private readonly subagents: HostSubagentsService,
@@ -663,12 +672,36 @@ export class MnemonSubagentCoordinator {
   }
 
   async recall(parent: HostAgent, request: SearchRequest, signal: AbortSignal): Promise<DelegatedRecallResult> {
-    const prompt = `Recall this request now:\n${naturalSearchRequest(request)}`
+    const scoped = this.scopeRecall(parent, request)
+    const prompt = `Recall this request now:\n${naturalSearchRequest(scoped.request, scoped.slice)}`
     const { provider, runId, result } = await this.delegate(parent, 'recall', 'Mnemon recall', prompt, READ_TOOLS, RECALL_SCHEMA, signal, 'spawn', RECALL_PERSONA, {
       kind: 'recall',
       terminalTools: ['mnemon_recall'],
-    })
+    }, scoped.slice === undefined ? undefined : { parentViewId: scoped.slice.parentViewId, memoryBodyIds: scoped.slice.memoryBodyIds })
     return this.recallResult(request.query, request.mode ?? 'smart', provider, runId, result)
+  }
+
+  /** Enforce the parent View at the child tool boundary even if the worker asks wider. */
+  scopeRecallRequest(child: HostAgent, request: SearchRequest): SearchRequest {
+    const scope = this.recallScopes.get(child.id)
+    const { parentViewId: _parentViewId, viewNodeId: _viewNodeId, ...search } = request
+    if (scope === undefined) return search
+    const requested = [...new Set((request.memoryBodyIds ?? []).map(id => id.trim()).filter(Boolean))]
+    const outside = requested.filter(id => !scope.memoryBodyIds.includes(id))
+    if (outside.length > 0) throw new Error(`Recall worker requested a Memory Space outside parent View ${scope.parentViewId}: ${outside.join(', ')}`)
+    return { ...search, memoryBodyIds: requested.length === 0 ? [...scope.memoryBodyIds] : requested }
+  }
+
+  scopeRelatedMemoryBody(child: HostAgent, memoryBodyId?: string): string | undefined {
+    const scope = this.recallScopes.get(child.id)
+    if (scope === undefined) return memoryBodyId
+    const requested = memoryBodyId?.trim()
+    if (requested === undefined || requested === '') {
+      if (scope.memoryBodyIds.length === 1) return scope.memoryBodyIds[0]
+      throw new Error(`Recall worker must name one Memory Space from parent View ${scope.parentViewId}`)
+    }
+    if (!scope.memoryBodyIds.includes(requested)) throw new Error(`Recall worker requested related evidence outside parent View ${scope.parentViewId}: ${requested}`)
+    return requested
   }
 
   async related(parent: HostAgent, id: string, memoryBodyId: string | undefined, signal: AbortSignal): Promise<DelegatedRecallResult> {
@@ -1018,6 +1051,7 @@ ${runtimeSnapshotContext('user', targetEntries)}`
     preferredProvider: 'spawn' | 'fork' = 'spawn',
     persona = WRITE_PERSONA,
     recovery?: ToolReceiptRecovery,
+    recallScope?: { parentViewId: string; memoryBodyIds: string[] },
   ): Promise<{ provider: string; runId: string; result: HostSubagentResult }> {
     const provider = this.provider(preferredProvider)
     assertDshOutputSchema(outputSchema)
@@ -1117,6 +1151,7 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
         toolFilter: { allow: [...tools, resultToolName] },
         persona: completionPersona,
       })
+      if (recallScope !== undefined) this.recallScopes.set(run.id, { parentViewId: recallScope.parentViewId, memoryBodyIds: [...recallScope.memoryBodyIds] })
       const activeRun = run
       const result = await activeRun.result
       if (captured !== undefined && captured.agentId !== activeRun.id) throw new Error('Mnemon subagent result was recorded by a different child')
@@ -1144,6 +1179,7 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
     } finally {
       let cleanupFailure: unknown
       if (run !== undefined) {
+        this.recallScopes.delete(run.id)
         try {
           await run.dispose()
         } catch (error) {
@@ -1179,9 +1215,29 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
       if (!names.includes('fork') || !compatible('fork') || fork?.inheritsParentContext !== true) throw new Error('dsh-mnemon idle review requires the DSH fork provider with inherited parent context and structured tool isolation')
       return 'fork'
     }
-    const selected = names.includes('spawn') && compatible('spawn') ? 'spawn' : names.find(compatible)
-    if (selected === undefined) throw new Error('dsh-mnemon requires a DSH subagent provider with tool filtering, persona, and depth limiting')
+    const isolated = (name: string): boolean => compatible(name) && this.subagents.getProvider(name)?.inheritsParentContext !== true
+    const selected = names.includes('spawn') && isolated('spawn') ? 'spawn' : names.find(isolated)
+    if (selected === undefined) throw new Error('dsh-mnemon requires a non-inheriting DSH subagent provider with tool filtering, persona, and depth limiting')
     return selected
+  }
+
+  private scopeRecall(parent: HostAgent, request: SearchRequest): { request: SearchRequest; slice?: MemoryRecallSlice } {
+    if (!isAgentRuntimeSource(this.runtimeMemoryOrSource)) return { request }
+    const views = this.runtimeMemoryOrSource.forAgent(parent).memoryViews
+    if (views === undefined) return { request }
+    const pinned = views.activeTurn(parent.id)
+    const requestedViewId = request.parentViewId?.trim()
+    if (pinned !== undefined && requestedViewId !== undefined && requestedViewId !== '' && requestedViewId !== pinned.viewId) {
+      throw new Error(`Recall parentViewId does not match the View pinned to this turn: ${pinned.viewId}`)
+    }
+    const parentViewId = requestedViewId === undefined || requestedViewId === '' ? pinned?.viewId : requestedViewId
+    if (parentViewId === undefined) return { request }
+    const slice = views.recallSlice(parentViewId, request.viewNodeId, request.memoryBodyIds)
+    if (slice.memoryBodyIds.length === 0) throw new Error(`parent Memory View has no Recall-authorized Memory Spaces: ${parentViewId}`)
+    return {
+      request: { ...request, parentViewId, memoryBodyIds: [...slice.memoryBodyIds] },
+      slice,
+    }
   }
 
   private runtimeMemoryFor(parent: HostAgent): RuntimeMemoryController {
