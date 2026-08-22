@@ -52,6 +52,31 @@ interface RuntimeMemoryFile {
   entries: RuntimeMemoryEntry[]
 }
 
+type RuntimeMemoryResultFields = Pick<RuntimeMemoryMutationResult, 'message' | 'added' | 'replaced' | 'removed'>
+
+interface PreparedRuntimeMemoryMutation {
+  changed: boolean
+  projectedEntries: RuntimeMemoryEntry[]
+  compactableEntries: RuntimeMemoryEntry[]
+  pendingEntry?: RuntimeMemoryEntry
+  excludedEntry?: RuntimeMemoryEntry
+  fields: RuntimeMemoryResultFields
+}
+
+/** Host-only plan for capacity maintenance; this is not a Tool or RPC action. */
+export interface RuntimeMemoryMaintenancePlan {
+  revision: string
+  action: RuntimeMemoryAction
+  target: RuntimeMemoryTarget
+  entries: RuntimeMemoryEntry[]
+  pending?: RuntimeMemoryCompactedEntry
+  excluded?: RuntimeMemoryEntry
+  used: number
+  projected: number
+  limit: number
+  requiresMaintenance: boolean
+}
+
 export class RuntimeMemoryCapacityError extends Error {
   constructor(
     readonly target: RuntimeMemoryTarget,
@@ -118,6 +143,121 @@ function markdown(entries: readonly RuntimeMemoryEntry[], target: RuntimeMemoryT
 
 function revision(file: RuntimeMemoryFile): string {
   return createHash('sha256').update(JSON.stringify(file)).digest('hex')
+}
+
+function prepareMutation(
+  before: readonly RuntimeMemoryEntry[],
+  request: RuntimeMemoryMutation,
+  now: string,
+): PreparedRuntimeMemoryMutation {
+  if (!isTarget(request.target)) throw new Error('target must be memory or user')
+  if (!['add', 'replace', 'remove'].includes(request.action)) throw new Error('action must be add, replace, or remove')
+  if (request.importance !== undefined && !isImportance(request.importance)) throw new Error('importance must be critical, normal, or low')
+  const entries = before.map(entry => ({ ...entry }))
+
+  if (request.action === 'add') {
+    const content = normalizeContent(request.content, 'content')
+    const duplicate = entries.find(entry => entry.target === request.target && entry.content === content)
+    if (duplicate !== undefined) {
+      return {
+        changed: false,
+        projectedEntries: entries,
+        compactableEntries: entries.filter(entry => entry.target === request.target),
+        fields: { message: 'Entry already exists (no duplicate added).', added: duplicate.content },
+      }
+    }
+    const pendingEntry: RuntimeMemoryEntry = {
+      content,
+      created_at: now,
+      updated_at: now,
+      target: request.target,
+      importance: request.importance ?? 'normal',
+    }
+    return {
+      changed: true,
+      projectedEntries: [...entries, pendingEntry],
+      compactableEntries: entries.filter(entry => entry.target === request.target),
+      pendingEntry,
+      fields: { message: 'Entry added.', added: content },
+    }
+  }
+
+  const oldText = normalizeContent(request.oldText, 'oldText')
+  const matches = entries.map((entry, index) => entry.target === request.target && entry.content.includes(oldText) ? index : -1).filter(index => index >= 0)
+  if (matches.length === 0) throw new Error(`No ${request.target} entry contains ${JSON.stringify(oldText)}.`)
+  if (matches.length > 1) throw new Error(`Multiple ${request.target} entries contain ${JSON.stringify(oldText)}; use a unique substring.`)
+  const index = matches[0]!
+  const previous = entries[index]!
+  const compactableEntries = entries.filter((entry, entryIndex) => entry.target === request.target && entryIndex !== index)
+
+  if (request.action === 'replace') {
+    const content = normalizeContent(request.content, 'content')
+    const pendingEntry: RuntimeMemoryEntry = {
+      ...previous,
+      content,
+      updated_at: now,
+      importance: request.importance ?? previous.importance,
+    }
+    entries[index] = pendingEntry
+    return {
+      changed: true,
+      projectedEntries: entries,
+      compactableEntries,
+      pendingEntry,
+      excludedEntry: previous,
+      fields: { message: 'Entry replaced.', replaced: { from: previous.content, to: content } },
+    }
+  }
+
+  return {
+    changed: true,
+    projectedEntries: entries.filter((_, entryIndex) => entryIndex !== index),
+    compactableEntries,
+    excludedEntry: previous,
+    fields: { message: 'Entry removed.', removed: previous.content },
+  }
+}
+
+function compactionCandidates(
+  compacted: readonly RuntimeMemoryCompactedEntry[],
+  existing: readonly RuntimeMemoryEntry[],
+  target: RuntimeMemoryTarget,
+  now: string,
+): RuntimeMemoryEntry[] {
+  const seen = new Set<string>()
+  return compacted.map((entry): RuntimeMemoryEntry => {
+    const content = normalizeContent(entry.content, 'compacted content')
+    if (!isImportance(entry.importance)) throw new Error('compacted importance must be critical, normal, or low')
+    if (seen.has(content)) throw new Error('compacted runtime memory contains duplicate entries')
+    seen.add(content)
+    const unchanged = existing.find(current => current.content === content)
+    return {
+      content,
+      created_at: unchanged?.created_at ?? now,
+      updated_at: unchanged?.updated_at ?? now,
+      target,
+      importance: entry.importance,
+    }
+  })
+}
+
+function packCompactionCandidates(
+  replacements: readonly RuntimeMemoryEntry[],
+  target: RuntimeMemoryTarget,
+  maxBytes: number,
+): RuntimeMemoryEntry[] {
+  const priority: Record<RuntimeMemoryImportance, number> = { critical: 0, normal: 1, low: 2 }
+  const ranked = replacements.map((entry, index) => ({ entry, index })).sort((left, right) => (
+    priority[left.entry.importance] - priority[right.entry.importance] || left.index - right.index
+  ))
+  const selected = new Set<number>()
+  const packed: RuntimeMemoryEntry[] = []
+  for (const candidate of ranked) {
+    if (byteCount([...packed, candidate.entry], target) > maxBytes) continue
+    packed.push(candidate.entry)
+    selected.add(candidate.index)
+  }
+  return replacements.filter((_, index) => selected.has(index))
 }
 
 function sleepSync(milliseconds: number): void {
@@ -206,7 +346,7 @@ WRITE PROTOCOL
 - Before writing, compare against the entries below. Use action="add" only for a new independent fact. Use action="replace" with a short unique old_text when correcting, consolidating, or making an existing entry more precise. Use action="remove" with a short unique old_text only when the user withdraws it or there is direct evidence that it is obsolete or wrong; absence from recent conversation is not evidence.
 - Choose target="user" only for the user profile and target="memory" only for project/environment knowledge. Use importance="critical" for explicit must/always/never rules or strong preferences, "low" for transient or one-time facts that are still worth keeping, and "normal" otherwise.
 - Entries are separated by a standalone §. old_text must uniquely identify one entry. Tool receipts are sufficient; do not echo either complete file after a successful mutation.
-- If USER.md reaches capacity, the tool conservatively consolidates the local profile without sending preferences to Mnemon Memory Spaces. If MEMORY.md reaches capacity, the tool archives committed working memories into one or more semantically appropriate Memory Spaces, compacts only after archival succeeds, verifies that no concurrent revision was overwritten, then retries the add. Never evade either limit with direct file edits.
+- If USER.md reaches capacity, the tool conservatively consolidates the local profile without sending preferences to Mnemon Memory Spaces. If MEMORY.md reaches capacity, the tool archives committed working memories into one or more semantically appropriate Memory Spaces, then atomically applies compaction and the pending mutation only when the reviewed revision is still current. Never evade either limit with direct file edits.
 
 Contents of USER.md (user profile; ${userUsage.used}/${userUsage.limit} UTF-8 bytes)
 <runtime-memory-file name="USER.md">
@@ -227,6 +367,65 @@ IMPORTANT: USER.md and MEMORY.md above are always relevant when applicable. Foll
     return operation
   }
 
+  /** Resolve exactly which committed entries survive a blocked mutation and are safe to compact. */
+  planMaintenance(request: RuntimeMemoryMutation): Promise<RuntimeMemoryMaintenancePlan> {
+    const operation = this.queue.then(() => this.withLock(() => {
+      const file = this.readSource()
+      const prepared = prepareMutation(file.entries, request, this.now().toISOString())
+      const used = byteCount(file.entries, request.target)
+      const projected = byteCount(prepared.projectedEntries, request.target)
+      const limit = RUNTIME_MEMORY_LIMITS[request.target]
+      return {
+        revision: revision(file),
+        action: request.action,
+        target: request.target,
+        entries: prepared.compactableEntries.map(entry => ({ ...entry })),
+        ...(prepared.pendingEntry === undefined ? {} : { pending: { content: prepared.pendingEntry.content, importance: prepared.pendingEntry.importance } }),
+        ...(prepared.excludedEntry === undefined ? {} : { excluded: { ...prepared.excludedEntry } }),
+        used,
+        projected,
+        limit,
+        requiresMaintenance: prepared.changed && projected > limit,
+      }
+    }))
+    this.queue = operation.catch(() => undefined)
+    return operation
+  }
+
+  /** Commit LLM compaction and the original mutation together, or leave every local file unchanged. */
+  compactAndMutate(
+    expectedRevision: string,
+    request: RuntimeMemoryMutation,
+    compacted: RuntimeMemoryCompactedEntry[],
+    maxCompactedBytes = RUNTIME_MEMORY_LIMITS[request.target],
+  ): Promise<RuntimeMemoryMutationResult> {
+    const operation = this.queue.then(() => this.withLock(() => {
+      const file = this.readSource()
+      if (revision(file) !== expectedRevision) throw new RuntimeMemoryConflictError()
+      const now = this.now().toISOString()
+      const prepared = prepareMutation(file.entries, request, now)
+      if (!Number.isInteger(maxCompactedBytes) || maxCompactedBytes < 0 || maxCompactedBytes > RUNTIME_MEMORY_LIMITS[request.target]) throw new Error('compaction byte budget is invalid')
+      if (!prepared.changed) return this.result(request.target, prepared.projectedEntries, prepared.fields)
+      const replacements = compactionCandidates(compacted, prepared.compactableEntries, request.target, now)
+      if (prepared.pendingEntry !== undefined && replacements.some(entry => entry.content === prepared.pendingEntry!.content)) {
+        throw new Error('compacted runtime memory duplicates the pending mutation')
+      }
+      if (prepared.excludedEntry !== undefined && replacements.some(entry => entry.content === prepared.excludedEntry!.content)) {
+        throw new Error('compacted runtime memory reintroduces the replaced or removed entry')
+      }
+      const fitted = packCompactionCandidates(replacements, request.target, maxCompactedBytes)
+      const targetEntries = [...fitted, ...(prepared.pendingEntry === undefined ? [] : [prepared.pendingEntry])]
+      const entries = [...file.entries.filter(entry => entry.target !== request.target), ...targetEntries]
+      const used = byteCount(entries, request.target)
+      const limit = RUNTIME_MEMORY_LIMITS[request.target]
+      if (used > limit) throw new RuntimeMemoryCapacityError(request.target, byteCount(file.entries, request.target), used, limit)
+      this.persist({ version: RUNTIME_MEMORY_VERSION, entries })
+      return this.result(request.target, entries, prepared.fields)
+    }))
+    this.queue = operation.catch(() => undefined)
+    return operation
+  }
+
   /** Apply an LLM-produced compaction only to the exact snapshot it reviewed. */
   compactTarget(
     expectedRevision: string,
@@ -240,35 +439,10 @@ IMPORTANT: USER.md and MEMORY.md above are always relevant when applicable. Foll
       if (!Number.isInteger(maxBytes) || maxBytes < 0 || maxBytes > RUNTIME_MEMORY_LIMITS[target]) throw new Error('compaction byte budget is invalid')
       const now = this.now().toISOString()
       const existing = file.entries.filter(entry => entry.target === target)
-      const seen = new Set<string>()
-      const replacements = compacted.map((entry): RuntimeMemoryEntry => {
-        const content = normalizeContent(entry.content, 'compacted content')
-        if (!isImportance(entry.importance)) throw new Error('compacted importance must be critical, normal, or low')
-        if (seen.has(content)) throw new Error('compacted runtime memory contains duplicate entries')
-        seen.add(content)
-        const unchanged = existing.find(current => current.content === content)
-        return {
-          content,
-          created_at: unchanged?.created_at ?? now,
-          updated_at: unchanged?.updated_at ?? now,
-          target,
-          importance: entry.importance,
-        }
-      })
+      const replacements = compactionCandidates(compacted, existing, target, now)
       // The worker supplies semantic candidates; deterministic packing owns exact
       // UTF-8 accounting so the LLM never has to count bytes or delimiters.
-      const priority: Record<RuntimeMemoryImportance, number> = { critical: 0, normal: 1, low: 2 }
-      const ranked = replacements.map((entry, index) => ({ entry, index })).sort((left, right) => (
-        priority[left.entry.importance] - priority[right.entry.importance] || left.index - right.index
-      ))
-      const selected = new Set<number>()
-      const packed: RuntimeMemoryEntry[] = []
-      for (const candidate of ranked) {
-        if (byteCount([...packed, candidate.entry], target) > maxBytes) continue
-        packed.push(candidate.entry)
-        selected.add(candidate.index)
-      }
-      const fitted = replacements.filter((_, index) => selected.has(index))
+      const fitted = packCompactionCandidates(replacements, target, maxBytes)
       const entries = [...file.entries.filter(entry => entry.target !== target), ...fitted]
       const used = byteCount(entries, target)
       const limit = RUNTIME_MEMORY_LIMITS[target]
@@ -289,56 +463,20 @@ IMPORTANT: USER.md and MEMORY.md above are always relevant when applicable. Foll
   }
 
   private mutateLocked(request: RuntimeMemoryMutation): RuntimeMemoryMutationResult {
-    if (!isTarget(request.target)) throw new Error('target must be memory or user')
-    if (!['add', 'replace', 'remove'].includes(request.action)) throw new Error('action must be add, replace, or remove')
-    if (request.importance !== undefined && !isImportance(request.importance)) throw new Error('importance must be critical, normal, or low')
     const file = this.readSource()
-    const before = file.entries
-    const now = this.now().toISOString()
-    let entries = before.map(entry => ({ ...entry }))
-    let result: Pick<RuntimeMemoryMutationResult, 'message' | 'added' | 'replaced' | 'removed'>
-
-    if (request.action === 'add') {
-      const content = normalizeContent(request.content, 'content')
-      const duplicate = entries.find(entry => entry.target === request.target && entry.content === content)
-      if (duplicate !== undefined) {
-        return this.result(request.target, entries, { message: 'Entry already exists (no duplicate added).', added: duplicate.content })
-      }
-      entries.push({ content, created_at: now, updated_at: now, target: request.target, importance: request.importance ?? 'normal' })
-      result = { message: 'Entry added.', added: content }
-    } else {
-      const oldText = normalizeContent(request.oldText, 'oldText')
-      const matches = entries.map((entry, index) => entry.target === request.target && entry.content.includes(oldText) ? index : -1).filter(index => index >= 0)
-      if (matches.length === 0) throw new Error(`No ${request.target} entry contains ${JSON.stringify(oldText)}.`)
-      if (matches.length > 1) throw new Error(`Multiple ${request.target} entries contain ${JSON.stringify(oldText)}; use a unique substring.`)
-      const index = matches[0]!
-      const previous = entries[index]!
-      if (request.action === 'replace') {
-        const content = normalizeContent(request.content, 'content')
-        entries[index] = {
-          ...previous,
-          content,
-          updated_at: now,
-          importance: request.importance ?? previous.importance,
-        }
-        result = { message: 'Entry replaced.', replaced: { from: previous.content, to: content } }
-      } else {
-        entries = entries.filter((_, entryIndex) => entryIndex !== index)
-        result = { message: 'Entry removed.', removed: previous.content }
-      }
-    }
-
-    const used = byteCount(entries, request.target)
+    const prepared = prepareMutation(file.entries, request, this.now().toISOString())
+    if (!prepared.changed) return this.result(request.target, prepared.projectedEntries, prepared.fields)
+    const used = byteCount(prepared.projectedEntries, request.target)
     const limit = RUNTIME_MEMORY_LIMITS[request.target]
-    if (used > limit) throw new RuntimeMemoryCapacityError(request.target, byteCount(before, request.target), used, limit)
-    this.persist({ version: RUNTIME_MEMORY_VERSION, entries })
-    return this.result(request.target, entries, result)
+    if (used > limit) throw new RuntimeMemoryCapacityError(request.target, byteCount(file.entries, request.target), used, limit)
+    this.persist({ version: RUNTIME_MEMORY_VERSION, entries: prepared.projectedEntries })
+    return this.result(request.target, prepared.projectedEntries, prepared.fields)
   }
 
   private result(
     target: RuntimeMemoryTarget,
     entries: readonly RuntimeMemoryEntry[],
-    fields: Pick<RuntimeMemoryMutationResult, 'message' | 'added' | 'replaced' | 'removed'>,
+    fields: RuntimeMemoryResultFields,
   ): RuntimeMemoryMutationResult {
     return {
       success: true,
