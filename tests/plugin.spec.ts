@@ -28,6 +28,7 @@ function context(options: { connection?: boolean; workspaceRegistry?: boolean } 
   const tools: unknown[] = []
   const sections: unknown[] = []
   const contexts: unknown[] = []
+  const variables: unknown[] = []
   const channels: unknown[] = []
   const connection = {
     rpc: {
@@ -57,7 +58,7 @@ function context(options: { connection?: boolean; workspaceRegistry?: boolean } 
         return {
           section: (section: unknown) => { sections.push(section) },
           context: (context: unknown) => { contexts.push(context) },
-          variable: vi.fn(),
+          variable: vi.fn((...args: unknown[]) => { variables.push(args) }),
         }
       }
       if (name === 'workspaceRegistry' && 'workspaceRegistry' in ctx) return ctx.workspaceRegistry
@@ -72,7 +73,7 @@ function context(options: { connection?: boolean; workspaceRegistry?: boolean } 
   }
   if (options.connection !== false) Object.assign(ctx, { connection })
   if (options.workspaceRegistry !== false) Object.assign(ctx, { workspaceRegistry: { get: vi.fn(), list: vi.fn(() => []) } })
-  return { ctx, tools, sections, contexts, channels, registrations, commands, listeners }
+  return { ctx, tools, sections, contexts, variables, channels, registrations, commands, listeners }
 }
 
 describe('dsh-mnemon plugin composition', () => {
@@ -100,7 +101,8 @@ describe('dsh-mnemon plugin composition', () => {
 
     expect(fixture.tools).toHaveLength(14)
     expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:routing' })])
-    expect(fixture.contexts).toEqual([expect.objectContaining({ name: 'mnemon:runtime-memory' })])
+    expect(fixture.contexts).toEqual([])
+    expect(fixture.variables).toHaveLength(1)
     expect(fixture.commands).toEqual([expect.objectContaining({ name: 'mnemon' })])
     expect(fixture.channels).toEqual([])
   })
@@ -163,9 +165,8 @@ describe('dsh-mnemon plugin composition', () => {
     ]))
     expect(fixture.tools.every(tool => (tool as { output: { schema: { type: string } } }).output.schema.type !== 'json')).toBe(true)
     expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:routing' })])
-    expect(fixture.contexts).toEqual([
-      expect.objectContaining({ name: 'mnemon:runtime-memory', text: expect.any(Function) }),
-    ])
+    expect(fixture.contexts).toEqual([])
+    expect(fixture.variables).toHaveLength(1)
     const guidance = (fixture.sections[0] as { text: () => string }).text()
     expect(guidance).toContain('Call mnemon_recall')
     expect(guidance).toContain('never infer a missing historical rule')
@@ -213,7 +214,7 @@ describe('dsh-mnemon plugin composition', () => {
       expect.arrayContaining(['/dsh-mnemon-activation', expect.anything(), { authority: 'trusted-host' }]),
       expect.arrayContaining(['/dsh-mnemon-pack', expect.anything(), { authority: 'loopback' }]),
     ]))
-    expect(fixture.contexts).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'mnemon:runtime-memory' })]))
+    expect(fixture.contexts).toEqual([])
   })
 
   it('offers compact recent-document suggestions when a cross-language query has no exact match', async () => {
@@ -253,7 +254,7 @@ describe('dsh-mnemon plugin composition', () => {
     expect(fixture.sections).toEqual([
       expect.objectContaining({ name: 'mnemon:routing', text: expect.any(Function) }),
     ])
-    expect(fixture.contexts).toEqual([expect.objectContaining({ name: 'mnemon:runtime-memory' })])
+    expect(fixture.contexts).toEqual([])
     expect((fixture.sections[0] as { text: () => string }).text()).toBe('')
     expect(fixture.channels).toHaveLength(5)
   })

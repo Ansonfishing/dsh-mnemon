@@ -27,6 +27,7 @@ function userMessage(text = 'Continue the project'): HostUserMessage {
 function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: { taskModelRoute?: boolean } = {}) {
   const agentListeners = new Map<string, Listener>()
   const rootListeners = new Map<string, Listener>()
+  const agentContexts: Array<{ name: string; order: number; text: () => string }> = []
   const events: HostSessionEvent[] = []
   const followup = vi.fn()
   const steer = vi.fn()
@@ -56,6 +57,14 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
       const cleanup = callback()
       return () => cleanup?.()
     }),
+    get: vi.fn((name: string) => name === 'systemPrompt'
+      ? {
+          context: (value: { name: string; order: number; text: () => string }) => {
+            agentContexts.push(value)
+            return () => undefined
+          },
+        }
+      : undefined),
   } as unknown as HostAgentContext
   const agent = {
     id: 'session-1',
@@ -128,7 +137,18 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
       return () => rootListeners.delete(name)
     }),
   } as unknown as HostContextShape
-  const lifecycle = new MnemonLifecycle(ctx, coordinator, config)
+  const memoryViews = {
+    beginTurn: vi.fn(async (turnId: string, scope: object) => {
+      const turn = turnId.slice(turnId.lastIndexOf(':') + 1)
+      return { turnId, viewId: `view-${turn}`, viewDigest: `digest-${turn}`, scope, startedAt: '2026-08-23T00:00:00.000Z' }
+    }),
+    wake: vi.fn((viewId: string) => ({ viewId, viewDigest: viewId.replace('view-', 'digest-'), text: `Pinned Wake ${viewId}`, sections: [] })),
+    endTurn: vi.fn(() => true),
+  }
+  const runtimeSource = {
+    forAgent: vi.fn(() => ({ runtimeMemory: {}, memoryViews })),
+  }
+  const lifecycle = new MnemonLifecycle(ctx, coordinator, config, runtimeSource as never)
   const stop = lifecycle.start()
 
   const preStep = async (messages: HostUserMessage[], turn: number, step = 1): Promise<HostPreStepDecision> => {
@@ -141,12 +161,40 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     if (listener === undefined) throw new Error('turn-stopping listener missing')
     await listener({ agent, turn, signal: new AbortController().signal })
   }
-  return { agent, agentListeners, events, followup, steer, lifecycle, service, coordinator, createTaskAgent, disposedTaskAgents, defaultModel, llm, agentPresets, preStep, turnStopping, stop }
+  return { agent, agentListeners, agentContexts, events, followup, steer, lifecycle, service, coordinator, memoryViews, runtimeSource, createTaskAgent, disposedTaskAgents, defaultModel, llm, agentPresets, preStep, turnStopping, stop }
 }
 
 afterEach(() => vi.useRealTimers())
 
 describe('Mnemon DSH lifecycle integration', () => {
+  it('pins one immutable Wake across every model step and releases it at the turn boundary', async () => {
+    const value = fixture()
+    const context = value.agentContexts[0]
+    expect(context).toMatchObject({ name: 'mnemon:runtime-memory', order: 145 })
+    expect(context?.text()).toBe('')
+
+    await value.preStep([userMessage('First step')], 7, 1)
+    expect(context?.text()).toBe('Pinned Wake view-7')
+    expect(value.memoryViews.beginTurn).toHaveBeenCalledOnce()
+    expect(value.memoryViews.beginTurn).toHaveBeenCalledWith('session-1:7', {
+      storage: 'global',
+      sessionId: 'session-1',
+      agentId: 'session-1',
+    })
+
+    await value.preStep([userMessage('Tool continuation')], 7, 2)
+    expect(context?.text()).toBe('Pinned Wake view-7')
+    expect(value.memoryViews.beginTurn).toHaveBeenCalledOnce()
+
+    await value.turnStopping(7)
+    expect(value.memoryViews.endTurn).toHaveBeenCalledWith('session-1:7')
+    expect(context?.text()).toBe('')
+
+    await value.preStep([userMessage('Next turn')], 8, 1)
+    expect(context?.text()).toBe('Pinned Wake view-8')
+    expect(value.memoryViews.beginTurn).toHaveBeenCalledTimes(2)
+  })
+
   it('offers an active root Agent to standalone WebUI maintenance when no session is selected', () => {
     const value = fixture()
 
@@ -599,6 +647,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     const prompt = userMessage()
     const decision = await value.preStep([prompt], 1)
     expect(decision).toEqual({ kind: 'enter', messages: [prompt] })
+    expect(value.memoryViews.beginTurn).toHaveBeenCalledOnce()
     expect(value.steer).not.toHaveBeenCalled()
     await expect(value.lifecycle.supervise('session-1', 'Durable preference')).resolves.toMatchObject({ delegated: true })
   })

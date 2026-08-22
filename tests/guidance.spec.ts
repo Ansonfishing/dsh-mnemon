@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderContextSnapshot, renderPrompt, type PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import type { HostAgent, HostContextShape } from '../src/contracts.ts'
-import { registerAgentRuntimeMemoryContext, registerRuntimeMemoryContext, RUNTIME_MEMORY_CONTEXT_NAME } from '../src/guidance.ts'
+import { registerAgentMemoryViewContext, registerAgentRuntimeMemoryContext, registerRuntimeMemoryContext, RUNTIME_MEMORY_CONTEXT_NAME } from '../src/guidance.ts'
 import type { RuntimeMemoryController } from '../src/runtime-memory.ts'
 
 describe('runtime memory prompt interpolation', () => {
@@ -62,6 +62,20 @@ describe('runtime memory prompt interpolation', () => {
 })
 
 describe('agent-scoped runtime memory context', () => {
+  it('renders only the currently pinned View Wake and preserves interpolation as literal data', () => {
+    const context = vi.fn()
+    const agent = {
+      ctx: { get: vi.fn((name: string) => name === 'systemPrompt' ? { context } : undefined) },
+    } as unknown as HostAgent
+    let wake = { viewId: 'view-1', viewDigest: 'digest-1', text: 'Pinned {{model}} memory.', sections: [] }
+
+    registerAgentMemoryViewContext(agent, () => wake)
+    const registered = context.mock.calls[0]![0]
+    expect(registered?.text()).toBe('Pinned {{mnemon_runtime_memory_literal_open_braces}}model}} memory.')
+    wake = { viewId: 'view-1', viewDigest: 'digest-1', text: 'Same pinned memory.', sections: [] }
+    expect(registered?.text()).toBe('Same pinned memory.')
+  })
+
   it('registers a same-named per-Agent runtime context that resolves the current workspace lazily', () => {
     const dispose = vi.fn()
     const context = vi.fn((_value: { name: string; order: number; text: () => string }) => dispose)

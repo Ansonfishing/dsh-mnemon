@@ -149,7 +149,7 @@ export class MemoryViewManager {
   private readonly turns = new Map<string, MemoryTurnContext>()
   private readonly pendingReceipts = new Map<string, MemoryReceipt>()
   private current: MemoryView | undefined
-  private publishing: Promise<MemoryView> | undefined
+  private readonly publishing = new Map<string, Promise<MemoryView>>()
   private failure: string | undefined
   private readonly now: () => Date
   private readonly maxViews: number
@@ -272,7 +272,9 @@ export class MemoryViewManager {
 
   /** Strict publication API used by tests, diagnostics, and initial startup. */
   async publish(scope?: MemoryOperationScope): Promise<MemoryView> {
-    if (this.publishing !== undefined) return this.publishing
+    const publicationKey = scope === undefined ? '' : canonical(scope)
+    const inFlight = this.publishing.get(publicationKey)
+    if (inFlight !== undefined) return inFlight
     const receiptIds = [...this.pendingReceipts.keys()]
     const publication = this.buildCandidate(scope).then(candidate => {
       const current = this.current
@@ -288,11 +290,11 @@ export class MemoryViewManager {
       this.collect()
       return candidate
     })
-    this.publishing = publication
+    this.publishing.set(publicationKey, publication)
     try {
       return await publication
     } finally {
-      if (this.publishing === publication) this.publishing = undefined
+      if (this.publishing.get(publicationKey) === publication) this.publishing.delete(publicationKey)
     }
   }
 

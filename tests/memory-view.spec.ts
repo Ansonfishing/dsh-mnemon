@@ -92,6 +92,33 @@ describe('MemoryViewManager', () => {
     expect(project).toHaveBeenCalledTimes(2)
   })
 
+  it('does not coalesce concurrent publications from different workspace scopes', async () => {
+    const releases = new Map<string, () => void>()
+    const { views } = harness([{
+      layerId: 'runtime',
+      mode: 'exact',
+      project: async context => {
+        const workspaceId = context.scope?.workspaceId ?? 'unknown'
+        await new Promise<void>(resolve => { releases.set(workspaceId, resolve) })
+        return {
+          revision: workspaceId,
+          nodes: [{ key: 'runtime', kind: 'content', label: 'Runtime', content: `runtime for ${workspaceId}` }],
+        }
+      },
+    }])
+
+    const alpha = views.beginTurn('alpha:1', { storage: 'global', workspaceId: '/workspace/alpha', sessionId: 'alpha' })
+    const beta = views.beginTurn('beta:1', { storage: 'global', workspaceId: '/workspace/beta', sessionId: 'beta' })
+    await vi.waitFor(() => expect(releases.size).toBe(2))
+    releases.get('/workspace/beta')?.()
+    releases.get('/workspace/alpha')?.()
+
+    const [alphaTurn, betaTurn] = await Promise.all([alpha, beta])
+    expect(views.wake(alphaTurn.viewId).text).toBe('runtime for /workspace/alpha')
+    expect(views.wake(betaTurn.viewId).text).toBe('runtime for /workspace/beta')
+    expect(alphaTurn.viewId).not.toBe(betaTurn.viewId)
+  })
+
   it('zooms only through sealed nodes from the requested View', async () => {
     const { views } = harness([{
       layerId: 'runtime',

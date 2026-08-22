@@ -1,6 +1,7 @@
 import type { HostAgent, HostContextShape } from './contracts.ts'
 import type { ResolvedConfig } from './config.ts'
 import type { RuntimeMemoryController } from './runtime-memory.ts'
+import type { MemoryWake } from '../packages/contracts/src/index.ts'
 
 export const GUIDANCE_SECTION_NAME = 'mnemon:routing'
 export const RUNTIME_MEMORY_CONTEXT_NAME = 'mnemon:runtime-memory'
@@ -22,11 +23,16 @@ function scopedSystemPrompt(agent: HostAgent): SystemPromptRegistry | undefined 
   return agent.ctx.get?.('systemPrompt') as SystemPromptRegistry | undefined
 }
 
-function runtimeMemoryPromptText(runtimeMemory: RuntimeMemoryController): string {
-  return runtimeMemory.contextText().replaceAll(
+function memoryPromptText(value: string): string {
+  return value.replaceAll(
     LITERAL_OPEN_BRACES,
     `{{${RUNTIME_MEMORY_LITERAL_OPEN_BRACES_VARIABLE}}}`,
   )
+}
+
+/** Register the non-recursive escape used by both legacy Runtime and View Wake contexts. */
+export function registerMemoryPromptInterpolation(ctx: HostContextShape): void {
+  systemPrompt(ctx)?.variable?.(RUNTIME_MEMORY_LITERAL_OPEN_BRACES_VARIABLE, () => LITERAL_OPEN_BRACES)
 }
 
 export function registerGuidance(ctx: HostContextShape, config?: Pick<ResolvedConfig, 'routingGuidance'>): void {
@@ -42,11 +48,11 @@ export function registerRuntimeMemoryContext(ctx: HostContextShape, runtimeMemor
   const prompt = systemPrompt(ctx)
   // Runtime Memory is quoted user data, so every interpolation opener must be
   // restored through a non-recursive variable substitution instead of parsed.
-  prompt?.variable?.(RUNTIME_MEMORY_LITERAL_OPEN_BRACES_VARIABLE, () => LITERAL_OPEN_BRACES)
+  registerMemoryPromptInterpolation(ctx)
   prompt?.context?.({
     name: RUNTIME_MEMORY_CONTEXT_NAME,
     order: 145,
-    text: () => enabled() ? runtimeMemoryPromptText(runtimeMemory) : '',
+    text: () => enabled() ? memoryPromptText(runtimeMemory.contextText()) : '',
   })
 }
 
@@ -55,7 +61,20 @@ export function registerAgentRuntimeMemoryContext(agent: HostAgent, runtimeMemor
   const dispose = scopedSystemPrompt(agent)?.context?.({
     name: RUNTIME_MEMORY_CONTEXT_NAME,
     order: 145,
-    text: () => enabled() ? runtimeMemoryPromptText(runtimeMemory()) : '',
+    text: () => enabled() ? memoryPromptText(runtimeMemory().contextText()) : '',
+  })
+  return typeof dispose === 'function' ? dispose as () => void : () => {}
+}
+
+/** Project only the immutable Wake pinned by the root Agent lifecycle. */
+export function registerAgentMemoryViewContext(agent: HostAgent, wake: () => MemoryWake | undefined): () => void {
+  const dispose = scopedSystemPrompt(agent)?.context?.({
+    name: RUNTIME_MEMORY_CONTEXT_NAME,
+    order: 145,
+    text: () => {
+      const current = wake()
+      return current === undefined ? '' : memoryPromptText(current.text)
+    },
   })
   return typeof dispose === 'function' ? dispose as () => void : () => {}
 }

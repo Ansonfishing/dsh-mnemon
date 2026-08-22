@@ -2,7 +2,7 @@ import { Config, InteractionConfig, resolveConfig, resolveInteractionConfig, typ
 import { registerCommands } from './commands.ts'
 import type { HostContextShape } from './contracts.ts'
 import { DocumentManager } from './documents.ts'
-import { registerGuidance, registerRuntimeMemoryContext } from './guidance.ts'
+import { registerGuidance, registerMemoryPromptInterpolation } from './guidance.ts'
 import { createRuntimeGraph, LiveMnemonRuntime, type MnemonRuntimeGraph } from './live-runtime.ts'
 import { MnemonLifecycle } from './lifecycle.ts'
 import { registerRpc } from './rpc.ts'
@@ -87,7 +87,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   registerTools(ctx, runtime, coordinator)
   registerCommands(ctx.commands, runtime, coordinator)
   registerGuidance(ctx, resolved)
-  registerRuntimeMemoryContext(ctx, runtime.runtimeMemory, () => runtime.memoryKernel.allows('runtime', 'project', 'automatic'))
+  registerMemoryPromptInterpolation(ctx)
   ctx.inject(['connection'], (webContext) => {
     // `inject` guarantees the service at runtime; retain the defensive guard
     // because HostContextShape also models profiles where it is absent.

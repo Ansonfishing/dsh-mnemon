@@ -18,13 +18,15 @@ import { MnemonSubagentCoordinator, type DelegatedWriteResult } from './subagent
 import { scoreReviewActivity } from './review-activity.ts'
 import { TurnActivityProjection, type TurnMemoryActivity, type TurnMemoryActivitySnapshot } from './activity.ts'
 import type { RuntimeMemoryController } from './runtime-memory.ts'
-import { registerAgentRuntimeMemoryContext } from './guidance.ts'
+import { registerAgentMemoryViewContext } from './guidance.ts'
 import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot, ReviewActivityScore, TaskAgentModelCatalog } from './shared/contracts.ts'
 import type { PreparedMemoryPlacement } from './provider-placement.ts'
 import type { MemoryKernel } from './memory-system/kernel.ts'
+import type { MemoryOperationScope, MemoryTurnContext, MemoryWake } from '../packages/contracts/src/index.ts'
+import type { MemoryViewManager } from '../packages/kernel/src/index.ts'
 
 interface AgentRuntimeSource {
-  forAgent(agent: HostAgent): { runtimeMemory: RuntimeMemoryController; memoryKernel?: MemoryKernel }
+  forAgent(agent: HostAgent): { runtimeMemory: RuntimeMemoryController; memoryKernel?: MemoryKernel; memoryViews?: MemoryViewManager }
 }
 
 interface HostDefaultModelService {
@@ -172,6 +174,7 @@ class MnemonAgentLifecycle {
   private lastPhase: LifecyclePhase = 'idle'
   private lastAt: string | undefined
   private lastError: string | undefined
+  private pinnedView: { turn: number; manager: MemoryViewManager; context: MemoryTurnContext } | undefined
 
   constructor(
     readonly agent: HostAgent,
@@ -179,6 +182,7 @@ class MnemonAgentLifecycle {
     private readonly config: ResolvedConfig,
     private readonly counters: LifecycleCounters,
     source: LifecycleAgentSnapshot['startSource'],
+    private readonly runtimeSource?: AgentRuntimeSource,
   ) {
     this.startSource = source
   }
@@ -186,6 +190,7 @@ class MnemonAgentLifecycle {
   start(): () => void {
     const disposers = [
       this.agent.ctx.on('agent/session-start', ((payload: SessionStartPayload) => {
+        this.releaseView()
         this.cancelIdleReview(true)
         this.turnActivity.clear()
         this.memoryActivity.reset()
@@ -194,9 +199,13 @@ class MnemonAgentLifecycle {
         this.mark('prime')
       }) as never),
       this.agent.ctx.on('agent/pre-step', ((payload: PreStepPayload, next: () => Promise<HostPreStepDecision>) => this.preStep(payload, next)) as never),
-      this.agent.ctx.on('agent/turn-stopping', ((payload: TurnStoppingPayload) => { this.scheduleIdleReview(payload.turn) }) as never),
+      this.agent.ctx.on('agent/turn-stopping', ((payload: TurnStoppingPayload) => {
+        this.releaseView(payload.turn)
+        this.scheduleIdleReview(payload.turn)
+      }) as never),
     ]
     return () => {
+      this.releaseView()
       this.cancelIdleReview(true)
       for (const dispose of disposers.reverse()) dispose()
     }
@@ -238,10 +247,17 @@ class MnemonAgentLifecycle {
     return assistantMessageText(this.agent.session.events, messageId)
   }
 
+  memoryWake(): MemoryWake | undefined {
+    const pinned = this.pinnedView
+    return pinned === undefined ? undefined : pinned.manager.wake(pinned.context.viewId)
+  }
+
   private async preStep(payload: PreStepPayload, next: () => Promise<HostPreStepDecision>): Promise<HostPreStepDecision> {
     if (payload.step === 1) this.cancelIdleReview(true)
     const decision = await next()
-    if (decision.kind === 'reject' || payload.signal.aborted || !this.config.lifecycleEnabled) return decision
+    if (decision.kind === 'reject' || payload.signal.aborted) return decision
+    await this.pinView(payload.turn)
+    if (!this.config.lifecycleEnabled) return decision
     if (this.config.writeEnabled && this.config.writebackMode === 'guided') {
       this.recordTurnMessages(payload.turn, decision.messages)
     }
@@ -268,6 +284,29 @@ class MnemonAgentLifecycle {
     if (this.config.writebackMode === 'guided' && this.config.writeEnabled) this.counters.writebackCues += 1
     this.mark(this.config.recallMode === 'guided' ? 'recall' : 'writeback')
     return { kind: 'enter', messages: [...decision.messages, createPluginMessage(reminder, 'instructions', 'Optional memory recall and remember reminder')] }
+  }
+
+  private async pinView(turn: number): Promise<void> {
+    if (this.pinnedView?.turn === turn) return
+    this.releaseView()
+    const manager = this.runtimeSource?.forAgent(this.agent).memoryViews
+    if (manager === undefined) return
+    const cwd = this.agent.session.header?.cwd?.trim()
+    const scope: MemoryOperationScope = {
+      storage: this.config.storageScope,
+      ...(cwd === undefined || cwd === '' ? {} : { workspaceId: resolve(cwd) }),
+      sessionId: this.agent.id,
+      agentId: this.agent.id,
+    }
+    const context = await manager.beginTurn(`${this.agent.id}:${turn}`, scope)
+    this.pinnedView = { turn, manager, context }
+  }
+
+  private releaseView(turn?: number): void {
+    const pinned = this.pinnedView
+    if (pinned === undefined || (turn !== undefined && pinned.turn !== turn)) return
+    this.pinnedView = undefined
+    pinned.manager.endTurn(pinned.context.turnId)
   }
 
   private scheduleIdleReview(turn: number): void {
@@ -744,17 +783,13 @@ export class MnemonLifecycle {
 
   private install(agent: HostAgent, source: LifecycleAgentSnapshot['startSource']): void {
     if (this.taskAgentIds.has(agent.id) || this.owners.has(agent) || !this.ctx.agents.roots().includes(agent)) return
-    const lifecycle = new MnemonAgentLifecycle(agent, this.coordinator, this.config, this.counters, source)
+    const lifecycle = new MnemonAgentLifecycle(agent, this.coordinator, this.config, this.counters, source, this.runtimeSource)
     let dispose: () => unknown
     dispose = agent.ctx.effect(() => {
       const stop = lifecycle.start()
       const stopRuntimeContext = this.runtimeSource === undefined
         ? () => {}
-        : registerAgentRuntimeMemoryContext(
-            agent,
-            () => this.runtimeSource!.forAgent(agent).runtimeMemory,
-            () => this.runtimeSource!.forAgent(agent).memoryKernel?.allows('runtime', 'project', 'automatic') ?? true,
-          )
+        : registerAgentMemoryViewContext(agent, () => lifecycle.memoryWake())
       return () => {
         stopRuntimeContext()
         stop()
