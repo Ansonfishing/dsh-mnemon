@@ -7,7 +7,7 @@ const descriptor: MemoryLayerDescriptor = {
   description: 'Versioned narrative documents searched first and read in full on demand.',
   role: 'narrative',
   order: 200,
-  capabilities: ['status', 'recall', 'search', 'read', 'browse', 'write', 'archive', 'maintain', 'export', 'import'],
+  capabilities: ['status', 'project', 'recall', 'search', 'read', 'browse', 'write', 'archive', 'maintain', 'export', 'import'],
 }
 
 export const DOCUMENTS_MEMORY_LAYER: Readonly<MemoryLayerDescriptor> = Object.freeze(descriptor)

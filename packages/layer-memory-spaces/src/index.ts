@@ -7,7 +7,7 @@ const descriptor: MemoryLayerDescriptor = {
   description: 'Provider-backed durable evidence recalled across tasks and sessions.',
   role: 'durable-evidence',
   order: 300,
-  capabilities: ['status', 'recall', 'search', 'read', 'browse', 'write', 'graph', 'related', 'link', 'forget', 'maintain', 'export', 'import'],
+  capabilities: ['status', 'project', 'recall', 'search', 'read', 'browse', 'write', 'graph', 'related', 'link', 'forget', 'maintain', 'export', 'import'],
 }
 
 export const MEMORY_SPACES_LAYER: Readonly<MemoryLayerDescriptor> = Object.freeze(descriptor)

@@ -196,6 +196,7 @@ export interface MemoryReceipt {
   strategyId: string
   strategyVersion: string
   operation: string
+  capability: MemoryCapability
   status: MemoryReceiptStatus
   startedAt: string
   finishedAt: string
@@ -205,4 +206,71 @@ export interface MemoryReceipt {
 export interface MemorySystemDescriptor {
   catalog: MemoryCatalogSnapshot
   topology: MemoryTopologySnapshot
+}
+
+export const MEMORY_VIEW_PROJECTION_MODES = ['exact', 'outline', 'query-only'] as const
+export type MemoryViewProjectionMode = typeof MEMORY_VIEW_PROJECTION_MODES[number]
+export type MemoryViewNodeKind = 'root' | 'content' | 'outline' | 'query'
+
+export interface MemoryViewSource {
+  layerId: MemoryLayerId
+  revision: string
+  mode: MemoryViewProjectionMode
+  digest: string
+  nodeIds: string[]
+}
+
+export interface MemoryViewNode {
+  id: string
+  layerId: MemoryLayerId
+  kind: MemoryViewNodeKind
+  label: string
+  childIds: string[]
+  parentId?: string
+  summary?: string
+  content?: string
+  reference?: string
+  metadata?: { [key: string]: MemoryJsonValue }
+}
+
+/** Immutable, JSON-safe projection pinned by one or more user turns. */
+export interface MemoryView {
+  id: string
+  createdAt: string
+  topologyId: string
+  catalogGeneration: number
+  topologyGeneration: number
+  guardGeneration: number
+  sources: MemoryViewSource[]
+  nodes: MemoryViewNode[]
+  digest: string
+}
+
+export interface MemoryWakeSection {
+  layerId: MemoryLayerId
+  mode: MemoryViewProjectionMode
+  nodeIds: string[]
+  text: string
+}
+
+export interface MemoryWake {
+  viewId: string
+  viewDigest: string
+  text: string
+  sections: MemoryWakeSection[]
+}
+
+export interface MemoryZoomResult {
+  viewId: string
+  viewDigest: string
+  node: MemoryViewNode
+  children: MemoryViewNode[]
+}
+
+export interface MemoryTurnContext {
+  turnId: string
+  viewId: string
+  viewDigest: string
+  scope: MemoryOperationScope
+  startedAt: string
 }

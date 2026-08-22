@@ -76,6 +76,10 @@ export class MemoryKernel {
     this.receiptSink = options.receiptSink
   }
 
+  get guardGeneration(): number {
+    return this.currentGuardGeneration
+  }
+
   descriptor(): MemorySystemDescriptor {
     return { catalog: this.catalog.snapshot(), topology: this.topology.snapshot() }
   }
@@ -256,6 +260,7 @@ export class MemoryKernel {
       strategyId: plan.strategyId,
       strategyVersion: plan.strategyVersion,
       operation: plan.operation,
+      capability: request.capability,
       status,
       startedAt,
       finishedAt: this.now().toISOString(),
