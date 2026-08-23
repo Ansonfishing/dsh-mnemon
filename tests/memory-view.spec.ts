@@ -227,6 +227,35 @@ describe('MemoryViewManager', () => {
     expect(views.lastFailure()).toContain('parent is unavailable')
   })
 
+  it('keeps last-valid Views isolated by projection scope', async () => {
+    let failBeta = false
+    const { views } = harness([{
+      layerId: 'runtime',
+      mode: 'exact',
+      project: context => {
+        const workspaceId = context.scope?.workspaceId ?? 'unknown'
+        if (workspaceId === 'beta' && failBeta) throw new Error('beta projection failed')
+        return {
+          revision: workspaceId,
+          nodes: [{ key: 'runtime', kind: 'content', label: 'Runtime', content: `runtime for ${workspaceId}` }],
+        }
+      },
+    }])
+    const alphaScope = { storage: 'global' as const, workspaceId: 'alpha', sessionId: 'alpha' }
+    const betaScope = { storage: 'global' as const, workspaceId: 'beta', sessionId: 'beta' }
+    const alpha = await views.publish(alphaScope)
+
+    failBeta = true
+    await expect(views.reconcile(betaScope)).rejects.toThrow('beta projection failed')
+    expect(views.latest()).toBe(alpha)
+
+    failBeta = false
+    const beta = await views.publish(betaScope)
+    failBeta = true
+    expect(await views.reconcile(betaScope)).toBe(beta)
+    expect(views.wake(beta.id).text).toBe('runtime for beta')
+  })
+
   it('fails closed when an automatically projected Layer has no projector', async () => {
     const { topology, views } = harness([{
       layerId: 'runtime',

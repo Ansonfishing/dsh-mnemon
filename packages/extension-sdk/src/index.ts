@@ -60,7 +60,7 @@ export class MemoryExtensionHost {
     const applied: AttachedTarget[] = []
     try {
       for (const target of this.targets) {
-        target.releases.set(id, this.apply(normalized, target))
+        target.releases.set(id, this.applyChecked(normalized, target))
         applied.push(target)
       }
     } catch (error) {
@@ -74,13 +74,12 @@ export class MemoryExtensionHost {
     let active = true
     return () => {
       if (!active) return
-      active = false
-      if (this.extensions.get(id) !== normalized) return
-      this.extensions.delete(id)
-      for (const target of this.targets) {
-        target.releases.get(id)?.()
-        target.releases.delete(id)
+      if (this.extensions.get(id) !== normalized) {
+        active = false
+        return
       }
+      this.unregister(normalized)
+      active = false
     }
   }
 
@@ -144,6 +143,7 @@ export class MemoryExtensionHost {
               throw error
             }
           }
+          manager.assertProjectionReady()
           for (const [id, releaseProjectors] of projectorReleases) {
             const releasePrevious = target.releases.get(id) ?? (() => {})
             target.releases.set(id, () => {
@@ -201,6 +201,47 @@ export class MemoryExtensionHost {
       reverseDispose(disposers)
       throw error
     }
+  }
+
+  private applyChecked(extension: MemoryExtension, target: AttachedTarget): () => void {
+    const release = this.apply(extension, target)
+    try {
+      target.viewManager?.assertProjectionReady()
+      return release
+    } catch (error) {
+      release()
+      throw error
+    }
+  }
+
+  /** Remove one global extension from every live graph, or restore it everywhere. */
+  private unregister(extension: MemoryExtension): void {
+    const id = extension.descriptor.id
+    const removed: AttachedTarget[] = []
+    try {
+      for (const target of this.targets) {
+        const release = target.releases.get(id)
+        if (release === undefined) continue
+        release()
+        target.releases.delete(id)
+        removed.push(target)
+        target.viewManager?.assertProjectionReady()
+      }
+    } catch (error) {
+      const rollbackFailures: unknown[] = []
+      for (const target of removed.reverse()) {
+        try {
+          target.releases.set(id, this.applyChecked(extension, target))
+        } catch (rollbackError) {
+          rollbackFailures.push(rollbackError)
+        }
+      }
+      if (rollbackFailures.length > 0) {
+        throw new AggregateError([error, ...rollbackFailures], `memory extension ${id} unload failed and could not be fully rolled back`)
+      }
+      throw error
+    }
+    this.extensions.delete(id)
   }
 }
 

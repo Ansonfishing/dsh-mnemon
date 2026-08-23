@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { MemoryExtensionHost } from '../packages/extension-sdk/src/index.ts'
-import { MemoryCatalog, MemoryKernel, MemoryTopologyManager, type MemoryStrategyRegistration } from '../packages/kernel/src/index.ts'
+import { MemoryCatalog, MemoryKernel, MemoryTopologyManager, MemoryViewManager, type MemoryStrategyRegistration } from '../packages/kernel/src/index.ts'
 import { DEFAULT_THREE_TIER_TOPOLOGY, registerDefaultMemorySystem } from '../packages/strategy-default-three-tier/src/index.ts'
 import { defineMemoryStrategyPlugin, replayMemoryStrategy } from '../packages/strategy-sdk/src/index.ts'
 
@@ -45,6 +45,49 @@ describe('Memory extension workspace SDK', () => {
       adapters: [{ descriptor: { id: 'late-adapter', label: 'Late', description: 'Late adapter.', locality: 'local', scopes: ['global'], capabilities: ['recall'] } }],
     })
     expect(catalog.adapter('late-adapter')).toBeUndefined()
+  })
+
+  it('rolls back a projector-only unload that would break an automatic Layer', async () => {
+    const host = new MemoryExtensionHost()
+    const disposeLayer = host.register({
+      descriptor: { id: 'episodes-layer', version: '1', label: 'Episodes layer', description: 'Episodic Layer contribution.' },
+      layers: [{
+        descriptor: { id: 'episodes', label: 'Episodes', description: 'Recent episodic memory.', role: 'episodes', order: 400, capabilities: ['project'] },
+      }],
+    })
+    const disposeProjector = host.register({
+      descriptor: { id: 'episodes-projector', version: '1', label: 'Episodes projector', description: 'Episodic View contribution.' },
+      projectors: [{
+        layerId: 'episodes', mode: 'outline',
+        project: () => ({ revision: 'episodes-1', nodes: [{ key: 'episodes', kind: 'root', label: 'Episodes', summary: 'Recent events.' }] }),
+      }],
+    })
+    const catalog = new MemoryCatalog()
+    registerDefaultMemorySystem(catalog)
+    const attachment = host.attach(catalog)
+    const off = { recall: 'automatic' as const, write: 'automatic' as const, projection: 'off' as const, maintenance: 'automatic' as const }
+    const topology = new MemoryTopologyManager(catalog, {
+      id: 'projector-transaction', strategyId: 'default-three-tier',
+      layers: [
+        ...DEFAULT_THREE_TIER_TOPOLOGY.layers.map(layer => ({ ...layer, participation: off })),
+        { id: 'episodes', enabled: true, participation: { ...off, projection: 'automatic' }, adapterIds: [] },
+      ],
+    })
+    const kernel = new MemoryKernel(catalog, topology)
+    attachment.bindKernel(kernel)
+    const views = new MemoryViewManager(kernel)
+    attachment.bindViewManager(views)
+
+    expect(() => disposeProjector()).toThrow('no View projector: episodes')
+    expect(host.descriptors().map(descriptor => descriptor.id)).toContain('episodes-projector')
+    expect(() => views.assertProjectionReady()).not.toThrow()
+    await expect(views.publish({ storage: 'global' })).resolves.toMatchObject({ sources: [{ layerId: 'episodes' }] })
+
+    topology.configureLayer('episodes', { participation: { projection: 'off' } })
+    expect(() => disposeProjector()).not.toThrow()
+    disposeLayer()
+    attachment.dispose()
+    topology.dispose()
   })
 
   it('defines immutable strategy packages and supports deterministic replay', async () => {

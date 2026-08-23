@@ -140,6 +140,10 @@ function sameScope(left: MemoryOperationScope, right: MemoryOperationScope): boo
   return canonical(left) === canonical(right)
 }
 
+function scopeKey(scope: MemoryOperationScope | undefined): string {
+  return scope === undefined ? '' : canonical(scope)
+}
+
 /**
  * Owns immutable Memory Views and turn pins. Projectors read Authorities, while
  * this manager alone validates and atomically publishes their derived result.
@@ -151,6 +155,7 @@ export class MemoryViewManager {
   private readonly turns = new Map<string, MemoryTurnContext>()
   private readonly pendingReceipts = new Map<string, MemoryReceipt>()
   private current: MemoryView | undefined
+  private readonly currentByScope = new Map<string, MemoryView>()
   private readonly publishing = new Map<string, Promise<MemoryView>>()
   private failure: string | undefined
   private readonly now: () => Date
@@ -345,30 +350,35 @@ export class MemoryViewManager {
       return await this.publish(scope)
     } catch (error) {
       this.failure = error instanceof Error ? error.message : String(error)
-      if (this.current !== undefined) return this.current
+      const retained = this.currentByScope.get(scopeKey(scope))
+      if (retained !== undefined) return retained
       throw error
     }
   }
 
   /** Strict publication API used by tests, diagnostics, and initial startup. */
   async publish(scope?: MemoryOperationScope): Promise<MemoryView> {
-    const publicationKey = scope === undefined ? '' : canonical(scope)
+    const publicationKey = scopeKey(scope)
     const inFlight = this.publishing.get(publicationKey)
     if (inFlight !== undefined) return inFlight
     const receiptIds = [...this.pendingReceipts.keys()]
     const publication = this.buildCandidate(scope).then(candidate => {
-      const current = this.current
-      if (current !== undefined && current.digest === candidate.digest) {
+      const scopedCurrent = this.currentByScope.get(publicationKey)
+      if (scopedCurrent !== undefined && scopedCurrent.digest === candidate.digest) {
+        this.rememberScopeCurrent(publicationKey, scopedCurrent)
         for (const id of receiptIds) this.pendingReceipts.delete(id)
         this.failure = undefined
-        return current
+        return scopedCurrent
       }
-      this.views.set(candidate.id, candidate)
-      this.current = candidate
+      const existing = this.views.get(candidate.id)
+      const published = existing?.digest === candidate.digest ? existing : candidate
+      this.views.set(published.id, published)
+      this.rememberScopeCurrent(publicationKey, published)
+      this.current = published
       for (const id of receiptIds) this.pendingReceipts.delete(id)
       this.failure = undefined
       this.collect()
-      return candidate
+      return published
     })
     this.publishing.set(publicationKey, publication)
     try {
@@ -538,13 +548,27 @@ export class MemoryViewManager {
     return view
   }
 
+  private rememberScopeCurrent(scope: string, view: MemoryView): void {
+    this.currentByScope.delete(scope)
+    this.currentByScope.set(scope, view)
+    while (this.currentByScope.size > this.maxViews) {
+      const oldest = this.currentByScope.keys().next().value as string | undefined
+      if (oldest === undefined) break
+      this.currentByScope.delete(oldest)
+    }
+  }
+
   private collect(): void {
     if (this.views.size <= this.maxViews) return
     const pinned = new Set([...this.turns.values()].map(turn => turn.viewId))
     if (this.current !== undefined) pinned.add(this.current.id)
     for (const id of this.views.keys()) {
       if (this.views.size <= this.maxViews) break
-      if (!pinned.has(id)) this.views.delete(id)
+      if (pinned.has(id)) continue
+      this.views.delete(id)
+      for (const [scope, current] of this.currentByScope) {
+        if (current.id === id) this.currentByScope.delete(scope)
+      }
     }
   }
 }
