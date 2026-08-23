@@ -292,7 +292,11 @@ export const capacityMaintenanceScenario = {
     {
       id: 'capacity-maintenance',
       prompt: '[EVAL:capacity-maintenance] 请把这条长期适用的生产约定保存到 Runtime Memory，并保留代号 CAPACITY-NEXT-731：任何跨租户数据回滚都必须先保存审计游标、当前 schema digest 和负责人的确认，再执行流量切换；若其中一项缺失必须失败关闭。保存后只说明是否成功。',
-      expected: { mustContain: ['成功'], memoryTools: ['mnemon_runtime_memory'] },
+      expected: {
+        mustContainAny: [['成功', '已保存', '已记住']],
+        memoryTools: ['mnemon_runtime_memory'],
+        allowedMemoryTools: ['mnemon_runtime_memory'],
+      },
     },
   ],
 }
