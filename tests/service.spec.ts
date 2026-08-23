@@ -357,6 +357,106 @@ describe('MnemonService', () => {
     )
   })
 
+  it('recovers structured exact evidence after an explicit smart search misses it', async () => {
+    const process = vi.fn<ProcessRunner>(async (_command, args) => {
+      if (args.includes('search')) return {
+        stdout: JSON.stringify([
+          { id: 'target', content: '2026-06-02 的演练发现直接从 12% 升到 100% 会掩盖租户倾斜，因此增加 35% 与 65% 两个阶段。', score: 1 },
+          { id: 'partial', content: 'Project Lantern 当前 canary 是 12%。', score: 0.8 },
+        ]),
+        stderr: '', exitCode: 0,
+      }
+      return {
+        stdout: JSON.stringify({ results: [{ id: 'incident', content: 'ORCHID-47 是一次生产事故。', score: 0.9 }] }),
+        stderr: '', exitCode: 0,
+      }
+    })
+    const config = resolveConfig({ cliPath: '/fake/mnemon', dataDir: populatedDataDir(), store: 'work' })
+    const runner = createRunner(config, process)
+    const service = new MnemonService(runner, config, new MemoryBodyRegistry(runner, true))
+
+    const result = await service.search({
+      query: '哪次演练或事故导致灰度增加 35% 和 65% 阶段？直接从 12% 升到 100% 暴露了什么故障？',
+      limit: 3,
+    })
+
+    expect(result.results.map(insight => insight.id)).toEqual(['target', 'incident'])
+    expect(JSON.stringify(result.results)).not.toContain('当前 canary')
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining([
+      'search', '35% 65% 12% 100%', '--limit', '3',
+    ]), expect.anything())
+  })
+
+  it('does not run exact-anchor recovery when smart search already found covering evidence', async () => {
+    const process = vi.fn<ProcessRunner>(async () => ({
+      stdout: JSON.stringify({ results: [{
+        id: 'target',
+        content: '2026-06-02 的演练发现直接从 12% 升到 100% 会掩盖租户倾斜，因此增加 35% 与 65% 两个阶段。',
+        score: 0.7,
+      }] }),
+      stderr: '', exitCode: 0,
+    }))
+    const config = resolveConfig({ cliPath: '/fake/mnemon', dataDir: populatedDataDir(), store: 'work' })
+    const runner = createRunner(config, process)
+    const service = new MnemonService(runner, config, new MemoryBodyRegistry(runner, true))
+
+    await expect(service.search({ query: '35% 和 65% 两档来自哪次从 12% 到 100% 的演练？' })).resolves.toMatchObject({
+      results: [{ id: 'target' }],
+    })
+    expect(process).toHaveBeenCalledTimes(1)
+    expect(process.mock.calls[0]![1]).toContain('recall')
+  })
+
+  it('keeps keyword searches single-pass even when the query contains exact anchors', async () => {
+    const process = vi.fn<ProcessRunner>(async () => ({ stdout: '[]', stderr: '', exitCode: 0 }))
+    const config = resolveConfig({ cliPath: '/fake/mnemon', dataDir: populatedDataDir(), store: 'work' })
+    const runner = createRunner(config, process)
+    const service = new MnemonService(runner, config, new MemoryBodyRegistry(runner, true))
+
+    await service.search({ query: 'ORCHID-31 17', mode: 'keyword' })
+    expect(process).toHaveBeenCalledTimes(1)
+    expect(process.mock.calls[0]![1]).toEqual(expect.arrayContaining(['search', 'ORCHID-31 17']))
+  })
+
+  it('does not duplicate remote Provider calls during local exact-anchor recovery', async () => {
+    const { service } = fixture()
+    const provider = {
+      id: 'openviking' as const,
+      status: vi.fn(async () => ({ healthy: true })),
+      search: vi.fn(async () => ({ results: [{ id: 'remote-incident', content: 'ORCHID-47 是一次生产事故。' }] })),
+      graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
+      list: vi.fn(async () => []),
+      remember: vi.fn(async () => ({ action: 'stored' })),
+    }
+    ;(service as unknown as { providers: Map<string, typeof provider> }).providers.set('openviking', provider)
+    await service.createBody({
+      name: 'Team memory', description: 'Shared provider memory.', active: true, providerId: 'openviking',
+      connection: { endpoint: 'http://127.0.0.1:1933', targetUri: 'viking://user/team/memories' },
+    })
+    provider.search.mockClear()
+
+    await service.search({ query: '哪次事故涉及 35% 和 65%，并且从 12% 直接升到 100%？' })
+    expect(provider.search).toHaveBeenCalledTimes(1)
+  })
+
+  it('retains the original smart result if optional exact-anchor recovery is unavailable', async () => {
+    const process = vi.fn<ProcessRunner>(async (_command, args) => {
+      if (args.includes('search')) throw new Error('keyword index unavailable')
+      return {
+        stdout: JSON.stringify({ results: [{ id: 'incident', content: 'ORCHID-47 是一次生产事故。', score: 0.9 }] }),
+        stderr: '', exitCode: 0,
+      }
+    })
+    const config = resolveConfig({ cliPath: '/fake/mnemon', dataDir: populatedDataDir(), store: 'work' })
+    const runner = createRunner(config, process)
+    const service = new MnemonService(runner, config, new MemoryBodyRegistry(runner, true))
+
+    await expect(service.search({ query: '35% 65% 12% 100% 的事故' })).resolves.toMatchObject({
+      results: [{ id: 'incident' }],
+    })
+    expect(process).toHaveBeenCalledTimes(2)
+  })
+
   it('parses the official Mnemon visualization into a safe graph snapshot', async () => {
     const { service, process } = fixture()
     const graph = await service.graph()

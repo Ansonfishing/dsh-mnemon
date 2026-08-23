@@ -141,12 +141,13 @@ Agent calls mnemon_recall(query, optional memoryBodyIds)
   -> reject requested IDs outside the pinned set
   -> MnemonService searches authorized Providers concurrently
   -> normalize quality and reciprocal-rank fusion
+  -> 若准入证据丢失结构化查询锚点，执行一次有界 Native 关键词恢复
   -> 首次最多准入 4 条，并为恢复路径预留容量
   -> LLM 直接回答，或显式提交一个不同的精炼查询
   -> 两次结果去重后共享 6 条 / 4,800 字符 envelope
 ```
 
-是否发生 Recall 完全由模型判断，普通回合因此仍是 0 次 Provider Recall。首次调用后，只有模型认为 evidence 不足时，才可显式提交一个实质不同的查询；同查询会 join 或重放，第三个不同查询不能到达 Provider。两次合计最多准入 6 条、每条 1,200 字符、总正文 4,800 字符；首次最多 4 条和 3,600 字符，确保恢复路径始终有容量。模型输出不携带完整 Source 目录、已选 ID 回显或路由诊断，tags/entities 各最多 8 项。`mnemon_related` 使用同一套 pinned-source 校验和独立的有界 envelope。长期语义写入、关系、删除以及记忆体创建/更新仍会在需要语义判断时受监督，但确定性服务会先校验目标 Provider 的能力。Mnemon Native 仍是完整参考实现；三方适配器只开放各自能兑现的精确/异步写入、图谱、浏览、关联与删除语义。运行时记忆和 Documents 的普通变更仍由确定性控制层提交。
+是否发生 Recall 完全由模型判断，普通回合因此仍是 0 次 Provider Recall。在一次已经获得授权的 smart search 内，Host 会检查准入证据是否保留查询中的日期、百分比、时间、版本、编号和数字等高信息量锚点。查询至少有两个锚点但准入结果没有覆盖有界必需集合时，只有 Mnemon Native 会执行一次本地 keyword fallback；精确结果去重后仍经过同一质量策略和输出上限。该 fallback 不会重复请求远程 Provider，也不会新增 Recall 触发或模型调用。首次调用后，只有模型认为 evidence 不足时，才可显式提交一个实质不同的查询；同查询会 join 或重放，第三个不同查询不能到达 Provider。两次合计最多准入 6 条、每条 1,200 字符、总正文 4,800 字符；首次最多 4 条和 3,600 字符，确保恢复路径始终有容量。模型输出不携带完整 Source 目录、已选 ID 回显或路由诊断，tags/entities 各最多 8 项。`mnemon_related` 使用同一套 pinned-source 校验和独立的有界 envelope。长期语义写入、关系、删除以及记忆体创建/更新仍会在需要语义判断时受监督，但确定性服务会先校验目标 Provider 的能力。Mnemon Native 仍是完整参考实现；三方适配器只开放各自能兑现的精确/异步写入、图谱、浏览、关联与删除语义。运行时记忆和 Documents 的普通变更仍由确定性控制层提交。
 
 记忆体目录的移除是独立危险操作：Mnemon Native 经确认后调用 `store remove`，成功才移除登记；所有三方 Provider 都使用“断开”语义，只删除本地连接元数据，绝不删除 Provider 记忆。
 
