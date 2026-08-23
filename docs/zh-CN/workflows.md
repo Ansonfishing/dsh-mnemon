@@ -24,7 +24,7 @@ turn/start
 agent/pre-step(step=1)
   -> cancel pending/running background review for a new turn
   -> mark Prime once
-  -> optionally append one short recall/writeback cue
+  -> 每个会话至多追加一次简短 recall/writeback cue
   -> main Agent decides whether to call a memory tool
 ```
 
@@ -259,6 +259,12 @@ score >= 5 ? -- no --> retain activity for later turns
      yes
       |
       v
+Host dirty admission
+  - 当前轮明确要求不写记忆 -> stop
+  - 持久化意图、累计 >=320 用户字符、
+    >=600 助手字符或已完成非 Mnemon 工作 -> continue
+      |
+      v
 wait idleReviewMs (default 30 s)
       |
       +-- new turn --> cancel timer/worker, retain activity
@@ -280,7 +286,7 @@ conservative maintenance decision
       +-- failed/aborted ------------> retain activity
 ```
 
-“最多一次”当前由 worker persona 约束，不是 Host mutation counter。后台水位尚未持久化，Host 重启会丢失未处理的累计信号。
+admission 有意只使用结构信号，不调用 LLM 分类；因此达到 activity 门槛但没有 dirty candidate 的普通 checkpoint 不会启动后台模型。“最多一次”当前由 worker persona 约束，不是 Host mutation counter。后台水位尚未持久化，Host 重启会丢失未处理的累计信号。
 
 ## 配置开关的关系
 

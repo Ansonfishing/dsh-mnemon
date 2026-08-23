@@ -24,7 +24,7 @@ turn/start
 agent/pre-step(step=1)
   -> cancel pending/running background review for a new turn
   -> mark Prime once
-  -> optionally append one short recall/writeback cue
+  -> append at most one short recall/writeback cue per session
   -> main Agent decides whether to call a memory tool
 ```
 
@@ -259,6 +259,12 @@ score >= 5 ? -- no --> retain activity for later turns
      yes
       |
       v
+Host dirty admission
+  - explicit no-memory intent in current turn -> stop
+  - persistence intent, >=320 user characters,
+    >=600 assistant characters, or completed non-Mnemon work -> continue
+      |
+      v
 wait idleReviewMs (default 30 s)
       |
       +-- new turn --> cancel timer/worker, retain activity
@@ -280,7 +286,7 @@ conservative maintenance decision
       +-- failed/aborted ------------> retain activity
 ```
 
-“At most one” is currently enforced by the worker persona, not by a Host mutation counter. Background watermarks are not yet persisted, so a Host restart loses accumulated signals that have not been processed.
+The admission check is deliberately structural rather than an LLM classification, so an eligible but ordinary checkpoint starts no background model. “At most one” is currently enforced by the worker persona, not by a Host mutation counter. Background watermarks are not yet persisted, so a Host restart loses accumulated signals that have not been processed.
 
 ## How Configuration Switches Interact
 

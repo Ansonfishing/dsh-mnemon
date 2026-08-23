@@ -24,6 +24,10 @@ function userMessage(text = 'Continue the project'): HostUserMessage {
   }
 }
 
+function durableCandidate(filler = 97): HostUserMessage {
+  return userMessage(`Please remember this durable architecture rationale: ${'x'.repeat(filler)}`)
+}
+
 function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: { taskModelRoute?: boolean } = {}) {
   const agentListeners = new Map<string, Listener>()
   const rootListeners = new Map<string, Listener>()
@@ -366,7 +370,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.disposedTaskAgents).toHaveLength(1)
   })
 
-  it('adds a short optional reminder without forcing recall or remember for an ordinary turn', async () => {
+  it('adds one durable optional reminder without repeating it into later turn history', async () => {
     const value = fixture()
     const prompt = userMessage('Aster 发布前需要检查哪些事项？')
     const decision = await value.preStep([prompt], 1)
@@ -375,15 +379,15 @@ describe('Mnemon DSH lifecycle integration', () => {
     if (decision.kind !== 'enter') throw new Error('unexpected rejection')
     expect(decision.messages).toHaveLength(2)
     expect(decision.messages[1]?.source).toMatchObject({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'instructions' })
-    expect(decision.messages[1]?.content[0]?.text).toBe('[MNEMON] Search active Documents for substantial project knowledge before deep recall; call mnemon_recall only when durable history or an exact prior detail matters, and use mnemon_runtime_memory only for new explicit reusable facts. Otherwise call none.')
+    expect(decision.messages[1]?.content[0]?.text).toBe('[MNEMON] Search Documents for substantial project records; use mnemon_recall only for missing durable history or exact prior details, and mnemon_runtime_memory only for new explicit reusable facts. Otherwise use none.')
     expect(value.coordinator.recall).not.toHaveBeenCalled()
     expect(value.service.status).not.toHaveBeenCalled()
 
     const second = await value.preStep([userMessage('Second turn')], 2)
     if (second.kind !== 'enter') throw new Error('unexpected rejection')
-    expect(second.messages).toHaveLength(2)
+    expect(second.messages).toHaveLength(1)
     expect(value.coordinator.recall).not.toHaveBeenCalled()
-    expect(value.lifecycle.snapshot('session-1').counters).toMatchObject({ primes: 1, recallCues: 2, writebackCues: 2 })
+    expect(value.lifecycle.snapshot('session-1').counters).toMatchObject({ primes: 1, recallCues: 1, writebackCues: 1 })
   })
 
   it('keeps durable image references intact while scoring only text from a multimodal prompt', async () => {
@@ -423,7 +427,7 @@ describe('Mnemon DSH lifecycle integration', () => {
   it('waits for the QoderWork score threshold, then debounces a full-checkpoint review', async () => {
     vi.useFakeTimers()
     const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
-    await value.preStep([userMessage('x'.repeat(150))], 1)
+    await value.preStep([durableCandidate()], 1)
     value.events.push({ type: 'turn/end', data: { turn: 1 } })
     await value.turnStopping(1)
 
@@ -456,10 +460,69 @@ describe('Mnemon DSH lifecycle integration', () => {
     })
   })
 
-  it('cancels a pending idle review when a new turn begins', async () => {
+  it('does not start background work when activity has no deterministic dirty candidate', async () => {
     vi.useFakeTimers()
     const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
     await value.preStep([userMessage('x'.repeat(150))], 1)
+    value.events.push({ type: 'turn/end', data: { turn: 1 } })
+    await value.turnStopping(1)
+    await value.preStep([userMessage('one more ordinary turn')], 2)
+    value.events.push({ type: 'turn/end', data: { turn: 2 } })
+    await value.turnStopping(2)
+
+    expect(value.lifecycle.snapshot('session-1').current).toMatchObject({
+      idleReviewPending: false,
+      reviewActivity: { score: 5, eligible: true },
+    })
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(value.coordinator.review).not.toHaveBeenCalled()
+  })
+
+  it('admits a substantial completed assistant artifact without another classifier call', async () => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    await value.preStep([userMessage('x'.repeat(150))], 1)
+    value.events.push({
+      type: 'assistant/message',
+      data: {
+        turn: 1,
+        message: { content: [{ type: 'text', text: 'Reusable architecture artifact. '.repeat(24) }] },
+      },
+    })
+    value.events.push({ type: 'turn/end', data: { turn: 1 } })
+    await value.turnStopping(1)
+    await value.preStep([userMessage('one more ordinary turn')], 2)
+    value.events.push({ type: 'turn/end', data: { turn: 2 } })
+    await value.turnStopping(2)
+
+    expect(value.lifecycle.snapshot('session-1').current).toMatchObject({
+      idleReviewPending: true,
+      reviewActivity: { score: 5, eligible: true },
+    })
+  })
+
+  it('honors explicit no-memory maintenance intent before starting a review child', async () => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    await value.preStep([userMessage(`${'x'.repeat(150)}，不要主动写记忆。`)], 1)
+    value.events.push({ type: 'turn/end', data: { turn: 1 } })
+    await value.turnStopping(1)
+    await value.preStep([userMessage('请简短确认，但仍不要主动写记忆。')], 2)
+    value.events.push({ type: 'turn/end', data: { turn: 2 } })
+    await value.turnStopping(2)
+
+    expect(value.lifecycle.snapshot('session-1').current).toMatchObject({
+      idleReviewPending: false,
+      reviewActivity: { score: 5, eligible: true },
+    })
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(value.coordinator.review).not.toHaveBeenCalled()
+  })
+
+  it('cancels a pending idle review when a new turn begins', async () => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    await value.preStep([durableCandidate()], 1)
     value.events.push({ type: 'turn/end', data: { turn: 1 } })
     await value.turnStopping(1)
     await value.preStep([userMessage('threshold turn')], 2)
@@ -477,7 +540,7 @@ describe('Mnemon DSH lifecycle integration', () => {
   it('cancels delayed review work when a one-shot Host disposes the plugin', async () => {
     vi.useFakeTimers()
     const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
-    await value.preStep([userMessage('x'.repeat(150))], 1)
+    await value.preStep([durableCandidate()], 1)
     value.events.push({ type: 'turn/end', data: { turn: 1 } })
     await value.turnStopping(1)
     await value.preStep([userMessage('threshold turn')], 2)
@@ -564,7 +627,7 @@ describe('Mnemon DSH lifecycle integration', () => {
       })
     }))
 
-    await value.preStep([userMessage('x'.repeat(150))], 1)
+    await value.preStep([durableCandidate()], 1)
     value.events.push({ type: 'turn/end', data: { turn: 1 } })
     await value.turnStopping(1)
     await value.preStep([userMessage('threshold turn')], 2)

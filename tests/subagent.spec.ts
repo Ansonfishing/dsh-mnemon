@@ -632,13 +632,17 @@ describe('Mnemon memory subagent coordinator', () => {
       action: 'skipped',
     })
     expect(host.start).toHaveBeenCalledWith('fork', expect.objectContaining({
-      toolFilter: { allow: expect.arrayContaining(['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related', 'mnemon_document_search', 'mnemon_runtime_memory', 'mnemon_document_manage']) },
+      toolFilter: { allow: expect.arrayContaining(['mnemon_document_search', 'mnemon_runtime_memory', 'mnemon_document_manage']) },
       persona: expect.stringContaining('idle checkpoint reviewer'),
       prompt: [{ type: 'text', text: 'Review the inherited completed checkpoint now.' }],
     }))
     const reviewCall = (host.start.mock.calls[0] as unknown as [string, { persona: string; toolFilter: { allow: string[] } }])[1]
     expect(reviewCall.persona).toContain('Never move a document to cold archive in this pass')
+    expect(reviewCall.persona).toContain('Deep Recall is unavailable after the parent TurnView closes')
     expect(reviewCall.persona).not.toContain('Memory View')
+    expect(reviewCall.toolFilter.allow).not.toContain('mnemon_recall')
+    expect(reviewCall.toolFilter.allow).not.toContain('mnemon_related')
+    expect(reviewCall.toolFilter.allow).not.toContain('mnemon_memory_bodies')
     expect(reviewCall.toolFilter.allow).not.toContain('mnemon_memory_zoom')
     expect(coordinator.snapshot()).toMatchObject({ reviews: 1, writes: 0, lastOperation: 'review' })
   })
@@ -1112,7 +1116,7 @@ describe('Mnemon memory subagent coordinator', () => {
       action: 'skipped',
     })
     expect(host.start).toHaveBeenCalledWith('fork', expect.objectContaining({
-      toolFilter: { allow: expect.arrayContaining(['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_runtime_memory', 'mnemon_document_manage']) },
+      toolFilter: { allow: expect.arrayContaining(['mnemon_document_search', 'mnemon_runtime_memory', 'mnemon_document_manage']) },
       agentOptions: { provider: 'pinned-provider', model: 'pinned-model' },
     }))
   })

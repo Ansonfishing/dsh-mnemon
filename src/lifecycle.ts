@@ -116,15 +116,41 @@ function memoryToolCalls(events: readonly HostSessionEvent[], turn?: number): nu
     && event.data.name.startsWith('mnemon_')).length
 }
 
-function textLength(messages: readonly HostUserMessage[]): number {
-  return messages
-    .filter(message => message.source.kind === 'user')
-    .map(message => message.content
-      .filter(block => block.type === 'text' && 'text' in block && typeof block.text === 'string')
-      .map(block => block.text)
-      .join('\n')
-      .trim()
-      .length)
+const REVIEW_SUBSTANTIVE_USER_CHARACTERS = 320
+const REVIEW_SUBSTANTIVE_ASSISTANT_CHARACTERS = 600
+const EXPLICIT_MEMORY_CANDIDATE = [
+  /(?:记住|记下来|保存到记忆|写入记忆|长期记录)/u,
+  /\b(?:please\s+)?remember\b/iu,
+  /\b(?:save|store|write|record|persist)\b.{0,32}\b(?:memory|memories)\b/iu,
+]
+const NO_MEMORY_MAINTENANCE = [
+  /(?:不要|不必|无需|请勿|禁止|别)(?:再|主动|自动|在后台|替我)?(?:记住|记忆)/u,
+  /(?:不要|不必|无需|请勿|禁止|别)(?:再|主动|自动|在后台|替我)?(?:保存|写(?:入)?|记录|更新|维护|持久化).{0,16}(?:记忆|memory)/iu,
+  /\b(?:do not|don't|dont|never|no need to)\s+(?:proactively\s+|automatically\s+)?remember\b/iu,
+  /\b(?:do not|don't|dont|never|no need to)\s+(?:proactively\s+|automatically\s+)?(?:save|store|write|record|persist|update|maintain)\b.{0,32}\b(?:memory|memories)\b/iu,
+  /\bno\s+(?:memory|memories)\s+(?:write|writes|writing|maintenance|update|updates)\b/iu,
+]
+
+function userMessageText(message: HostUserMessage): string {
+  if (message.source.kind !== 'user') return ''
+  return message.content
+    .filter(block => block.type === 'text' && 'text' in block && typeof block.text === 'string')
+    .map(block => block.text)
+    .join('\n')
+    .trim()
+}
+
+function matchesAny(value: string, patterns: readonly RegExp[]): boolean {
+  return patterns.some(pattern => pattern.test(value))
+}
+
+function assistantEventTextLength(event: HostSessionEvent): number {
+  if (event.type !== 'assistant/message') return 0
+  const message = event.data.message as { content?: Array<{ type?: unknown; text?: unknown }> } | undefined
+  if (!Array.isArray(message?.content)) return 0
+  return message.content
+    .filter(block => block.type === 'text' && typeof block.text === 'string')
+    .map(block => String(block.text).trim().length)
     .reduce((total, length) => total + length, 0)
 }
 
@@ -154,8 +180,8 @@ function assistantMessageText(events: readonly HostSessionEvent[], messageId: st
 }
 
 function guidedReminder(config: ResolvedConfig): string | undefined {
-  if (config.recallMode === 'guided' && config.writebackMode === 'guided') return '[MNEMON] Search active Documents for substantial project knowledge before deep recall; call mnemon_recall only when durable history or an exact prior detail matters, and use mnemon_runtime_memory only for new explicit reusable facts. Otherwise call none.'
-  if (config.recallMode === 'guided') return '[MNEMON] Search active Documents for substantial project knowledge before deep recall; call mnemon_recall only when durable history or an exact prior detail matters. Otherwise call neither.'
+  if (config.recallMode === 'guided' && config.writebackMode === 'guided') return '[MNEMON] Search Documents for substantial project records; use mnemon_recall only for missing durable history or exact prior details, and mnemon_runtime_memory only for new explicit reusable facts. Otherwise use none.'
+  if (config.recallMode === 'guided') return '[MNEMON] Search Documents for substantial project records; use mnemon_recall only for missing durable history or exact prior details. Otherwise use neither.'
   if (config.writebackMode === 'guided') return '[MNEMON] Use mnemon_runtime_memory only for new, explicit, reusable information; otherwise continue without writing memory.'
   return undefined
 }
@@ -170,7 +196,10 @@ class MnemonAgentLifecycle {
     userTextLength: number
     toolCallCount: number
     toolNames: Set<string>
+    explicitCandidate: boolean
+    noMaintenance: boolean
   }>()
+  private cueInjected = false
   private idleReviewTimer: ReturnType<typeof setTimeout> | undefined
   private reviewController: AbortController | undefined
   private reviewRunning = false
@@ -199,10 +228,12 @@ class MnemonAgentLifecycle {
       this.agent.ctx.on('agent/session-start', ((payload: SessionStartPayload) => {
         this.releaseView()
         this.cancelIdleReview(true)
+        this.guidedTurns.clear()
         this.turnActivity.clear()
         this.memoryActivity.reset()
         this.startSource = payload.source
         this.primePending = true
+        this.cueInjected = false
         this.mark('prime')
       }) as never),
       this.agent.ctx.on('session/event', ((session: HostAgent['session'], event: HostSessionEvent) => this.sessionEvent(session, event)) as never),
@@ -285,8 +316,10 @@ class MnemonAgentLifecycle {
       this.counters.primes += 1
       this.mark('prime')
     }
+    if (this.cueInjected) return decision
     const reminder = guidedReminder(this.config)
     if (reminder === undefined) return decision
+    this.cueInjected = true
     this.guidedTurns.add(payload.turn)
     if (this.config.recallMode === 'guided') this.counters.recallCues += 1
     if (this.config.writebackMode === 'guided' && this.config.writeEnabled) this.counters.writebackCues += 1
@@ -369,12 +402,12 @@ class MnemonAgentLifecycle {
     const tools = completedToolActivity(this.agent.session.events, turn)
     activity.toolCallCount = tools.count
     activity.toolNames = tools.names
-    if (!this.reviewActivity().eligible) return
+    if (!this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
     this.idleReviewTimer = setTimeout(() => {
       this.idleReviewTimer = undefined
       if (this.agent.status !== 'idle') return
       const completed = this.agent.session.events.some(event => event.type === 'turn/end' && eventTurn(event) === turn)
-      if (!completed || !this.reviewActivity().eligible) return
+      if (!completed || !this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
       void this.runIdleReview()
     }, this.config.idleReviewMs)
   }
@@ -413,7 +446,14 @@ class MnemonAgentLifecycle {
   private ensureTurnActivity(turn: number) {
     let activity = this.turnActivity.get(turn)
     if (activity === undefined) {
-      activity = { messageIds: new Set(), userTextLength: 0, toolCallCount: 0, toolNames: new Set() }
+      activity = {
+        messageIds: new Set(),
+        userTextLength: 0,
+        toolCallCount: 0,
+        toolNames: new Set(),
+        explicitCandidate: false,
+        noMaintenance: false,
+      }
       this.turnActivity.set(turn, activity)
     }
     return activity
@@ -424,8 +464,39 @@ class MnemonAgentLifecycle {
     for (const message of messages) {
       if (message.source.kind !== 'user' || activity.messageIds.has(message.id)) continue
       activity.messageIds.add(message.id)
-      activity.userTextLength += textLength([message])
+      const text = userMessageText(message)
+      activity.userTextLength += text.length
+      activity.explicitCandidate ||= matchesAny(text, EXPLICIT_MEMORY_CANDIDATE)
+      activity.noMaintenance ||= matchesAny(text, NO_MEMORY_MAINTENANCE)
     }
+  }
+
+  /** Cheap Host signals decide whether an eligible checkpoint is worth an LLM call. */
+  private reviewAdmitted(currentTurn: number): boolean {
+    if (this.turnActivity.get(currentTurn)?.noMaintenance === true) return false
+    const turns = new Set([...this.turnActivity.entries()]
+      .filter(([, activity]) => !activity.noMaintenance)
+      .map(([turn]) => turn))
+    let totalUserTextLength = 0
+    let explicitCandidate = false
+    let completedNonMemoryTool = false
+    for (const activity of this.turnActivity.values()) {
+      if (activity.noMaintenance) continue
+      totalUserTextLength += activity.userTextLength
+      explicitCandidate ||= activity.explicitCandidate
+      completedNonMemoryTool ||= activity.toolCallCount > 0 && [...activity.toolNames].some(name => !name.startsWith('mnemon_'))
+    }
+    const assistantTextLength = this.agent.session.events
+      .filter(event => {
+        const turn = eventTurn(event)
+        return turn !== undefined && turns.has(turn)
+      })
+      .map(assistantEventTextLength)
+      .reduce((total, length) => total + length, 0)
+    return explicitCandidate
+      || totalUserTextLength >= REVIEW_SUBSTANTIVE_USER_CHARACTERS
+      || assistantTextLength >= REVIEW_SUBSTANTIVE_ASSISTANT_CHARACTERS
+      || completedNonMemoryTool
   }
 
   private reviewActivity(): ReviewActivityScore {
