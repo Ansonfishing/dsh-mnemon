@@ -120,6 +120,7 @@ interface RecallAttempt {
 }
 
 interface TurnRetrievalState {
+  documentSearchClaimed?: boolean
   recallAttempts: RecallAttempt[]
   relatedDigest?: string
   relatedResult?: RecallResult
@@ -913,6 +914,18 @@ export class MnemonSubagentCoordinator {
 
   documentSearch(parent: HostAgent, query: string, includeArchived = false, limit?: number) {
     return this.documentsFor(parent).forAgent(parent).search(query, { includeArchived, ...(limit === undefined ? {} : { limit }) })
+  }
+
+  /** Admit at most one model-facing Documents query for one root turn. */
+  claimDocumentSearch(parent: HostAgent): boolean {
+    const authority = this.turnAuthority(parent, false)
+    // Direct SDK/testing callers have no Host turn. Keep that compatibility
+    // seam unmetered; every real model turn is pinned before Prompt assembly.
+    if (authority === undefined) return true
+    const retrieval = this.turnRetrievalState(authority.turnId)
+    if (retrieval.documentSearchClaimed === true) return false
+    retrieval.documentSearchClaimed = true
+    return true
   }
 
   async recall(parent: HostAgent, request: SearchRequest, signal: AbortSignal, options: { requirePinnedView?: boolean } = {}): Promise<RecallResult> {
@@ -1737,6 +1750,20 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
   }
 
   private recallAuthority(agent: HostAgent, required: boolean): RecallAuthority | undefined {
+    const authority = this.turnAuthority(agent, required)
+    if (authority === undefined || !isAgentRuntimeSource(this.runtimeMemoryOrSource)) return undefined
+    const views = this.runtimeMemoryOrSource.forAgent(agent).memoryViews
+    const state = views.sourceState(authority.viewId, 'memory-spaces')
+    const value = optionalObject(state)
+    if (value === undefined || !Array.isArray(value.memoryBodyIds) || value.memoryBodyIds.some(id => typeof id !== 'string' || id.trim() === '')) {
+      throw new Error(`pinned MemorySource has invalid recall authority: ${authority.viewId}`)
+    }
+    const memoryBodyIds = [...new Set(value.memoryBodyIds.map(id => String(id).trim()))]
+    if (memoryBodyIds.length === 0) throw new Error(`pinned MemorySource has no recall-authorized Memory Spaces: ${authority.viewId}`)
+    return { ...authority, memoryBodyIds }
+  }
+
+  private turnAuthority(agent: HostAgent, required: boolean): Pick<RecallAuthority, 'turnId' | 'viewId'> | undefined {
     if (!isAgentRuntimeSource(this.runtimeMemoryOrSource)) return undefined
     const views = this.runtimeMemoryOrSource.forAgent(agent).memoryViews
     const parentId = isSubagent(agent) ? agent.session.header?.parentSession?.trim() : undefined
@@ -1746,14 +1773,7 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
       if (required) throw new Error('Recall requires the MemorySource generation pinned to the current turn')
       return undefined
     }
-    const state = views.sourceState(pinned.viewId, 'memory-spaces')
-    const value = optionalObject(state)
-    if (value === undefined || !Array.isArray(value.memoryBodyIds) || value.memoryBodyIds.some(id => typeof id !== 'string' || id.trim() === '')) {
-      throw new Error(`pinned MemorySource has invalid recall authority: ${pinned.viewId}`)
-    }
-    const memoryBodyIds = [...new Set(value.memoryBodyIds.map(id => String(id).trim()))]
-    if (memoryBodyIds.length === 0) throw new Error(`pinned MemorySource has no recall-authorized Memory Spaces: ${pinned.viewId}`)
-    return { turnId: pinned.turnId, viewId: pinned.viewId, memoryBodyIds }
+    return { turnId: pinned.turnId, viewId: pinned.viewId }
   }
 
   private turnRetrievalState(turnId: string): TurnRetrievalState {

@@ -326,6 +326,26 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(coordinator.snapshot()).toMatchObject({ recalls: 3, failures: 0 })
   })
 
+  it('shares one Documents search claim across root and child calls in a pinned turn', () => {
+    const host = subagents(undefined)
+    const memoryService = service()
+    let turnId = 'root:documents-1'
+    const memoryViews = {
+      activeTurn: vi.fn((agentId: string) => agentId === 'root' ? { turnId, viewId: `view-${turnId}` } : undefined),
+      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
+    }
+    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
+    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+    const child = parent('subagent')
+    child.session.header!.parentSession = 'root'
+
+    expect(coordinator.claimDocumentSearch(parent())).toBe(true)
+    expect(coordinator.claimDocumentSearch(child)).toBe(false)
+    turnId = 'root:documents-2'
+    expect(coordinator.claimDocumentSearch(child)).toBe(true)
+    expect(memoryViews.activeTurn).toHaveBeenCalledWith('root')
+  })
+
   it('shares one six-result and 4,800-character envelope across both Recall queries', async () => {
     const host = subagents(undefined)
     const memoryService = service()

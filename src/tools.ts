@@ -281,7 +281,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_document_search',
-    description: 'Run one focused search over project-scoped managed Documents before durable Recall. Results contain bounded query-local evidence, not complete records. Use them directly; do not repeat Document search in the same turn. Cold archives are excluded unless a known archive reference requires them.',
+    description: 'Run one focused search over project-scoped managed Documents before durable Recall. The Host admits only one Documents query for the root turn, shared with child and parallel calls. Results contain bounded query-local evidence, not complete records. Cold archives are excluded unless a known archive reference requires them.',
     parameters: {
       type: 'object',
       properties: {
@@ -293,7 +293,17 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     async execute(args: { query: string; includeArchived?: boolean; limit?: number }, exec: ToolExecution) {
-      const controller = requireLayer(exec, 'documents', 'search').documents.forAgent(requireAgent(exec))
+      const agent = requireAgent(exec)
+      const controller = requireLayer(exec, 'documents', 'search').documents.forAgent(agent)
+      if (!coordinator.claimDocumentSearch(agent)) {
+        return {
+          query: args.query.trim(),
+          includeArchived: args.includeArchived === true,
+          notRun: true,
+          results: [],
+          hint: 'The root turn already used its Documents search slot, so no second disk query ran. Use the admitted evidence, make one focused mnemon_recall only if exact durable history is still missing, or answer with appropriate uncertainty.',
+        }
+      }
       const result = await controller.search(args.query, { ...(args.includeArchived === undefined ? {} : { includeArchived: args.includeArchived }), limit: Math.min(4, args.limit ?? 4) })
       const suggestions = result.results.length === 0 && args.query.trim() !== ''
         ? controller.snapshot().documents

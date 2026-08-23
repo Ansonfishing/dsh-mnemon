@@ -2,7 +2,10 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ToolDefinition } from '../src/contracts.ts'
 import { apply, inject } from '../src/index.ts'
+import { MnemonSubagentCoordinator } from '../src/subagent.ts'
+import { registerTools } from '../src/tools.ts'
 import { memoryExtensions } from '../packages/extension-sdk/src/index.ts'
 
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
@@ -297,6 +300,42 @@ describe('dsh-mnemon plugin composition', () => {
     expect(result).not.toHaveProperty('generatedAt')
     expect(JSON.stringify(result).length).toBeLessThan(8_000)
     expect(result.hint).toContain('do not repeat Document search')
+  })
+
+  it('does not repeat Documents I/O after a pinned root turn spends its search slot', async () => {
+    const registered: ToolDefinition[] = []
+    const controller = {
+      search: vi.fn(async (query: string) => ({ query, includeArchived: false, total: 0, results: [] })),
+      snapshot: vi.fn(() => ({ documents: [] })),
+    }
+    const documents = {
+      forAgent: vi.fn(() => controller),
+    }
+    const memoryViews = {
+      activeTurn: vi.fn(() => ({ turnId: 'root:documents', viewId: 'view-documents' })),
+      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
+    }
+    const runtime = {
+      config: { memoryTopology: undefined },
+      forAgent: vi.fn(() => ({
+        service: { config: { memoryTopology: undefined } },
+        runtimeMemory: {},
+        documents,
+        memoryViews,
+      })),
+    }
+    const coordinator = new MnemonSubagentCoordinator(
+      { list: () => [], getProvider: () => undefined, start: vi.fn() } as never,
+      runtime as never,
+    )
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as never, runtime as never, coordinator)
+    const tool = registered.find(candidate => candidate.name === 'mnemon_document_search')!
+    const execution = { agent: { id: 'root', options: {}, session: { header: {}, events: [] } }, signal: new AbortController().signal }
+
+    const first = await tool.execute({ query: 'ORCHID-47 root cause' } as never, execution as never)
+    expect(first).not.toHaveProperty('notRun')
+    await expect(tool.execute({ query: 'incident ORCHID generation key' } as never, execution as never)).resolves.toMatchObject({ notRun: true, results: [] })
+    expect(controller.search).toHaveBeenCalledOnce()
   })
 
   it('keeps guidance and Web RPC registrations stable while their live values are disabled', () => {
