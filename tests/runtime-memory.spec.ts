@@ -218,4 +218,181 @@ describe('RuntimeMemoryController', () => {
       { content: 'low detail', importance: 'low' },
     ])
   })
+
+  it('atomically compacts surviving entries and applies a capacity-blocked replacement', async () => {
+    const { controller } = fixture()
+    const oldContent = `old-${'o'.repeat(96)}`
+    const replacement = `new-${'n'.repeat(496)}`
+    await controller.mutate({ action: 'add', target: 'memory', content: oldContent })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'a'.repeat(5_000) })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'b'.repeat(5_000) })
+    const request = { action: 'replace', target: 'memory', oldText: 'old-', content: replacement } as const
+
+    await expect(controller.mutate(request)).rejects.toBeInstanceOf(RuntimeMemoryCapacityError)
+    const plan = await controller.planMaintenance(request)
+    expect(plan).toMatchObject({
+      action: 'replace',
+      requiresMaintenance: true,
+      pending: { content: replacement },
+      excluded: { content: oldContent },
+    })
+    expect(plan.entries.map(entry => entry.content)).toEqual(['a'.repeat(5_000), 'b'.repeat(5_000)])
+
+    const result = await controller.compactAndMutate(
+      plan.revision,
+      request,
+      [{ content: 'Archived details remain available in project memory.', importance: 'normal' }],
+      6_000,
+    )
+    expect(result).toMatchObject({ replaced: { from: oldContent, to: replacement } })
+    expect(controller.snapshot().entries.map(entry => entry.content)).toEqual([
+      'Archived details remain available in project memory.',
+      replacement,
+    ])
+    expect(readFileSync(controller.memoryPath, 'utf8')).not.toContain(oldContent)
+  })
+
+  it('atomically commits a capacity-blocked add and records its migration lineage once', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-mnemon-runtime-atomic-lineage-'))
+    directories.push(directory)
+    const commits: Array<Record<string, unknown>> = []
+    const controller = new RuntimeMemoryController(
+      { effectiveDataDir: () => directory },
+      undefined,
+      operation => {
+        commits.push(operation as unknown as Record<string, unknown>)
+        return {} as never
+      },
+    )
+    await controller.mutate({ action: 'add', target: 'memory', content: 'a'.repeat(5_000) })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'b'.repeat(5_000) })
+    const request = { action: 'add', target: 'memory', content: 'new durable fact '.repeat(30) } as const
+    await expect(controller.mutate(request)).rejects.toBeInstanceOf(RuntimeMemoryCapacityError)
+    const plan = await controller.planMaintenance(request)
+    const lineage = [{
+      source: { layerId: 'runtime', reference: `runtime:${plan.revision}:memory:1`, digest: 'a'.repeat(64) },
+      destination: { layerId: 'memory-spaces', reference: 'memory-space:project/item:m1', digest: 'b'.repeat(64) },
+    }]
+
+    const beforeCommitCount = commits.length
+    const result = await controller.compactAndMutate(
+      plan.revision,
+      request,
+      [{ content: 'Archived workspace history.', importance: 'normal' }],
+      6_000,
+      lineage,
+    )
+
+    expect(result).toMatchObject({ added: request.content.trim() })
+    expect(controller.snapshot().entries.map(entry => entry.content)).toEqual([
+      'Archived workspace history.',
+      request.content.trim(),
+    ])
+    expect(commits).toHaveLength(beforeCommitCount + 1)
+    expect(commits.at(-1)).toMatchObject({
+      operation: 'runtime-add',
+      checkpoint: { target: 'memory', maintenance: { kind: 'runtime-compaction', lineage } },
+    })
+  })
+
+  it('never archives or preserves a removed entry while recovering an already-over-capacity file', async () => {
+    const { controller } = fixture()
+    const now = '2026-08-13T08:00:00.000Z'
+    const removed = `delete-${'x'.repeat(93)}`
+    const entries = [removed, 'a'.repeat(5_150), 'b'.repeat(5_150)].map(content => ({
+      content,
+      created_at: now,
+      updated_at: now,
+      target: 'memory' as const,
+      importance: 'normal' as const,
+    }))
+    writeFileSync(controller.sourcePath, `${JSON.stringify({ version: 1, entries }, null, 2)}\n`)
+    writeFileSync(controller.memoryPath, `${entries.map(entry => entry.content).join(RUNTIME_ENTRY_DELIMITER)}\n`)
+    const request = { action: 'remove', target: 'memory', oldText: 'delete-' } as const
+
+    await expect(controller.mutate(request)).rejects.toBeInstanceOf(RuntimeMemoryCapacityError)
+    const plan = await controller.planMaintenance(request)
+    expect(plan).toMatchObject({ action: 'remove', requiresMaintenance: true, excluded: { content: removed } })
+    expect(plan.pending).toBeUndefined()
+    expect(plan.entries.map(entry => entry.content)).not.toContain(removed)
+
+    const result = await controller.compactAndMutate(
+      plan.revision,
+      request,
+      [{ content: 'Remaining history is archived.', importance: 'normal' }],
+      6_000,
+    )
+    expect(result).toMatchObject({ removed })
+    expect(controller.snapshot().entries.map(entry => entry.content)).toEqual(['Remaining history is archived.'])
+  })
+
+  it('leaves every local file unchanged when a compacted mutation conflicts or still exceeds capacity', async () => {
+    const { directory, controller } = fixture()
+    const oldContent = `old-${'o'.repeat(96)}`
+    await controller.mutate({ action: 'add', target: 'memory', content: oldContent })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'a'.repeat(5_000) })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'b'.repeat(5_000) })
+    const request = { action: 'replace', target: 'memory', oldText: 'old-', content: 'n'.repeat(3_000) } as const
+    await expect(controller.mutate(request)).rejects.toBeInstanceOf(RuntimeMemoryCapacityError)
+    const obsolete = await controller.planMaintenance(request)
+
+    const other = new RuntimeMemoryController({ effectiveDataDir: () => directory })
+    await other.mutate({ action: 'replace', target: 'memory', oldText: 'old-', content: 'concurrent replacement' })
+    const paths = [controller.sourcePath, controller.memoryPath, controller.userPath]
+    const afterConcurrent = paths.map(path => readFileSync(path, 'utf8'))
+    await expect(controller.compactAndMutate(
+      obsolete.revision,
+      request,
+      [{ content: 'summary', importance: 'normal' }],
+      6_000,
+    )).rejects.toThrow('changed while archival')
+    expect(paths.map(path => readFileSync(path, 'utf8'))).toEqual(afterConcurrent)
+
+    const currentRequest = {
+      action: 'replace',
+      target: 'memory',
+      oldText: 'concurrent replacement',
+      content: 'n'.repeat(3_000),
+    } as const
+    await expect(controller.mutate(currentRequest)).rejects.toBeInstanceOf(RuntimeMemoryCapacityError)
+    const current = await controller.planMaintenance(currentRequest)
+    const beforeOverflow = paths.map(path => readFileSync(path, 'utf8'))
+    await expect(controller.compactAndMutate(
+      current.revision,
+      currentRequest,
+      [{ content: 'c'.repeat(8_000), importance: 'normal' }],
+      10_240,
+    )).rejects.toBeInstanceOf(RuntimeMemoryCapacityError)
+    expect(paths.map(path => readFileSync(path, 'utf8'))).toEqual(beforeOverflow)
+  })
+
+  it('rejects compaction output that duplicates the pending mutation or reintroduces its excluded entry', async () => {
+    const { controller } = fixture()
+    const oldContent = `obsolete-${'o'.repeat(91)}`
+    const replacement = `corrected-${'n'.repeat(490)}`
+    await controller.mutate({ action: 'add', target: 'memory', content: oldContent })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'a'.repeat(5_000) })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'b'.repeat(5_000) })
+    const request = { action: 'replace', target: 'memory', oldText: 'obsolete-', content: replacement } as const
+    await expect(controller.mutate(request)).rejects.toBeInstanceOf(RuntimeMemoryCapacityError)
+    const plan = await controller.planMaintenance(request)
+    const paths = [controller.sourcePath, controller.memoryPath, controller.userPath]
+    const before = paths.map(path => readFileSync(path, 'utf8'))
+
+    await expect(controller.compactAndMutate(
+      plan.revision,
+      request,
+      [{ content: replacement, importance: 'normal' }],
+      6_000,
+    )).rejects.toThrow('duplicates the pending mutation')
+    expect(paths.map(path => readFileSync(path, 'utf8'))).toEqual(before)
+
+    await expect(controller.compactAndMutate(
+      plan.revision,
+      request,
+      [{ content: oldContent, importance: 'normal' }],
+      6_000,
+    )).rejects.toThrow('reintroduces the replaced or removed entry')
+    expect(paths.map(path => readFileSync(path, 'utf8'))).toEqual(before)
+  })
 })
