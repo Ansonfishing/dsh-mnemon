@@ -313,7 +313,11 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(first.results.map(result => result.id)).toEqual(['high-1', 'medium-1', 'unknown-1'])
     expect(duplicate).toMatchObject({ results: first.results, hint: expect.stringContaining('query already ran') })
     expect(refinement).toMatchObject({
-      results: [{ id: 'rollback-1', content: 'Rollback exposed tenant skew.' }],
+      results: [
+        { id: 'rollback-1', content: 'Rollback exposed tenant skew.' },
+        { id: 'medium-refinement', content: 'A second medium clue.' },
+        { id: 'unknown-refinement', content: 'A second unknown clue.' },
+      ],
       hint: expect.stringContaining('Recall refinement is complete'),
     })
     expect(exhausted).toMatchObject({ results: refinement.results, hint: expect.stringContaining('budget is exhausted') })

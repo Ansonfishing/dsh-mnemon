@@ -21,6 +21,7 @@ import {
   applyRecallQualityPolicy,
   prepareRecallQualityPolicy,
   recallQualityPolicies,
+  type EvaluatedRecallQualityCandidate,
   type RecallQualityCandidate,
   type RecallQualityPolicy,
   type RecallQualityPolicyContext,
@@ -208,6 +209,23 @@ function mergeRecoveryResults(
     seen.add(insight.id)
     return true
   }).slice(0, limit)
+}
+
+/** Put query-covering evidence first before the smaller model envelope runs. */
+function prioritizeRecoveryEvidence(
+  selected: readonly EvaluatedRecallQualityCandidate[],
+  plan: NativeSearchRecoveryPlan,
+): EvaluatedRecallQualityCandidate[] {
+  return selected
+    .map((entry, index) => ({ entry, index, matches: recoveryMatchCount(entry.candidate.insight.content, plan) }))
+    .sort((left, right) => {
+      const leftAdmitted = left.matches >= plan.requiredMatches
+      const rightAdmitted = right.matches >= plan.requiredMatches
+      if (leftAdmitted !== rightAdmitted) return rightAdmitted ? 1 : -1
+      if (leftAdmitted && left.matches !== right.matches) return right.matches - left.matches
+      return left.index - right.index
+    })
+    .map(candidate => candidate.entry)
 }
 
 function insightColor(category: string | undefined): string {
@@ -721,6 +739,9 @@ export class MnemonService {
       evaluation = evaluate(batches)
     }
     const { hints, quality } = evaluation
+    const selected = recoveryPlan === undefined
+      ? quality.selected
+      : prioritizeRecoveryEvidence(quality.selected, recoveryPlan)
     const qualityStats = (memoryBodyId: string): RecallQualityStats => {
       const evaluated = quality.evaluated.filter(candidate => candidate.candidate.memoryBodyId === memoryBodyId)
       const selected = quality.selected.filter(candidate => candidate.candidate.memoryBodyId === memoryBodyId)
@@ -740,7 +761,7 @@ export class MnemonService {
     return {
       query,
       mode,
-      results: quality.selected.map(({ candidate, decision }) => ({
+      results: selected.map(({ candidate, decision }) => ({
         ...candidate.insight,
         relevanceTier: decision.tier,
         ...(decision.normalizedScore === undefined ? {} : { normalizedScore: decision.normalizedScore }),

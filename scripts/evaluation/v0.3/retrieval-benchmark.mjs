@@ -17,6 +17,8 @@ const QUERIES = [
   { id: 'zoom-cost', query: '旧版 Zoom 树平均增加了多少次前台模型调用？', expected: '1.7' },
   { id: 'cordis-boundary', query: 'Cordis isolate 的生命周期与不可信代码沙箱边界是什么？', expected: '不可信代码沙箱' },
   { id: 'view-user-correction', query: '普通用户是否应该选择或理解 View id？过去的明确纠正是什么？', expected: '普通用户' },
+  { id: 'view-user-correction-sparse', query: 'View id 普通用户体验 纠正 暴露', expected: '普通用户' },
+  { id: 'view-user-correction-refined', query: '普通用户界面 view id 展示 修正 反馈', expected: '普通用户' },
   { id: 'vendor-renewal', query: 'Nebula Storage 续约检查点和业务 owner、法务复核人是谁？', expected: '2026-10-08' },
   { id: 'absent-quantum-key', query: 'Project Lantern 量子加密密钥轮换日期', expected: undefined },
   { id: 'absent-cfo', query: 'Project Lantern CFO 姓名和任命日期', expected: undefined },

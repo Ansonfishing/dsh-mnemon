@@ -60,7 +60,8 @@ one-turn natural-language recall benchmark suitable for repeated A/B samples;
 `single-recall-fault` uses a known misleading paraphrase that misses the first
 native smart result and therefore gates deterministic Native keyword recovery
 after the LLM has explicitly chosen Recall. The direct retrieval matrix also
-contains a focused non-numeric correction query to gate lexical recovery.
+contains natural, sparse, and refinement-worded non-numeric correction queries
+to gate lexical recovery and final evidence ordering.
 `--routing-guidance off --recall-mode off --writeback-mode off` isolates the
 base protocol and tool-schema cost. `--package-root` can point to a built older
 worktree for a like-for-like baseline. The harness detects pre-TurnView v0.2

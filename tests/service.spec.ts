@@ -412,6 +412,23 @@ describe('MnemonService', () => {
     expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['search', query]), expect.anything())
   })
 
+  it('prioritizes selected query-covering evidence before the smaller model envelope', async () => {
+    const process = vi.fn<ProcessRunner>(async () => ({
+      stdout: JSON.stringify({ results: [
+        { id: 'generic', content: '架构说明默认使用中文，UI 变更需要用户明确授权。', score: 0.35 },
+        { id: 'target', content: '用户曾明确纠正：View 是内部 generation snapshot，不应要求普通用户选择或理解 View id。', score: 0.317 },
+      ] }),
+      stderr: '', exitCode: 0,
+    }))
+    const config = resolveConfig({ cliPath: '/fake/mnemon', dataDir: populatedDataDir(), store: 'work' })
+    const runner = createRunner(config, process)
+    const service = new MnemonService(runner, config, new MemoryBodyRegistry(runner, true))
+
+    const result = await service.search({ query: 'View id 普通用户体验 纠正 暴露', limit: 3 })
+    expect(result.results.map(insight => insight.id)).toEqual(['target', 'generic'])
+    expect(process).toHaveBeenCalledOnce()
+  })
+
   it('does not run exact-anchor recovery when smart search already found covering evidence', async () => {
     const process = vi.fn<ProcessRunner>(async () => ({
       stdout: JSON.stringify({ results: [{

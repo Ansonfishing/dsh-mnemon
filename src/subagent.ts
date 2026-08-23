@@ -117,8 +117,6 @@ interface RecallAttempt {
   queryDigest: string
   result?: RecallResult
   pending?: Promise<RecallResult>
-  mediumCount?: number
-  unknownCount?: number
 }
 
 interface TurnRetrievalState {
@@ -354,8 +352,8 @@ const MODEL_RECALL_TOTAL_CONTENT_LIMIT = 4_800
 const MODEL_RECALL_ATTEMPT_LIMIT = 2
 const MODEL_RECALL_INITIAL_RESULT_LIMIT = 4
 const MODEL_RECALL_INITIAL_TOTAL_CONTENT_LIMIT = 3_600
-const MODEL_RECALL_MEDIUM_LIMIT = 1
-const MODEL_RECALL_UNKNOWN_LIMIT = 1
+const MODEL_RECALL_MEDIUM_LIMIT_PER_ATTEMPT = 1
+const MODEL_RECALL_UNKNOWN_LIMIT_PER_ATTEMPT = 1
 const MODEL_RECALL_LIST_LIMIT = 8
 const MODEL_RECALL_METADATA_LIMIT = 300
 
@@ -374,8 +372,6 @@ interface ModelInsightAdmission {
 
 interface ModelInsightEnvelope {
   results: Insight[]
-  mediumCount: number
-  unknownCount: number
 }
 
 function insightDigest(result: Pick<Insight, 'content'>): string {
@@ -392,8 +388,8 @@ function boundedModelInsights(results: readonly Insight[], admission: ModelInsig
   const resultLimit = admission.resultLimit ?? MODEL_RECALL_RESULT_LIMIT
   const contentLimit = admission.contentLimit ?? MODEL_RECALL_CONTENT_LIMIT
   const totalContentLimit = admission.totalContentLimit ?? MODEL_RECALL_TOTAL_CONTENT_LIMIT
-  const mediumLimit = admission.mediumLimit ?? MODEL_RECALL_MEDIUM_LIMIT
-  const unknownLimit = admission.unknownLimit ?? MODEL_RECALL_UNKNOWN_LIMIT
+  const mediumLimit = admission.mediumLimit ?? MODEL_RECALL_MEDIUM_LIMIT_PER_ATTEMPT
+  const unknownLimit = admission.unknownLimit ?? MODEL_RECALL_UNKNOWN_LIMIT_PER_ATTEMPT
   const seenReferences = new Set<string>()
   const seenDigests = new Set<string>(admission.excludeDigests)
   let mediumCount = 0
@@ -436,7 +432,7 @@ function boundedModelInsights(results: readonly Insight[], admission: ModelInsig
       ...(result.externalUri === undefined ? {} : { externalUri: boundedModelText(result.externalUri, 2_000) }),
     })
   }
-  return { results: admitted, mediumCount, unknownCount }
+  return { results: admitted }
 }
 
 /** Compatibility name for the v0.3 pre-release API. Recall no longer delegates. */
@@ -967,8 +963,6 @@ export class MnemonSubagentCoordinator {
       const priorAttempts = retrieval?.recallAttempts.slice(0, attemptIndex) ?? []
       const priorResults = priorAttempts.flatMap(entry => entry.result?.results ?? [])
       const priorContentCharacters = priorResults.reduce((total, insight) => total + insight.content.length, 0)
-      const priorMediumCount = priorAttempts.reduce((total, entry) => total + (entry.mediumCount ?? 0), 0)
-      const priorUnknownCount = priorAttempts.reduce((total, entry) => total + (entry.unknownCount ?? 0), 0)
       const requestedLimit = Math.min(limited.limit ?? MODEL_RECALL_RESULT_LIMIT, MODEL_RECALL_RESULT_LIMIT)
       const envelope = boundedModelInsights(result.results, retrieval === undefined
         ? { resultLimit: requestedLimit }
@@ -979,8 +973,12 @@ export class MnemonSubagentCoordinator {
             totalContentLimit: attemptIndex === 0
               ? MODEL_RECALL_INITIAL_TOTAL_CONTENT_LIMIT
               : Math.max(0, MODEL_RECALL_TOTAL_CONTENT_LIMIT - priorContentCharacters),
-            mediumLimit: Math.max(0, MODEL_RECALL_MEDIUM_LIMIT - priorMediumCount),
-            unknownLimit: Math.max(0, MODEL_RECALL_UNKNOWN_LIMIT - priorUnknownCount),
+            // A materially different query must be able to contribute one
+            // bounded medium/unknown clue even when the first attempt used
+            // its own slot. The shared result and character limits still cap
+            // the complete turn envelope.
+            mediumLimit: MODEL_RECALL_MEDIUM_LIMIT_PER_ATTEMPT,
+            unknownLimit: MODEL_RECALL_UNKNOWN_LIMIT_PER_ATTEMPT,
             excludeDigests: retrieval.evidenceDigests,
           })
       const results = envelope.results
@@ -1003,8 +1001,6 @@ export class MnemonSubagentCoordinator {
       if (retrieval !== undefined) {
         if (attempt !== undefined) {
           attempt.result = structuredClone(response)
-          attempt.mediumCount = envelope.mediumCount
-          attempt.unknownCount = envelope.unknownCount
         }
         for (const insight of results) {
           retrieval.evidenceDigests.add(insightDigest(insight))
