@@ -133,7 +133,8 @@ must not be mistaken for user wall time because concurrent calls can overlap.
 An execution timeout now terminates DSH but still flushes captured requests and
 logs before failing the run. `--execution-timeout-ms` can extend the default
 300-second ceiling for a diagnostic rerun without changing the release pass
-criterion.
+criterion. `--max-tokens` overrides a fixture's root response budget for
+diagnostic runs; release-suite measurements always use the fixture default.
 
 Request bodies contain the synthetic evaluation corpus and conversation, so
 they should be treated as evaluation evidence rather than committed fixtures.

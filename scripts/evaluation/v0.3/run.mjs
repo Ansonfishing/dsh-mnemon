@@ -46,11 +46,12 @@ function parseArguments(argv) {
     recallMode: 'guided',
     writebackMode: 'guided',
     executionTimeoutMs: undefined,
+    maxTokens: undefined,
   }
   for (let index = 0; index < argv.length; index += 1) {
     const name = argv[index]
     const value = argv[index + 1]
-    if (name === '--provider' || name === '--scenario' || name === '--package-root' || name === '--output' || name === '--mnemon-binary' || name === '--credential-file' || name === '--tool-surface' || name === '--idle-review-ms' || name === '--execution-timeout-ms' || name === '--corpus' || name === '--mnemon' || name === '--routing-guidance' || name === '--recall-mode' || name === '--writeback-mode') {
+    if (name === '--provider' || name === '--scenario' || name === '--package-root' || name === '--output' || name === '--mnemon-binary' || name === '--credential-file' || name === '--tool-surface' || name === '--idle-review-ms' || name === '--execution-timeout-ms' || name === '--max-tokens' || name === '--corpus' || name === '--mnemon' || name === '--routing-guidance' || name === '--recall-mode' || name === '--writeback-mode') {
       if (value === undefined) throw new Error(`${name} requires a value`)
       const key = {
         '--package-root': 'packageRoot',
@@ -59,11 +60,12 @@ function parseArguments(argv) {
         '--tool-surface': 'toolSurface',
         '--idle-review-ms': 'idleReviewMs',
         '--execution-timeout-ms': 'executionTimeoutMs',
+        '--max-tokens': 'maxTokens',
         '--routing-guidance': 'routingGuidance',
         '--recall-mode': 'recallMode',
         '--writeback-mode': 'writebackMode',
       }[name] ?? name.slice(2)
-      options[key] = key === 'idleReviewMs' || key === 'executionTimeoutMs' ? Number(value) : value
+      options[key] = key === 'idleReviewMs' || key === 'executionTimeoutMs' || key === 'maxTokens' ? Number(value) : value
       index += 1
       continue
     }
@@ -80,6 +82,7 @@ function parseArguments(argv) {
   if (options.mnemon === 'off' && (options.scenario !== 'context-only' || options.corpus !== 'empty')) throw new Error('--mnemon off requires --scenario context-only --corpus empty')
   if (!Number.isInteger(options.idleReviewMs) || options.idleReviewMs < 5_000 || options.idleReviewMs > 600_000) throw new Error('--idle-review-ms must be within 5000..600000')
   if (options.executionTimeoutMs !== undefined && (!Number.isInteger(options.executionTimeoutMs) || options.executionTimeoutMs < 60_000 || options.executionTimeoutMs > 900_000)) throw new Error('--execution-timeout-ms must be within 60000..900000')
+  if (options.maxTokens !== undefined && (!Number.isInteger(options.maxTokens) || options.maxTokens < 64 || options.maxTokens > 32_768)) throw new Error('--max-tokens must be within 64..32768')
   options.packageRoot = resolve(options.packageRoot)
   options.output = resolve(options.output)
   options.mnemonBinary = resolve(options.mnemonBinary)
@@ -618,6 +621,7 @@ async function main() {
       : await seedData(options.packageRoot, dataDir, workspaceRoot, options.mnemonBinary, options.corpus)
     await writeFile(join(options.output, 'seed.json'), `${JSON.stringify(seed, null, 2)}\n`)
     const scenario = scenarioFixture(options.scenario, workspaceRoot)
+    if (options.maxTokens !== undefined) scenario.maxTokens = options.maxTokens
     await writeFile(scenarioPath, `${JSON.stringify(scenario, null, 2)}\n`)
     await writeFile(join(options.output, 'scenario.json'), `${JSON.stringify({ ...scenario, workspaceRoot: '<isolated-workspace>' }, null, 2)}\n`)
 
