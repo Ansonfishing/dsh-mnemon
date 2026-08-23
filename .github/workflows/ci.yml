@@ -93,3 +93,14 @@ jobs:
           Remove-Item Env:MNEMON_CLI_PATH -ErrorAction SilentlyContinue
           $env:RUN_WINDOWS_MNEMON_SMOKE = '1'
           pnpm exec vitest run tests/windows-smoke.spec.ts
+
+      - name: Set up Node.js 20 for compatible-plugin smoke
+        if: runner.os == 'Linux' && matrix.node == 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          package-manager-cache: false
+
+      - name: Import public plugin entries on Node.js 20
+        if: runner.os == 'Linux' && matrix.node == 24
+        run: node scripts/verify-public-entries.mjs
