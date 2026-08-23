@@ -84,6 +84,38 @@ manifest, raw request bodies, durable session events, logs, and generated
 analysis. Mock usage is explicitly labelled as a character estimate; only a
 real run's `provider-reported` usage is valid for token conclusions.
 
+For a resumable release A/B, run the interleaved suite against a clean v0.2.16
+worktree. It alternates baseline/current order to reduce provider and prompt
+cache drift, repeats stochastic scenarios, and aggregates median and p95
+distributions:
+
+```sh
+node scripts/evaluation/v0.3/release-suite.mjs \
+  --baseline-root /private/tmp/dsh-mnemon-eval-v0216 \
+  --output /private/tmp/dsh-mnemon-v03-release-benchmark-20260824
+```
+
+`--mode smoke` reduces every selected case to one sample. `--only` accepts a
+comma-separated case list and makes an interrupted suite cheap to resume. A
+partial output directory is moved under `_partial/` before retry; completed
+runs whose package commit still matches are reused.
+
+In addition to the earlier conversation, autonomous recall, isolated recall,
+idle review, capacity, and context matrices, the release suite adds:
+
+- `steady-state`: eight hot-memory or unrelated turns where every memory tool
+  call is a false-positive scheduling cost;
+- `recall-matrix`: Document, durable-only, missing-history, and irrelevant
+  queries in one continuous session, exposing evidence carry-over;
+- `runtime-mutations`: add, next-turn visibility, replace, stale suppression,
+  remove, and deleted-fact suppression.
+
+The capture proxy forwards real SSE chunks as they arrive and records response
+headers, first byte, and completion separately. Analysis schema v2 also reports
+turn wall time, memory-tool result characters, tool event latency, failures,
+and unexpected memory calls. Provider request latency is still reported, but
+must not be mistaken for user wall time because concurrent calls can overlap.
+
 Request bodies contain the synthetic evaluation corpus and conversation, so
 they should be treated as evaluation evidence rather than committed fixtures.
 The harness stores no authorization header and removes its temporary DSH home,

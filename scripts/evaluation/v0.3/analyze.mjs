@@ -22,6 +22,20 @@ function textContent(content) {
   return content.map(block => typeof block === 'string' ? block : typeof block?.text === 'string' ? block.text : '').join('\n')
 }
 
+function deepTextContent(value) {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return value.map(deepTextContent).filter(Boolean).join('\n')
+  if (typeof value !== 'object' || value === null) return ''
+  if (typeof value.text === 'string') return value.text
+  return deepTextContent(value.content)
+}
+
+function elapsedMs(startedAt, finishedAt) {
+  const started = Date.parse(startedAt)
+  const finished = Date.parse(finishedAt)
+  return Number.isFinite(started) && Number.isFinite(finished) ? finished - started : undefined
+}
+
 function titleRequest(request) {
   return request.body?.messages?.some(message => textContent(message.content).startsWith('Create a concise title for an AI coding-assistant session')) === true
 }
@@ -72,8 +86,6 @@ function requestMetrics(request, rootSessionId, attribution) {
   const reminders = messages.filter(message => message.role === 'user' && textContent(message.content).startsWith(GUIDED_PREFIX)).map(message => textContent(message.content))
   const mnemonTools = tools.filter(tool => String(tool?.function?.name ?? '').startsWith('mnemon_'))
   const otherTools = tools.filter(tool => !String(tool?.function?.name ?? '').startsWith('mnemon_'))
-  const started = Date.parse(request.startedAt)
-  const finished = Date.parse(request.finishedAt)
   return {
     index: request.index,
     marker: attribution.marker,
@@ -104,7 +116,9 @@ function requestMetrics(request, rootSessionId, attribution) {
     usageKind: request.usageKind,
     finishReasons: request.finishReasons ?? [],
     responseToolCalls: request.responseToolCalls ?? [],
-    latencyMs: Number.isFinite(started) && Number.isFinite(finished) ? finished - started : undefined,
+    latencyMs: elapsedMs(request.startedAt, request.finishedAt),
+    headersLatencyMs: request.headersLatencyMs,
+    ttftMs: request.ttftMs,
   }
 }
 
@@ -138,20 +152,64 @@ function toolNames(turn) {
     .map(event => event.data.name)
 }
 
+function parseJson(value) {
+  try { return JSON.parse(value) } catch { return undefined }
+}
+
+function nestedError(value) {
+  if (typeof value !== 'object' || value === null) return false
+  if (value.isError === true) return true
+  return Object.values(value).some(nestedError)
+}
+
+function toolMetrics(turn) {
+  const calls = new Map()
+  const metrics = []
+  for (const event of turn.events) {
+    if (event.type === 'tool/call' && typeof event.data?.callId === 'string') {
+      calls.set(event.data.callId, event)
+      continue
+    }
+    if (event.type !== 'tool/result') continue
+    const callId = event.data?.message?.source?.callId
+    if (typeof callId !== 'string') continue
+    const call = calls.get(callId)
+    const resultText = deepTextContent(event.data?.message?.content)
+    const parsedResult = parseJson(resultText)
+    const started = Number(call?.time)
+    const finished = Number(event.time)
+    metrics.push({
+      callId,
+      name: call?.data?.name ?? 'unknown',
+      argumentsCharacters: typeof call?.data?.arguments === 'string' ? call.data.arguments.length : 0,
+      resultCharacters: resultText.length,
+      durationMs: Number.isFinite(started) && Number.isFinite(finished) ? Math.max(0, finished - started) : undefined,
+      isError: nestedError(event.data?.message?.content),
+      evidenceCount: Array.isArray(parsedResult?.results) ? parsedResult.results.length : undefined,
+    })
+  }
+  return metrics
+}
+
 function expectedAssessment(turn, scenarioTurn) {
   const expected = scenarioTurn?.expected ?? {}
   const tools = toolNames(turn).filter(name => name.startsWith('mnemon_'))
   const expectedTools = expected.memoryTools ?? []
   const missingTools = expectedTools.filter(name => !tools.includes(name))
   const unexpectedTools = expectedTools.length === 0 ? tools : []
-  const missingText = (expected.mustContain ?? []).filter(text => !turn.assistantText.toLocaleLowerCase().includes(String(text).toLocaleLowerCase()))
+  const answer = turn.assistantText.toLocaleLowerCase()
+  const missingText = (expected.mustContain ?? []).filter(text => !answer.includes(String(text).toLocaleLowerCase()))
+  const missingAnyText = (expected.mustContainAny ?? []).filter(group => !group.some(text => answer.includes(String(text).toLocaleLowerCase())))
+  const forbiddenText = (expected.mustNotContain ?? []).filter(text => answer.includes(String(text).toLocaleLowerCase()))
   return {
-    passed: missingTools.length === 0 && unexpectedTools.length === 0 && missingText.length === 0,
+    passed: missingTools.length === 0 && unexpectedTools.length === 0 && missingText.length === 0 && missingAnyText.length === 0 && forbiddenText.length === 0,
     memoryTools: tools,
     expectedTools,
     missingTools,
     unexpectedTools,
     missingText,
+    missingAnyText,
+    forbiddenText,
   }
 }
 
@@ -183,6 +241,8 @@ function summaryMarkdown(analysis, directory) {
     { label: 'Model calls', value: row => row.requestCount },
     { label: 'Prompt tokens', value: row => row.promptTokens },
     { label: 'Completion tokens', value: row => row.completionTokens },
+    { label: 'Wall ms', value: row => row.wallLatencyMs ?? '?' },
+    { label: 'Tool result chars', value: row => row.memoryToolResultCharacters },
   ])
   const requestTable = markdownTable(analysis.requests, [
     { label: '#', value: row => row.index },
@@ -193,6 +253,7 @@ function summaryMarkdown(analysis, directory) {
     { label: 'Latest Mnemon', value: row => `${row.latestMnemonCharacters}c` },
     { label: 'Mnemon tools', value: row => `${row.mnemonToolCount}/${row.mnemonToolCharacters}c` },
     { label: 'Reminders', value: row => `${row.guidedReminderCount}/${row.guidedReminderCharacters}c` },
+    { label: 'TTFT', value: row => row.ttftMs ?? '?' },
   ])
   return `# ${analysis.scenarioId} — evaluation summary
 
@@ -203,6 +264,8 @@ Evidence directory: \`${basename(directory)}\`
 - Provider usage: ${analysis.totals.usageKind}; ${analysis.totals.modelCalls} evaluated model calls plus ${analysis.totals.titleCalls} DSH title call(s).
 - Provider-reported/recorded tokens: ${analysis.totals.promptTokens} prompt + ${analysis.totals.completionTokens} completion = ${analysis.totals.totalTokens} total.
 - Scenario checks: ${analysis.totals.passedTurns}/${analysis.turns.length} passed.
+- User-visible turn wall time: ${analysis.totals.turnWallMs} ms; provider request time sums to ${analysis.totals.latencyMs} ms and can overlap.
+- Memory tools: ${analysis.totals.memoryToolCalls} calls, ${analysis.totals.memoryToolResultCharacters} result chars, ${analysis.totals.failedMemoryToolCalls} failed results.
 - First latest Mnemon payload: ${first?.latestMnemonCharacters ?? 0} chars; protocol ${first?.latestProtocolCharacters ?? 0}, memory data ${first?.latestDataCharacters ?? 0}, routed cover ${first?.latestRoutedCharacters ?? 0}.
 - Last request carries ${last?.contextSnapshotCount ?? 0} runtime-context snapshot(s), totaling ${last?.contextSnapshotCharacters ?? 0} chars; superseded snapshots still count toward provider input.
 - Mnemon tool schemas per ordinary root call: ${first?.mnemonToolCount ?? 0} tools / ${first?.mnemonToolCharacters ?? 0} serialized chars.
@@ -236,6 +299,8 @@ async function main() {
   const scenarioById = new Map(scenario.turns.map(turn => [turn.id, turn]))
   const turns = session.turns.map(turn => {
     const related = metrics.filter(request => request.marker === turn.prompt.match(/\[EVAL:[^\]]+\]/u)?.[0])
+    const tools = toolMetrics(turn)
+    const memoryTools = tools.filter(tool => tool.name.startsWith('mnemon_'))
     return {
       id: turn.id,
       assistantText: turn.assistantText,
@@ -247,6 +312,11 @@ async function main() {
       promptTokens: sum(related.map(request => request.providerUsage?.prompt_tokens)),
       completionTokens: sum(related.map(request => request.providerUsage?.completion_tokens)),
       latencyMs: sum(related.map(request => request.latencyMs)),
+      wallLatencyMs: elapsedMs(turn.startedAt, turn.finishedAt),
+      toolMetrics: tools,
+      memoryToolCalls: memoryTools.length,
+      memoryToolLatencyMs: sum(memoryTools.map(tool => tool.durationMs)),
+      memoryToolResultCharacters: sum(memoryTools.map(tool => tool.resultCharacters)),
     }
   })
   const firstMnemonContext = requestContexts(evaluatedRequests.find(request => request.sessionId === session.sessionId) ?? { body: {} }).map(mnemonSlice).at(-1) ?? ''
@@ -254,7 +324,7 @@ async function main() {
   const completeMetrics = metrics.filter(request => request.status !== undefined && request.providerUsage !== undefined)
   const incompleteCalls = metrics.length - completeMetrics.length
   const analysis = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     scenarioId: session.scenarioId,
     sessionId: session.sessionId,
     requests: metrics,
@@ -281,6 +351,12 @@ async function main() {
       latencyMs: sum(metrics.map(request => request.latencyMs)),
       rootLatencyMs: sum(metrics.filter(request => request.agentRole === 'root').map(request => request.latencyMs)),
       childLatencyMs: sum(metrics.filter(request => request.agentRole !== 'root').map(request => request.latencyMs)),
+      turnWallMs: sum(turns.map(turn => turn.wallLatencyMs)),
+      memoryToolCalls: sum(turns.map(turn => turn.memoryToolCalls)),
+      memoryToolLatencyMs: sum(turns.map(turn => turn.memoryToolLatencyMs)),
+      memoryToolResultCharacters: sum(turns.map(turn => turn.memoryToolResultCharacters)),
+      failedMemoryToolCalls: sum(turns.flatMap(turn => turn.toolMetrics).map(tool => tool.name.startsWith('mnemon_') && tool.isError ? 1 : 0)),
+      unexpectedMemoryToolTurns: turns.filter(turn => turn.assessment.unexpectedTools.length > 0).length,
       titlePromptTokens: sum(titleRequests.map(request => request.usage?.prompt_tokens)),
       titleCompletionTokens: sum(titleRequests.map(request => request.usage?.completion_tokens)),
       completedModelCalls: completeMetrics.length,

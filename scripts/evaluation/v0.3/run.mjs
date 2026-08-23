@@ -17,8 +17,11 @@ import {
   idleReviewScenario,
   memorySpaces,
   realConversationScenario,
+  recallMatrixScenario,
   runtimeEntries,
+  runtimeMutationScenario,
   singleRecallScenario,
+  steadyStateScenario,
 } from './fixtures.mjs'
 
 const harnessRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -65,7 +68,7 @@ function parseArguments(argv) {
     throw new Error(`unknown argument: ${name}`)
   }
   if (!['mock', 'real'].includes(options.provider)) throw new Error('--provider must be mock or real')
-  if (!['deterministic', 'real-conversation', 'idle-review', 'context-only', 'autonomous-recall', 'single-recall', 'capacity-maintenance'].includes(options.scenario)) throw new Error('--scenario is unsupported')
+  if (!['deterministic', 'real-conversation', 'idle-review', 'context-only', 'autonomous-recall', 'single-recall', 'capacity-maintenance', 'steady-state', 'recall-matrix', 'runtime-mutations'].includes(options.scenario)) throw new Error('--scenario is unsupported')
   if (!['memory-only', 'full'].includes(options.toolSurface)) throw new Error('--tool-surface must be memory-only or full')
   if (!['empty', 'realistic', 'max-runtime', 'capacity', 'scale'].includes(options.corpus)) throw new Error('--corpus is unsupported')
   if (!['on', 'off'].includes(options.mnemon)) throw new Error('--mnemon must be on or off')
@@ -291,19 +294,19 @@ async function inspectData(packageRoot, dataDir, workspaceRoot, mnemonBinary) {
 }
 
 function scenarioFixture(name, workspaceRoot) {
-  const selected = name === 'deterministic'
-    ? deterministicScenario
-    : name === 'idle-review'
-      ? idleReviewScenario
-      : name === 'context-only'
-        ? contextOnlyScenario
-        : name === 'autonomous-recall'
-          ? autonomousRecallScenario
-          : name === 'single-recall'
-            ? singleRecallScenario
-            : name === 'capacity-maintenance'
-              ? capacityMaintenanceScenario
-              : realConversationScenario
+  const selected = {
+    deterministic: deterministicScenario,
+    'real-conversation': realConversationScenario,
+    'idle-review': idleReviewScenario,
+    'context-only': contextOnlyScenario,
+    'autonomous-recall': autonomousRecallScenario,
+    'single-recall': singleRecallScenario,
+    'capacity-maintenance': capacityMaintenanceScenario,
+    'steady-state': steadyStateScenario,
+    'recall-matrix': recallMatrixScenario,
+    'runtime-mutations': runtimeMutationScenario,
+  }[name]
+  if (selected === undefined) throw new Error(`evaluation scenario is unavailable: ${name}`)
   return { ...structuredClone(selected), workspaceRoot, sessionId: `mnemon-eval-${name}-${randomUUID()}` }
 }
 
@@ -510,7 +513,7 @@ async function startCaptureServer(provider) {
         const payload = mockSse(body, index)
         response.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
         response.end(payload)
-        Object.assign(record, { finishedAt: new Date().toISOString(), status: 200, usage: responseUsage(payload), finishReasons: responseFinishReasons(payload), responseToolCalls: responseToolCalls(payload), usageKind: 'mock-character-estimate' })
+        Object.assign(record, { finishedAt: new Date().toISOString(), status: 200, headersLatencyMs: 0, ttftMs: 0, usage: responseUsage(payload), finishReasons: responseFinishReasons(payload), responseToolCalls: responseToolCalls(payload), usageKind: 'mock-character-estimate' })
         return
       }
       const upstream = new URL(request.url ?? '/', 'https://api.deepseek.com')
@@ -519,15 +522,35 @@ async function startCaptureServer(provider) {
         headers: proxyHeaders(request.headers),
         body: request.method === 'GET' || request.method === 'HEAD' ? undefined : rawBody,
       })
-      const responseBody = await upstreamResponse.text()
+      const headersAt = new Date().toISOString()
       response.writeHead(upstreamResponse.status, {
         'content-type': upstreamResponse.headers.get('content-type') ?? 'application/octet-stream',
         'cache-control': upstreamResponse.headers.get('cache-control') ?? 'no-cache',
       })
-      response.end(responseBody)
+      response.flushHeaders()
+      const decoder = new TextDecoder()
+      let responseBody = ''
+      let firstByteAt
+      if (upstreamResponse.body !== null) {
+        const reader = upstreamResponse.body.getReader()
+        while (true) {
+          const chunk = await reader.read()
+          if (chunk.done) break
+          if (firstByteAt === undefined) firstByteAt = new Date().toISOString()
+          responseBody += decoder.decode(chunk.value, { stream: true })
+          response.write(chunk.value)
+        }
+        responseBody += decoder.decode()
+      }
+      response.end()
+      const finishedAt = new Date().toISOString()
       Object.assign(record, {
-        finishedAt: new Date().toISOString(),
+        headersAt,
+        firstByteAt,
+        finishedAt,
         status: upstreamResponse.status,
+        headersLatencyMs: Math.max(0, Date.parse(headersAt) - Date.parse(startedAt)),
+        ttftMs: firstByteAt === undefined ? undefined : Math.max(0, Date.parse(firstByteAt) - Date.parse(startedAt)),
         usage: responseUsage(responseBody),
         finishReasons: responseFinishReasons(responseBody),
         responseToolCalls: responseToolCalls(responseBody),
