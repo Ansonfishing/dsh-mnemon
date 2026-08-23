@@ -11,8 +11,8 @@ function invocation(rawInput: string) {
 
 function coordinator(overrides: Partial<MnemonSubagentCoordinator> = {}): MnemonSubagentCoordinator {
   return {
-    recall: vi.fn(async (_agent, request) => ({ query: request.query, mode: 'smart', results: [], delegation: { runId: 'child-1', provider: 'spawn', summary: '', selectedMemoryBodyIds: [] } })),
-    related: vi.fn(async () => ({ query: 'related', mode: 'related', results: [], delegation: { runId: 'child-1', provider: 'spawn', summary: '', selectedMemoryBodyIds: [] } })),
+    recall: vi.fn(async (_agent, request) => ({ query: request.query, mode: 'smart', results: [], selectedMemoryBodyIds: [] })),
+    related: vi.fn(async () => ({ query: 'related', mode: 'related', results: [], selectedMemoryBodyIds: [] })),
     remember: vi.fn(async () => ({ delegated: true, runId: 'child-1', provider: 'spawn', summary: '', action: 'stored', memoryBodyIds: ['project'] })),
     write: vi.fn(async () => ({ delegated: true, runId: 'child-1', provider: 'spawn', summary: '', action: 'forgotten', memoryBodyIds: ['project'] })),
     ...overrides,
@@ -49,7 +49,7 @@ describe('/mnemon command', () => {
       config: { writeEnabled: true, defaultRecallLimit: 20 },
     } as unknown as MnemonService
     const memoryCoordinator = coordinator({
-      recall: vi.fn(async () => ({ query: '为什么使用 SQLite', mode: 'smart', results: [{ id: 'memory-full-id', content: '选择 SQLite 以便本地优先', score: 0.8, memoryBodyId: 'project' }], delegation: { runId: 'child-1', provider: 'spawn', summary: '', selectedMemoryBodyIds: ['project'] } })),
+      recall: vi.fn(async () => ({ query: '为什么使用 SQLite', mode: 'smart', results: [{ id: 'memory-full-id', content: '选择 SQLite 以便本地优先', score: 0.8, memoryBodyId: 'project' }], selectedMemoryBodyIds: ['project'] })),
     })
     const result = await createMnemonCommand(service, memoryCoordinator).handler(invocation('recall 为什么使用 SQLite'))
     expect(memoryCoordinator.recall).toHaveBeenCalledWith(agent, { query: '为什么使用 SQLite', limit: 10 }, expect.any(AbortSignal))

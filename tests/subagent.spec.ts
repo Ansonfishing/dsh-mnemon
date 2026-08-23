@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostAgent, HostContextShape, HostSubagentsService, ToolDefinition } from '../src/contracts.ts'
 import { DocumentManager } from '../src/documents.ts'
-import type { MnemonService, SearchRequest } from '../src/service.ts'
+import type { MnemonService } from '../src/service.ts'
 import { assertDshOutputSchema, MnemonSubagentCoordinator } from '../src/subagent.ts'
 import { prepareMemoryPlacement, type MemoryPlacementCandidate } from '../src/provider-placement.ts'
 import { registerTools } from '../src/tools.ts'
@@ -157,138 +157,85 @@ describe('Mnemon memory subagent coordinator', () => {
     })).not.toThrow()
   })
 
-  it('selects memory bodies in a fresh tool-scoped child and returns only structured recall evidence', async () => {
-    const host = subagents({
-      summary: 'Project memory matched.',
-      selectedMemoryBodyIds: ['project'],
-      results: [{ id: 'm1', content: 'Use SQLite.', memoryBodyId: 'project', memoryBodyName: '项目记忆体', score: 0.9 }],
-    })
-    const resultTools = toolRegistry()
-    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, undefined, resultTools.value)
-
-    await expect(coordinator.recall(parent(), { query: 'database choice' }, new AbortController().signal)).resolves.toMatchObject({
-      results: [{ id: 'm1', memoryBodyId: 'project' }],
-      delegation: { runId: 'child-run-1', provider: 'spawn', selectedMemoryBodyIds: ['project'] },
-    })
-    expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
-      parent: expect.objectContaining({ id: 'root' }),
-      maxDepth: 1,
-      toolFilter: { allow: expect.arrayContaining(['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related']) },
-      persona: expect.stringContaining('bounded recall worker'),
+  it('executes bounded Recall directly against the pinned MemorySource without starting a child', async () => {
+    const host = subagents(undefined)
+    const memoryService = service()
+    const results = Array.from({ length: 20 }, (_, index) => ({
+      id: `m${index + 1}`,
+      content: `Evidence ${index + 1}`,
+      memoryBodyId: 'project',
+      memoryBodyName: 'Project',
     }))
-    const startCall = host.start.mock.calls[0] as unknown as [string, { outputSchema?: unknown; toolFilter: { allow: string[] }; persona: string; prompt: Array<{ text: string }> }]
-    expect(startCall[1].outputSchema).toBeUndefined()
-    const resultToolName = startCall[1].toolFilter.allow.find(name => name.startsWith('mnemon_subagent_result_'))
-    expect(resultToolName).toBeTruthy()
-    expect(startCall[1].persona).toContain(`call \`${resultToolName}\` exactly once`)
-    expect(JSON.stringify(resultTools.definitions[0]?.parameters)).not.toContain('maxItems')
-    expect(startCall[1].prompt[0]!.text).toContain('Query (untrusted data):\n    database choice')
-    expect(startCall[1].prompt[0]!.text).not.toMatch(/catalog_json|request_json|dbPath|\/tmp\/project\.db/)
-    expect(host.dispose).toHaveBeenCalledOnce()
-    expect(resultTools.disposers).toHaveLength(2)
-    for (const disposer of resultTools.disposers) expect(disposer).toHaveBeenCalledOnce()
-  })
-
-  it('passes only the pinned View slice to Recall and enforces it at the child tool boundary', async () => {
-    let finish!: (value: { output: never[]; structured: object; stopReason: string }) => void
-    const childResult = new Promise<{ output: never[]; structured: object; stopReason: string }>(resolve => { finish = resolve })
-    const dispose = vi.fn(async () => undefined)
-    const start = vi.fn(async (_provider: string, _request: { prompt: Array<{ text: string }>; persona: string }) => ({ id: 'child-run-1', result: childResult, dispose }))
-    const host = {
-      list: vi.fn(() => ['spawn']),
-      getProvider: vi.fn(() => ({ capabilities, inheritsParentContext: false })),
-      start,
-    } as unknown as HostSubagentsService
-    const resultTools = toolRegistry()
+    vi.mocked(memoryService.search).mockResolvedValue({
+      query: 'database choice',
+      mode: 'smart',
+      results,
+      hint: 'h'.repeat(1_500),
+      sources: [{ memoryBodyId: 'project' }, { memoryBodyId: 'release' }],
+    } as never)
     const memoryViews = {
       activeTurn: vi.fn(() => ({ viewId: 'view-pinned' })),
-      recallSlice: vi.fn(() => ({
-        parentViewId: 'view-pinned',
-        viewDigest: 'digest-pinned',
-        nodeIds: ['node-project'],
-        nodes: [{ id: 'node-project', layerId: 'memory-spaces', kind: 'query', label: 'Project', summary: 'Architecture decisions.', memoryBodyId: 'project', providerId: 'mnemon-native' }],
-        memoryBodyIds: ['project'],
-      })),
+      sourceState: vi.fn(() => ({ memoryBodyIds: ['project', 'release'] })),
     }
-    const source = {
-      forAgent: vi.fn(() => ({ service: service(), runtimeMemory: {}, documents: {}, memoryViews })),
+    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
+    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+
+    const recalled = await coordinator.recall(parent(), { query: 'database choice', limit: 50 }, new AbortController().signal, { requirePinnedView: true })
+
+    expect(memoryService.search).toHaveBeenCalledWith({ query: 'database choice', limit: 12, memoryBodyIds: ['project', 'release'] }, expect.any(AbortSignal))
+    expect(recalled).toMatchObject({ selectedMemoryBodyIds: ['project', 'release'], results: expect.any(Array) })
+    expect(recalled.results).toHaveLength(12)
+    expect(recalled.hint).toHaveLength(1_000)
+    expect(recalled).not.toHaveProperty('sources')
+    expect(recalled).not.toHaveProperty('delegation')
+    expect(host.start).not.toHaveBeenCalled()
+    expect(coordinator.snapshot()).toMatchObject({ recalls: 1, failures: 0, lastOperation: 'recall' })
+  })
+
+  it('derives a child read from its root parent turn with no model-facing capability', async () => {
+    const host = subagents(undefined)
+    const memoryService = service()
+    const memoryViews = {
+      activeTurn: vi.fn((agentId: string) => agentId === 'root' ? { viewId: 'view-pinned' } : undefined),
+      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
     }
-    const coordinator = new MnemonSubagentCoordinator(host, source as never, undefined, resultTools.value)
-    const root = parent()
-    await expect(coordinator.recall(root, { query: 'stale request', parentViewId: 'view-stale' }, new AbortController().signal)).rejects.toThrow('does not match the View pinned')
-    expect(start).not.toHaveBeenCalled()
-    const pending = coordinator.recall(root, { query: 'database choice', viewNodeId: 'node-project' }, new AbortController().signal)
-    await vi.waitFor(() => expect(start).toHaveBeenCalledOnce())
+    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
+    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
     const child = parent('subagent')
-    child.id = 'child-run-1'
-    child.session.header!.parentSession = root.id
-    const capability = /viewCapability="([^"]+)"/.exec((start.mock.calls[0]![1] as { persona: string }).persona)?.[1]
-    expect(capability).toBeTruthy()
+    child.session.header!.parentSession = 'root'
 
-    expect(coordinator.scopeRecallRequest(child, { query: 'database choice' }, capability)).toEqual({ query: 'database choice', memoryBodyIds: ['project'] })
-    expect(() => coordinator.scopeRecallRequest(child, { query: 'database choice', memoryBodyIds: ['outside'] }, capability)).toThrow('outside parent View')
-    expect(coordinator.scopeRelatedMemoryBody(child, undefined, capability)).toBe('project')
-    expect(() => coordinator.scopeRelatedMemoryBody(child, 'outside', capability)).toThrow('outside parent View')
-    const request = start.mock.calls[0]![1] as { prompt: Array<{ text: string }>; persona: string }
-    expect(request.prompt[0]!.text).toContain('Parent Memory View: view-pinned')
-    expect(request.prompt[0]!.text).toContain('[node-project] Project (Memory Space project)')
-    expect(request.prompt[0]!.text).not.toContain('Runtime Memory')
-    expect(request.persona).toContain('never the parent\'s full Wake')
-
-    finish({ output: [], structured: { summary: '', selectedMemoryBodyIds: ['project'], results: [] }, stopReason: 'completed' })
-    await expect(pending).resolves.toMatchObject({ delegation: { selectedMemoryBodyIds: ['project'] } })
-    expect(dispose).toHaveBeenCalledOnce()
-
-    memoryViews.activeTurn.mockReturnValueOnce(undefined as never)
-    await expect(coordinator.recall(root, { query: 'old explicit View', parentViewId: 'view-pinned' }, new AbortController().signal, { requirePinnedView: true })).rejects.toThrow('pinned to the current turn')
-    expect(start).toHaveBeenCalledOnce()
+    expect(coordinator.scopeRecallRequest(child, { query: 'database choice' })).toEqual({ query: 'database choice', memoryBodyIds: ['project'] })
+    expect(() => coordinator.scopeRecallRequest(child, { query: 'database choice', memoryBodyIds: ['outside'] })).toThrow('outside pinned Source')
+    expect(coordinator.scopeRelatedMemoryBody(child)).toBe('project')
+    expect(() => coordinator.scopeRelatedMemoryBody(child, 'outside')).toThrow('outside pinned Source')
+    await expect(coordinator.recall(child, { query: 'database choice' }, new AbortController().signal)).resolves.toMatchObject({ selectedMemoryBodyIds: ['project'] })
+    expect(memoryViews.activeTurn).toHaveBeenCalledWith('root')
+    expect(host.start).not.toHaveBeenCalled()
   })
 
-  it('installs the Recall View capability before an in-process child can execute', async () => {
-    const resultTools = toolRegistry()
+  it('fails closed without pinned authority and executes bounded Related directly when authorized', async () => {
+    const host = subagents(undefined)
+    const memoryService = service()
     const memoryViews = {
-      activeTurn: vi.fn(() => ({ viewId: 'view-pinned' })),
-      recallSlice: vi.fn(() => ({
-        parentViewId: 'view-pinned', viewDigest: 'digest-pinned', nodeIds: ['node-project'],
-        nodes: [{ id: 'node-project', layerId: 'memory-spaces', kind: 'query', label: 'Project', summary: 'Decisions.', memoryBodyId: 'project', providerId: 'mnemon-native' }],
-        memoryBodyIds: ['project'],
-      })),
+      activeTurn: vi.fn(() => undefined as { viewId: string } | undefined),
+      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
     }
-    const source = { forAgent: vi.fn(() => ({ service: service(), runtimeMemory: {}, documents: {}, memoryViews })) }
-    let coordinator!: MnemonSubagentCoordinator
-    let earliestRequest: SearchRequest | undefined
-    const start = vi.fn(async (_provider: string, request: { persona: string; parent: HostAgent }) => {
-      const child = parent('subagent')
-      child.id = 'child-racing-start'
-      child.session.header!.parentSession = request.parent.id
-      expect(() => coordinator.scopeRecallRequest(child, { query: 'database choice' })).toThrow('not yet bound')
-      const capability = /viewCapability="([^"]+)"/.exec(request.persona)?.[1]
-      expect(capability).toBeTruthy()
-      earliestRequest = coordinator.scopeRecallRequest(child, { query: 'database choice' }, capability)
-      return {
-        id: child.id,
-        localAgent: child,
-        result: Promise.resolve({ output: [], structured: { summary: '', selectedMemoryBodyIds: ['project'], results: [] }, stopReason: 'completed' }),
-        dispose: vi.fn(async () => undefined),
-      }
+    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
+    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+    const signal = new AbortController().signal
+
+    await expect(coordinator.recall(parent(), { query: 'database choice' }, signal, { requirePinnedView: true })).rejects.toThrow('MemorySource generation pinned')
+    expect(memoryService.search).not.toHaveBeenCalled()
+
+    memoryViews.activeTurn.mockReturnValue({ viewId: 'view-pinned' })
+    vi.mocked(memoryService.related).mockResolvedValue([{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: 'Project' }])
+    await expect(coordinator.related(parent(), 'm1', undefined, signal, { depth: 3, edge: 'causal', requirePinnedView: true })).resolves.toEqual({
+      query: 'related:m1',
+      mode: 'related',
+      results: [{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: 'Project' }],
+      selectedMemoryBodyIds: ['project'],
     })
-    const host = {
-      list: vi.fn(() => ['spawn']),
-      getProvider: vi.fn(() => ({ capabilities, inheritsParentContext: false })),
-      start,
-    } as unknown as HostSubagentsService
-    coordinator = new MnemonSubagentCoordinator(host, source as never, undefined, resultTools.value)
-
-    await expect(coordinator.recall(parent(), { query: 'database choice', viewNodeId: 'node-project' }, new AbortController().signal))
-      .resolves.toMatchObject({ delegation: { selectedMemoryBodyIds: ['project'] } })
-    expect(earliestRequest).toEqual({ query: 'database choice', memoryBodyIds: ['project'] })
-  })
-
-  it('refuses an inheriting provider for isolated Recall workers', async () => {
-    const host = subagents({ summary: '', selectedMemoryBodyIds: [], results: [] }, 'completed', ['fork'])
-    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, undefined, toolRegistry().value)
-
-    await expect(coordinator.recall(parent(), { query: 'private context' }, new AbortController().signal)).rejects.toThrow('non-inheriting')
+    expect(memoryService.related).toHaveBeenCalledWith('m1', 3, 'causal', signal, 'project')
     expect(host.start).not.toHaveBeenCalled()
   })
 
@@ -305,12 +252,12 @@ describe('Mnemon memory subagent coordinator', () => {
       const outerToken = Symbol('run-code')
       const execution = { name: definition.name, token: Symbol('result'), parent: outerToken, agent: child, signal: new AbortController().signal, concludeTurn }
       await definition.execute({
-        summary: 'Project memory matched.',
-        selectedMemoryBodyIds: ['project'],
-        results: [{ id: 'm1', content: 'Use SQLite.', memoryBodyId: 'project', memoryBodyName: 'Project' }],
+        summary: 'Stored in project.',
+        action: 'stored',
+        memoryBodyIds: ['project'],
       } as never, execution)
       await expect(definition.execute({
-        summary: 'Duplicate.', selectedMemoryBodyIds: [], results: [],
+        summary: 'Duplicate.', action: 'skipped', memoryBodyIds: [],
       } as never, { ...execution, token: Symbol('duplicate') })).rejects.toThrow('already recorded')
       resultTools.emit('tools/result', execution, { isError: false })
       resultTools.emit('tools/result', { name: 'run_code', token: outerToken, signal: execution.signal, agent: child }, { isError: false })
@@ -323,9 +270,10 @@ describe('Mnemon memory subagent coordinator', () => {
     } as unknown as HostSubagentsService
     const coordinator = new MnemonSubagentCoordinator(host, undefined, undefined, resultTools.value)
 
-    await expect(coordinator.recall(parent(), { query: 'database choice' }, new AbortController().signal)).resolves.toMatchObject({
-      results: [{ id: 'm1', memoryBodyId: 'project' }],
-      delegation: { runId: 'child-run-1', provider: 'spawn' },
+    await expect(coordinator.remember(parent(), { content: 'Use SQLite.' }, new AbortController().signal)).resolves.toMatchObject({
+      delegated: true,
+      action: 'stored',
+      memoryBodyIds: ['project'],
     })
     expect(concludeTurn).toHaveBeenCalledOnce()
     expect(dispose).toHaveBeenCalledOnce()
@@ -343,7 +291,7 @@ describe('Mnemon memory subagent coordinator', () => {
         const definition = resultTools.definitions.at(-1)!
         const execution = { name: definition.name, token: Symbol('intruder'), agent: intruder, signal: new AbortController().signal, concludeTurn: vi.fn() }
         await definition.execute({
-          summary: 'Wrong child.', selectedMemoryBodyIds: [], results: [],
+          summary: 'Wrong child.', action: 'skipped', memoryBodyIds: [],
         } as never, execution)
         resultTools.emit('tools/result', execution, { isError: false })
         return { id: 'child-run-1', result: Promise.resolve({ output: [], stopReason: 'completed' }), dispose: vi.fn(async () => {}) }
@@ -351,7 +299,7 @@ describe('Mnemon memory subagent coordinator', () => {
     } as unknown as HostSubagentsService
     const coordinator = new MnemonSubagentCoordinator(host, undefined, undefined, resultTools.value)
 
-    await expect(coordinator.recall(parent(), { query: 'x' }, new AbortController().signal)).rejects.toThrow('recorded by a different child')
+    await expect(coordinator.remember(parent(), { content: 'x' }, new AbortController().signal)).rejects.toThrow('recorded by a different child')
     for (const disposer of resultTools.disposers) expect(disposer).toHaveBeenCalledOnce()
   })
 
@@ -363,7 +311,7 @@ describe('Mnemon memory subagent coordinator', () => {
       list: vi.fn(() => ['spawn']),
       getProvider: vi.fn(() => ({ capabilities })),
       start: vi.fn(async () => {
-        await resultTools.definitions.at(-1)!.execute({ selectedMemoryBodyIds: [], results: [] } as never, {
+        await resultTools.definitions.at(-1)!.execute({ action: 'stored', memoryBodyIds: [] } as never, {
           agent: child, signal: new AbortController().signal, concludeTurn: vi.fn(),
         })
         throw new Error('unreachable')
@@ -371,30 +319,8 @@ describe('Mnemon memory subagent coordinator', () => {
     } as unknown as HostSubagentsService
     const coordinator = new MnemonSubagentCoordinator(host, undefined, undefined, resultTools.value)
 
-    await expect(coordinator.recall(parent(), { query: 'x' }, new AbortController().signal)).rejects.toThrow('result.summary is required')
+    await expect(coordinator.remember(parent(), { content: 'x' }, new AbortController().signal)).rejects.toThrow('result.summary is required')
     for (const disposer of resultTools.disposers) expect(disposer).toHaveBeenCalledOnce()
-  })
-
-  it('recovers recall evidence from an authoritative native tool receipt when the child omits its terminal result', async () => {
-    const resultTools = toolRegistry()
-    const host = observedSubagents(resultTools, child => {
-      emitSuccessfulToolResult(resultTools, child, 'mnemon_recall', { query: 'database', memoryBodyIds: ['project'] }, {
-        query: 'database',
-        mode: 'smart',
-        hint: 'Project memory matched.',
-        results: [{ id: 'm1', content: 'Use SQLite.', memoryBodyId: 'project', memoryBodyName: 'Project' }],
-        sources: [{ memoryBodyId: 'project' }],
-      })
-    })
-    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, undefined, resultTools.value)
-
-    await expect(coordinator.recall(parent(), { query: 'database' }, new AbortController().signal)).resolves.toMatchObject({
-      results: [{ id: 'm1', content: 'Use SQLite.', memoryBodyId: 'project' }],
-      hint: 'Project memory matched.',
-      delegation: { runId: 'child-run-1', selectedMemoryBodyIds: ['project'] },
-    })
-    expect(host.start).toHaveBeenCalledOnce()
-    expect(coordinator.snapshot()).toMatchObject({ recalls: 1, failures: 0 })
   })
 
   it('recovers a committed write receipt without retrying the mutation', async () => {
@@ -476,7 +402,7 @@ describe('Mnemon memory subagent coordinator', () => {
   it('fails closed when a child completes without a terminal result or matching successful tool receipt', async () => {
     const host = subagents(undefined)
     const coordinator = createCoordinator(host.value)
-    await expect(coordinator.recall(parent(), { query: 'x' }, new AbortController().signal)).rejects.toThrow('completed without recording its result')
+    await expect(coordinator.remember(parent(), { content: 'x' }, new AbortController().signal)).rejects.toThrow('completed without recording its result')
     expect(host.dispose).toHaveBeenCalledOnce()
   })
 
@@ -1005,14 +931,14 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(runtime.compactTarget).not.toHaveBeenCalled()
   })
 
-  it('disposes failed child runs and reports a hard error instead of falling back to direct memory access', async () => {
+  it('disposes failed delegated writes and reports the bounded provider error', async () => {
     const failedChild = {
       ...parent('subagent'),
       session: { header: { origin: 'subagent' as const }, events: [{ type: 'turn/end', data: { reason: { kind: 'error', error: { code: 'MODEL_ROUTE', message: 'provider rejected sk-secret123456' } } } }] },
     }
     const host = subagents(undefined, 'error', ['spawn'], failedChild)
     const coordinator = createCoordinator(host.value)
-    await expect(coordinator.recall(parent(), { query: 'x' }, new AbortController().signal)).rejects.toThrow('stopped with error: MODEL_ROUTE: provider rejected [redacted]')
+    await expect(coordinator.remember(parent(), { content: 'x' }, new AbortController().signal)).rejects.toThrow('stopped with error: MODEL_ROUTE: provider rejected [redacted]')
     expect(host.dispose).toHaveBeenCalledOnce()
     expect(coordinator.snapshot().failures).toBe(1)
   })
@@ -1021,7 +947,7 @@ describe('Mnemon memory subagent coordinator', () => {
     const host = subagents(undefined, 'error', ['spawn'], undefined, 'REMOTE_GATEWAY:  rejected   sk-secret123456')
     const coordinator = createCoordinator(host.value)
 
-    await expect(coordinator.recall(parent(), { query: 'x' }, new AbortController().signal))
+    await expect(coordinator.remember(parent(), { content: 'x' }, new AbortController().signal))
       .rejects.toThrow('stopped with error: REMOTE_GATEWAY: rejected [redacted]')
     expect(host.dispose).toHaveBeenCalledOnce()
   })
@@ -1110,13 +1036,12 @@ describe('Mnemon memory subagent coordinator', () => {
 })
 
 describe('Mnemon root/child tool split', () => {
-  it('delegates a root recall while allowing the bounded memory child to execute the deterministic service', async () => {
+  it('routes both root and child Recall through Host-pinned Source authority', async () => {
     const registered: ToolDefinition[] = []
     const memoryService = service()
     const coordinator = {
-      recall: vi.fn(async () => ({ query: 'x', mode: 'smart', results: [], delegation: { runId: 'child', provider: 'spawn', summary: '', selectedMemoryBodyIds: [] } })),
-      scopeRecallRequest: vi.fn((_agent, request) => request),
-      scopeRelatedMemoryBody: vi.fn((_agent, memoryBodyId) => memoryBodyId),
+      recall: vi.fn(async () => ({ query: 'x', mode: 'smart', results: [], selectedMemoryBodyIds: ['project'] })),
+      related: vi.fn(async () => ({ query: 'related:m1', mode: 'related', results: [{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }], selectedMemoryBodyIds: ['project'] })),
       runtime: vi.fn(async () => ({ success: true, message: 'Entry added.', target: 'user', entryCount: 1, usage: { used: 20, limit: 4096 } })),
     } as unknown as MnemonSubagentCoordinator
     const runtimeMemory = { mutate: vi.fn() } as unknown as RuntimeMemoryController
@@ -1135,67 +1060,24 @@ describe('Mnemon root/child tool split', () => {
     await hotMemory.execute({ action: 'add', target: 'memory', content: 'Child fact' } as never, { agent: parent('subagent'), signal })
     expect(runtimeMemory.mutate).toHaveBeenCalledWith({ action: 'add', target: 'memory', content: 'Child fact' })
 
-    await recall.execute({ query: 'root query', parentViewId: 'view-1', viewNodeId: 'node-project' } as never, { agent: parent(), signal })
-    expect(coordinator.recall).toHaveBeenCalledOnce()
-    expect(coordinator.recall).toHaveBeenCalledWith(parent(), { query: 'root query', parentViewId: 'view-1', viewNodeId: 'node-project' }, signal, { requirePinnedView: true })
+    await recall.execute({ query: 'root query' } as never, { agent: parent(), signal })
+    expect(coordinator.recall).toHaveBeenNthCalledWith(1, parent(), { query: 'root query' }, signal, { requirePinnedView: true })
     expect(memoryService.search).not.toHaveBeenCalled()
 
     await recall.execute({ query: 'child query', memoryBodyIds: ['project'] } as never, { agent: parent('subagent'), signal })
-    expect(memoryService.search).toHaveBeenCalledWith({ query: 'child query', memoryBodyIds: ['project'] }, signal)
+    expect(coordinator.recall).toHaveBeenNthCalledWith(2, parent('subagent'), { query: 'child query', memoryBodyIds: ['project'] }, signal, { requirePinnedView: false })
+    expect(memoryService.search).not.toHaveBeenCalled()
 
-    vi.mocked(memoryService.related).mockResolvedValueOnce([{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }])
     const related = registered.find(tool => tool.name === 'mnemon_related')!
     await expect(related.execute({ id: 'm1', depth: 2, memoryBodyId: 'project' } as never, { agent: parent('subagent'), signal })).resolves.toEqual({
-      id: 'm1',
-      depth: 2,
-      memoryBodyId: 'project',
+      query: 'related:m1',
+      mode: 'related',
       results: [{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }],
+      selectedMemoryBodyIds: ['project'],
     })
-  })
-
-  it('zooms only the sealed root View without delegation or provider access', async () => {
-    const registered: ToolDefinition[] = []
-    const memoryService = service()
-    const coordinator = {
-      recall: vi.fn(),
-      runtime: vi.fn(),
-    } as unknown as MnemonSubagentCoordinator
-    const zoomResult = {
-      viewId: 'view-stable',
-      viewDigest: 'digest-stable',
-      node: { id: 'node-documents', layerId: 'documents', kind: 'root', label: 'Documents', childIds: [] },
-      children: [],
-    }
-    const memoryViews = {
-      activeTurn: vi.fn(() => ({ viewId: 'view-stable' })),
-      zoom: vi.fn(() => zoomResult),
-    }
-    const source = {
-      config: memoryService.config,
-      forAgent: vi.fn(() => ({
-        service: memoryService,
-        runtimeMemory: { mutate: vi.fn() },
-        documents: { forAgent: vi.fn() },
-        memoryViews,
-      })),
-    }
-    registerTools(
-      { tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape,
-      source as never,
-      coordinator,
-    )
-    const zoom = registered.find(tool => tool.name === 'mnemon_memory_zoom')!
-    const signal = new AbortController().signal
-
-    expect(zoom.execute({ viewId: 'view-stable', nodeId: 'node-documents' } as never, { agent: parent(), signal })).toEqual(zoomResult)
-    expect(memoryViews.zoom).toHaveBeenCalledWith('view-stable', 'node-documents')
-    expect(coordinator.recall).not.toHaveBeenCalled()
-    expect(memoryService.search).not.toHaveBeenCalled()
-    expect(() => zoom.execute({ viewId: 'view-stable', nodeId: 'node-documents' } as never, { agent: parent('subagent'), signal })).toThrow('root agent')
-    expect(() => zoom.execute({ viewId: 'view-stale', nodeId: 'node-documents' } as never, { agent: parent(), signal })).toThrow('does not match the View pinned')
-    memoryViews.activeTurn.mockReturnValueOnce(undefined as never)
-    expect(() => zoom.execute({ viewId: 'view-stable', nodeId: 'node-documents' } as never, { agent: parent(), signal })).toThrow('not pinned')
-    expect(memoryViews.zoom).toHaveBeenCalledOnce()
+    expect(coordinator.related).toHaveBeenCalledWith(parent('subagent'), 'm1', 'project', signal, { depth: 2, requirePinnedView: false })
+    expect(registered.some(tool => tool.name === 'mnemon_memory_zoom')).toBe(false)
+    expect(JSON.stringify(recall.parameters)).not.toMatch(/viewId|viewNodeId|viewCapability/u)
   })
 
   it('enforces automatic topology participation without hiding the management catalog', async () => {

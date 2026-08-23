@@ -479,10 +479,6 @@ export interface SearchRequest {
   source?: Source
   intent?: Intent
   memoryBodyIds?: string[]
-  /** Immutable View pinned by the calling root turn; Host-derived when omitted. */
-  parentViewId?: string
-  /** Optional Memory Spaces node used to minimize and authorize the Recall slice. */
-  viewNodeId?: string
 }
 
 export interface RememberRequest {

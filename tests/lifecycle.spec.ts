@@ -86,7 +86,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     })),
   } as unknown as MnemonService
   const coordinator = {
-    recall: vi.fn(async (_agent, request) => ({ query: request.query, mode: 'smart', results: [], delegation: { runId: 'recall-child', provider: 'spawn', summary: '', selectedMemoryBodyIds: [] } })),
+    recall: vi.fn(async (_agent, request) => ({ query: request.query, mode: 'smart', results: [], selectedMemoryBodyIds: [] })),
     write: vi.fn(async () => ({ delegated: true, runId: 'write-child', provider: 'spawn', summary: 'No durable memory', action: 'skipped', memoryBodyIds: [] })),
     answer: vi.fn(async () => ({ answer: 'SQLite.', citations: [], delegation: { runId: 'answer-child', provider: 'spawn' } })),
     review: vi.fn(async () => ({ delegated: true, runId: 'review-child', provider: 'fork', summary: 'No durable change', action: 'skipped', memoryBodyIds: [] })),

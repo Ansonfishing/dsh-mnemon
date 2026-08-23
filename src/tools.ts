@@ -5,7 +5,6 @@ import type { RuntimeMemoryController, RuntimeMemoryImportance, RuntimeMemoryTar
 import { assertMemoryLayerParticipation } from './memory-system/access.ts'
 import type { MemoryCapability } from './memory-system/contracts.ts'
 import type { MemoryKernel } from './memory-system/kernel.ts'
-import type { MemoryViewManager } from '../packages/kernel/src/index.ts'
 import type { MnemonAgentRuntimeSource } from './live-runtime.ts'
 import { isSubagent, MnemonSubagentCoordinator } from './subagent.ts'
 import {
@@ -46,7 +45,6 @@ interface ToolRuntime {
   runtimeMemory: RuntimeMemoryController
   documents: DocumentManager
   memoryKernel?: MemoryKernel
-  memoryViews?: MemoryViewManager
 }
 
 function isAgentRuntimeSource(value: MnemonService | AgentRuntimeSource): value is AgentRuntimeSource {
@@ -89,35 +87,8 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
   } as never))
 
   ctx.tools.register(definition({
-    name: 'mnemon_memory_zoom',
-    description: 'Expand one node from the immutable Mnemon Memory View pinned to the current user turn. Pass the exact viewId and nodeId shown in the Mnemon Memory Map. Zoom is deterministic and query-free: it reads only the sealed View and never starts recall, a provider, a strategy, or a subagent.',
-    parameters: {
-      type: 'object',
-      properties: {
-        viewId: { type: 'string', description: 'Pinned View id shown in the current Mnemon Memory Map.' },
-        nodeId: { type: 'string', description: 'Stable node id listed in that same View.' },
-      },
-      required: ['viewId', 'nodeId'],
-    },
-    output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    execute: (args: { viewId: string; nodeId: string }, exec: ToolExecution) => {
-      const agent = requireAgent(exec)
-      if (isSubagent(agent)) throw new Error('Mnemon View navigation is available only to the root agent')
-      const memoryViews = runtimeFor(exec).memoryViews
-      if (memoryViews === undefined) throw new Error('Mnemon Memory View control plane is unavailable')
-      const pinned = memoryViews.activeTurn(agent.id)
-      if (pinned === undefined) throw new Error('Mnemon Memory View is not pinned to the current turn')
-      const requestedViewId = args.viewId.trim()
-      if (requestedViewId !== pinned.viewId) throw new Error(`Zoom viewId does not match the View pinned to this turn: ${pinned.viewId}`)
-      return memoryViews.zoom(pinned.viewId, args.nodeId)
-    },
-    presentCall: (args: { nodeId: string }) => ({ card: 'generic', title: 'Zoom Mnemon Memory View', kind: 'search', rawInput: args.nodeId }),
-    presentResult: () => ({ card: 'generic', title: 'Mnemon Memory View expanded' }),
-  } as never))
-
-  ctx.tools.register(definition({
     name: 'mnemon_recall',
-    description: 'Recall query-dependent durable evidence under the immutable Memory View pinned to this turn. Prefer passing the parentViewId and relevant Memory Spaces viewNodeId shown in the current Memory Map; the Host always derives and enforces the pinned parent View. Choose spaces whose routing description matches the task. Provider-native scores are rank-fused rather than compared directly.',
+    description: 'Recall query-dependent durable evidence from the MemorySource generation pinned to this turn. The Host derives the generation and validates any requested Memory Space IDs; no View identifier is model-facing. Omit memoryBodyIds to search every active space authorized for the turn. Provider-native scores are rank-fused rather than compared directly.',
     parameters: {
       type: 'object',
       properties: {
@@ -127,10 +98,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
         category: { type: 'string', enum: [...CATEGORIES] },
         source: { type: 'string', enum: [...SOURCES] },
         intent: { type: 'string', enum: [...INTENTS] },
-        memoryBodyIds: { type: 'array', items: { type: 'string' }, description: 'One or more active Memory Space ids. Omit to search every active space; the service accepts at most 20 ids.' },
-        parentViewId: { type: 'string', description: 'Pinned View id shown in the current Mnemon Memory Map. The Host rejects a stale or different View.' },
-        viewNodeId: { type: 'string', description: 'Relevant Memory Spaces node id from that View. Narrows Recall to the selected branch.' },
-        viewCapability: { type: 'string', description: 'Ephemeral Host capability supplied only to a bounded Recall worker. Root calls omit it.' },
+        memoryBodyIds: { type: 'array', items: { type: 'string' }, description: 'Optional active Memory Space ids from mnemon_memory_bodies. The Host rejects ids outside the pinned Source.' },
       },
       required: ['query'],
     },
@@ -138,12 +106,10 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
       schema: JSON_OBJECT_OUTPUT,
       render: (_args: unknown, value: unknown) => text(value),
     },
-    async execute(args: { query: string; mode?: 'smart' | 'keyword' | 'basic'; limit?: number; category?: Category; source?: Source; intent?: Intent; memoryBodyIds?: string[]; parentViewId?: string; viewNodeId?: string; viewCapability?: string }, exec: ToolExecution) {
-      const runtime = requireLayer(exec, 'memory-spaces', 'recall')
-      const { viewCapability, ...request } = args
-      return isSubagent(exec.agent)
-        ? runtime.service.search(coordinator.scopeRecallRequest(requireAgent(exec), request, viewCapability), exec.signal)
-        : coordinator.recall(requireAgent(exec), request, exec.signal, { requirePinnedView: true })
+    async execute(args: { query: string; mode?: 'smart' | 'keyword' | 'basic'; limit?: number; category?: Category; source?: Source; intent?: Intent; memoryBodyIds?: string[] }, exec: ToolExecution) {
+      requireLayer(exec, 'memory-spaces', 'recall')
+      const agent = requireAgent(exec)
+      return coordinator.recall(agent, args, exec.signal, { requirePinnedView: !isSubagent(agent) })
     },
     presentCall: (args: { query: string }) => ({ card: 'generic', title: 'Recall Mnemon memory', kind: 'search', rawInput: args.query }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon recall complete' }),
@@ -159,25 +125,18 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
         depth: { type: 'integer', description: 'Traversal depth. The service accepts 1 through 5.' },
         edge: { type: 'string', enum: [...EDGE_TYPES] },
         memoryBodyId: { type: 'string', description: 'Active Memory Space that returned this insight id.' },
-        viewCapability: { type: 'string', description: 'Ephemeral Host capability supplied only to a bounded Recall worker. Root calls omit it.' },
       },
       required: ['id'],
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    async execute(args: { id: string; depth?: number; edge?: EdgeType; memoryBodyId?: string; viewCapability?: string }, exec: ToolExecution) {
-      const runtime = requireLayer(exec, 'memory-spaces', 'related')
-      if (!isSubagent(exec.agent)) return coordinator.related(requireAgent(exec), args.id, args.memoryBodyId, exec.signal)
-      const memoryBodyId = coordinator.scopeRelatedMemoryBody(requireAgent(exec), args.memoryBodyId, args.viewCapability)
-      const results = await runtime.service.related(args.id, args.depth, args.edge, exec.signal, memoryBodyId)
-      // DSH tool output validation requires the declared object shape. Keep the
-      // underlying service array internal and expose a stable traversal receipt.
-      return {
-        id: args.id,
-        depth: args.depth ?? 2,
+    async execute(args: { id: string; depth?: number; edge?: EdgeType; memoryBodyId?: string }, exec: ToolExecution) {
+      requireLayer(exec, 'memory-spaces', 'related')
+      const agent = requireAgent(exec)
+      return coordinator.related(agent, args.id, args.memoryBodyId, exec.signal, {
+        ...(args.depth === undefined ? {} : { depth: args.depth }),
         ...(args.edge === undefined ? {} : { edge: args.edge }),
-        ...(memoryBodyId === undefined ? {} : { memoryBodyId }),
-        results,
-      }
+        requirePinnedView: !isSubagent(agent),
+      })
     },
     presentCall: (args: { id: string }) => ({ card: 'generic', title: 'Traverse Mnemon graph', kind: 'search', rawInput: args.id }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon graph traversal complete' }),
