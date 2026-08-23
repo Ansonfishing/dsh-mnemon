@@ -22,12 +22,12 @@ describe('default three-tier MemorySources', () => {
     const workspace = temporaryDirectory('workspace')
     const dataDir = temporaryDirectory('data')
     const runtime = createRuntimeGraph(resolveConfig({ storageScope: 'custom', dataDir, cliPath: '/fake/mnemon' }), workspace)
-    await runtime.runtimeMemory.mutate({ action: 'add', target: 'memory', content: 'The project uses immutable per-turn memory views.' })
+    await runtime.runtimeMemory.mutate({ action: 'add', target: 'memory', content: 'The project uses an immutable per-turn Wake.' })
     await runtime.documents.forWorkspace(workspace).mutate({
       action: 'create',
-      title: 'View architecture',
-      description: 'Pinned Wake, deterministic Zoom, and receipt-driven publication.',
-      content: '# View architecture\n\nThe complete design remains in this managed Document.',
+      title: 'Memory source architecture',
+      description: 'Pinned Wake, Host-only source authority, and receipt-driven publication.',
+      content: '# Memory source architecture\n\nThe complete design remains in this managed Document.',
     })
     runtime.service.memoryBodies.updateProviderService('openviking', { endpoint: 'http://127.0.0.1:1933', apiKey: 'projection-secret' })
     const body = await runtime.service.memoryBodies.create({
@@ -45,10 +45,10 @@ describe('default three-tier MemorySources', () => {
       { layerId: 'documents', mode: 'routed' },
       { layerId: 'memory-spaces', mode: 'routed' },
     ])
-    expect(wake.text).toContain('The project uses immutable per-turn memory views.')
+    expect(wake.text).toContain('The project uses an immutable per-turn Wake.')
     expect(wake.text).toContain('1 active project Document.')
     expect(wake.text).toContain('active of')
-    expect(wake.text).not.toContain('View architecture')
+    expect(wake.text).not.toContain('Memory source architecture')
     expect(wake.text).not.toContain('Architecture decisions')
     expect(wake.text).not.toContain('complete design remains')
     expect(wake.text).not.toContain('projection-secret')

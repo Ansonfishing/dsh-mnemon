@@ -225,6 +225,9 @@ describe('Mnemon memory subagent coordinator', () => {
     const signal = new AbortController().signal
 
     await expect(coordinator.recall(parent(), { query: 'database choice' }, signal, { requirePinnedView: true })).rejects.toThrow('MemorySource generation pinned')
+    const child = parent('subagent')
+    child.session.header!.parentSession = 'root'
+    await expect(coordinator.recall(child, { query: 'database choice' }, signal, { requirePinnedView: true })).rejects.toThrow('MemorySource generation pinned')
     expect(memoryService.search).not.toHaveBeenCalled()
 
     memoryViews.activeTurn.mockReturnValue({ viewId: 'view-pinned' })
@@ -514,7 +517,8 @@ describe('Mnemon memory subagent coordinator', () => {
       prompt: [{ type: 'text', text: 'Review the inherited completed checkpoint now.' }],
     }))
     const reviewCall = (host.start.mock.calls[0] as unknown as [string, { persona: string; toolFilter: { allow: string[] } }])[1]
-    expect(reviewCall.persona).toContain('Never move a document to cold archive in this pass or publish a Memory View')
+    expect(reviewCall.persona).toContain('Never move a document to cold archive in this pass')
+    expect(reviewCall.persona).not.toContain('Memory View')
     expect(reviewCall.toolFilter.allow).not.toContain('mnemon_memory_zoom')
     expect(coordinator.snapshot()).toMatchObject({ reviews: 1, writes: 0, lastOperation: 'review' })
   })
@@ -1065,7 +1069,7 @@ describe('Mnemon root/child tool split', () => {
     expect(memoryService.search).not.toHaveBeenCalled()
 
     await recall.execute({ query: 'child query', memoryBodyIds: ['project'] } as never, { agent: parent('subagent'), signal })
-    expect(coordinator.recall).toHaveBeenNthCalledWith(2, parent('subagent'), { query: 'child query', memoryBodyIds: ['project'] }, signal, { requirePinnedView: false })
+    expect(coordinator.recall).toHaveBeenNthCalledWith(2, parent('subagent'), { query: 'child query', memoryBodyIds: ['project'] }, signal, { requirePinnedView: true })
     expect(memoryService.search).not.toHaveBeenCalled()
 
     const related = registered.find(tool => tool.name === 'mnemon_related')!
@@ -1075,7 +1079,7 @@ describe('Mnemon root/child tool split', () => {
       results: [{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }],
       selectedMemoryBodyIds: ['project'],
     })
-    expect(coordinator.related).toHaveBeenCalledWith(parent('subagent'), 'm1', 'project', signal, { depth: 2, requirePinnedView: false })
+    expect(coordinator.related).toHaveBeenCalledWith(parent('subagent'), 'm1', 'project', signal, { depth: 2, requirePinnedView: true })
     expect(registered.some(tool => tool.name === 'mnemon_memory_zoom')).toBe(false)
     expect(JSON.stringify(recall.parameters)).not.toMatch(/viewId|viewNodeId|viewCapability/u)
   })

@@ -172,7 +172,7 @@ describe('MemoryTurnViewManager', () => {
     await expect(oversizedWake.views.publish()).rejects.toThrow('Wake is 15 characters; limit is 5')
   })
 
-  it('pins one View for a turn while coalesced receipts advance the next turn once', async () => {
+  it('pins one TurnView for a turn while coalesced receipts advance the next turn once', async () => {
     let revision = 1
     const snapshot = vi.fn(() => ({ revision: `runtime-${revision}`, wake: `runtime ${revision}` }))
     const { views } = harness([{ layerId: 'runtime', mode: 'eager', snapshot }])

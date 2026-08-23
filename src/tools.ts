@@ -109,7 +109,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
     async execute(args: { query: string; mode?: 'smart' | 'keyword' | 'basic'; limit?: number; category?: Category; source?: Source; intent?: Intent; memoryBodyIds?: string[] }, exec: ToolExecution) {
       requireLayer(exec, 'memory-spaces', 'recall')
       const agent = requireAgent(exec)
-      return coordinator.recall(agent, args, exec.signal, { requirePinnedView: !isSubagent(agent) })
+      return coordinator.recall(agent, args, exec.signal, { requirePinnedView: true })
     },
     presentCall: (args: { query: string }) => ({ card: 'generic', title: 'Recall Mnemon memory', kind: 'search', rawInput: args.query }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon recall complete' }),
@@ -135,7 +135,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
       return coordinator.related(agent, args.id, args.memoryBodyId, exec.signal, {
         ...(args.depth === undefined ? {} : { depth: args.depth }),
         ...(args.edge === undefined ? {} : { edge: args.edge }),
-        requirePinnedView: !isSubagent(agent),
+        requirePinnedView: true,
       })
     },
     presentCall: (args: { id: string }) => ({ card: 'generic', title: 'Traverse Mnemon graph', kind: 'search', rawInput: args.id }),
