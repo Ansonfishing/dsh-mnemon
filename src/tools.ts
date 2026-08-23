@@ -200,7 +200,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
   const config = serviceOrSource.config
   ctx.tools.register(definition({
     name: 'mnemon_memory_bodies',
-    description: 'List a bounded model-facing Memory Space catalog with ids, routing descriptions, provider capabilities, activation, and health. Control-plane paths, provider settings, and statistics are omitted. Read only. Recall may only read active spaces; writes may target any space whose provider supports remember.',
+    description: 'Inspect a bounded Memory Space catalog with ids, routing, capabilities, activation, and health; paths, settings, and statistics are omitted. Use only for explicit space inspection or management, or before a capability-dependent write. Never call it to route Recall: omit memoryBodyIds and mnemon_recall searches every pinned active space.',
     parameters: { type: 'object', properties: {} },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     async execute(_args: unknown, exec: ToolExecution) {
