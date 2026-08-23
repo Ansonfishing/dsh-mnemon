@@ -225,33 +225,20 @@ export interface MemorySystemDescriptor {
   topology: MemoryTopologySnapshot
 }
 
-export const MEMORY_VIEW_PROJECTION_MODES = ['exact', 'outline', 'query-only'] as const
-export type MemoryViewProjectionMode = typeof MEMORY_VIEW_PROJECTION_MODES[number]
-export type MemoryViewNodeKind = 'root' | 'content' | 'outline' | 'query'
+export const MEMORY_SOURCE_MODES = ['eager', 'routed'] as const
+export type MemorySourceMode = typeof MEMORY_SOURCE_MODES[number]
 
 export interface MemoryViewSource {
   layerId: MemoryLayerId
   revision: string
-  mode: MemoryViewProjectionMode
+  mode: MemorySourceMode
   digest: string
-  nodeIds: string[]
+  /** Exact eager content or one compact routed cover; never a child catalog. */
+  wake: string
 }
 
-export interface MemoryViewNode {
-  id: string
-  layerId: MemoryLayerId
-  kind: MemoryViewNodeKind
-  label: string
-  childIds: string[]
-  parentId?: string
-  summary?: string
-  content?: string
-  reference?: string
-  metadata?: { [key: string]: MemoryJsonValue }
-}
-
-/** Immutable, JSON-safe projection pinned by one or more user turns. */
-export interface MemoryView {
+/** Immutable Source-generation snapshot pinned by one or more user turns. */
+export interface MemoryTurnView {
   id: string
   createdAt: string
   topologyId: string
@@ -259,14 +246,15 @@ export interface MemoryView {
   topologyGeneration: number
   guardGeneration: number
   sources: MemoryViewSource[]
-  nodes: MemoryViewNode[]
   digest: string
 }
 
+/** Compatibility name for the v0.3 pre-release API. */
+export type MemoryView = MemoryTurnView
+
 export interface MemoryWakeSection {
   layerId: MemoryLayerId
-  mode: MemoryViewProjectionMode
-  nodeIds: string[]
+  mode: MemorySourceMode
   text: string
 }
 
@@ -275,32 +263,6 @@ export interface MemoryWake {
   viewDigest: string
   text: string
   sections: MemoryWakeSection[]
-}
-
-export interface MemoryZoomResult {
-  viewId: string
-  viewDigest: string
-  node: MemoryViewNode
-  children: MemoryViewNode[]
-}
-
-export interface MemoryRecallSliceNode {
-  id: string
-  layerId: MemoryLayerId
-  kind: MemoryViewNodeKind
-  label: string
-  summary?: string
-  reference?: string
-  memoryBodyId?: string
-  providerId?: string
-}
-
-export interface MemoryRecallSlice {
-  parentViewId: string
-  viewDigest: string
-  nodeIds: string[]
-  nodes: MemoryRecallSliceNode[]
-  memoryBodyIds: string[]
 }
 
 export interface MemoryTurnContext {

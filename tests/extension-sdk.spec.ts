@@ -47,7 +47,7 @@ describe('Memory extension workspace SDK', () => {
     expect(catalog.adapter('late-adapter')).toBeUndefined()
   })
 
-  it('rolls back a projector-only unload that would break an automatic Layer', async () => {
+  it('rolls back a Source-only unload that would break an automatic Layer', async () => {
     const host = new MemoryExtensionHost()
     const disposeLayer = host.register({
       descriptor: { id: 'episodes-layer', version: '1', label: 'Episodes layer', description: 'Episodic Layer contribution.' },
@@ -55,11 +55,11 @@ describe('Memory extension workspace SDK', () => {
         descriptor: { id: 'episodes', label: 'Episodes', description: 'Recent episodic memory.', role: 'episodes', order: 400, capabilities: ['project'] },
       }],
     })
-    const disposeProjector = host.register({
-      descriptor: { id: 'episodes-projector', version: '1', label: 'Episodes projector', description: 'Episodic View contribution.' },
-      projectors: [{
-        layerId: 'episodes', mode: 'outline',
-        project: () => ({ revision: 'episodes-1', nodes: [{ key: 'episodes', kind: 'root', label: 'Episodes', summary: 'Recent events.' }] }),
+    const disposeSource = host.register({
+      descriptor: { id: 'episodes-source', version: '1', label: 'Episodes source', description: 'Episodic Source contribution.' },
+      sources: [{
+        layerId: 'episodes', mode: 'routed',
+        snapshot: () => ({ revision: 'episodes-1', wake: 'Recent episodes are available.' }),
       }],
     })
     const catalog = new MemoryCatalog()
@@ -78,13 +78,13 @@ describe('Memory extension workspace SDK', () => {
     const views = new MemoryViewManager(kernel)
     attachment.bindViewManager(views)
 
-    expect(() => disposeProjector()).toThrow('no View projector: episodes')
-    expect(host.descriptors().map(descriptor => descriptor.id)).toContain('episodes-projector')
-    expect(() => views.assertProjectionReady()).not.toThrow()
+    expect(() => disposeSource()).toThrow('no MemorySource: episodes')
+    expect(host.descriptors().map(descriptor => descriptor.id)).toContain('episodes-source')
+    expect(() => views.assertSourcesReady()).not.toThrow()
     await expect(views.publish({ storage: 'global' })).resolves.toMatchObject({ sources: [{ layerId: 'episodes' }] })
 
     topology.configureLayer('episodes', { participation: { projection: 'off' } })
-    expect(() => disposeProjector()).not.toThrow()
+    expect(() => disposeSource()).not.toThrow()
     disposeLayer()
     attachment.dispose()
     topology.dispose()

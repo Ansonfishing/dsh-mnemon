@@ -17,8 +17,8 @@ afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 
-describe('default three-tier Memory View projectors', () => {
-  it('projects exact Runtime plus bounded Document and Memory Space outlines without secrets', async () => {
+describe('default three-tier MemorySources', () => {
+  it('projects exact Runtime plus compact covers while keeping complete recall authority Host-only', async () => {
     const workspace = temporaryDirectory('workspace')
     const dataDir = temporaryDirectory('data')
     const runtime = createRuntimeGraph(resolveConfig({ storageScope: 'custom', dataDir, cliPath: '/fake/mnemon' }), workspace)
@@ -41,18 +41,20 @@ describe('default three-tier Memory View projectors', () => {
     const view = await runtime.memoryViews.publish({ storage: 'custom', workspaceId: workspace, sessionId: 'session-1' })
     const wake = runtime.memoryViews.wake(view.id)
     expect(view.sources).toMatchObject([
-      { layerId: 'runtime', mode: 'exact' },
-      { layerId: 'documents', mode: 'outline' },
-      { layerId: 'memory-spaces', mode: 'outline' },
+      { layerId: 'runtime', mode: 'eager' },
+      { layerId: 'documents', mode: 'routed' },
+      { layerId: 'memory-spaces', mode: 'routed' },
     ])
     expect(wake.text).toContain('The project uses immutable per-turn memory views.')
-    expect(wake.text).toContain('View architecture')
-    expect(wake.text).toContain('Architecture decisions')
+    expect(wake.text).toContain('1 active project Document.')
+    expect(wake.text).toContain('active of')
+    expect(wake.text).not.toContain('View architecture')
+    expect(wake.text).not.toContain('Architecture decisions')
+    expect(wake.text).not.toContain('complete design remains')
     expect(wake.text).not.toContain('projection-secret')
-    const spacesRoot = view.nodes.find(node => node.reference === 'memory-spaces:active')!
-    expect(runtime.memoryViews.zoom(view.id, spacesRoot.id).children).toMatchObject([
-      { reference: `memory-space:${body.id}`, metadata: { memoryBodyId: body.id, providerId: 'openviking' } },
-    ])
+    expect(runtime.memoryViews.sourceState(view.id, 'memory-spaces')).toEqual({ memoryBodyIds: expect.arrayContaining([body.id]) })
+    expect(runtime.memoryViews.sourceState(view.id, 'documents')).toEqual({ documentIds: [expect.any(String)] })
+    expect(JSON.stringify(view)).not.toContain(body.id)
     runtime.dispose()
   })
 
@@ -87,7 +89,9 @@ describe('default three-tier Memory View projectors', () => {
     expect(secondTurn.viewId).not.toBe(firstTurn.viewId)
     expect(runtime.memoryViews.pendingReceiptCount()).toBe(0)
     expect(runtime.memoryViews.wake(secondTurn.viewId).text).toContain('Second runtime revision.')
-    expect(runtime.memoryViews.wake(secondTurn.viewId).text).toContain('Next View')
+    expect(runtime.memoryViews.wake(secondTurn.viewId).text).toContain('1 active project Document.')
+    expect(runtime.memoryViews.wake(secondTurn.viewId).text).not.toContain('Next View')
+    expect(runtime.memoryViews.sourceState(secondTurn.viewId, 'documents')).toEqual({ documentIds: [expect.any(String)] })
     runtime.dispose()
   })
 })

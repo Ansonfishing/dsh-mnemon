@@ -88,7 +88,7 @@ describe('LiveMnemonRuntime workspace routing', () => {
     runtime.dispose()
   })
 
-  it('rejects automatic extension projection without a Projector and assembles contributed Projectors when present', async () => {
+  it('rejects automatic extension projection without a MemorySource and assembles contributed Sources when present', async () => {
     const missing = new MemoryExtensionHost()
     missing.register({
       descriptor: { id: 'missing-projector', version: '1', label: 'Missing', description: 'Projection fixture.' },
@@ -99,22 +99,22 @@ describe('LiveMnemonRuntime workspace routing', () => {
       cliPath: '/fake/mnemon',
       memoryTopology: { layers: { episodes: { enabled: true, participation: { projection: 'automatic' } } } },
     })
-    expect(() => createRuntimeGraph(config, undefined, missing)).toThrow('no View projector: episodes')
+    expect(() => createRuntimeGraph(config, undefined, missing)).toThrow('no MemorySource: episodes')
 
     const extensions = new MemoryExtensionHost()
     extensions.register({
-      descriptor: { id: 'episodes-projector', version: '1', label: 'Episodes', description: 'Projection fixture.' },
+      descriptor: { id: 'episodes-source', version: '1', label: 'Episodes', description: 'Source fixture.' },
       layers: [{ descriptor: { id: 'episodes', label: 'Episodes', description: 'Episodic projection.', role: 'episodes', order: 400, capabilities: ['project'] } }],
-      projectors: [{
+      sources: [{
         layerId: 'episodes',
-        mode: 'outline',
-        project: () => ({ revision: 'episodes-1', nodes: [{ key: 'episodes', kind: 'root', label: 'Episodes', summary: 'Recent bounded episodes.' }] }),
+        mode: 'routed',
+        snapshot: () => ({ revision: 'episodes-1', wake: 'Recent bounded episodes are available.' }),
       }],
     })
     const graph = createRuntimeGraph(config, undefined, extensions)
     const turn = await graph.memoryViews.beginTurn('session:1', { storage: 'global', sessionId: 'session', agentId: 'session' })
     expect(graph.memoryViews.wake(turn.viewId).sections).toEqual(expect.arrayContaining([
-      expect.objectContaining({ layerId: 'episodes', mode: 'outline' }),
+      expect.objectContaining({ layerId: 'episodes', mode: 'routed' }),
     ]))
     graph.memoryViews.endTurn(turn.turnId)
     graph.dispose()

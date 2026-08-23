@@ -91,7 +91,7 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: strin
     })
     const memoryViews = createDefaultMemoryViewManager(memoryKernel, { runtimeMemory, documents, service })
     extensionAttachment?.bindViewManager(memoryViews)
-    memoryViews.assertProjectionReady()
+    memoryViews.assertSourcesReady()
     receiptBridge = new MemoryReceiptBridge(memoryKernel, memoryViews)
     const detachReceiptSink = memoryKernel.registerReceiptSink(receiptBridge)
     let disposed = false
