@@ -1,6 +1,6 @@
 import type { HostContextShape, ToolDefinition, ToolExecution } from './contracts.ts'
 import type { HostAgent } from './contracts.ts'
-import type { DocumentManager, DocumentMutation } from './documents.ts'
+import type { DocumentManager, DocumentMutation, DocumentSearchResult } from './documents.ts'
 import type { RuntimeMemoryController, RuntimeMemoryImportance, RuntimeMemoryTarget } from './runtime-memory.ts'
 import { assertMemoryLayerParticipation } from './memory-system/access.ts'
 import type { MemoryCapability } from './memory-system/contracts.ts'
@@ -10,12 +10,11 @@ import { isSubagent, MnemonSubagentCoordinator } from './subagent.ts'
 import {
   CATEGORIES,
   EDGE_TYPES,
-  INTENTS,
   SOURCES,
   type Category,
   type EdgeType,
-  type Intent,
   type MnemonService,
+  type MemoryBodyCatalog,
   type Source,
 } from './service.ts'
 
@@ -31,6 +30,85 @@ function definition(value: ToolDefinition): ToolDefinition {
 // DSH tool outputs use its supported JSON Schema subset. `type: "json"` is
 // valid in the parameter DSL, but it is not a JSON Schema type.
 const JSON_OBJECT_OUTPUT = { type: 'object', additionalProperties: true } as const
+const MODEL_MEMORY_BODY_LIMIT = 16
+const MODEL_DOCUMENT_RESULT_LIMIT = 4
+const MODEL_DOCUMENT_TOTAL_CONTENT_LIMIT = 6_000
+const MODEL_DOCUMENT_CONTENT_LIMIT = 2_600
+
+function boundedToolText(value: string, maximum: number): string {
+  return value.length <= maximum ? value : `${value.slice(0, maximum - 1)}…`
+}
+
+/** Strip control-plane paths, provider settings, and statistics from model output. */
+function modelBodyCatalog(catalog: MemoryBodyCatalog) {
+  const items = catalog.items.slice(0, MODEL_MEMORY_BODY_LIMIT)
+  return {
+    items: items.map(body => ({
+      id: body.id,
+      name: boundedToolText(body.name, 120),
+      description: boundedToolText(body.description, 500),
+      active: body.active,
+      providerEnabled: body.providerEnabled !== false,
+      status: body.providerEnabled === false
+        ? 'provider-disabled'
+        : body.statusLoading === true ? 'not-probed' : body.healthy ? 'healthy' : 'unhealthy',
+      ...(body.error === undefined ? {} : { error: boundedToolText(body.error, 500) }),
+      provider: {
+        id: body.provider.id,
+        label: boundedToolText(body.provider.label, 120),
+        capabilities: structuredClone(body.provider.capabilities),
+      },
+    })),
+    total: catalog.total,
+    activeCount: catalog.activeCount,
+    omittedCount: Math.max(0, catalog.items.length - items.length),
+  }
+}
+
+function documentEvidence(content: string, query: string, maximum: number): string {
+  if (content.length <= maximum) return content
+  const normalized = content.toLocaleLowerCase()
+  const terms = [query.trim(), ...(query.match(/[\p{L}\p{N}_-]+/gu) ?? [])]
+    .map(term => term.toLocaleLowerCase())
+    .filter(Boolean)
+    .sort((left, right) => right.length - left.length)
+  const matched = terms.map(term => normalized.indexOf(term)).find(index => index >= 0) ?? 0
+  const projectedStart = Math.max(0, Math.min(content.length - maximum, matched - 400))
+  const prefix = projectedStart === 0 ? '' : '[earlier content omitted]\n'
+  const suffix = projectedStart + maximum >= content.length ? '' : '\n[later content omitted]'
+  const bodyLength = Math.max(0, maximum - prefix.length - suffix.length)
+  const start = suffix === '' ? content.length - bodyLength : projectedStart
+  const body = content.slice(start, start + bodyLength)
+  return `${prefix}${body}${suffix}`
+}
+
+/** Keep enough query-local document evidence without serializing managed records. */
+function modelDocumentSearch(result: DocumentSearchResult) {
+  let remaining = MODEL_DOCUMENT_TOTAL_CONTENT_LIMIT
+  const results = []
+  for (const document of result.results.slice(0, MODEL_DOCUMENT_RESULT_LIMIT)) {
+    if (remaining <= 0) break
+    const content = documentEvidence(document.content, result.query, Math.min(MODEL_DOCUMENT_CONTENT_LIMIT, remaining))
+    remaining -= content.length
+    results.push({
+      id: document.id,
+      title: boundedToolText(document.title, 200),
+      description: boundedToolText(document.description, 500),
+      status: document.status,
+      relativePath: boundedToolText(document.relativePath, 500),
+      sourcePaths: document.sourcePaths.slice(0, 8).map(path => boundedToolText(path, 500)),
+      score: document.score,
+      content,
+    })
+  }
+  return {
+    query: result.query,
+    includeArchived: result.includeArchived,
+    total: result.total,
+    results,
+    hint: 'Document evidence is bounded. Use it, then one focused mnemon_recall only if exact durable history is still missing; do not repeat Document search this turn.',
+  }
+}
 
 /** Register a deliberately small model-facing surface over Mnemon's protocol. */
 function requireAgent(exec: ToolExecution) {
@@ -76,28 +154,29 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
   const config = serviceOrSource.config
   ctx.tools.register(definition({
     name: 'mnemon_memory_bodies',
-    description: 'List the Memory Space catalog, including each space id, name, routing description, provider, capabilities, activation state, location, health, and statistics when available. Read only. Use this before choosing a read or write target. Recall may only read active spaces; writes may target any space whose provider supports remember.',
+    description: 'List a bounded model-facing Memory Space catalog with ids, routing descriptions, provider capabilities, activation, and health. Control-plane paths, provider settings, and statistics are omitted. Read only. Recall may only read active spaces; writes may target any space whose provider supports remember.',
     parameters: { type: 'object', properties: {} },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    execute: (_args: unknown, exec: ToolExecution) => isSubagent(exec.agent)
-      ? runtimeFor(exec).service.bodyDirectory()
-      : runtimeFor(exec).service.bodies(exec.signal),
+    async execute(_args: unknown, exec: ToolExecution) {
+      const runtime = runtimeFor(exec)
+      const catalog = isSubagent(exec.agent)
+        ? runtime.service.bodyDirectory()
+        : await runtime.service.bodies(exec.signal)
+      return modelBodyCatalog(catalog)
+    },
     presentCall: () => ({ card: 'generic', title: 'Inspect Mnemon Memory Spaces', kind: 'search' }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon Memory Spaces ready' }),
   } as never))
 
   ctx.tools.register(definition({
     name: 'mnemon_recall',
-    description: 'Recall bounded durable evidence from the MemorySource pinned to this turn. Make the query focused: the Host permits one Provider Recall per turn, validates requested Memory Spaces, and admits only a small deduplicated evidence set. Omit memoryBodyIds to search every pinned active space. Provider-native scores are rank-fused rather than compared directly.',
+    description: 'Recall bounded durable evidence from the MemorySource pinned to this turn. Make one focused query: the Host permits one Provider Recall, validates requested Memory Spaces, ignores brittle model-selected category filters, and replays admitted evidence if called again. Omit memoryBodyIds to search every pinned active space.',
     parameters: {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Focused natural-language memory query.' },
         mode: { type: 'string', enum: ['smart', 'keyword', 'basic'], description: 'smart=graph-enhanced default, keyword=token ranking, basic=SQL LIKE fallback.' },
         limit: { type: 'integer', description: 'Maximum number of results. The model path caps output at 6.' },
-        category: { type: 'string', enum: [...CATEGORIES] },
-        source: { type: 'string', enum: [...SOURCES] },
-        intent: { type: 'string', enum: [...INTENTS] },
         memoryBodyIds: { type: 'array', items: { type: 'string' }, description: 'Optional known active Memory Space ids to narrow recall. Omit this field to search every pinned active space; do not list the catalog only to populate it. The Host rejects ids outside the pinned Source.' },
       },
       required: ['query'],
@@ -106,7 +185,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
       schema: JSON_OBJECT_OUTPUT,
       render: (_args: unknown, value: unknown) => text(value),
     },
-    async execute(args: { query: string; mode?: 'smart' | 'keyword' | 'basic'; limit?: number; category?: Category; source?: Source; intent?: Intent; memoryBodyIds?: string[] }, exec: ToolExecution) {
+    async execute(args: { query: string; mode?: 'smart' | 'keyword' | 'basic'; limit?: number; memoryBodyIds?: string[] }, exec: ToolExecution) {
       requireLayer(exec, 'memory-spaces', 'recall')
       const agent = requireAgent(exec)
       return coordinator.recall(agent, args, exec.signal, { requirePinnedView: true })
@@ -154,25 +233,25 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_document_search',
-    description: 'Search project-scoped managed Documents before falling back to deep Mnemon recall. Active Documents contain substantial design, research, procedure, and handoff knowledge. Search is deterministic and read only. Cold archives are excluded unless includeArchived is explicitly required by a known archive reference.',
+    description: 'Run one focused search over project-scoped managed Documents before durable Recall. Results contain bounded query-local evidence, not complete records. Use them directly; do not repeat Document search in the same turn. Cold archives are excluded unless a known archive reference requires them.',
     parameters: {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Focused natural-language or keyword query. Empty lists recent documents.' },
         includeArchived: { type: 'boolean', description: 'Include cold archived originals only for explicit deep-reference inspection.' },
-        limit: { type: 'integer', description: 'Maximum results, 1 through 8 for model calls.' },
+        limit: { type: 'integer', description: 'Maximum results, 1 through 4 for model calls.' },
       },
       required: ['query'],
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     async execute(args: { query: string; includeArchived?: boolean; limit?: number }, exec: ToolExecution) {
       const controller = requireLayer(exec, 'documents', 'search').documents.forAgent(requireAgent(exec))
-      const result = await controller.search(args.query, { ...(args.includeArchived === undefined ? {} : { includeArchived: args.includeArchived }), limit: Math.min(8, args.limit ?? 8) })
+      const result = await controller.search(args.query, { ...(args.includeArchived === undefined ? {} : { includeArchived: args.includeArchived }), limit: Math.min(4, args.limit ?? 4) })
       const suggestions = result.results.length === 0 && args.query.trim() !== ''
         ? controller.snapshot().documents
           .filter(document => args.includeArchived === true || document.status === 'active')
           .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
-          .slice(0, Math.min(5, args.limit ?? 5))
+          .slice(0, Math.min(3, args.limit ?? 3))
           .map(document => ({
             id: document.id,
             title: document.title,
@@ -182,14 +261,10 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
           }))
         : []
       return {
-        ...result,
-        results: result.results.map(document => ({
-          ...document,
-          content: document.content.length <= 8_000 ? document.content : `${document.content.slice(0, 8_000)}\n[truncated]`,
-        })),
+        ...modelDocumentSearch(result),
         ...(suggestions.length === 0 ? {} : {
           suggestions,
-          suggestionHint: 'No exact same-language match. Retry with distinctive words from a suggested title or description before deep recall.',
+          suggestionHint: 'No exact match. Use one focused mnemon_recall rather than repeating Document search.',
         }),
       }
     },

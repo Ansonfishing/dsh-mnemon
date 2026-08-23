@@ -116,7 +116,11 @@ interface RecallAuthority {
 interface TurnRetrievalState {
   recallDigest?: string
   recallResultDigest?: string
+  recallResult?: RecallResult
+  recallPending?: Promise<RecallResult>
   relatedDigest?: string
+  relatedResult?: RecallResult
+  relatedPending?: Promise<RecallResult>
   evidenceDigests: Set<string>
   evidenceReferences: Set<string>
 }
@@ -368,9 +372,6 @@ function recallRequestDigest(request: SearchRequest): string {
   return sha256(JSON.stringify({
     query: request.query.trim().replace(/\s+/gu, ' ').toLocaleLowerCase(),
     mode: request.mode ?? 'smart',
-    category: request.category ?? '',
-    source: request.source ?? '',
-    intent: request.intent ?? '',
     memoryBodyIds: [...(request.memoryBodyIds ?? [])].sort(),
   }))
 }
@@ -414,18 +415,20 @@ function boundedModelInsights(results: readonly Insight[], admission: ModelInsig
     if (tier === 'medium') mediumCount += 1
     if (tier === 'unknown') unknownCount += 1
     admitted.push({
-      ...result,
+      id: result.id,
       content,
       ...(result.category === undefined ? {} : { category: boundedModelText(result.category, MODEL_RECALL_METADATA_LIMIT) }),
+      ...(typeof result.importance !== 'number' || !Number.isFinite(result.importance) ? {} : { importance: result.importance }),
       ...(result.tags === undefined ? {} : { tags: result.tags.slice(0, MODEL_RECALL_LIST_LIMIT).map(tag => boundedModelText(tag, MODEL_RECALL_METADATA_LIMIT)) }),
       ...(result.entities === undefined ? {} : { entities: result.entities.slice(0, MODEL_RECALL_LIST_LIMIT).map(entity => boundedModelText(entity, MODEL_RECALL_METADATA_LIMIT)) }),
       ...(result.source === undefined ? {} : { source: boundedModelText(result.source, MODEL_RECALL_METADATA_LIMIT) }),
-      ...(result.confidence === undefined ? {} : { confidence: boundedModelText(result.confidence, MODEL_RECALL_METADATA_LIMIT) }),
-      ...(result.intent === undefined ? {} : { intent: boundedModelText(result.intent, MODEL_RECALL_METADATA_LIMIT) }),
-      ...(result.matchedVia === undefined ? {} : { matchedVia: boundedModelText(result.matchedVia, MODEL_RECALL_METADATA_LIMIT) }),
       ...(result.createdAt === undefined ? {} : { createdAt: boundedModelText(result.createdAt, MODEL_RECALL_METADATA_LIMIT) }),
+      ...(typeof result.depth !== 'number' || !Number.isFinite(result.depth) ? {} : { depth: result.depth }),
       ...(result.edgeType === undefined ? {} : { edgeType: boundedModelText(result.edgeType, MODEL_RECALL_METADATA_LIMIT) }),
+      ...(result.memoryBodyId === undefined ? {} : { memoryBodyId: boundedModelText(result.memoryBodyId, 1_000) }),
       ...(result.memoryBodyName === undefined ? {} : { memoryBodyName: boundedModelText(result.memoryBodyName, MODEL_RECALL_METADATA_LIMIT) }),
+      ...(result.memoryProviderId === undefined ? {} : { memoryProviderId: result.memoryProviderId }),
+      ...(result.memoryCapabilities === undefined ? {} : { memoryCapabilities: structuredClone(result.memoryCapabilities) }),
       ...(result.externalUri === undefined ? {} : { externalUri: boundedModelText(result.externalUri, 2_000) }),
     })
   }
@@ -914,44 +917,65 @@ export class MnemonSubagentCoordinator {
 
   async recall(parent: HostAgent, request: SearchRequest, signal: AbortSignal, options: { requirePinnedView?: boolean } = {}): Promise<RecallResult> {
     const authority = this.recallAuthority(parent, options.requirePinnedView === true)
-    const limited = { ...request, limit: Math.min(request.limit ?? MODEL_RECALL_RESULT_LIMIT, MODEL_RECALL_RESULT_LIMIT) }
+    // Model-selected semantic filters are too brittle to be authoritative:
+    // one wrong category can hide the exact evidence. The query and pinned
+    // Source remain the complete model-facing routing contract.
+    const limited: SearchRequest = {
+      query: request.query,
+      ...(request.mode === undefined ? {} : { mode: request.mode }),
+      limit: Math.min(request.limit ?? MODEL_RECALL_RESULT_LIMIT, MODEL_RECALL_RESULT_LIMIT),
+      ...(request.memoryBodyIds === undefined ? {} : { memoryBodyIds: request.memoryBodyIds }),
+    }
     const scoped = this.scopeRecallWithAuthority(limited, authority)
     const digest = authority === undefined ? undefined : recallRequestDigest(scoped)
     const retrieval = authority === undefined ? undefined : this.turnRetrievalState(authority.turnId)
     if (retrieval?.recallDigest !== undefined) {
       const duplicate = retrieval.recallDigest === digest
+      const previous = retrieval.recallResult ?? await retrieval.recallPending
       return {
-        query: scoped.query,
-        mode: scoped.mode ?? 'smart',
-        results: [],
+        query: previous?.query ?? scoped.query,
+        mode: previous?.mode ?? scoped.mode ?? 'smart',
+        results: structuredClone(previous?.results ?? []),
         hint: duplicate
-          ? 'This exact Recall already ran in the current turn. Reuse its prior evidence; no Provider query was repeated.'
-          : 'The direct Recall budget for this turn is exhausted. Use the evidence already returned or ask a focused follow-up next turn.',
+          ? 'This exact Recall already ran. The Host replayed its admitted evidence without another Provider query; stop retrieval and answer from it.'
+          : 'Direct Recall is complete for this turn. The Host replayed the admitted evidence; stop retrieval and answer from it or state what remains unknown.',
       }
     }
     if (retrieval !== undefined && digest !== undefined) retrieval.recallDigest = digest
-    try {
+    const operation = (async (): Promise<RecallResult> => {
       const result = await this.serviceFor(parent).search(scoped, signal)
       const results = boundedModelInsights(result.results)
+      const response: RecallResult = {
+        query: result.query,
+        mode: result.mode,
+        results,
+        hint: results.length === 0
+          ? 'No durable evidence was admitted. Direct Recall is closed for this turn; stop retrieval and answer with appropriate uncertainty.'
+          : 'Direct Recall is complete for this turn. Answer from this admitted evidence; use Related only if graph context is materially required.',
+      }
       if (retrieval !== undefined) {
         retrieval.recallResultDigest = admittedResultDigest(results)
+        retrieval.recallResult = structuredClone(response)
         for (const insight of results) {
           retrieval.evidenceDigests.add(insightDigest(insight))
           retrieval.evidenceReferences.add(`${insight.memoryBodyId ?? ''}/${insight.id}`)
         }
       }
       this.recordRecall()
-      const hint = result.hint?.trim()
-      return {
-        query: result.query,
-        mode: result.mode,
-        results,
-        ...(hint === undefined || hint === '' ? {} : { hint: hint.length <= 1_000 ? hint : `${hint.slice(0, 999)}…` }),
-      }
+      return response
+    })()
+    if (retrieval !== undefined) retrieval.recallPending = operation
+    try {
+      return await operation
     } catch (error) {
-      if (retrieval !== undefined && retrieval.recallDigest === digest && retrieval.recallResultDigest === undefined) delete retrieval.recallDigest
+      if (retrieval !== undefined && retrieval.recallDigest === digest && retrieval.recallResultDigest === undefined) {
+        delete retrieval.recallDigest
+        delete retrieval.recallResult
+      }
       this.counters.failures += 1
       throw error
+    } finally {
+      if (retrieval?.recallPending === operation) delete retrieval.recallPending
     }
   }
 
@@ -1011,17 +1035,18 @@ export class MnemonSubagentCoordinator {
       edge: options.edge ?? '',
     }))
     if (retrieval?.relatedDigest !== undefined) {
+      const previous = retrieval.relatedResult ?? await retrieval.relatedPending
       return {
-        query: `related:${id}`,
-        mode: 'related',
-        results: [],
+        query: previous?.query ?? `related:${id}`,
+        mode: previous?.mode ?? 'related',
+        results: structuredClone(previous?.results ?? []),
         hint: retrieval.relatedDigest === digest
-          ? 'This exact related traversal already ran in the current turn. Reuse its prior evidence.'
-          : 'The related-traversal budget for this turn is exhausted. Use the evidence already returned.',
+          ? 'This exact Related traversal already ran. The Host replayed its admitted evidence without another Provider query; stop retrieval and answer from it.'
+          : 'Related traversal is complete for this turn. The Host replayed the admitted evidence; stop retrieval and answer from it.',
       }
     }
     if (retrieval !== undefined && digest !== undefined) retrieval.relatedDigest = digest
-    try {
+    const operation = (async (): Promise<RecallResult> => {
       const results = await this.serviceFor(parent).related(id, options.depth, options.edge, signal, selected)
       const admitted = boundedModelInsights(results, {
         resultLimit: 4,
@@ -1037,15 +1062,29 @@ export class MnemonSubagentCoordinator {
         }
       }
       this.recordRecall()
-      return {
+      const response: RecallResult = {
         query: `related:${id}`,
         mode: 'related',
         results: admitted,
+        hint: admitted.length === 0
+          ? 'No new graph evidence was admitted; stop retrieval and answer from the existing evidence.'
+          : 'Related traversal is complete for this turn; stop retrieval and answer from the admitted evidence.',
       }
+      if (retrieval !== undefined) retrieval.relatedResult = structuredClone(response)
+      return response
+    })()
+    if (retrieval !== undefined) retrieval.relatedPending = operation
+    try {
+      return await operation
     } catch (error) {
-      if (retrieval !== undefined && retrieval.relatedDigest === digest) delete retrieval.relatedDigest
+      if (retrieval !== undefined && retrieval.relatedDigest === digest) {
+        delete retrieval.relatedDigest
+        delete retrieval.relatedResult
+      }
       this.counters.failures += 1
       throw error
+    } finally {
+      if (retrieval?.relatedPending === operation) delete retrieval.relatedPending
     }
   }
 

@@ -254,7 +254,46 @@ describe('dsh-mnemon plugin composition', () => {
     expect(result.total).toBe(0)
     expect(result.results).toEqual([])
     expect(result.suggestions).toEqual([expect.objectContaining({ title: 'Cold Archive Transaction Contract' })])
-    expect(result.suggestionHint).toContain('Retry')
+    expect(result.suggestionHint).toContain('mnemon_recall')
+    expect(result.suggestionHint).toContain('rather than repeating Document search')
+  })
+
+  it('returns bounded query-local document evidence without managed-record internals', async () => {
+    const fixture = context()
+    const workspace = dataDir()
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
+    const tools = fixture.tools as Array<{
+      name: string
+      execute: (args: unknown, execution: unknown) => Promise<unknown>
+    }>
+    const agent = {
+      id: 'document-boundary-worker',
+      options: {},
+      session: { header: { origin: 'subagent', cwd: workspace }, events: [] },
+    }
+    const execution = { agent, signal: new AbortController().signal }
+    const needle = 'TENANT-SKEW-NEEDLE-729'
+    await tools.find(tool => tool.name === 'mnemon_document_manage')!.execute({
+      action: 'create',
+      title: 'Long incident record',
+      description: 'A deliberately long managed record.',
+      sourcePaths: ['reports/incident.md'],
+      content: `${'before '.repeat(1_500)}${needle}\n${'after '.repeat(1_500)}`,
+    }, execution)
+
+    const result = await tools.find(tool => tool.name === 'mnemon_document_search')!.execute({ query: needle }, execution) as {
+      results: Array<Record<string, unknown> & { content: string }>
+      hint: string
+    }
+
+    expect(result.results).toHaveLength(1)
+    expect(result.results[0]!.content).toContain(needle)
+    expect(result.results[0]!.content.length).toBeLessThanOrEqual(2_600)
+    expect(result.results[0]).not.toHaveProperty('contentHash')
+    expect(result.results[0]).not.toHaveProperty('revision')
+    expect(result).not.toHaveProperty('generatedAt')
+    expect(JSON.stringify(result).length).toBeLessThan(8_000)
+    expect(result.hint).toContain('do not repeat Document search')
   })
 
   it('keeps guidance and Web RPC registrations stable while their live values are disabled', () => {

@@ -248,7 +248,7 @@ describe('Mnemon memory subagent coordinator', () => {
     const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
     const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
 
-    const recalled = await coordinator.recall(parent(), { query: 'database choice', limit: 50 }, new AbortController().signal, { requirePinnedView: true })
+    const recalled = await coordinator.recall(parent(), { query: 'database choice', limit: 50, category: 'fact', intent: 'WHY' }, new AbortController().signal, { requirePinnedView: true })
 
     expect(memoryService.search).toHaveBeenCalledWith({ query: 'database choice', limit: 6, memoryBodyIds: authorizedIds }, expect.any(AbortSignal))
     expect(recalled).toMatchObject({ results: expect.any(Array) })
@@ -256,7 +256,7 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(recalled.results[0]?.content).toHaveLength(1_200)
     expect(recalled.results[0]?.content.endsWith('…')).toBe(true)
     expect(recalled.results[0]?.tags).toHaveLength(8)
-    expect(recalled.hint).toHaveLength(1_000)
+    expect(recalled.hint).toContain('Direct Recall is complete for this turn')
     expect(recalled).not.toHaveProperty('sources')
     expect(recalled).not.toHaveProperty('selectedMemoryBodyIds')
     expect(recalled).not.toHaveProperty('delegation')
@@ -297,11 +297,42 @@ describe('Mnemon memory subagent coordinator', () => {
     const nextTurn = await coordinator.recall(parent(), { query: 'rollback drill' }, signal, { requirePinnedView: true })
 
     expect(first.results.map(result => result.id)).toEqual(['high-1', 'medium-1', 'unknown-1'])
-    expect(duplicate).toMatchObject({ results: [], hint: expect.stringContaining('exact Recall already ran') })
-    expect(variant).toMatchObject({ results: [], hint: expect.stringContaining('budget for this turn is exhausted') })
+    expect(duplicate).toMatchObject({ results: first.results, hint: expect.stringContaining('exact Recall already ran') })
+    expect(variant).toMatchObject({ results: first.results, hint: expect.stringContaining('Direct Recall is complete for this turn') })
     expect(nextTurn.results.map(result => result.id)).toEqual(['high-1', 'medium-1', 'unknown-1'])
     expect(memoryService.search).toHaveBeenCalledTimes(2)
     expect(coordinator.snapshot()).toMatchObject({ recalls: 2, failures: 0 })
+  })
+
+  it('joins concurrent same-turn Recall calls to one Provider result', async () => {
+    const host = subagents(undefined)
+    const memoryService = service()
+    let finishSearch!: (value: { query: string; mode: 'smart'; results: Array<{ id: string; content: string; relevanceTier: 'high'; memoryBodyId: string }> }) => void
+    vi.mocked(memoryService.search).mockImplementation(() => new Promise(resolve => { finishSearch = resolve }) as never)
+    const memoryViews = {
+      activeTurn: vi.fn(() => ({ turnId: 'root:concurrent', viewId: 'view-concurrent' })),
+      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
+    }
+    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
+    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+    const signal = new AbortController().signal
+
+    const first = coordinator.recall(parent(), { query: 'release history' }, signal, { requirePinnedView: true })
+    const duplicate = coordinator.recall(parent(), { query: 'release history' }, signal, { requirePinnedView: true })
+    expect(memoryService.search).toHaveBeenCalledOnce()
+    finishSearch({
+      query: 'release history',
+      mode: 'smart',
+      results: [{ id: 'history-1', content: 'Use 35% and 65%.', relevanceTier: 'high', memoryBodyId: 'project' }],
+    })
+
+    const [firstResult, duplicateResult] = await Promise.all([first, duplicate])
+    expect(firstResult.results).toEqual([expect.objectContaining({ id: 'history-1' })])
+    expect(duplicateResult).toMatchObject({
+      results: firstResult.results,
+      hint: expect.stringContaining('replayed its admitted evidence'),
+    })
+    expect(coordinator.snapshot()).toMatchObject({ recalls: 1, failures: 0 })
   })
 
   it('derives a child read from its root parent turn with no model-facing capability', async () => {
@@ -348,14 +379,15 @@ describe('Mnemon memory subagent coordinator', () => {
       { id: 'duplicate', content: 'SQLite', memoryBodyId: 'project', memoryBodyName: 'Project' },
       { id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: 'Project' },
     ])
-    await expect(coordinator.related(parent(), 'm1', undefined, signal, { depth: 3, edge: 'causal', requirePinnedView: true })).resolves.toEqual({
+    await expect(coordinator.related(parent(), 'm1', undefined, signal, { depth: 3, edge: 'causal', requirePinnedView: true })).resolves.toMatchObject({
       query: 'related:m1',
       mode: 'related',
       results: [{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: 'Project' }],
+      hint: expect.stringContaining('Related traversal is complete'),
     })
     await expect(coordinator.related(parent(), 'm1', undefined, signal, { depth: 3, edge: 'causal', requirePinnedView: true })).resolves.toMatchObject({
-      results: [],
-      hint: expect.stringContaining('exact related traversal already ran'),
+      results: [{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: 'Project' }],
+      hint: expect.stringContaining('exact Related traversal already ran'),
     })
     expect(memoryService.related).toHaveBeenCalledWith('m1', 3, 'causal', signal, 'project')
     expect(memoryService.related).toHaveBeenCalledOnce()
@@ -1252,10 +1284,12 @@ describe('Mnemon root/child tool split', () => {
       { action: 'add', target: 'memory', content: 'blocked' } as never,
       { agent: parent(), signal },
     )).toThrow('allows write only for manual operations')
-    await expect(registered.find(tool => tool.name === 'mnemon_memory_bodies')!.execute(
+    const catalog = await registered.find(tool => tool.name === 'mnemon_memory_bodies')!.execute(
       {} as never,
       { agent: parent(), signal },
-    )).resolves.toMatchObject({ total: 1 })
+    ) as { total: number; items: unknown[] }
+    expect(catalog).toMatchObject({ total: 1, omittedCount: 0 })
+    expect(JSON.stringify(catalog)).not.toMatch(/dbPath|directory|settings|stats|apiKey/)
     expect(coordinator.recall).not.toHaveBeenCalled()
     expect(coordinator.runtime).not.toHaveBeenCalled()
   })
