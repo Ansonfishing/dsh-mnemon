@@ -160,8 +160,13 @@ export interface MemoryPlan {
   strategyId: string
   strategyVersion: string
   operation: string
+  capability: MemoryCapability
   trigger: MemoryOperationTrigger
   scope: MemoryOperationScope
+  /** Canonical JSON request approved by Guards and proposed against by the Strategy. */
+  request: MemoryPlanRequest
+  /** SHA-256 of the canonical request, used to bind execution to that exact request. */
+  requestDigest: string
   reason: string
   createdAt: string
   budget: MemoryOperationBudget

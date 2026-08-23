@@ -48,11 +48,15 @@ export function defineMemoryStrategyPlugin(plugin: MemoryStrategyPlugin): Readon
   const allowedLayers = new Set(manifest.permissions.layerIds)
   const allowedAdapters = new Set(manifest.permissions.adapterIds)
   const allowedCapabilities = new Set(manifest.permissions.capabilities)
+  const propose = plugin.strategy.propose.bind(plugin.strategy)
   const strategy: MemoryStrategyRegistration = Object.freeze({
-    descriptor: Object.freeze({ ...plugin.strategy.descriptor, hooks: [...plugin.strategy.descriptor.hooks] }),
+    descriptor: Object.freeze({
+      ...plugin.strategy.descriptor,
+      hooks: Object.freeze([...plugin.strategy.descriptor.hooks]) as unknown as MemoryStrategyDescriptor['hooks'],
+    }),
     async propose(request: MemoryPlanRequest, context: MemoryStrategyContext) {
       if (!allowedCapabilities.has(request.capability)) throw new Error(`memory strategy plugin is not permitted to use ${request.capability}`)
-      const proposal = await plugin.strategy.propose(request, context)
+      const proposal = await propose(request, context)
       if (proposal.steps.length > manifest.permissions.maxSteps) {
         throw new Error(`memory strategy plugin proposed ${proposal.steps.length} steps; manifest allows ${manifest.permissions.maxSteps}`)
       }

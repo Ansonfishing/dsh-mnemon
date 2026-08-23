@@ -62,6 +62,7 @@ describe('Memory extension workspace SDK', () => {
       },
       strategy,
     })
+    strategy.propose = vi.fn(() => ({ strategyId: 'generated-example', strategyVersion: '1', reason: 'mutated after replay admission', steps: [{ layerId: 'documents', capability: 'recall' as const }] }))
     const assert = vi.fn()
     await replayMemoryStrategy(plugin.strategy, [{
       request: { operation: 'test', capability: 'recall', trigger: 'manual', scope: { storage: 'global' } },
@@ -72,6 +73,8 @@ describe('Memory extension workspace SDK', () => {
       assert,
     }])
     expect(Object.isFrozen(plugin.manifest)).toBe(true)
+    expect(Object.isFrozen(plugin.strategy.descriptor)).toBe(true)
+    expect(Object.isFrozen(plugin.strategy.descriptor.hooks)).toBe(true)
     expect(propose).toHaveBeenCalledOnce()
     expect(assert).toHaveBeenCalledWith(expect.objectContaining({ strategyId: 'generated-example' }))
 

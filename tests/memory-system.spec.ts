@@ -123,6 +123,69 @@ describe('composable memory system', () => {
     await expect(kernel.execute(plan, plannedRequest)).rejects.toThrow('active guards')
   })
 
+  it('binds execution to the complete Guard-approved request and never trusts a replacement request', async () => {
+    const execute = vi.fn(async (_step, context) => ({ workspaceId: context.request.scope.workspaceId ?? '' }))
+    const catalog = new MemoryCatalog()
+    registerDefaultMemorySystem(catalog, { 'memory-spaces': { execute } })
+    const topology = new MemoryTopologyManager(catalog, DEFAULT_THREE_TIER_TOPOLOGY)
+    topology.configureLayer('documents', { enabled: false })
+    const kernel = new MemoryKernel(catalog, topology)
+    kernel.registerGuard({
+      id: 'approved-workspace',
+      decide: input => input.scope.workspaceId === 'allowed' ? { kind: 'allow' } : { kind: 'deny', reason: 'workspace denied' },
+    })
+    const approved = request({
+      scope: { storage: 'workspace', workspaceId: 'allowed' },
+      candidateLayerIds: ['memory-spaces'],
+      input: { query: 'public' },
+    })
+    const plan = await kernel.plan(approved)
+
+    await expect(kernel.execute(plan, {
+      ...approved,
+      scope: { storage: 'workspace', workspaceId: 'secret' },
+      input: { query: 'private' },
+    })).rejects.toThrow('complete execution request')
+    expect(execute).not.toHaveBeenCalled()
+
+    await expect(kernel.execute(plan, approved)).resolves.toMatchObject({ status: 'succeeded', capability: 'recall' })
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({ capability: 'recall' }),
+      expect.objectContaining({ request: expect.objectContaining({ scope: { storage: 'workspace', workspaceId: 'allowed' }, input: { query: 'public' } }) }),
+    )
+    const executionContext = execute.mock.calls[0]![1]
+    expect(Object.isFrozen(executionContext.request)).toBe(true)
+    expect(Object.isFrozen(executionContext.request.input)).toBe(true)
+  })
+
+  it('deep-freezes issued Plans and rejects altered or forged execution steps before data-plane access', async () => {
+    const execute = vi.fn(async () => ({ ok: true }))
+    const catalog = new MemoryCatalog()
+    registerDefaultMemorySystem(catalog, { 'memory-spaces': { execute } })
+    const topology = new MemoryTopologyManager(catalog, DEFAULT_THREE_TIER_TOPOLOGY)
+    topology.configureLayer('documents', { enabled: false })
+    const kernel = new MemoryKernel(catalog, topology)
+    const plannedRequest = request({ candidateLayerIds: ['memory-spaces'], input: { query: 'safe' } })
+    const plan = await kernel.plan(plannedRequest)
+
+    expect(Object.isFrozen(plan)).toBe(true)
+    expect(Object.isFrozen(plan.request)).toBe(true)
+    expect(Object.isFrozen(plan.steps)).toBe(true)
+    expect(Object.isFrozen(plan.steps[0]?.input)).toBe(true)
+    expect(() => { plan.steps[0]!.capability = 'write' }).toThrow()
+
+    const forged = structuredClone(plan)
+    forged.steps[0]!.capability = 'write'
+    forged.steps[0]!.input = { content: 'unauthorized write' }
+    await expect(kernel.execute(forged, plannedRequest)).rejects.toThrow('changed after authorization')
+    expect(execute).not.toHaveBeenCalled()
+
+    const unknown = structuredClone(plan)
+    unknown.id = 'not-issued'
+    await expect(kernel.execute(unknown, plannedRequest)).rejects.toThrow('not issued by this Kernel')
+    expect(execute).not.toHaveBeenCalled()
+  })
+
   it('executes bounded steps and records a partial receipt', async () => {
     const catalog = new MemoryCatalog()
     registerDefaultMemorySystem(catalog, {
