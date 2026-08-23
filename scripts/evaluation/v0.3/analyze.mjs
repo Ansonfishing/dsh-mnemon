@@ -201,8 +201,12 @@ function expectedAssessment(turn, scenarioTurn) {
   const missingText = (expected.mustContain ?? []).filter(text => !answer.includes(String(text).toLocaleLowerCase()))
   const missingAnyText = (expected.mustContainAny ?? []).filter(group => !group.some(text => answer.includes(String(text).toLocaleLowerCase())))
   const forbiddenText = (expected.mustNotContain ?? []).filter(text => answer.includes(String(text).toLocaleLowerCase()))
+  const semanticPassed = missingText.length === 0 && missingAnyText.length === 0 && forbiddenText.length === 0
+  const toolPolicyPassed = missingTools.length === 0 && unexpectedTools.length === 0
   return {
-    passed: missingTools.length === 0 && unexpectedTools.length === 0 && missingText.length === 0 && missingAnyText.length === 0 && forbiddenText.length === 0,
+    passed: semanticPassed && toolPolicyPassed,
+    semanticPassed,
+    toolPolicyPassed,
     memoryTools: tools,
     expectedTools,
     missingTools,
@@ -237,7 +241,8 @@ function summaryMarkdown(analysis, directory) {
   const turnTable = markdownTable(analysis.turns, [
     { label: 'Turn', value: row => row.id },
     { label: 'Memory tools', value: row => row.assessment.memoryTools.join(', ') || 'none' },
-    { label: 'Check', value: row => row.assessment.passed ? 'pass' : 'FAIL' },
+    { label: 'Semantic', value: row => row.assessment.semanticPassed ? 'pass' : 'FAIL' },
+    { label: 'Tool policy', value: row => row.assessment.toolPolicyPassed ? 'pass' : 'FAIL' },
     { label: 'Model calls', value: row => row.requestCount },
     { label: 'Prompt tokens', value: row => row.promptTokens },
     { label: 'Completion tokens', value: row => row.completionTokens },
@@ -263,7 +268,7 @@ Evidence directory: \`${basename(directory)}\`
 
 - Provider usage: ${analysis.totals.usageKind}; ${analysis.totals.modelCalls} evaluated model calls plus ${analysis.totals.titleCalls} DSH title call(s).
 - Provider-reported/recorded tokens: ${analysis.totals.promptTokens} prompt + ${analysis.totals.completionTokens} completion = ${analysis.totals.totalTokens} total.
-- Scenario checks: ${analysis.totals.passedTurns}/${analysis.turns.length} passed.
+- Scenario checks: ${analysis.totals.semanticPassedTurns}/${analysis.turns.length} semantic, ${analysis.totals.toolPolicyPassedTurns}/${analysis.turns.length} tool-policy, ${analysis.totals.passedTurns}/${analysis.turns.length} combined.
 - User-visible turn wall time: ${analysis.totals.turnWallMs} ms; provider request time sums to ${analysis.totals.latencyMs} ms and can overlap.
 - Memory tools: ${analysis.totals.memoryToolCalls} calls, ${analysis.totals.memoryToolResultCharacters} result chars, ${analysis.totals.failedMemoryToolCalls} failed results.
 - First latest Mnemon payload: ${first?.latestMnemonCharacters ?? 0} chars; protocol ${first?.latestProtocolCharacters ?? 0}, memory data ${first?.latestDataCharacters ?? 0}, routed cover ${first?.latestRoutedCharacters ?? 0}.
@@ -362,6 +367,8 @@ async function main() {
       completedModelCalls: completeMetrics.length,
       incompleteModelCalls: incompleteCalls,
       usageKind: [...usageKinds, ...(incompleteCalls > 0 ? ['missing'] : [])].join(', ') || 'missing',
+      semanticPassedTurns: turns.filter(turn => turn.assessment.semanticPassed).length,
+      toolPolicyPassedTurns: turns.filter(turn => turn.assessment.toolPolicyPassed).length,
       passedTurns: turns.filter(turn => turn.assessment.passed).length,
     },
   }

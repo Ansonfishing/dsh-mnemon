@@ -45,6 +45,8 @@ function runMetrics(record, analysis) {
     caseId: record.caseId,
     version: record.version,
     sample: record.sample,
+    semanticPassedTurns: analysis.totals.semanticPassedTurns ?? analysis.totals.passedTurns,
+    toolPolicyPassedTurns: analysis.totals.toolPolicyPassedTurns ?? analysis.totals.passedTurns,
     passedTurns: analysis.totals.passedTurns,
     totalTurns: analysis.turns.length,
     modelCalls: analysis.totals.modelCalls,
@@ -89,6 +91,10 @@ function groupMetrics(runs) {
     version: group.version,
     samples: group.runs.length,
     passedRuns: group.runs.filter(run => run.passedTurns === run.totalTurns).length,
+    semanticPassedRuns: group.runs.filter(run => run.semanticPassedTurns === run.totalTurns).length,
+    toolPolicyPassedRuns: group.runs.filter(run => run.toolPolicyPassedTurns === run.totalTurns).length,
+    semanticPassedTurns: sum(group.runs.map(run => run.semanticPassedTurns)),
+    toolPolicyPassedTurns: sum(group.runs.map(run => run.toolPolicyPassedTurns)),
     passedTurns: sum(group.runs.map(run => run.passedTurns)),
     totalTurns: sum(group.runs.map(run => run.totalTurns)),
     distributions: Object.fromEntries([
@@ -137,12 +143,12 @@ function markdown(groups, comparisons, suite) {
     '',
     `Current: \`${suite.commits.current}\``,
     '',
-    '| Case | Version | n | Passed | Total tokens median/p95 | Calls root/child median | Cache miss median | Turn wall median/p95 ms | Memory tools/result chars median | First prompt/Wake |',
-    '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|',
+    '| Case | Version | n | Semantic | Tool policy | Combined | Total tokens median/p95 | Calls root/child median | Cache miss median | Turn wall median/p95 ms | Memory tools/result chars median | First prompt/Wake |',
+    '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|',
   ]
   for (const group of groups) {
     const d = group.distributions
-    lines.push(`| ${group.caseId} | ${group.version} | ${group.samples} | ${group.passedTurns}/${group.totalTurns} | ${d.totalTokens.median ?? '?'}/${d.totalTokens.p95 ?? '?'} | ${d.rootCalls.median ?? '?'}/${d.childCalls.median ?? '?'} | ${d.cacheMissTokens.median ?? '?'} | ${d.turnWallMs.median ?? '?'}/${d.turnWallMs.p95 ?? '?'} | ${d.memoryToolCalls.median ?? '?'}/${d.memoryToolResultCharacters.median ?? '?'}c | ${d.firstPromptTokens.median ?? '?'}/${d.firstMnemonCharacters.median ?? '?'}c |`)
+    lines.push(`| ${group.caseId} | ${group.version} | ${group.samples} | ${group.semanticPassedTurns}/${group.totalTurns} | ${group.toolPolicyPassedTurns}/${group.totalTurns} | ${group.passedTurns}/${group.totalTurns} | ${d.totalTokens.median ?? '?'}/${d.totalTokens.p95 ?? '?'} | ${d.rootCalls.median ?? '?'}/${d.childCalls.median ?? '?'} | ${d.cacheMissTokens.median ?? '?'} | ${d.turnWallMs.median ?? '?'}/${d.turnWallMs.p95 ?? '?'} | ${d.memoryToolCalls.median ?? '?'}/${d.memoryToolResultCharacters.median ?? '?'}c | ${d.firstPromptTokens.median ?? '?'}/${d.firstMnemonCharacters.median ?? '?'}c |`)
   }
   lines.push('', '## Median deltas (v0.3 - v0.2.16)', '', '| Case | Tokens | Calls | Child | Cache miss | Turn wall | Memory result chars | First prompt |', '|---|---:|---:|---:|---:|---:|---:|---:|')
   for (const item of comparisons) {
