@@ -189,6 +189,33 @@ describe('composable memory system', () => {
     expect(execute).not.toHaveBeenCalled()
   })
 
+  it('claims an issued Plan once before data-plane execution begins', async () => {
+    let entered!: () => void
+    let release!: () => void
+    const executing = new Promise<void>(resolve => { entered = resolve })
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const execute = vi.fn(async () => {
+      entered()
+      await gate
+      return { committed: true }
+    })
+    const catalog = new MemoryCatalog()
+    registerDefaultMemorySystem(catalog, { 'memory-spaces': { execute } })
+    const topology = new MemoryTopologyManager(catalog, DEFAULT_THREE_TIER_TOPOLOGY)
+    topology.configureLayer('documents', { enabled: false })
+    const kernel = new MemoryKernel(catalog, topology)
+    const plannedRequest = request({ candidateLayerIds: ['memory-spaces'] })
+    const plan = await kernel.plan(plannedRequest)
+
+    const first = kernel.execute(plan, plannedRequest)
+    await executing
+    await expect(kernel.execute(plan, plannedRequest)).rejects.toThrow('already claimed')
+    release()
+    await expect(first).resolves.toMatchObject({ status: 'succeeded' })
+    await expect(kernel.execute(plan, plannedRequest)).rejects.toThrow('already claimed')
+    expect(execute).toHaveBeenCalledOnce()
+  })
+
   it('executes bounded steps and records a partial receipt', async () => {
     const catalog = new MemoryCatalog()
     registerDefaultMemorySystem(catalog, {

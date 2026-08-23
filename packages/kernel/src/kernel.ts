@@ -334,7 +334,7 @@ export class MemoryKernel {
 
   async execute(plan: MemoryPlan, request: MemoryPlanRequest, signal?: AbortSignal): Promise<MemoryReceipt> {
     const issued = this.issuedPlans.get(plan.id)
-    if (issued === undefined) throw new Error('memory plan was not issued by this Kernel')
+    if (issued === undefined) throw new Error('memory plan was not issued by this Kernel or was already claimed')
     let suppliedPlanDigest: string
     try {
       suppliedPlanDigest = digest(plan, 'memory plan')
@@ -374,6 +374,11 @@ export class MemoryKernel {
       return { step, execute: layer?.execute?.bind(layer) }
     })
     const executionTopology = deepFreeze(jsonClone(current.topology, 'memory execution topology'))
+    // Claim the authorization synchronously, after every supplied value has
+    // passed validation and before the first data-plane await. A Plan is an
+    // at-most-once authority, not a replayable recipe.
+    if (this.issuedPlans.get(authorizedPlan.id) !== issued) throw new Error('memory plan was already claimed')
+    this.issuedPlans.delete(authorizedPlan.id)
     const startedAt = this.now().toISOString()
     const steps: MemoryReceiptStep[] = []
     for (const executable of executableSteps) {
