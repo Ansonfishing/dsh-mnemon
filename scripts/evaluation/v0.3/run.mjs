@@ -251,6 +251,20 @@ async function inspectData(packageRoot, dataDir, workspaceRoot, mnemonBinary) {
     const documentSnapshot = graph.documents.forWorkspace(workspaceRoot).snapshot()
     const bodies = graph.service.memoryBodies.list()
     const projection = await publishedProjection(graph, workspaceRoot, 'final-state')
+    const capacityArchiveEvidence = []
+    for (const marker of ['CAPACITY-SOURCE-A', 'CAPACITY-SOURCE-B', 'CAPACITY-SOURCE-C']) {
+      const recalled = await graph.service.search({ query: marker, mode: 'basic', limit: 10 })
+      capacityArchiveEvidence.push({
+        marker,
+        matches: recalled.results.map(result => ({
+          id: result.id,
+          memoryBodyId: result.memoryBodyId,
+          contentHash: sha256(result.content),
+          contentCharacters: result.content.length,
+          containsMarker: result.content.includes(marker),
+        })),
+      })
+    }
     return {
       runtime: {
         revision: runtime.revision,
@@ -262,6 +276,7 @@ async function inspectData(packageRoot, dataDir, workspaceRoot, mnemonBinary) {
         items: documentSnapshot.documents.map(document => ({ id: document.id, title: document.title, status: document.status, contentHash: document.contentHash })),
       },
       memorySpaces: bodies.map(body => ({ id: body.id, name: body.name, description: body.description, active: body.active, providerId: body.provider.id })),
+      capacityArchiveEvidence,
       finalView: {
         kind: projection.kind,
         ...(projection.id === undefined ? {} : { id: projection.id }),
