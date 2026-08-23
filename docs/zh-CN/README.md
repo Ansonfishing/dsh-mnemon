@@ -28,7 +28,7 @@
 | 排查召回为空、目录未对齐、CLI 或 Provider 问题 | [运维、安全与故障排查](./operations.md#故障排查) |
 | 使用模型工具、`/mnemon` 命令或内部 RPC | [接口参考](./interfaces.md) |
 | 理解 Host、worker、控制面与数据面 | [架构设计](./architecture.md) |
-| 开发 Layer、Adapter、Strategy 或 Guard 插件 | [记忆扩展开发](./extensions.md) |
+| 开发 Layer、Adapter、Strategy、Guard 或 Projector 插件 | [记忆扩展开发](./extensions.md) |
 | 修改代码、截图、测试或发布 | [开发与验证](./development.md) |
 | 从上一版本升级 | [v0.3.0 发布说明](./releases/v0.3.0.md) |
 | 查看下一阶段计划 | [Roadmap](./roadmap.md) |

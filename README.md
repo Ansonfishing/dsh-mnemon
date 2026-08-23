@@ -30,7 +30,7 @@
 
 [Mnemon](https://github.com/mnemon-dev/mnemon) remains the official, prioritized native engine. The third tier is replaceable; the first two keep the same storage, workspace, and interaction model regardless of provider.
 
-Since v0.3.0, the three tiers are the **default topology** of a composable kernel rather than the only shape hard-coded into every entry point. Layers, Adapters, Strategies, Guards, and DSH Surfaces have separate contracts. Each Layer can be disabled or independently set to `off`, `manual`, or `automatic` participation for recall, writes, projection, and maintenance. Users still install one `dsh-mnemon` package, while extension authors contribute through stable subpaths. See the [composable architecture](./docs/en/architecture.md#composable-memory-kernel) and [extension guide](./docs/en/extensions.md).
+Since v0.3.0, the three tiers are the **default topology** of a composable kernel rather than the only shape hard-coded into every entry point. Layers, Adapters, Strategies, Guards, View Projectors, and DSH Surfaces have separate contracts. Each Layer can be disabled or independently set to `off`, `manual`, or `automatic` participation for recall, writes, projection, and maintenance. Users still install one `dsh-mnemon` package, while extension authors contribute through stable subpaths. See the [composable architecture](./docs/en/architecture.md#composable-memory-kernel) and [extension guide](./docs/en/extensions.md).
 
 ## Understand the scope in 30 seconds
 
@@ -199,7 +199,7 @@ See [Operations, security, and troubleshooting](./docs/en/operations.md) for bac
 | Configure scope, routing, and model selection | [Configuration](./docs/en/configuration.md) |
 | Back up, update, or troubleshoot | [Operations](./docs/en/operations.md) |
 | Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |
-| Build a Layer, Adapter, or Strategy extension | [Extension guide](./docs/en/extensions.md) |
+| Build a Layer, Adapter, Strategy, Guard, or Projector extension | [Extension guide](./docs/en/extensions.md) |
 | Review the release | [v0.3.0 release notes](./docs/en/releases/v0.3.0.md) |
 
 See the [documentation hub](./docs/en/README.md) for the full map.

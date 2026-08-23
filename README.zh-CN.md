@@ -30,7 +30,7 @@
 
 [Mnemon](https://github.com/mnemon-dev/mnemon) 仍是官方优先的原生引擎。可以替换的是第三层；无论选择哪个 Provider，前两层的存储、工作区和交互心智保持不变。
 
-从 v0.3.0 开始，三层是可组合内核中的**默认拓扑**，不再是各入口各自写死的唯一结构。Layer、Adapter、Strategy、Guard 与 DSH Surface 具有独立契约；每层可分别关闭，或把召回、写入、投影、维护设为 `off` / `manual` / `automatic`。用户仍只安装一个 `dsh-mnemon`，扩展作者则使用稳定子路径贡献新能力。参见[可组合架构](./docs/zh-CN/architecture.md#可组合记忆内核)与[扩展开发指南](./docs/zh-CN/extensions.md)。
+从 v0.3.0 开始，三层是可组合内核中的**默认拓扑**，不再是各入口各自写死的唯一结构。Layer、Adapter、Strategy、Guard、View Projector 与 DSH Surface 具有独立契约；每层可分别关闭，或把召回、写入、投影、维护设为 `off` / `manual` / `automatic`。用户仍只安装一个 `dsh-mnemon`，扩展作者则使用稳定子路径贡献新能力。参见[可组合架构](./docs/zh-CN/architecture.md#可组合记忆内核)与[扩展开发指南](./docs/zh-CN/extensions.md)。
 
 ## 30 秒理解能力边界
 
@@ -199,7 +199,7 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 | 配置范围、路由与模型 | [配置参考](./docs/zh-CN/configuration.md) |
 | 备份、更新或排障 | [运维指南](./docs/zh-CN/operations.md) |
 | 接入工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
-| 开发 Layer、Adapter 或 Strategy 扩展 | [扩展开发指南](./docs/zh-CN/extensions.md) |
+| 开发 Layer、Adapter、Strategy、Guard 或 Projector 扩展 | [扩展开发指南](./docs/zh-CN/extensions.md) |
 | 查看本次升级 | [v0.3.0 发布说明](./docs/zh-CN/releases/v0.3.0.md) |
 
 完整目录见[文档中心](./docs/zh-CN/README.md)。

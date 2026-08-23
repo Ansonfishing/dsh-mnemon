@@ -218,13 +218,13 @@ MnemonLifecycle
 |---|---|
 | `dsh-mnemon/contracts` | wire-safe 描述符、Topology、Plan 与 Receipt 类型 |
 | `dsh-mnemon/kernel` | Catalog、Topology Manager、Kernel 与 Guard API |
-| `dsh-mnemon/extension-sdk` | `MemoryExtensionHost`、扩展定义与进程级预注册 |
+| `dsh-mnemon/extension-sdk` | `MemoryExtensionHost`、Layer/Adapter/Strategy/Guard/Projector contribution 与进程级预注册 |
 | `dsh-mnemon/strategy-sdk` | Strategy 定义、权限清单和 replay |
 | `dsh-mnemon/provider-sdk` | Adapter Factory Registry 与当前 Provider Adapter 接口 |
 | `dsh-mnemon/layers/runtime`、`documents`、`memory-spaces` | 三个默认 Layer 描述符 |
 | `dsh-mnemon/strategy-default-three-tier` | 默认拓扑与调度策略 |
 
-Host 发布 Cordis 服务 `mnemonMemory: MemoryExtensionHost`。其他 DSH 插件声明 `inject = ['mnemonMemory']` 后，可以把 Layer、Adapter、Strategy 或 Guard 注册到同一生命周期；卸载 disposer 会推动 Catalog/Topology 新 generation，并使旧 Plan 失效。完整示例见[记忆扩展开发](./extensions.md)。内部 RPC 与 `MnemonClient` 仍不属于公开 SDK。
+Host 发布 Cordis 服务 `mnemonMemory: MemoryExtensionHost`。其他 DSH 插件声明 `inject = ['mnemonMemory']` 后，可以把 Layer、Adapter、Strategy、Guard 或 View Projector 注册到同一生命周期；卸载 disposer 会推动 generation 并使旧 Plan 失效，若卸载会让自动参与投影的 Layer 失去 Projector，则操作会被拒绝并回滚。完整示例见[记忆扩展开发](./extensions.md)。内部 RPC 与 `MnemonClient` 仍不属于公开 SDK。
 
 ## 国际化范围
 

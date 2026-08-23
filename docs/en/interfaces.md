@@ -218,13 +218,13 @@ Composable-memory APIs use dedicated subpaths:
 |---|---|
 | `dsh-mnemon/contracts` | Wire-safe descriptors, Topology, Plan, and Receipt types |
 | `dsh-mnemon/kernel` | Catalog, Topology Manager, Kernel, and Guard APIs |
-| `dsh-mnemon/extension-sdk` | `MemoryExtensionHost`, extension definitions, and process-level pre-registration |
+| `dsh-mnemon/extension-sdk` | `MemoryExtensionHost`, Layer/Adapter/Strategy/Guard/Projector contributions, and process-level pre-registration |
 | `dsh-mnemon/strategy-sdk` | Strategy definitions, permission manifests, and replay |
 | `dsh-mnemon/provider-sdk` | Adapter Factory Registry and current Provider Adapter interfaces |
 | `dsh-mnemon/layers/runtime`, `documents`, `memory-spaces` | The three default Layer descriptors |
 | `dsh-mnemon/strategy-default-three-tier` | Default topology and scheduling Strategy |
 
-The Host publishes `mnemonMemory: MemoryExtensionHost` as a Cordis service. Another DSH plugin can declare `inject = ['mnemonMemory']` and lifecycle-register Layers, Adapters, Strategies, or Guards. Disposal advances Catalog/Topology generations and invalidates stale Plans. See [Building Memory Extensions](./extensions.md) for a complete example. Internal RPC and `MnemonClient` remain outside the public SDK.
+The Host publishes `mnemonMemory: MemoryExtensionHost` as a Cordis service. Another DSH plugin can declare `inject = ['mnemonMemory']` and lifecycle-register Layers, Adapters, Strategies, Guards, or View Projectors. Disposal advances generations and invalidates stale Plans; an unload that would strand an automatic project-capable Layer is rejected and rolled back. See [Building Memory Extensions](./extensions.md) for a complete example. Internal RPC and `MnemonClient` remain outside the public SDK.
 
 ## Internationalization
 
