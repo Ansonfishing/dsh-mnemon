@@ -51,13 +51,21 @@ MnemonService searches authorized Providers concurrently
 quality normalization + reciprocal-rank fusion
           |
           v
-cap results at 12, each content at 2,000 characters, and hint at 1,000
+drop low relevance, deduplicate, then admit at most 6 results
+with at most 1,200 characters each and 4,800 total content characters
           |
           v
-omit Source diagnostics and authorized-ID echo; return evidence directly
+return only answer evidence and provenance; omit raw scores and diagnostics
+          |
+          v
+cache the admitted result for this root turn
 ```
 
-If the user has already supplied current facts, or the repository can answer directly, the Agent should not recall merely to “show memory.” When relationship explanations are needed, first use the complete `memoryBodyId + id` returned by recall, then run related.
+The model-facing tool deliberately exposes no `category`, `source`, or `intent` filter: a guessed filter must not hide exact evidence. One root turn can issue one Provider Recall. Exact, variant, and concurrent repeats join or replay the same admitted result instead of querying again or returning an ambiguous empty array. One Related traversal may follow, but only from a `memoryBodyId + id` admitted by that Recall; its repeated result is replayed in the same way.
+
+Document search is separately bounded to four records, 2,600 query-local characters per record, and 6,000 content characters total. The model-facing Memory Space catalog is capped at 16 entries, and `mnemon_status` returns only a compact health aggregate. Full records, provider settings, paths, and per-Space statistics remain available to Web/RPC control-plane surfaces, not conversation history.
+
+If the user has already supplied current facts, or the repository can answer directly, the Agent should not recall merely to “show memory.”
 
 ## Web Retrieval and Agent Queries
 
@@ -115,7 +123,7 @@ request
   -> return compact receipt
 ```
 
-`replace` and `remove` must match exactly one item through `old_text`. Capacity maintenance is triggered automatically only when `add` overflows.
+`replace` and `remove` must match exactly one item through `old_text`. Capacity maintenance is triggered only when the requested add or size-increasing replacement would exceed the target limit.
 
 ## USER.md Capacity Maintenance
 
@@ -156,33 +164,32 @@ The user profile is never sent to Memory Spaces. The worker has no tool permissi
 MEMORY add exceeds 10 KiB
           |
           v
-snapshot revision + committed entries
+snapshot revision + committed entries eligible for archival
+(exclude the pending add and the entry being replaced or removed)
           |
           v
-spawn archive worker
-  allow: memory_bodies, recall, remember, body_create
+Host selects existing active writable Memory Spaces
           |
           v
-route semantic clusters and archive or duplicate-check them
+spawn a no-tool planner
+  output: complete source-index routes + bounded compacted candidates
           |
           v
-return action + target spaces + compacted candidates
+Host validates exact source coverage, destinations, candidates, and byte budget
+          |
+          +-- invalid/revision changed -> no Provider writes; preserve Runtime
           |
           v
-Host validates structure, action, revision and byte budget
-          |
-          +-- failure/conflict -> preserve hot memory
-          |
-          v
-pack candidates by importance
+Host writes each original entry exactly to its planned existing Space
+  - committed receipt -> bind destination digest
+  - skipped -> require exact Recall evidence
           |
           v
-retry pending add
+CAS compactAndMutate(revision, compaction, original mutation, lineage)
+  -> persist JSON and both Markdown projections as one local commit
 ```
 
-The worker persona requires every committed entry to be represented in long-term storage or verified as a duplicate; this is an LLM-supervised policy. The Host's hard guarantees are structural, revision, and capacity validation, so semantic coverage should not be described as a database-level proof.
-
-If a revision conflict occurs after a successful long-term write, the hot memory is preserved while the long-term layer may also contain a copy. The plugin prioritizes preventing data loss and does not attempt to roll back a completed Mnemon write across the database and file system.
+The planner has no data-plane tools and cannot create a Space. The Host owns every write, verifies one durable destination for every committed source entry, and changes Runtime only after all evidence is valid. A late cross-process revision conflict still preserves the original hot entries; because a remote Provider cannot share the local file lock, already committed durable copies are retained as safe duplicates rather than destructively rolled back.
 
 ## Document Creation, Update, and Archiving
 

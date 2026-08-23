@@ -51,13 +51,21 @@ MnemonService searches authorized Providers concurrently
 quality normalization + reciprocal-rank fusion
           |
           v
-结果限制为 12 条、每条正文 2,000 字符、hint 1,000 字符
+丢弃低相关项并去重；最多准入 6 条结果，
+每条正文最多 1,200 字符，总正文最多 4,800 字符
           |
           v
-省略 Source 诊断与授权 ID 回显，直接返回 evidence
+只返回回答所需 evidence 与 provenance；省略原始分数和诊断
+          |
+          v
+在当前 root 回合缓存已准入结果
 ```
 
-如果用户已经提供当前事实，或仓库可以直接回答，Agent 不应为了“展示记忆”而召回。需要关系解释时，先使用 recall 返回的完整 `memoryBodyId + id`，再执行 related。
+模型工具不暴露 `category`、`source` 或 `intent` 过滤器：模型猜错过滤条件不能遮住精确证据。一个 root 回合只执行一次 Provider Recall；完全相同、变体或并发重复请求会 join 或重放同一份已准入结果，不再查询 Provider，也不会返回容易诱发继续搜索的空数组。随后至多执行一次 Related，而且只能使用本轮 Recall 已准入的 `memoryBodyId + id`；重复 Related 同样重放结果。
+
+Document search 另有独立边界：最多 4 条记录、每条最多 2,600 个查询附近字符、总正文最多 6,000 字符。模型侧 Memory Space 目录最多 16 项，`mnemon_status` 只返回紧凑健康汇总。完整记录、Provider 设置、路径和逐 Space 统计仍由 Web/RPC 控制面读取，不进入对话历史。
+
+如果用户已经提供当前事实，或仓库可以直接回答，Agent 不应为了“展示记忆”而召回。
 
 ## Web 检索和 Agent 查询
 
@@ -115,7 +123,7 @@ request
   -> return compact receipt
 ```
 
-`replace` 和 `remove` 必须通过 `old_text` 唯一命中一条。容量维护只在 `add` 溢出时自动触发。
+`replace` 和 `remove` 必须通过 `old_text` 唯一命中一条。只有请求中的 add 或增大正文的 replace 会超过目标上限时，才触发容量维护。
 
 ## USER.md 容量整理
 
@@ -156,33 +164,32 @@ retry pending add
 MEMORY add exceeds 10 KiB
           |
           v
-snapshot revision + committed entries
+snapshot revision + 可归档的已提交 entries
+（排除待提交 add，以及正被 replace/remove 的 entry）
           |
           v
-spawn archive worker
-  allow: memory_bodies, recall, remember, body_create
+Host 选择已有、active、可写的 Memory Spaces
           |
           v
-route semantic clusters and archive or duplicate-check them
+spawn 无工具 planner
+  output: 完整 source-index 路由 + 有界压缩候选
           |
           v
-return action + target spaces + compacted candidates
+Host 校验精确 source coverage、目标、候选和字节预算
+          |
+          +-- 无效/revision 已变 -> 不写 Provider；保留 Runtime
           |
           v
-Host validates structure, action, revision and byte budget
-          |
-          +-- failure/conflict -> preserve hot memory
-          |
-          v
-pack candidates by importance
+Host 把每条原始 entry 精确写入规划的已有 Space
+  - committed receipt -> 绑定目标 digest
+  - skipped -> 必须取得完全一致的 Recall evidence
           |
           v
-retry pending add
+CAS compactAndMutate(revision, compaction, original mutation, lineage)
+  -> JSON 与两个 Markdown projection 作为一次本地提交落盘
 ```
 
-worker persona 要求每条已提交 entry 都被长期表示或验证为重复；这是 LLM 监督策略。Host 的硬保证是结构、revision 和容量验证，不应把语义覆盖描述成数据库级证明。
-
-如果长期写入成功后发生 revision 冲突，热记忆会保留，长期层可能同时已有副本。插件优先避免丢失，不尝试跨数据库和文件系统回滚已完成的 Mnemon 写入。
+planner 没有数据面工具，不能创建 Memory Space。每次写入都由 Host 发起；只有每条已提交来源都有可验证的 durable destination 后，Runtime 才会变化。若远端写入后发生很晚的跨进程 revision 冲突，原 hot entries 仍会保留；远端 Provider 无法共享本地文件锁，因此已提交的 durable copy 会作为安全重复保留，而不会被破坏性回滚。
 
 ## Documents 创建、更新和归档
 
