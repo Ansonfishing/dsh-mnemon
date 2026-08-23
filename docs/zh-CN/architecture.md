@@ -141,10 +141,10 @@ Agent calls mnemon_recall(query, optional memoryBodyIds)
   -> reject requested IDs outside the pinned set
   -> MnemonService searches authorized Providers concurrently
   -> normalize quality and reciprocal-rank fusion
-  -> return at most 12 results and a 1,000-character hint
+  -> omit the authorized ID set; return at most 12 compact results
 ```
 
-模型输出不携带完整 Source 目录与路由诊断；`mnemon_related` 使用同一套 pinned-source 校验。长期语义写入、关系、删除以及记忆体创建/更新仍会在需要语义判断时受监督，但确定性服务会先校验目标 Provider 的能力。Mnemon Native 仍是完整参考实现；三方适配器只开放各自能兑现的精确/异步写入、图谱、浏览、关联与删除语义。运行时记忆和 Documents 的普通变更仍由确定性控制层提交。
+模型输出不携带完整 Source 目录、已选 ID 回显或路由诊断；每条 evidence 正文最多 2,000 字符，tags/entities 各最多 8 项，聚合 hint 最多 1,000 字符。`mnemon_related` 使用同一套 pinned-source 校验和 evidence envelope。长期语义写入、关系、删除以及记忆体创建/更新仍会在需要语义判断时受监督，但确定性服务会先校验目标 Provider 的能力。Mnemon Native 仍是完整参考实现；三方适配器只开放各自能兑现的精确/异步写入、图谱、浏览、关联与删除语义。运行时记忆和 Documents 的普通变更仍由确定性控制层提交。
 
 记忆体目录的移除是独立危险操作：Mnemon Native 经确认后调用 `store remove`，成功才移除登记；所有三方 Provider 都使用“断开”语义，只删除本地连接元数据，绝不删除 Provider 记忆。
 

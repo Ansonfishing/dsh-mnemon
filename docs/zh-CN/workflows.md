@@ -51,10 +51,10 @@ MnemonService searches authorized Providers concurrently
 quality normalization + reciprocal-rank fusion
           |
           v
-结果限制为 12 条，hint 限制为 1,000 字符，并省略 Source 诊断
+结果限制为 12 条、每条正文 2,000 字符、hint 1,000 字符
           |
           v
-Agent receives evidence directly, without a second model call
+省略 Source 诊断与授权 ID 回显，直接返回 evidence
 ```
 
 如果用户已经提供当前事实，或仓库可以直接回答，Agent 不应为了“展示记忆”而召回。需要关系解释时，先使用 recall 返回的完整 `memoryBodyId + id`，再执行 related。

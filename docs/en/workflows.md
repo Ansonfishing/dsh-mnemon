@@ -51,10 +51,10 @@ MnemonService searches authorized Providers concurrently
 quality normalization + reciprocal-rank fusion
           |
           v
-cap results at 12 and hint at 1,000 characters; omit Source diagnostics
+cap results at 12, each content at 2,000 characters, and hint at 1,000
           |
           v
-Agent receives evidence directly, without a second model call
+omit Source diagnostics and authorized-ID echo; return evidence directly
 ```
 
 If the user has already supplied current facts, or the repository can answer directly, the Agent should not recall merely to “show memory.” When relationship explanations are needed, first use the complete `memoryBodyId + id` returned by recall, then run related.
