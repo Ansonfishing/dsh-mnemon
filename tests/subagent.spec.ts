@@ -235,6 +235,10 @@ describe('Mnemon memory subagent coordinator', () => {
     finish({ output: [], structured: { summary: '', selectedMemoryBodyIds: ['project'], results: [] }, stopReason: 'completed' })
     await expect(pending).resolves.toMatchObject({ delegation: { selectedMemoryBodyIds: ['project'] } })
     expect(dispose).toHaveBeenCalledOnce()
+
+    memoryViews.activeTurn.mockReturnValueOnce(undefined as never)
+    await expect(coordinator.recall(root, { query: 'old explicit View', parentViewId: 'view-pinned' }, new AbortController().signal, { requirePinnedView: true })).rejects.toThrow('pinned to the current turn')
+    expect(start).toHaveBeenCalledOnce()
   })
 
   it('refuses an inheriting provider for isolated Recall workers', async () => {
@@ -1071,7 +1075,7 @@ describe('Mnemon root/child tool split', () => {
 
     await recall.execute({ query: 'root query', parentViewId: 'view-1', viewNodeId: 'node-project' } as never, { agent: parent(), signal })
     expect(coordinator.recall).toHaveBeenCalledOnce()
-    expect(coordinator.recall).toHaveBeenCalledWith(parent(), { query: 'root query', parentViewId: 'view-1', viewNodeId: 'node-project' }, signal)
+    expect(coordinator.recall).toHaveBeenCalledWith(parent(), { query: 'root query', parentViewId: 'view-1', viewNodeId: 'node-project' }, signal, { requirePinnedView: true })
     expect(memoryService.search).not.toHaveBeenCalled()
 
     await recall.execute({ query: 'child query', memoryBodyIds: ['project'] } as never, { agent: parent('subagent'), signal })
@@ -1100,7 +1104,10 @@ describe('Mnemon root/child tool split', () => {
       node: { id: 'node-documents', layerId: 'documents', kind: 'root', label: 'Documents', childIds: [] },
       children: [],
     }
-    const memoryViews = { zoom: vi.fn(() => zoomResult) }
+    const memoryViews = {
+      activeTurn: vi.fn(() => ({ viewId: 'view-stable' })),
+      zoom: vi.fn(() => zoomResult),
+    }
     const source = {
       config: memoryService.config,
       forAgent: vi.fn(() => ({
@@ -1123,6 +1130,9 @@ describe('Mnemon root/child tool split', () => {
     expect(coordinator.recall).not.toHaveBeenCalled()
     expect(memoryService.search).not.toHaveBeenCalled()
     expect(() => zoom.execute({ viewId: 'view-stable', nodeId: 'node-documents' } as never, { agent: parent('subagent'), signal })).toThrow('root agent')
+    expect(() => zoom.execute({ viewId: 'view-stale', nodeId: 'node-documents' } as never, { agent: parent(), signal })).toThrow('does not match the View pinned')
+    memoryViews.activeTurn.mockReturnValueOnce(undefined as never)
+    expect(() => zoom.execute({ viewId: 'view-stable', nodeId: 'node-documents' } as never, { agent: parent(), signal })).toThrow('not pinned')
     expect(memoryViews.zoom).toHaveBeenCalledOnce()
   })
 

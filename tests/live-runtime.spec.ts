@@ -88,6 +88,59 @@ describe('LiveMnemonRuntime workspace routing', () => {
     runtime.dispose()
   })
 
+  it('rejects automatic extension projection without a Projector and assembles contributed Projectors when present', async () => {
+    const missing = new MemoryExtensionHost()
+    missing.register({
+      descriptor: { id: 'missing-projector', version: '1', label: 'Missing', description: 'Projection fixture.' },
+      layers: [{ descriptor: { id: 'episodes', label: 'Episodes', description: 'Episodic projection.', role: 'episodes', order: 400, capabilities: ['project'] } }],
+    })
+    const config = resolveConfig({
+      storageScope: 'global',
+      cliPath: '/fake/mnemon',
+      memoryTopology: { layers: { episodes: { enabled: true, participation: { projection: 'automatic' } } } },
+    })
+    expect(() => createRuntimeGraph(config, undefined, missing)).toThrow('no View projector: episodes')
+
+    const extensions = new MemoryExtensionHost()
+    extensions.register({
+      descriptor: { id: 'episodes-projector', version: '1', label: 'Episodes', description: 'Projection fixture.' },
+      layers: [{ descriptor: { id: 'episodes', label: 'Episodes', description: 'Episodic projection.', role: 'episodes', order: 400, capabilities: ['project'] } }],
+      projectors: [{
+        layerId: 'episodes',
+        mode: 'outline',
+        project: () => ({ revision: 'episodes-1', nodes: [{ key: 'episodes', kind: 'root', label: 'Episodes', summary: 'Recent bounded episodes.' }] }),
+      }],
+    })
+    const graph = createRuntimeGraph(config, undefined, extensions)
+    const turn = await graph.memoryViews.beginTurn('session:1', { storage: 'global', sessionId: 'session', agentId: 'session' })
+    expect(graph.memoryViews.wake(turn.viewId).sections).toEqual(expect.arrayContaining([
+      expect.objectContaining({ layerId: 'episodes', mode: 'outline' }),
+    ]))
+    graph.memoryViews.endTurn(turn.turnId)
+    graph.dispose()
+  })
+
+  it('keeps one Agent on its pinned runtime graph across a live swap and releases it at turn end', async () => {
+    const config = resolveConfig({ storageScope: 'global', cliPath: '/fake/mnemon' })
+    const first = createRuntimeGraph(config)
+    const runtime = new LiveMnemonRuntime(first)
+    const sessionAgent = agent('session-1', temporaryDirectory('pinned-runtime'))
+    const context = await first.memoryViews.beginTurn('session-1:1', { storage: 'global', sessionId: 'session-1', agentId: 'session-1' })
+    const release = runtime.bindAgentRuntime(sessionAgent.id, first)
+    const second = createRuntimeGraph(config)
+
+    runtime.swap(second)
+    expect(runtime.snapshot()).toBe(second)
+    expect(runtime.forAgent(sessionAgent)).toBe(first)
+    expect(runtime.forAgent(sessionAgent).memoryViews.activeTurn(sessionAgent.id)).toEqual(context)
+
+    first.memoryViews.endTurn(context.turnId)
+    release()
+    expect(runtime.forAgent(sessionAgent)).toBe(second)
+    runtime.dispose()
+    expect(() => runtime.forAgent(sessionAgent)).toThrow('disposed')
+  })
+
   it('separates the inspected workspace from the current session execution workspace', () => {
     const workspaceOne = temporaryDirectory('workspace-one')
     const workspaceTwo = temporaryDirectory('workspace-two')

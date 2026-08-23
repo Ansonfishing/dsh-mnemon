@@ -17,17 +17,14 @@ import type { DocumentMutation } from './documents.ts'
 import { MnemonSubagentCoordinator, type DelegatedWriteResult } from './subagent.ts'
 import { scoreReviewActivity } from './review-activity.ts'
 import { TurnActivityProjection, type TurnMemoryActivity, type TurnMemoryActivitySnapshot } from './activity.ts'
-import type { RuntimeMemoryController } from './runtime-memory.ts'
-import { registerAgentMemoryViewContext } from './guidance.ts'
+import { applyAgentMemoryViewWake, registerAgentMemoryViewContext } from './guidance.ts'
 import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot, ReviewActivityScore, TaskAgentModelCatalog } from './shared/contracts.ts'
 import type { PreparedMemoryPlacement } from './provider-placement.ts'
-import type { MemoryKernel } from './memory-system/kernel.ts'
 import type { MemoryOperationScope, MemoryTurnContext, MemoryWake } from '../packages/contracts/src/index.ts'
 import type { MemoryViewManager } from '../packages/kernel/src/index.ts'
+import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from './live-runtime.ts'
 
-interface AgentRuntimeSource {
-  forAgent(agent: HostAgent): { runtimeMemory: RuntimeMemoryController; memoryKernel?: MemoryKernel; memoryViews?: MemoryViewManager }
-}
+type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'forAgent' | 'bindAgentRuntime'>
 
 interface HostDefaultModelService {
   currentSelection(): { provider: string; model: string }
@@ -78,6 +75,16 @@ interface PreStepPayload extends AgentEventPayload {
 interface TurnStoppingPayload extends AgentEventPayload {
   turn: number
   signal: AbortSignal
+}
+
+interface PromptAssembly {
+  contexts: Array<{ name: string; text: string }>
+  [key: string]: unknown
+}
+
+interface PromptAssemblyContext {
+  agent?: HostAgent
+  signal?: AbortSignal
 }
 
 function createPluginMessage(text: string, form: 'recall' | 'notice' | 'instructions', summary?: string): HostUserMessage {
@@ -174,7 +181,7 @@ class MnemonAgentLifecycle {
   private lastPhase: LifecyclePhase = 'idle'
   private lastAt: string | undefined
   private lastError: string | undefined
-  private pinnedView: { turn: number; manager: MemoryViewManager; context: MemoryTurnContext } | undefined
+  private pinnedView: { turn: number; manager: MemoryViewManager; context: MemoryTurnContext; releaseRuntime: () => void } | undefined
 
   constructor(
     readonly agent: HostAgent,
@@ -198,6 +205,8 @@ class MnemonAgentLifecycle {
         this.primePending = true
         this.mark('prime')
       }) as never),
+      this.agent.ctx.on('session/event', ((session: HostAgent['session'], event: HostSessionEvent) => this.sessionEvent(session, event)) as never),
+      this.agent.ctx.on('system-prompt/assemble', ((assembly: PromptAssembly, context: PromptAssemblyContext, next: () => Promise<PromptAssembly>) => this.assemblePrompt(assembly, context, next)) as never),
       this.agent.ctx.on('agent/pre-step', ((payload: PreStepPayload, next: () => Promise<HostPreStepDecision>) => this.preStep(payload, next)) as never),
       this.agent.ctx.on('agent/turn-stopping', ((payload: TurnStoppingPayload) => this.finishTurn(payload)) as never),
     ]
@@ -252,8 +261,10 @@ class MnemonAgentLifecycle {
   private async preStep(payload: PreStepPayload, next: () => Promise<HostPreStepDecision>): Promise<HostPreStepDecision> {
     if (payload.step === 1) this.cancelIdleReview(true)
     const decision = await next()
-    if (decision.kind === 'reject' || payload.signal.aborted) return decision
-    await this.pinView(payload.turn)
+    if (decision.kind === 'reject' || payload.signal.aborted) {
+      this.releaseView(payload.turn)
+      return decision
+    }
     if (!this.config.lifecycleEnabled) return decision
     if (this.config.writeEnabled && this.config.writebackMode === 'guided') {
       this.recordTurnMessages(payload.turn, decision.messages)
@@ -283,11 +294,31 @@ class MnemonAgentLifecycle {
     return { kind: 'enter', messages: [...decision.messages, createPluginMessage(reminder, 'instructions', 'Optional memory recall and remember reminder')] }
   }
 
+  private async assemblePrompt(assembly: PromptAssembly, context: PromptAssemblyContext, next: () => Promise<PromptAssembly>): Promise<PromptAssembly> {
+    if (context.agent !== undefined && context.agent.id !== this.agent.id) return next()
+    const turn = this.openTurn()
+    if (turn === undefined || context.signal?.aborted === true) return next()
+    await this.pinView(turn)
+    const assembled = await next()
+    return applyAgentMemoryViewWake(assembled, this.memoryWake())
+  }
+
+  private openTurn(): number | undefined {
+    let open: number | undefined
+    for (const event of this.agent.session.events) {
+      const turn = eventTurn(event)
+      if (event.type === 'turn/start' && turn !== undefined) open = turn
+      else if (event.type === 'turn/end' && turn === open) open = undefined
+    }
+    return open
+  }
+
   private async pinView(turn: number): Promise<void> {
     if (this.pinnedView?.turn === turn) return
     this.releaseView()
-    const manager = this.runtimeSource?.forAgent(this.agent).memoryViews
-    if (manager === undefined) return
+    const graph: MnemonRuntimeGraph | undefined = this.runtimeSource?.forAgent(this.agent)
+    const manager = graph?.memoryViews
+    if (manager === undefined || graph === undefined || this.runtimeSource === undefined) return
     const cwd = this.agent.session.header?.cwd?.trim()
     const scope: MemoryOperationScope = {
       storage: this.config.storageScope,
@@ -296,21 +327,39 @@ class MnemonAgentLifecycle {
       agentId: this.agent.id,
     }
     const context = await manager.beginTurn(`${this.agent.id}:${turn}`, scope)
-    this.pinnedView = { turn, manager, context }
+    let releaseRuntime: (() => void) | undefined
+    try {
+      releaseRuntime = this.runtimeSource.bindAgentRuntime(this.agent.id, graph)
+      this.pinnedView = { turn, manager, context, releaseRuntime }
+    } catch (error) {
+      manager.endTurn(context.turnId)
+      releaseRuntime?.()
+      throw error
+    }
   }
 
   private releaseView(turn?: number): void {
     const pinned = this.pinnedView
     if (pinned === undefined || (turn !== undefined && pinned.turn !== turn)) return
     this.pinnedView = undefined
-    pinned.manager.endTurn(pinned.context.turnId)
+    try {
+      pinned.manager.endTurn(pinned.context.turnId)
+    } finally {
+      pinned.releaseRuntime()
+    }
   }
 
   private async finishTurn(payload: TurnStoppingPayload): Promise<void> {
-    const pinned = this.pinnedView?.turn === payload.turn ? this.pinnedView : undefined
-    this.releaseView(payload.turn)
-    if (pinned !== undefined) await pinned.manager.reconcile(pinned.context.scope)
     this.scheduleIdleReview(payload.turn)
+  }
+
+  private sessionEvent(session: HostAgent['session'], event: HostSessionEvent): void {
+    if (session !== this.agent.session || event.type !== 'turn/end') return
+    const turn = eventTurn(event)
+    const pinned = turn === undefined || this.pinnedView?.turn !== turn ? undefined : this.pinnedView
+    if (pinned === undefined) return
+    this.releaseView(turn)
+    void pinned.manager.reconcile(pinned.context.scope).catch(error => this.fail(error))
   }
 
   private scheduleIdleReview(turn: number): void {

@@ -20,13 +20,11 @@ import { finalizeLlmPlacement, rulesOnlyPlacement, type PreparedMemoryPlacement 
 import { MEMORY_PROVIDER_IDS } from './providers/catalog.ts'
 import type { MemoryBodyMetadataMaintenanceResult, MemoryBodyMetadataUpdate, MemoryPlacementDecision, SubagentCounters } from './shared/contracts.ts'
 import type { MemoryMigrationLineage, MemoryRecallSlice } from '../packages/contracts/src/index.ts'
-import type { MemoryViewManager } from '../packages/kernel/src/index.ts'
+import type { MnemonAgentRuntimeSource } from './live-runtime.ts'
 
 export type { SubagentCounters } from './shared/contracts.ts'
 
-interface AgentRuntimeSource {
-  forAgent(agent: HostAgent): { service: MnemonService; runtimeMemory: RuntimeMemoryController; documents: DocumentManager; memoryViews?: MemoryViewManager }
-}
+type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'forAgent'>
 
 function isAgentRuntimeSource(value: RuntimeMemoryController | AgentRuntimeSource | undefined): value is AgentRuntimeSource {
   return typeof value === 'object' && value !== null && 'forAgent' in value && typeof value.forAgent === 'function'
@@ -836,8 +834,8 @@ export class MnemonSubagentCoordinator {
     return this.documentsFor(parent).forAgent(parent).search(query, { includeArchived, ...(limit === undefined ? {} : { limit }) })
   }
 
-  async recall(parent: HostAgent, request: SearchRequest, signal: AbortSignal): Promise<DelegatedRecallResult> {
-    const scoped = this.scopeRecall(parent, request)
+  async recall(parent: HostAgent, request: SearchRequest, signal: AbortSignal, options: { requirePinnedView?: boolean } = {}): Promise<DelegatedRecallResult> {
+    const scoped = this.scopeRecall(parent, request, options.requirePinnedView === true)
     const prompt = `Recall this request now:\n${naturalSearchRequest(scoped.request, scoped.slice)}`
     const { provider, runId, result } = await this.delegate(parent, 'recall', 'Mnemon recall', prompt, READ_TOOLS, RECALL_SCHEMA, signal, 'spawn', RECALL_PERSONA, {
       kind: 'recall',
@@ -1418,17 +1416,19 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
     return selected
   }
 
-  private scopeRecall(parent: HostAgent, request: SearchRequest): { request: SearchRequest; slice?: MemoryRecallSlice } {
+  private scopeRecall(parent: HostAgent, request: SearchRequest, requirePinnedView: boolean): { request: SearchRequest; slice?: MemoryRecallSlice } {
     if (!isAgentRuntimeSource(this.runtimeMemoryOrSource)) return { request }
     const views = this.runtimeMemoryOrSource.forAgent(parent).memoryViews
-    if (views === undefined) return { request }
     const pinned = views.activeTurn(parent.id)
     const requestedViewId = request.parentViewId?.trim()
-    if (pinned !== undefined && requestedViewId !== undefined && requestedViewId !== '' && requestedViewId !== pinned.viewId) {
+    if (pinned === undefined) {
+      if (requirePinnedView) throw new Error('Recall requires the Memory View pinned to the current turn')
+      return { request }
+    }
+    if (requestedViewId !== undefined && requestedViewId !== '' && requestedViewId !== pinned.viewId) {
       throw new Error(`Recall parentViewId does not match the View pinned to this turn: ${pinned.viewId}`)
     }
-    const parentViewId = requestedViewId === undefined || requestedViewId === '' ? pinned?.viewId : requestedViewId
-    if (parentViewId === undefined) return { request }
+    const parentViewId = pinned.viewId
     const slice = views.recallSlice(parentViewId, request.viewNodeId, request.memoryBodyIds)
     if (slice.memoryBodyIds.length === 0) throw new Error(`parent Memory View has no Recall-authorized Memory Spaces: ${parentViewId}`)
     return {

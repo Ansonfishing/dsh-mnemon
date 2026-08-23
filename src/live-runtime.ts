@@ -33,6 +33,13 @@ export interface MnemonRuntimeGraph {
   dispose(): void
 }
 
+export interface MnemonAgentRuntimeSource {
+  readonly config: ResolvedConfig
+  forAgent(agent: HostAgent): MnemonRuntimeGraph
+  /** Pin every tool in one Agent turn to the same immutable runtime generation. */
+  bindAgentRuntime(agentId: string, graph: MnemonRuntimeGraph): () => void
+}
+
 /**
  * Build a complete generation before it can become visible. Constructors also
  * validate and initialize the selected storage root, so a failed candidate is
@@ -83,6 +90,8 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: strin
       }
     })
     const memoryViews = createDefaultMemoryViewManager(memoryKernel, { runtimeMemory, documents, service })
+    extensionAttachment?.bindViewManager(memoryViews)
+    memoryViews.assertProjectionReady()
     receiptBridge = new MemoryReceiptBridge(memoryKernel, memoryViews)
     const detachReceiptSink = memoryKernel.registerReceiptSink(receiptBridge)
     let disposed = false
@@ -129,9 +138,11 @@ function liveProxy<T extends object>(resolve: () => T): T {
  * JavaScript turn. A method obtained before the swap stays bound to its old
  * generation until that invocation settles.
  */
-export class LiveMnemonRuntime {
+export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
   private current: MnemonRuntimeGraph
   private readonly workspaceGraphs = new Map<string, MnemonRuntimeGraph>()
+  private readonly agentGraphs = new Map<string, { token: symbol; graph: MnemonRuntimeGraph }>()
+  private closed = false
 
   readonly config: ResolvedConfig
   readonly runner: MnemonRunner
@@ -161,6 +172,10 @@ export class LiveMnemonRuntime {
   }
 
   swap(next: MnemonRuntimeGraph): void {
+    if (this.closed) {
+      next.dispose()
+      throw new Error('Mnemon runtime is disposed')
+    }
     const previous = this.current
     this.current = next
     previous.dispose()
@@ -169,11 +184,40 @@ export class LiveMnemonRuntime {
   }
 
   snapshot(): MnemonRuntimeGraph {
+    this.assertOpen()
     return this.current
+  }
+
+  bindAgentRuntime(agentId: string, graph: MnemonRuntimeGraph): () => void {
+    this.assertOpen()
+    const id = agentId.trim()
+    if (id === '') throw new Error('Mnemon runtime binding requires an Agent id')
+    if (this.agentGraphs.has(id)) throw new Error(`Mnemon runtime is already pinned for Agent ${id}`)
+    const token = Symbol(id)
+    this.agentGraphs.set(id, { token, graph })
+    return () => {
+      if (this.agentGraphs.get(id)?.token === token) this.agentGraphs.delete(id)
+    }
+  }
+
+  dispose(): void {
+    if (this.closed) return
+    this.closed = true
+    const graphs = new Set<MnemonRuntimeGraph>([
+      this.current,
+      ...this.workspaceGraphs.values(),
+      ...[...this.agentGraphs.values()].map(binding => binding.graph),
+    ])
+    this.agentGraphs.clear()
+    this.workspaceGraphs.clear()
+    for (const graph of graphs) graph.dispose()
   }
 
   /** Resolve the runtime that must serve one Agent execution. */
   forAgent(agent: HostAgent): MnemonRuntimeGraph {
+    this.assertOpen()
+    const pinned = this.agentGraphs.get(agent.id)
+    if (pinned !== undefined) return pinned.graph
     if (this.current.config.storageScope !== 'workspace') return this.current
     const cwd = agent.session.header?.cwd?.trim()
     if (cwd === undefined || cwd === '') throw new Error('the current DSH session has no workspace for Mnemon')
@@ -182,6 +226,7 @@ export class LiveMnemonRuntime {
 
   /** Resolve an authorized DSH workspace selected by the Web workbench. */
   forWorkspaceId(workspaceId: string): MnemonRuntimeGraph {
+    this.assertOpen()
     const workspace = this.requireWorkspace(workspaceId)
     return this.current.config.storageScope === 'workspace' ? this.forWorkspacePath(workspace.path) : this.current
   }
@@ -195,6 +240,7 @@ export class LiveMnemonRuntime {
     effectiveRoot: string
     aligned: boolean
   } {
+    this.assertOpen()
     const effectiveAgent = this.agent(request.sessionId)
     const effectiveWorkspace = effectiveAgent === undefined ? undefined : this.workspaceForPath(effectiveAgent.session.header?.cwd)
     const selectedWorkspace = request.workspaceId === undefined || request.workspaceId.trim() === ''
@@ -224,6 +270,10 @@ export class LiveMnemonRuntime {
       this.workspaceGraphs.set(key, graph)
     }
     return graph
+  }
+
+  private assertOpen(): void {
+    if (this.closed) throw new Error('Mnemon runtime is disposed')
   }
 
   private agent(sessionId?: string): HostAgent | undefined {

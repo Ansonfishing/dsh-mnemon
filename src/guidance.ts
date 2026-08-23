@@ -30,6 +30,19 @@ function memoryPromptText(value: string): string {
   )
 }
 
+/** Replace the already-materialized Agent context with the Wake pinned during assembly. */
+export function applyAgentMemoryViewWake<T extends { contexts: Array<{ name: string; text: string }> }>(assembly: T, wake: MemoryWake | undefined): T {
+  const rendered = wake === undefined ? '' : memoryPromptText(wake.text)
+  let found = false
+  const contexts = assembly.contexts.map(context => {
+    if (context.name !== RUNTIME_MEMORY_CONTEXT_NAME) return context
+    found = true
+    return { ...context, text: rendered }
+  })
+  if (!found) contexts.push({ name: RUNTIME_MEMORY_CONTEXT_NAME, text: rendered })
+  return { ...assembly, contexts }
+}
+
 /** Register the non-recursive escape used by both legacy Runtime and View Wake contexts. */
 export function registerMemoryPromptInterpolation(ctx: HostContextShape): void {
   systemPrompt(ctx)?.variable?.(RUNTIME_MEMORY_LITERAL_OPEN_BRACES_VARIABLE, () => LITERAL_OPEN_BRACES)

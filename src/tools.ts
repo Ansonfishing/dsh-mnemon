@@ -6,6 +6,7 @@ import { assertMemoryLayerParticipation } from './memory-system/access.ts'
 import type { MemoryCapability } from './memory-system/contracts.ts'
 import type { MemoryKernel } from './memory-system/kernel.ts'
 import type { MemoryViewManager } from '../packages/kernel/src/index.ts'
+import type { MnemonAgentRuntimeSource } from './live-runtime.ts'
 import { isSubagent, MnemonSubagentCoordinator } from './subagent.ts'
 import {
   CATEGORIES,
@@ -38,10 +39,7 @@ function requireAgent(exec: ToolExecution) {
   return exec.agent
 }
 
-interface AgentRuntimeSource {
-  readonly config: MnemonService['config']
-  forAgent(agent: HostAgent): { service: MnemonService; runtimeMemory: RuntimeMemoryController; documents: DocumentManager; memoryKernel?: MemoryKernel; memoryViews?: MemoryViewManager }
-}
+type AgentRuntimeSource = MnemonAgentRuntimeSource
 
 interface ToolRuntime {
   service: MnemonService
@@ -107,7 +105,11 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
       if (isSubagent(agent)) throw new Error('Mnemon View navigation is available only to the root agent')
       const memoryViews = runtimeFor(exec).memoryViews
       if (memoryViews === undefined) throw new Error('Mnemon Memory View control plane is unavailable')
-      return memoryViews.zoom(args.viewId, args.nodeId)
+      const pinned = memoryViews.activeTurn(agent.id)
+      if (pinned === undefined) throw new Error('Mnemon Memory View is not pinned to the current turn')
+      const requestedViewId = args.viewId.trim()
+      if (requestedViewId !== pinned.viewId) throw new Error(`Zoom viewId does not match the View pinned to this turn: ${pinned.viewId}`)
+      return memoryViews.zoom(pinned.viewId, args.nodeId)
     },
     presentCall: (args: { nodeId: string }) => ({ card: 'generic', title: 'Zoom Mnemon Memory View', kind: 'search', rawInput: args.nodeId }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon Memory View expanded' }),
@@ -139,7 +141,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
       const runtime = requireLayer(exec, 'memory-spaces', 'recall')
       return isSubagent(exec.agent)
         ? runtime.service.search(coordinator.scopeRecallRequest(requireAgent(exec), args), exec.signal)
-        : coordinator.recall(requireAgent(exec), args, exec.signal)
+        : coordinator.recall(requireAgent(exec), args, exec.signal, { requirePinnedView: true })
     },
     presentCall: (args: { query: string }) => ({ card: 'generic', title: 'Recall Mnemon memory', kind: 'search', rawInput: args.query }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon recall complete' }),

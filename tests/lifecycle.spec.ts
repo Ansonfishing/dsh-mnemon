@@ -28,6 +28,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
   const agentListeners = new Map<string, Listener>()
   const rootListeners = new Map<string, Listener>()
   const agentContexts: Array<{ name: string; order: number; text: () => string }> = []
+  const promptAssemblies: Array<{ contexts: Array<{ name: string; text: string }> }> = []
   const events: HostSessionEvent[] = []
   const followup = vi.fn()
   const steer = vi.fn()
@@ -148,11 +149,30 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
   }
   const runtimeSource = {
     forAgent: vi.fn(() => ({ runtimeMemory: {}, memoryViews })),
+    bindAgentRuntime: vi.fn(() => vi.fn()),
   }
   const lifecycle = new MnemonLifecycle(ctx, coordinator, config, runtimeSource as never)
   const stop = lifecycle.start()
 
+  const assemblePrompt = async (turn: number) => {
+    const hasOpenTurn = events.some(event => event.type === 'turn/start' && event.data.turn === turn)
+      && !events.some(event => event.type === 'turn/end' && event.data.turn === turn)
+    if (!hasOpenTurn) events.push({ type: 'turn/start', data: { turn } })
+    const listener = agentListeners.get('system-prompt/assemble')
+    if (listener === undefined) throw new Error('system-prompt/assemble listener missing')
+    const assembly = {
+      sections: [],
+      contexts: agentContexts.map(context => ({ name: context.name, text: context.text() })),
+      tools: [],
+      variables: {},
+    }
+    const assembled = await listener(assembly, { agent, signal: new AbortController().signal }, async () => assembly) as typeof assembly
+    promptAssemblies.push(assembled)
+    return assembled
+  }
   const preStep = async (messages: HostUserMessage[], turn: number, step = 1): Promise<HostPreStepDecision> => {
+    // Match the real DSH order: turn/start -> systemPrompt.assemble -> agent/pre-step.
+    await assemblePrompt(turn)
     const listener = agentListeners.get('agent/pre-step')
     if (listener === undefined) throw new Error('pre-step listener missing')
     return await listener({ agent, messages, turn, step, signal: new AbortController().signal }, async () => ({ kind: 'enter', messages })) as HostPreStepDecision
@@ -161,8 +181,13 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     const listener = agentListeners.get('agent/turn-stopping')
     if (listener === undefined) throw new Error('turn-stopping listener missing')
     await listener({ agent, turn, signal: new AbortController().signal })
+    if (!events.some(event => event.type === 'turn/end' && event.data.turn === turn)) {
+      const event = { type: 'turn/end', data: { turn } }
+      events.push(event)
+      agentListeners.get('session/event')?.(agent.session, event)
+    }
   }
-  return { agent, agentListeners, agentContexts, events, followup, steer, lifecycle, service, coordinator, memoryViews, runtimeSource, createTaskAgent, disposedTaskAgents, defaultModel, llm, agentPresets, preStep, turnStopping, stop }
+  return { agent, agentListeners, agentContexts, promptAssemblies, events, followup, steer, lifecycle, service, coordinator, memoryViews, runtimeSource, createTaskAgent, disposedTaskAgents, defaultModel, llm, agentPresets, assemblePrompt, preStep, turnStopping, stop }
 }
 
 afterEach(() => vi.useRealTimers())
@@ -175,8 +200,10 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(context?.text()).toBe('')
 
     await value.preStep([userMessage('First step')], 7, 1)
+    expect(value.promptAssemblies[0]?.contexts).toContainEqual({ name: 'mnemon:runtime-memory', text: 'Pinned Wake view-7' })
     expect(context?.text()).toBe('Pinned Wake view-7')
     expect(value.memoryViews.beginTurn).toHaveBeenCalledOnce()
+    expect(value.runtimeSource.bindAgentRuntime).toHaveBeenCalledOnce()
     expect(value.memoryViews.beginTurn).toHaveBeenCalledWith('session-1:7', {
       storage: 'global',
       sessionId: 'session-1',

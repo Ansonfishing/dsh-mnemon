@@ -190,6 +190,17 @@ export class MemoryViewManager {
     }
   }
 
+  /** Validate every automatic project-capable Layer before a runtime graph becomes live. */
+  assertProjectionReady(): void {
+    const descriptor = this.kernel.descriptor()
+    const layers = new Map(descriptor.catalog.layers.map(layer => [layer.id, layer]))
+    for (const layer of descriptor.topology.layers) {
+      if (!layer.enabled || layer.participation.projection !== 'automatic') continue
+      if (layers.get(layer.id)?.capabilities.includes('project') !== true) continue
+      if (!this.projectors.has(layer.id)) throw new Error(`enabled memory layer has no View projector: ${layer.id}`)
+    }
+  }
+
   latest(): MemoryView | undefined {
     return this.current
   }

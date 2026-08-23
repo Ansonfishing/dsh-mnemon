@@ -1,5 +1,6 @@
 import type { MemoryAdapterRegistration, MemoryCatalog, MemoryLayerRegistration, MemoryStrategyRegistration } from '../../kernel/src/catalog.ts'
 import type { MemoryGuardRegistration, MemoryKernel } from '../../kernel/src/kernel.ts'
+import type { MemoryViewManager, MemoryViewProjector } from '../../kernel/src/view.ts'
 
 const EXTENSION_ID = /^[a-z][a-z0-9-]{0,127}$/u
 
@@ -15,12 +16,15 @@ export interface MemoryExtension {
   layers?: readonly MemoryLayerRegistration[]
   adapters?: readonly MemoryAdapterRegistration[]
   strategies?: readonly MemoryStrategyRegistration[]
+  /** Trusted, query-independent projection sources for extension Layers. */
+  projectors?: readonly MemoryViewProjector[]
   /** Guards can only deny; strategies and data-plane executors cannot bypass them. */
   guards?: readonly MemoryGuardRegistration[]
 }
 
 export interface MemoryExtensionAttachment {
   bindKernel(kernel: MemoryKernel): void
+  bindViewManager(manager: MemoryViewManager): void
   dispose(): void
   release(): void
 }
@@ -28,6 +32,7 @@ export interface MemoryExtensionAttachment {
 interface AttachedTarget {
   catalog: MemoryCatalog
   kernel?: MemoryKernel
+  viewManager?: MemoryViewManager
   releases: Map<string, () => void>
   released: boolean
 }
@@ -120,6 +125,38 @@ export class MemoryExtensionHost {
           throw error
         }
       },
+      bindViewManager: manager => {
+        if (target.released) throw new Error('memory extension attachment is released')
+        if (target.viewManager !== undefined) throw new Error('memory extension attachment already has a View manager')
+        target.viewManager = manager
+        const projectorReleases = new Map<string, () => void>()
+        try {
+          for (const extension of this.extensions.values()) {
+            const disposers: Array<() => void> = []
+            try {
+              for (const projector of extension.projectors ?? []) {
+                if (target.catalog.layer(projector.layerId) === undefined) throw new Error(`memory View projector layer is unavailable: ${projector.layerId}`)
+                disposers.push(manager.registerProjector(projector))
+              }
+              projectorReleases.set(extension.descriptor.id, () => reverseDispose(disposers))
+            } catch (error) {
+              reverseDispose(disposers)
+              throw error
+            }
+          }
+          for (const [id, releaseProjectors] of projectorReleases) {
+            const releasePrevious = target.releases.get(id) ?? (() => {})
+            target.releases.set(id, () => {
+              releaseProjectors()
+              releasePrevious()
+            })
+          }
+        } catch (error) {
+          reverseDispose([...projectorReleases.values()])
+          delete target.viewManager
+          throw error
+        }
+      },
       dispose: () => {
         if (target.released) return
         target.released = true
@@ -153,6 +190,12 @@ export class MemoryExtensionHost {
       if (target.kernel !== undefined) {
         for (const guard of extension.guards ?? []) disposers.push(target.kernel.registerGuard(guard))
       }
+      if (target.viewManager !== undefined) {
+        for (const projector of extension.projectors ?? []) {
+          if (target.catalog.layer(projector.layerId) === undefined) throw new Error(`memory View projector layer is unavailable: ${projector.layerId}`)
+          disposers.push(target.viewManager.registerProjector(projector))
+        }
+      }
       return () => reverseDispose(disposers)
     } catch (error) {
       reverseDispose(disposers)
@@ -174,3 +217,4 @@ export function registerMemoryExtension(extension: MemoryExtension): () => void 
 
 export type { MemoryAdapterRegistration, MemoryLayerRegistration, MemoryStrategyRegistration } from '../../kernel/src/catalog.ts'
 export type { MemoryGuardRegistration } from '../../kernel/src/kernel.ts'
+export type { MemoryViewProjector } from '../../kernel/src/view.ts'
