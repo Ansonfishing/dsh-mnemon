@@ -7,8 +7,9 @@ import { basename, join, resolve } from 'node:path'
 const GUIDED_PREFIX = '[MNEMON]'
 const RUNTIME_START = 'MNEMON RUNTIME MEMORY PROTOCOL'
 const USER_CONTENTS = 'Contents of USER.md'
-const IMPORTANT = 'IMPORTANT: USER.md and MEMORY.md above'
-const ROUTED_START = 'MNEMON ROUTED MEMORY SOURCES'
+const IMPORTANT = '\nIMPORTANT:'
+const ROUTED_START = 'MNEMON ROUTES ('
+const LEGACY_ROUTED_START = 'MNEMON ROUTED MEMORY SOURCES'
 const ROUTED_END = 'END MNEMON ROUTED MEMORY SOURCES'
 
 function sha256(value) {
@@ -28,18 +29,28 @@ function titleRequest(request) {
 function mnemonSlice(context) {
   const start = context.indexOf(RUNTIME_START)
   if (start < 0) return ''
-  const routedEnd = context.indexOf(ROUTED_END, start)
-  return context.slice(start, routedEnd < 0 ? undefined : routedEnd + ROUTED_END.length)
+  const legacyStart = context.indexOf(LEGACY_ROUTED_START, start)
+  if (legacyStart >= 0) {
+    const routedEnd = context.indexOf(ROUTED_END, legacyStart)
+    return context.slice(start, routedEnd < 0 ? undefined : routedEnd + ROUTED_END.length)
+  }
+  const routedStart = context.indexOf(ROUTED_START, start)
+  if (routedStart < 0) return context.slice(start)
+  const routedEnd = context.indexOf('\n', routedStart)
+  return context.slice(start, routedEnd < 0 ? undefined : routedEnd)
 }
 
 function splitMnemon(value) {
   if (value === '') return { protocol: '', data: '', routed: '' }
   const dataStart = value.indexOf(USER_CONTENTS)
   const importantStart = value.indexOf(IMPORTANT)
-  const routedStart = value.indexOf(ROUTED_START)
+  const compactRoutedStart = value.indexOf(ROUTED_START)
+  const legacyRoutedStart = value.indexOf(LEGACY_ROUTED_START)
+  const routedStart = compactRoutedStart >= 0 ? compactRoutedStart : legacyRoutedStart
+  const dataEnd = importantStart >= 0 ? importantStart : routedStart >= 0 ? routedStart : value.length
   return {
     protocol: dataStart < 0 ? value : value.slice(0, dataStart).trim(),
-    data: dataStart < 0 ? '' : value.slice(dataStart, importantStart < 0 ? routedStart : importantStart).trim(),
+    data: dataStart < 0 ? '' : value.slice(dataStart, dataEnd).trim(),
     routed: routedStart < 0 ? '' : value.slice(routedStart).trim(),
   }
 }
@@ -88,7 +99,7 @@ function requestMetrics(request, rootSessionId, attribution) {
     latestRoutedCharacters: latest.routed.length,
     guidedReminderCount: reminders.length,
     guidedReminderCharacters: reminders.reduce((total, reminder) => total + reminder.length, 0),
-    routingGuidancePresent: system.includes('Use memory only by need.'),
+    routingGuidancePresent: system.includes('Use memory only when needed.') || system.includes('Use memory only by need.'),
     providerUsage: request.usage,
     usageKind: request.usageKind,
     finishReasons: request.finishReasons ?? [],
