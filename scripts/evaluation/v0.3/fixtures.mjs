@@ -260,6 +260,19 @@ export const singleRecallScenario = {
   ],
 }
 
+/** Natural wording that is a known miss for the underlying retriever. */
+export const singleRecallFaultWordingScenario = {
+  id: 'v03-single-durable-recall-fault-wording',
+  maxTokens: 4096,
+  turns: [
+    {
+      id: 'single-durable-recall-fault-wording',
+      prompt: '[EVAL:single-recall-fault] 哪次演练或事故导致灰度增加 35% 和 65% 阶段？直接从 12% 升到 100% 暴露了什么故障？',
+      expected: { mustContain: ['2026-06-02', '租户'], memoryTools: ['mnemon_recall'] },
+    },
+  ],
+}
+
 export const capacityMaintenanceScenario = {
   id: 'v03-runtime-capacity-maintenance',
   maxTokens: 4096,

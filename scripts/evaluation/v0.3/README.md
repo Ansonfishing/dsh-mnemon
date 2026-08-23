@@ -56,7 +56,9 @@ node scripts/evaluation/v0.3/run.mjs --provider real --scenario context-only \
 `--corpus max-runtime` fills Runtime Memory close to its configured limits.
 `--corpus capacity --scenario capacity-maintenance` exercises the real
 overflow archive/compaction/retry path. `--scenario single-recall` is a
-one-turn natural-language recall benchmark suitable for repeated A/B samples.
+one-turn natural-language recall benchmark suitable for repeated A/B samples;
+`single-recall-fault` uses a known misleading paraphrase that misses in the
+underlying native retriever unless the LLM chooses a better query.
 `--routing-guidance off --recall-mode off --writeback-mode off` isolates the
 base protocol and tool-schema cost. `--package-root` can point to a built older
 worktree for a like-for-like baseline. The harness detects pre-TurnView v0.2
@@ -111,9 +113,12 @@ node scripts/evaluation/v0.3/release-suite.mjs \
 ```
 
 `--mode smoke` reduces every selected case to one sample. `--only` accepts a
-comma-separated case list and makes an interrupted suite cheap to resume. A
-partial output directory is moved under `_partial/` before retry; completed
-runs whose package commit still matches are reused.
+comma-separated case list, `--versions current` avoids re-running an unchanged
+baseline, and both make an interrupted suite cheap to resume. A partial output
+directory is moved under `_partial/` before retry; completed runs whose package
+commit still matches are reused. Two opt-in stable-release cases are excluded
+from the default matrix: `recall-gate-natural` and `recall-gate-fault` each run
+20 current-version samples with a 4,096-token ceiling.
 
 In addition to the earlier conversation, autonomous recall, isolated recall,
 idle review, capacity, and context matrices, the release suite adds:
@@ -133,8 +138,9 @@ must not be mistaken for user wall time because concurrent calls can overlap.
 An execution timeout now terminates DSH but still flushes captured requests and
 logs before failing the run. `--execution-timeout-ms` can extend the default
 300-second ceiling for a diagnostic rerun without changing the release pass
-criterion. `--max-tokens` overrides a fixture's root response budget for
-diagnostic runs; release-suite measurements always use the fixture default.
+criterion. `--max-tokens` overrides a fixture's root response budget; a release
+suite case may also pin that value explicitly and records the effective budget
+in each manifest.
 
 Request bodies contain the synthetic evaluation corpus and conversation, so
 they should be treated as evaluation evidence rather than committed fixtures.

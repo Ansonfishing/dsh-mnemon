@@ -26,6 +26,8 @@ const CASES = [
   { id: 'runtime-mutations', provider: 'real', scenario: 'runtime-mutations', repetitions: 2 },
   { id: 'idle-no-write', provider: 'real', scenario: 'idle-review', idleReviewMs: 5_000, repetitions: 2 },
   { id: 'capacity-maintenance', provider: 'real', scenario: 'capacity-maintenance', corpus: 'capacity', repetitions: 3 },
+  { id: 'recall-gate-natural', provider: 'real', scenario: 'single-recall', versions: ['current'], repetitions: 20, maxTokens: 4096, releaseOnly: true },
+  { id: 'recall-gate-fault', provider: 'real', scenario: 'single-recall-fault', versions: ['current'], repetitions: 20, maxTokens: 4096, releaseOnly: true },
 ]
 
 function argumentsFrom(argv) {
@@ -37,6 +39,7 @@ function argumentsFrom(argv) {
     mnemonBinary: '/private/tmp/dsh-mnemon-v03-eval-mnemon',
     mode: 'full',
     only: undefined,
+    versions: ['baseline', 'current'],
   }
   for (let index = 0; index < argv.length; index += 2) {
     const name = argv[index]
@@ -49,10 +52,12 @@ function argumentsFrom(argv) {
     else if (name === '--mnemon-binary') options.mnemonBinary = resolve(value)
     else if (name === '--mode') options.mode = value
     else if (name === '--only') options.only = new Set(value.split(',').map(item => item.trim()).filter(Boolean))
+    else if (name === '--versions') options.versions = value.split(',').map(item => item.trim()).filter(Boolean)
     else throw new Error(`unknown argument: ${name}`)
   }
   if (options.baselineRoot === undefined) throw new Error('--baseline-root is required')
   if (!['full', 'smoke'].includes(options.mode)) throw new Error('--mode must be full or smoke')
+  if (options.versions.length === 0 || options.versions.some(version => !['baseline', 'current'].includes(version))) throw new Error('--versions must contain baseline and/or current')
   return options
 }
 
@@ -75,7 +80,7 @@ async function gitCommit(root) {
 }
 
 function planCases(options) {
-  let cases = options.only === undefined ? CASES : CASES.filter(item => options.only.has(item.id))
+  let cases = options.only === undefined ? CASES.filter(item => item.releaseOnly !== true) : CASES.filter(item => options.only.has(item.id))
   if (options.only !== undefined) {
     const unknown = [...options.only].filter(id => !CASES.some(item => item.id === id))
     if (unknown.length > 0) throw new Error(`unknown benchmark case(s): ${unknown.join(', ')}`)
@@ -102,6 +107,7 @@ function runArguments(item, packageRoot, output, options) {
     '--recall-mode', item.recallMode ?? 'guided',
     '--writeback-mode', item.writebackMode ?? 'guided',
     '--idle-review-ms', String(item.idleReviewMs ?? 600_000),
+    ...(item.maxTokens === undefined ? [] : ['--max-tokens', String(item.maxTokens)]),
   ]
 }
 
@@ -150,7 +156,7 @@ async function main() {
   const plan = []
   for (const [caseIndex, item] of cases.entries()) {
     for (let sample = 1; sample <= item.repetitions; sample += 1) {
-      const versions = [...(item.versions ?? ['baseline', 'current'])]
+      const versions = (item.versions ?? ['baseline', 'current']).filter(version => options.versions.includes(version))
       if ((caseIndex + sample) % 2 === 0) versions.reverse()
       for (const version of versions) plan.push({ item, version, sample })
     }
@@ -160,6 +166,7 @@ async function main() {
     objective: 'v0.2.16 versus v0.3 release benchmark',
     updatedAt: new Date().toISOString(),
     mode: options.mode,
+    versions: options.versions,
     roots,
     commits,
     cases,

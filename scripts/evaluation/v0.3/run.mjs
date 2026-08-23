@@ -20,6 +20,7 @@ import {
   recallMatrixScenario,
   runtimeEntries,
   runtimeMutationScenario,
+  singleRecallFaultWordingScenario,
   singleRecallScenario,
   steadyStateScenario,
 } from './fixtures.mjs'
@@ -72,7 +73,7 @@ function parseArguments(argv) {
     throw new Error(`unknown argument: ${name}`)
   }
   if (!['mock', 'real'].includes(options.provider)) throw new Error('--provider must be mock or real')
-  if (!['deterministic', 'real-conversation', 'idle-review', 'context-only', 'autonomous-recall', 'single-recall', 'capacity-maintenance', 'steady-state', 'recall-matrix', 'runtime-mutations'].includes(options.scenario)) throw new Error('--scenario is unsupported')
+  if (!['deterministic', 'real-conversation', 'idle-review', 'context-only', 'autonomous-recall', 'single-recall', 'single-recall-fault', 'capacity-maintenance', 'steady-state', 'recall-matrix', 'runtime-mutations'].includes(options.scenario)) throw new Error('--scenario is unsupported')
   if (!['memory-only', 'full'].includes(options.toolSurface)) throw new Error('--tool-surface must be memory-only or full')
   if (!['empty', 'realistic', 'max-runtime', 'capacity', 'scale'].includes(options.corpus)) throw new Error('--corpus is unsupported')
   if (!['on', 'off'].includes(options.mnemon)) throw new Error('--mnemon must be on or off')
@@ -312,6 +313,7 @@ function scenarioFixture(name, workspaceRoot) {
     'context-only': contextOnlyScenario,
     'autonomous-recall': autonomousRecallScenario,
     'single-recall': singleRecallScenario,
+    'single-recall-fault': singleRecallFaultWordingScenario,
     'capacity-maintenance': capacityMaintenanceScenario,
     'steady-state': steadyStateScenario,
     'recall-matrix': recallMatrixScenario,
@@ -677,6 +679,7 @@ async function main() {
       toolSurface: options.toolSurface,
       idleReviewMs: options.idleReviewMs,
       executionTimeoutMs: options.executionTimeoutMs ?? (options.scenario === 'idle-review' ? 180_000 : 300_000),
+      maxTokens: scenario.maxTokens,
       package: metadata,
       dshVersion: '0.1.1-rc.2',
       mnemonBinary: options.mnemonBinary,
