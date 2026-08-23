@@ -379,7 +379,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     if (decision.kind !== 'enter') throw new Error('unexpected rejection')
     expect(decision.messages).toHaveLength(2)
     expect(decision.messages[1]?.source).toMatchObject({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'instructions' })
-    expect(decision.messages[1]?.content[0]?.text).toBe('[MNEMON] Search Documents for substantial project records; use mnemon_recall only for missing durable history or exact prior details, and mnemon_runtime_memory only for new explicit reusable facts. Otherwise use none.')
+    expect(decision.messages[1]?.content[0]?.text).toBe('[MNEMON] Search Documents for substantial project records; use mnemon_recall only for missing durable history or exact prior details, and mnemon_runtime_memory only for new user-supplied facts or explicit save/correction requests—never retrieved evidence. Otherwise use none.')
     expect(value.coordinator.recall).not.toHaveBeenCalled()
     expect(value.service.status).not.toHaveBeenCalled()
 

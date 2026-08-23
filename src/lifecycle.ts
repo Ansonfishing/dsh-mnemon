@@ -180,9 +180,9 @@ function assistantMessageText(events: readonly HostSessionEvent[], messageId: st
 }
 
 function guidedReminder(config: ResolvedConfig): string | undefined {
-  if (config.recallMode === 'guided' && config.writebackMode === 'guided') return '[MNEMON] Search Documents for substantial project records; use mnemon_recall only for missing durable history or exact prior details, and mnemon_runtime_memory only for new explicit reusable facts. Otherwise use none.'
+  if (config.recallMode === 'guided' && config.writebackMode === 'guided') return '[MNEMON] Search Documents for substantial project records; use mnemon_recall only for missing durable history or exact prior details, and mnemon_runtime_memory only for new user-supplied facts or explicit save/correction requests—never retrieved evidence. Otherwise use none.'
   if (config.recallMode === 'guided') return '[MNEMON] Search Documents for substantial project records; use mnemon_recall only for missing durable history or exact prior details. Otherwise use neither.'
-  if (config.writebackMode === 'guided') return '[MNEMON] Use mnemon_runtime_memory only for new, explicit, reusable information; otherwise continue without writing memory.'
+  if (config.writebackMode === 'guided') return '[MNEMON] Use mnemon_runtime_memory only for new user-supplied facts or explicit save/correction requests, never retrieved evidence; otherwise continue without writing memory.'
   return undefined
 }
 

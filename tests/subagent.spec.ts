@@ -1411,6 +1411,8 @@ describe('Mnemon root/child tool split', () => {
     expect(registered.some(tool => tool.name === 'mnemon_memory_zoom')).toBe(false)
     expect(JSON.stringify(recall.parameters)).not.toMatch(/viewId|viewNodeId|viewCapability/u)
     expect(JSON.stringify(recall.parameters)).toContain('do not list the catalog only to populate it')
+    expect(hotMemory.description).toContain('answering a read question must stay read-only')
+    expect(hotMemory.description).toContain('unless the user explicitly asks to save that exact evidence')
   })
 
   it('projects status as a bounded health summary without control-plane paths or detailed statistics', async () => {

@@ -233,7 +233,11 @@ export const autonomousRecallScenario = {
     {
       id: 'durable-only-history',
       prompt: '[EVAL:auto-recall] 哪次演练让我们增加了 35% 和 65% 两个灰度阶段？直接从 12% 升到 100% 当时暴露了什么？',
-      expected: { mustContain: ['2026-06-02', '租户'], memoryTools: ['mnemon_recall'] },
+      expected: {
+        mustContain: ['2026-06-02', '租户'],
+        memoryTools: ['mnemon_recall'],
+        allowedMemoryTools: ['mnemon_document_search', 'mnemon_recall', 'mnemon_related'],
+      },
     },
     {
       id: 'durable-ux-correction',
@@ -255,7 +259,11 @@ export const singleRecallScenario = {
     {
       id: 'single-durable-recall',
       prompt: '[EVAL:single-recall] 哪次演练让我们增加了 35% 和 65% 两个灰度阶段？直接从 12% 升到 100% 当时暴露了什么？',
-      expected: { mustContain: ['2026-06-02', '租户'], memoryTools: ['mnemon_recall'] },
+      expected: {
+        mustContain: ['2026-06-02', '租户'],
+        memoryTools: ['mnemon_recall'],
+        allowedMemoryTools: ['mnemon_document_search', 'mnemon_recall', 'mnemon_related'],
+      },
     },
   ],
 }
@@ -268,7 +276,11 @@ export const singleRecallFaultWordingScenario = {
     {
       id: 'single-durable-recall-fault-wording',
       prompt: '[EVAL:single-recall-fault] 哪次演练或事故导致灰度增加 35% 和 65% 阶段？直接从 12% 升到 100% 暴露了什么故障？',
-      expected: { mustContain: ['2026-06-02', '租户'], memoryTools: ['mnemon_recall'] },
+      expected: {
+        mustContain: ['2026-06-02', '租户'],
+        memoryTools: ['mnemon_recall'],
+        allowedMemoryTools: ['mnemon_document_search', 'mnemon_recall', 'mnemon_related'],
+      },
     },
   ],
 }

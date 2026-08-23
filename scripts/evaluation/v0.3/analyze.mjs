@@ -196,7 +196,9 @@ function expectedAssessment(turn, scenarioTurn) {
   const tools = toolNames(turn).filter(name => name.startsWith('mnemon_'))
   const expectedTools = expected.memoryTools ?? []
   const missingTools = expectedTools.filter(name => !tools.includes(name))
-  const unexpectedTools = expectedTools.length === 0 ? tools : []
+  const unexpectedTools = Array.isArray(expected.allowedMemoryTools)
+    ? tools.filter(name => !expected.allowedMemoryTools.includes(name))
+    : expectedTools.length === 0 ? tools : []
   const answer = turn.assistantText.toLocaleLowerCase()
   const missingText = (expected.mustContain ?? []).filter(text => !answer.includes(String(text).toLocaleLowerCase()))
   const missingAnyText = (expected.mustContainAny ?? []).filter(group => !group.some(text => answer.includes(String(text).toLocaleLowerCase())))
