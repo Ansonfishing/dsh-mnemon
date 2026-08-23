@@ -809,7 +809,10 @@ export class MnemonService {
   async remember(request: RememberRequest, signal?: AbortSignal): Promise<JsonValue> {
     this.assertWritable()
     const body = this.writeBody(request.memoryBodyId)
-    const content = required(request.content, 'content', 8000)
+    // Runtime entries are capped at 8 KiB. Keep the service boundary large
+    // enough for the Host to archive any valid hot-memory entry byte-for-byte;
+    // the UI remains at its existing 8,000-character limit.
+    const content = required(request.content, 'content', 8 * 1024)
     const importance = boundedInteger(request.importance, 3, 1, 5)
     const category = allowed(request.category, CATEGORIES, 'category') ?? 'general'
     const source = allowed(request.source, SOURCES, 'source') ?? 'user'

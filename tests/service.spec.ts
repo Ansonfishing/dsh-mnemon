@@ -467,6 +467,15 @@ describe('MnemonService', () => {
     )
   })
 
+  it('accepts the full Runtime entry boundary for lossless Host archival', async () => {
+    const { service, process } = fixture()
+    const content = 'x'.repeat(8 * 1024)
+
+    await expect(service.remember({ content })).resolves.toMatchObject({ action: 'added' })
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['remember', content]), expect.anything())
+    await expect(service.remember({ content: `${content}x` })).rejects.toThrow('max 8192 characters')
+  })
+
   it('records only committed provider mutations and advances the safe Memory Space checkpoint', async () => {
     const recordCommit = vi.fn() as unknown as AuthorityCommitRecorder
     const { service, process } = fixture(true, recordCommit)

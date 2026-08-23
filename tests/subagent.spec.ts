@@ -9,7 +9,11 @@ import type { MnemonService } from '../src/service.ts'
 import { assertDshOutputSchema, MnemonSubagentCoordinator } from '../src/subagent.ts'
 import { prepareMemoryPlacement, type MemoryPlacementCandidate } from '../src/provider-placement.ts'
 import { registerTools } from '../src/tools.ts'
-import { RuntimeMemoryCapacityError, type RuntimeMemoryController } from '../src/runtime-memory.ts'
+import {
+  RuntimeMemoryCapacityError,
+  RuntimeMemoryController,
+  type RuntimeMemoryMaintenancePlan,
+} from '../src/runtime-memory.ts'
 import { resolveConfig } from '../src/config.ts'
 
 const capabilities = { outputSchema: true, depthLimit: true, toolFilter: true, persona: true }
@@ -28,15 +32,34 @@ function parent(origin?: 'subagent'): HostAgent {
 }
 
 function service(): MnemonService {
+  const project = {
+    id: 'project',
+    name: '项目记忆体',
+    description: '项目决策',
+    active: true,
+    providerEnabled: true,
+    dbPath: '/tmp/project.db',
+    createdAt: 'now',
+    updatedAt: 'now',
+    healthy: true,
+    provider: {
+      id: 'mnemon-native',
+      label: 'Mnemon Native',
+      capabilities: { search: true, remember: true },
+    },
+  }
+  const catalog = {
+    items: [project],
+    providers: [],
+    total: 1,
+    activeCount: 1,
+    directory: '/tmp',
+    generatedAt: 'now',
+  }
   return {
     config: { writeEnabled: true },
-    bodies: vi.fn(async () => ({
-      items: [{ id: 'project', name: '项目记忆体', description: '项目决策', active: true, dbPath: '/tmp/project.db', createdAt: 'now', updatedAt: 'now', healthy: true }],
-      total: 1,
-      activeCount: 1,
-      directory: '/tmp',
-      generatedAt: 'now',
-    })),
+    bodyDirectory: vi.fn(() => catalog),
+    bodies: vi.fn(async () => catalog),
     search: vi.fn(async request => ({ query: request.query, mode: 'smart', results: [{ id: 'm1', content: 'SQLite', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }] })),
     metadataSample: vi.fn(async (memoryBodyId: string) => ({
       memoryBodyId,
@@ -49,7 +72,12 @@ function service(): MnemonService {
     })),
     related: vi.fn(async () => []),
     status: vi.fn(async () => ({ healthy: true })),
-    remember: vi.fn(async () => ({ action: 'added' })),
+    remember: vi.fn(async request => ({
+      action: 'added',
+      id: `stored-${createHash('sha256').update(request.content).digest('hex').slice(0, 8)}`,
+      memoryBodyId: request.memoryBodyId,
+      memoryBodyName: '项目记忆体',
+    })),
     link: vi.fn(async () => ({ action: 'linked' })),
     forget: vi.fn(async () => ({ action: 'forgotten' })),
     createBody: vi.fn(async () => ({ id: 'new-body' })),
@@ -100,6 +128,43 @@ function toolRegistry() {
 
 function createCoordinator(host: HostSubagentsService, runtime?: RuntimeMemoryController, documents?: DocumentManager) {
   return new MnemonSubagentCoordinator(host, runtime, documents, toolRegistry().value)
+}
+
+function runtimeSource(runtime: RuntimeMemoryController, memoryService: MnemonService) {
+  return {
+    forAgent: vi.fn((_agent: HostAgent) => ({
+      runtimeMemory: runtime,
+      service: memoryService,
+      documents: {},
+      memoryViews: {},
+      memoryKernel: { assertParticipation: vi.fn() },
+    })),
+  }
+}
+
+function maintenancePlan(
+  target: 'memory' | 'user' = 'memory',
+  entries = [
+    { content: 'Project uses pnpm.', importance: 'normal' as const },
+    { content: 'Release checks require a canary.', importance: 'critical' as const },
+  ],
+): RuntimeMemoryMaintenancePlan {
+  return {
+    revision: `${target}-reviewed-revision`,
+    action: 'add',
+    target,
+    entries: entries.map(entry => ({
+      ...entry,
+      target,
+      created_at: '2026-08-23T00:00:00.000Z',
+      updated_at: '2026-08-23T00:00:00.000Z',
+    })),
+    pending: { content: target === 'memory' ? 'New durable fact.' : 'User prefers direct answers.', importance: 'normal' },
+    used: target === 'memory' ? 10_200 : 4_090,
+    projected: target === 'memory' ? 10_300 : 4_180,
+    limit: target === 'memory' ? 10_240 : 4_096,
+    requiresMaintenance: true,
+  }
 }
 
 function observedSubagents(
@@ -636,164 +701,216 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(controller.get(created.document.id).status).toBe('active')
   })
 
-  it('archives before compacting and retrying a capacity-blocked runtime write', async () => {
-    const sourceEntry = { content: 'Project uses {{package_manager}} pnpm and has a long history.', importance: 'normal' }
-    const sourceDigest = createHash('sha256').update(JSON.stringify(sourceEntry)).digest('hex')
+  it('uses a bounded route proposal, then archives exact sources and commits the blocked write atomically', async () => {
+    const plan = maintenancePlan()
     const structured = {
-      summary: 'Archived and compacted hot memory.',
-      action: 'archived',
-      memoryBodyIds: ['project'],
-      lineage: [{
-        sourceIndex: 1,
-        sourceDigest,
-        destinationReceiptIndex: 1,
-        destinationMemoryBodyId: 'project',
-        destinationId: 'project-memory-1',
-      }],
-      compactedEntries: [{ content: 'Project uses pnpm.', importance: 'normal' }],
+      summary: 'Route both committed entries to project memory and compact the hot pointers.',
+      action: 'planned',
+      routes: [{ sourceIndexes: [1, 2], memoryBodyId: 'project' }],
+      compactedEntries: [{ content: 'Project uses pnpm and requires canary release checks.', importance: 'critical' }],
     }
     const resultTools = toolRegistry()
-    const host = observedSubagents(resultTools, child => {
-      emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Project uses pnpm.', memoryBodyId: 'project' }, {
-        action: 'added', id: 'project-memory-1', memoryBodyId: 'project', memoryBodyName: 'Project',
-      })
-    }, 'completed', structured)
+    const host = subagents(structured)
     const runtime = {
-      mutate: vi.fn()
-        .mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', 10_200, 10_300, 10_240))
-        .mockResolvedValueOnce({ success: true, message: 'Entry added.', target: 'memory', entryCount: 2, usage: { used: 120, limit: 10_240 }, added: 'New durable fact.' }),
-      snapshot: vi.fn(() => ({
-        revision: 'reviewed-revision',
-        entries: [{ ...sourceEntry, created_at: 'now', updated_at: 'now', target: 'memory' }],
-        targets: { memory: { target: 'memory', entryCount: 1, used: 10_200, limit: 10_240, markdownPath: '/tmp/MEMORY.md' } },
+      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      planMaintenance: vi.fn(async () => plan),
+      compactAndMutate: vi.fn(async () => ({
+        success: true,
+        message: 'Entry added.',
+        target: 'memory',
+        entryCount: 2,
+        usage: { used: 120, limit: 10_240 },
+        added: plan.pending!.content,
       })),
-      compactTarget: vi.fn(async () => ({})),
     } as unknown as RuntimeMemoryController
-    const coordinator = new MnemonSubagentCoordinator(host.value, runtime, undefined, resultTools.value)
-    await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: 'New durable fact.' }, new AbortController().signal)).resolves.toMatchObject({
+    const memoryService = service()
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, resultTools.value)
+    const request = { action: 'add', target: 'memory', content: plan.pending!.content } as const
+
+    await expect(coordinator.runtime(parent(), request, new AbortController().signal)).resolves.toMatchObject({
       added: 'New durable fact.',
       maintenance: { kind: 'mnemon-archive', provider: 'spawn', memoryBodyIds: ['project'] },
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
-      toolFilter: { allow: expect.arrayContaining(['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_remember', 'mnemon_memory_body_create']) },
-      agentOptions: { maxTokens: 16_384 },
+      toolFilter: { allow: [expect.stringMatching(/^mnemon_subagent_result_/)] },
+      agentOptions: { maxTokens: 8_192 },
     }))
     const migrationCall = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }>; persona: string; toolFilter: { allow: string[] } }])[1]
     const migrationPrompt = migrationCall.prompt[0]!.text
-    expect(migrationPrompt).toContain('Run the MEMORY.md capacity archive now')
-    expect(migrationPrompt).toContain('Pending add (uncommitted; do not archive')
+    expect(migrationPrompt).toContain('Plan the MEMORY.md capacity archive now')
+    expect(migrationPrompt).toContain('Pending mutation (uncommitted; do not archive')
     expect(migrationPrompt).toContain('New durable fact.')
-    expect(migrationPrompt).toContain('Project uses {{package_manager}} pnpm and has a long history.')
-    expect(migrationPrompt).toContain(`sourceDigest=${sourceDigest}`)
+    expect(migrationPrompt).toContain('Project uses pnpm.')
+    expect(migrationPrompt).toContain('Release checks require a canary.')
+    expect(migrationPrompt).toContain('id=project')
     expect(migrationPrompt).toContain('<runtime-memory-snapshot target="memory">')
-    expect(migrationCall.persona).toContain('Do not count characters, bytes, tokens')
-    expect(migrationCall.persona).toContain('Route each cluster independently')
-    expect(migrationCall.persona).toContain('host generates the UUID, so never propose an id')
+    expect(migrationCall.persona).toContain('proposal has no data-plane authority')
+    expect(migrationCall.persona).toContain('exactly one existing eligible Memory Space')
     expect(migrationCall.persona).toContain('USER.md preferences are outside this task and must never enter')
-    expect(migrationCall.persona).toContain('Do not narrate an extended plan, delegate again, or publish a View')
-    expect(migrationCall.toolFilter.allow).not.toContain('mnemon_memory_zoom')
-    expect(migrationCall.persona).not.toContain('{{package_manager}}')
+    expect(migrationCall.persona).toContain('Do not call task tools')
     expect(migrationCall.persona).not.toContain('<runtime-memory-snapshot')
     expect(migrationPrompt).not.toMatch(/catalog_json|runtime_entries_json|pending_mutation_json|current_usage_json|created_at|markdownPath|dbPath/)
-    expect(runtime.compactTarget).toHaveBeenCalledWith(
-      'reviewed-revision',
-      'memory',
-      [{ content: 'Project uses pnpm.', importance: 'normal' }],
-      7_143,
-      [{
-        source: { layerId: 'runtime', reference: 'runtime:reviewed-revision:memory:1', digest: sourceDigest },
-        destination: {
-          layerId: 'memory-spaces',
-          reference: 'memory-space:project/item:project-memory-1',
-          digest: createHash('sha256').update('Project uses pnpm.').digest('hex'),
-        },
-      }],
+    expect(memoryService.remember).toHaveBeenNthCalledWith(1, {
+      content: plan.entries[0]!.content,
+      category: 'context',
+      importance: 3,
+      source: 'agent',
+      memoryBodyId: 'project',
+    }, expect.any(AbortSignal))
+    expect(memoryService.remember).toHaveBeenNthCalledWith(2, {
+      content: plan.entries[1]!.content,
+      category: 'context',
+      importance: 5,
+      source: 'agent',
+      memoryBodyId: 'project',
+    }, expect.any(AbortSignal))
+    expect(memoryService.createBody).not.toHaveBeenCalled()
+    expect(runtime.compactAndMutate).toHaveBeenCalledWith(
+      plan.revision,
+      request,
+      structured.compactedEntries,
+      expect.any(Number),
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: expect.objectContaining({ reference: `runtime:${plan.revision}:memory:1` }),
+          destination: expect.objectContaining({ layerId: 'memory-spaces', reference: expect.stringContaining('memory-space:project/item:stored-') }),
+        }),
+      ]),
     )
-    expect(runtime.mutate).toHaveBeenCalledTimes(2)
+    expect(runtime.mutate).toHaveBeenCalledOnce()
     expect(coordinator.snapshot()).toMatchObject({ migrations: 1, lastOperation: 'migration' })
   })
 
-  it('refuses runtime compaction when lineage omits any committed source entry', async () => {
-    const entries = [
-      { content: 'Use pnpm.', importance: 'normal' },
-      { content: 'Run canary releases.', importance: 'critical' },
-    ]
-    const firstDigest = createHash('sha256').update(JSON.stringify(entries[0])).digest('hex')
-    const resultTools = toolRegistry()
-    const host = observedSubagents(resultTools, child => {
-      emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Use pnpm.', memoryBodyId: 'project' }, {
-        action: 'added', id: 'project-memory-1', memoryBodyId: 'project', memoryBodyName: 'Project',
-      })
-    }, 'completed', {
-      summary: 'Incomplete lineage.',
-      action: 'archived',
-      memoryBodyIds: ['project'],
-      lineage: [{
-        sourceIndex: 1,
-        sourceDigest: firstDigest,
-        destinationReceiptIndex: 1,
-        destinationMemoryBodyId: 'project',
-        destinationId: 'project-memory-1',
-      }],
-      compactedEntries: [],
+  it('runs the real capacity controller from overflow through verified archive to one local commit', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-mnemon-runtime-integration-'))
+    temporaryDirectories.push(directory)
+    const runtime = new RuntimeMemoryController({ effectiveDataDir: () => directory })
+    const first = `project-history-a ${'a'.repeat(4_800)}`
+    const second = `project-history-b ${'b'.repeat(4_800)}`
+    const pending = `new-release-rule ${'c'.repeat(700)}`
+    await runtime.mutate({ action: 'add', target: 'memory', content: first })
+    await runtime.mutate({ action: 'add', target: 'memory', content: second })
+    const host = subagents({
+      summary: 'Archived exact history and retained one hot pointer.',
+      action: 'planned',
+      routes: [{ sourceIndexes: [1, 2], memoryBodyId: 'project' }],
+      compactedEntries: [{ content: 'Older project history is archived in project memory.', importance: 'normal' }],
     })
-    const runtime = {
-      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', 10_200, 10_300, 10_240)),
-      snapshot: vi.fn(() => ({
-        revision: 'two-entry-revision',
-        entries: entries.map(entry => ({ ...entry, target: 'memory' })),
-        targets: { memory: { used: 10_200, limit: 10_240 } },
-      })),
-      compactTarget: vi.fn(async () => ({})),
-    } as unknown as RuntimeMemoryController
-    const coordinator = new MnemonSubagentCoordinator(host.value, runtime, undefined, resultTools.value)
+    const memoryService = service()
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, toolRegistry().value)
 
-    await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: 'Pending.' }, new AbortController().signal))
-      .rejects.toThrow('exactly one target for every source entry')
-    expect(runtime.compactTarget).not.toHaveBeenCalled()
-    expect(runtime.mutate).toHaveBeenCalledOnce()
+    await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: pending }, new AbortController().signal)).resolves.toMatchObject({
+      added: pending,
+      maintenance: { kind: 'mnemon-archive', memoryBodyIds: ['project'] },
+    })
+    expect(vi.mocked(memoryService.remember).mock.calls.map(call => call[0].content)).toEqual([first, second])
+    expect(runtime.snapshot().entries.map(entry => entry.content)).toEqual([
+      'Older project history is archived in project memory.',
+      pending,
+    ])
   })
 
-  it('accepts an exact recalled insight as committed duplicate lineage', async () => {
-    const sourceEntry = { content: 'Use SQLite for local storage.', importance: 'normal' }
-    const sourceDigest = createHash('sha256').update(JSON.stringify(sourceEntry)).digest('hex')
-    const resultTools = toolRegistry()
-    const host = observedSubagents(resultTools, child => {
-      emitSuccessfulToolResult(resultTools, child, 'mnemon_recall', { query: 'SQLite local storage', memoryBodyIds: ['project'] }, {
-        query: 'SQLite local storage',
-        mode: 'smart',
-        results: [{ id: 'sqlite-1', content: sourceEntry.content, memoryBodyId: 'project', memoryBodyName: 'Project' }],
-      })
-    }, 'completed', {
-      summary: 'Verified existing durable insight.',
-      action: 'archived',
-      memoryBodyIds: ['project'],
-      lineage: [{
-        sourceIndex: 1,
-        sourceDigest,
-        destinationReceiptIndex: 1,
-        destinationMemoryBodyId: 'project',
-        destinationId: 'sqlite-1',
-      }],
+  it('fails before model work when no existing active writable Memory Space can receive an archive', async () => {
+    const plan = maintenancePlan()
+    const host = subagents(undefined)
+    const runtime = {
+      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      planMaintenance: vi.fn(async () => plan),
+      compactAndMutate: vi.fn(),
+    } as unknown as RuntimeMemoryController
+    const memoryService = service()
+    vi.mocked(memoryService.bodyDirectory).mockReturnValue({
+      ...memoryService.bodyDirectory(),
+      items: [],
+      total: 0,
+      activeCount: 0,
+    })
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, toolRegistry().value)
+
+    await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
+      .rejects.toThrow('existing active writable Memory Space')
+    expect(host.start).not.toHaveBeenCalled()
+    expect(memoryService.remember).not.toHaveBeenCalled()
+    expect(runtime.compactAndMutate).not.toHaveBeenCalled()
+  })
+
+  it('enforces automatic Memory Space write participation before capacity archival', async () => {
+    const plan = maintenancePlan()
+    const host = subagents(undefined)
+    const runtime = {
+      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      planMaintenance: vi.fn(async () => plan),
+      compactAndMutate: vi.fn(),
+    } as unknown as RuntimeMemoryController
+    const memoryService = service()
+    const source = runtimeSource(runtime, memoryService)
+    const graph = source.forAgent(parent())
+    vi.mocked(graph.memoryKernel.assertParticipation).mockImplementation(() => {
+      throw new Error('memory layer memory-spaces allows write only for manual operations')
+    })
+    vi.mocked(source.forAgent).mockReturnValue(graph)
+
+    await expect(new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+      .runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
+      .rejects.toThrow('allows write only for manual operations')
+    expect(graph.memoryKernel.assertParticipation).toHaveBeenCalledWith('memory-spaces', 'write', 'automatic')
+    expect(host.start).not.toHaveBeenCalled()
+    expect(memoryService.remember).not.toHaveBeenCalled()
+  })
+
+  it('rejects incomplete or invalid routes before any Provider write', async () => {
+    const plan = maintenancePlan()
+    const host = subagents({
+      summary: 'Incomplete route.',
+      action: 'planned',
+      routes: [{ sourceIndexes: [1], memoryBodyId: 'project' }],
       compactedEntries: [],
     })
     const runtime = {
-      mutate: vi.fn()
-        .mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', 10_200, 10_300, 10_240))
-        .mockResolvedValueOnce({ success: true, target: 'memory', added: 'Pending.', usage: { used: 20, limit: 10_240 } }),
-      snapshot: vi.fn(() => ({
-        revision: 'duplicate-revision',
-        entries: [{ ...sourceEntry, target: 'memory' }],
-        targets: { memory: { used: 10_200, limit: 10_240 } },
-      })),
-      compactTarget: vi.fn(async () => ({})),
+      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      planMaintenance: vi.fn(async () => plan),
+      compactAndMutate: vi.fn(),
     } as unknown as RuntimeMemoryController
-    const coordinator = new MnemonSubagentCoordinator(host.value, runtime, undefined, resultTools.value)
+    const memoryService = service()
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, toolRegistry().value)
 
-    await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: 'Pending.' }, new AbortController().signal))
+    await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
+      .rejects.toThrow('omitted committed archive sources')
+    expect(memoryService.remember).not.toHaveBeenCalled()
+    expect(runtime.compactAndMutate).not.toHaveBeenCalled()
+  })
+
+  it('accepts a skipped archive write only after exact Host recall verification', async () => {
+    const sourceEntry = { content: 'Use SQLite for local storage.', importance: 'normal' as const }
+    const plan = maintenancePlan('memory', [sourceEntry])
+    const host = subagents({
+      summary: 'Route existing SQLite fact.',
+      action: 'planned',
+      routes: [{ sourceIndexes: [1], memoryBodyId: 'project' }],
+      compactedEntries: [],
+    })
+    const runtime = {
+      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      planMaintenance: vi.fn(async () => plan),
+      compactAndMutate: vi.fn(async () => ({ success: true, target: 'memory', added: plan.pending!.content, usage: { used: 20, limit: 10_240 } })),
+    } as unknown as RuntimeMemoryController
+    const memoryService = service()
+    vi.mocked(memoryService.remember).mockResolvedValueOnce({ action: 'skipped', memoryBodyId: 'project' })
+    vi.mocked(memoryService.search).mockResolvedValueOnce({
+      query: sourceEntry.content,
+      mode: 'smart',
+      results: [{ id: 'sqlite-1', content: sourceEntry.content, memoryBodyId: 'project', memoryBodyName: 'Project' }],
+    } as never)
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, toolRegistry().value)
+
+    await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
       .resolves.toMatchObject({ maintenance: { kind: 'mnemon-archive', memoryBodyIds: ['project'] } })
-    expect(runtime.compactTarget).toHaveBeenCalledWith('duplicate-revision', 'memory', [], expect.any(Number), [{
-      source: { layerId: 'runtime', reference: 'runtime:duplicate-revision:memory:1', digest: sourceDigest },
+    expect(runtime.compactAndMutate).toHaveBeenCalledWith(plan.revision, expect.any(Object), [], expect.any(Number), [{
+      source: {
+        layerId: 'runtime',
+        reference: `runtime:${plan.revision}:memory:1`,
+        digest: createHash('sha256').update(JSON.stringify(sourceEntry)).digest('hex'),
+      },
       destination: {
         layerId: 'memory-spaces',
         reference: 'memory-space:project/item:sqlite-1',
@@ -802,69 +919,36 @@ describe('Mnemon memory subagent coordinator', () => {
     }])
   })
 
-  it('refuses runtime compaction when source digest or destination commit evidence is invalid', async () => {
-    const sourceEntry = { content: 'Use pnpm.', importance: 'normal' }
-    const runtime = {
-      mutate: vi.fn().mockRejectedValue(new RuntimeMemoryCapacityError('memory', 10_200, 10_300, 10_240)),
-      snapshot: vi.fn(() => ({
-        revision: 'source-revision',
-        entries: [{ ...sourceEntry, target: 'memory' }],
-        targets: { memory: { used: 10_200, limit: 10_240 } },
-      })),
-      compactTarget: vi.fn(async () => ({})),
+  it('checks revision again before Provider writes and rejects asynchronous acceptance', async () => {
+    const plan = maintenancePlan('memory', [{ content: 'Use pnpm.', importance: 'normal' }])
+    const structured = {
+      summary: 'Route pnpm fact.',
+      action: 'planned',
+      routes: [{ sourceIndexes: [1], memoryBodyId: 'project' }],
+      compactedEntries: [],
+    }
+    const staleRuntime = {
+      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      planMaintenance: vi.fn().mockResolvedValueOnce(plan).mockResolvedValueOnce({ ...plan, revision: 'concurrent-revision' }),
+      compactAndMutate: vi.fn(),
     } as unknown as RuntimeMemoryController
+    const staleService = service()
+    await expect(new MnemonSubagentCoordinator(subagents(structured).value, runtimeSource(staleRuntime, staleService) as never, undefined, toolRegistry().value)
+      .runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
+      .rejects.toThrow('no archive writes were attempted')
+    expect(staleService.remember).not.toHaveBeenCalled()
 
-    const digestTools = toolRegistry()
-    const digestHost = observedSubagents(digestTools, child => {
-      emitSuccessfulToolResult(digestTools, child, 'mnemon_remember', { content: 'Use pnpm.', memoryBodyId: 'project' }, {
-        action: 'added', id: 'memory-1', memoryBodyId: 'project', memoryBodyName: 'Project',
-      })
-    }, 'completed', {
-      summary: 'Wrong digest.', action: 'archived', memoryBodyIds: ['project'], compactedEntries: [],
-      lineage: [{ sourceIndex: 1, sourceDigest: '0'.repeat(64), destinationReceiptIndex: 1, destinationMemoryBodyId: 'project', destinationId: 'memory-1' }],
-    })
-    await expect(new MnemonSubagentCoordinator(digestHost.value, runtime, undefined, digestTools.value)
-      .runtime(parent(), { action: 'add', target: 'memory', content: 'Pending.' }, new AbortController().signal))
-      .rejects.toThrow('source digest does not match')
-
-    const skippedTools = toolRegistry()
-    const skippedHost = observedSubagents(skippedTools, child => {
-      emitSuccessfulToolResult(skippedTools, child, 'mnemon_remember', { content: 'Use pnpm.', memoryBodyId: 'project' }, {
-        action: 'skipped', id: 'memory-1', memoryBodyId: 'project', memoryBodyName: 'Project',
-      })
-    }, 'completed', {
-      summary: 'Skipped write.', action: 'archived', memoryBodyIds: ['project'], compactedEntries: [],
-      lineage: [{
-        sourceIndex: 1,
-        sourceDigest: createHash('sha256').update(JSON.stringify(sourceEntry)).digest('hex'),
-        destinationReceiptIndex: 1,
-        destinationMemoryBodyId: 'project',
-        destinationId: 'memory-1',
-      }],
-    })
-    await expect(new MnemonSubagentCoordinator(skippedHost.value, runtime, undefined, skippedTools.value)
-      .runtime(parent(), { action: 'add', target: 'memory', content: 'Pending.' }, new AbortController().signal))
-      .rejects.toThrow('uncommitted remember receipt')
-
-    const queuedTools = toolRegistry()
-    const queuedHost = observedSubagents(queuedTools, child => {
-      emitSuccessfulToolResult(queuedTools, child, 'mnemon_remember', { content: 'Use pnpm.', memoryBodyId: 'project' }, {
-        action: 'queued', status: 'pending', taskId: 'task-slow', memoryBodyId: 'project', memoryBodyName: 'Project',
-      })
-    }, 'completed', {
-      summary: 'Queued write.', action: 'archived', memoryBodyIds: ['project'], compactedEntries: [],
-      lineage: [{
-        sourceIndex: 1,
-        sourceDigest: createHash('sha256').update(JSON.stringify(sourceEntry)).digest('hex'),
-        destinationReceiptIndex: 1,
-        destinationMemoryBodyId: 'project',
-        destinationId: 'task-slow',
-      }],
-    })
-    await expect(new MnemonSubagentCoordinator(queuedHost.value, runtime, undefined, queuedTools.value)
-      .runtime(parent(), { action: 'add', target: 'memory', content: 'Pending.' }, new AbortController().signal))
-      .rejects.toThrow('uncommitted remember receipt')
-    expect(runtime.compactTarget).not.toHaveBeenCalled()
+    const queuedRuntime = {
+      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      planMaintenance: vi.fn(async () => plan),
+      compactAndMutate: vi.fn(),
+    } as unknown as RuntimeMemoryController
+    const queuedService = service()
+    vi.mocked(queuedService.remember).mockResolvedValueOnce({ action: 'queued', status: 'pending', taskId: 'task-slow', memoryBodyId: 'project' })
+    await expect(new MnemonSubagentCoordinator(subagents(structured).value, runtimeSource(queuedRuntime, queuedService) as never, undefined, toolRegistry().value)
+      .runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
+      .rejects.toThrow('did not commit synchronously')
+    expect(queuedRuntime.compactAndMutate).not.toHaveBeenCalled()
   })
 
   it('compacts USER.md locally with complete source coverage and never grants Mnemon tools', async () => {
@@ -877,19 +961,16 @@ describe('Mnemon memory subagent coordinator', () => {
         sourceIndexes: [1, 2],
       }],
     })
+    const plan = maintenancePlan('user', [
+      { content: 'User prefers concise {{language}} Chinese release notes.', importance: 'critical' },
+      { content: 'User wants blockers listed first in release notes.', importance: 'normal' },
+    ])
+    plan.revision = 'user-revision'
+    plan.pending = { content: 'User prefers direct answers.', importance: 'normal' }
     const runtime = {
-      mutate: vi.fn()
-        .mockRejectedValueOnce(new RuntimeMemoryCapacityError('user', 4_090, 4_180, 4_096))
-        .mockResolvedValueOnce({ success: true, message: 'Entry added.', target: 'user', entryCount: 2, usage: { used: 180, limit: 4_096 }, added: 'User prefers direct answers.' }),
-      snapshot: vi.fn(() => ({
-        revision: 'user-revision',
-        entries: [
-          { content: 'User prefers concise {{language}} Chinese release notes.', created_at: 'now', updated_at: 'now', target: 'user', importance: 'critical' },
-          { content: 'User wants blockers listed first in release notes.', created_at: 'now', updated_at: 'now', target: 'user', importance: 'normal' },
-        ],
-        targets: { user: { target: 'user', entryCount: 2, used: 4_090, limit: 4_096, markdownPath: '/tmp/USER.md' } },
-      })),
-      compactTarget: vi.fn(async () => ({})),
+      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('user', plan.used, plan.projected, plan.limit)),
+      planMaintenance: vi.fn(async () => plan),
+      compactAndMutate: vi.fn(async () => ({ success: true, message: 'Entry added.', target: 'user', entryCount: 2, usage: { used: 180, limit: 4_096 }, added: plan.pending!.content })),
     } as unknown as RuntimeMemoryController
     const coordinator = createCoordinator(host.value, runtime)
 
@@ -912,8 +993,13 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(compactionCall.persona).toContain('every source number must appear exactly once')
     expect(compactionCall.persona).not.toContain('{{language}}')
     expect(compactionCall.persona).not.toContain('<runtime-memory-snapshot')
-    expect(runtime.compactTarget).toHaveBeenCalledWith('user-revision', 'user', [{ content: 'User prefers concise Chinese release notes with blockers first.', importance: 'critical' }], expect.any(Number))
-    expect(runtime.mutate).toHaveBeenCalledTimes(2)
+    expect(runtime.compactAndMutate).toHaveBeenCalledWith(
+      'user-revision',
+      { action: 'add', target: 'user', content: 'User prefers direct answers.' },
+      [{ content: 'User prefers concise Chinese release notes with blockers first.', importance: 'critical' }],
+      expect.any(Number),
+    )
+    expect(runtime.mutate).toHaveBeenCalledOnce()
     expect(coordinator.snapshot()).toMatchObject({ compactions: 1, migrations: 0, lastOperation: 'compaction' })
   })
 
@@ -923,22 +1009,20 @@ describe('Mnemon memory subagent coordinator', () => {
       action: 'compacted',
       compactedEntries: [{ content: 'Only first preference.', importance: 'normal', sourceIndexes: [1] }],
     })
+    const plan = maintenancePlan('user', [
+      { content: 'First preference.', importance: 'normal' },
+      { content: 'Second preference.', importance: 'normal' },
+    ])
+    plan.pending = { content: 'Pending preference.', importance: 'normal' }
     const runtime = {
-      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('user', 4_090, 4_180, 4_096)),
-      snapshot: vi.fn(() => ({
-        revision: 'user-revision',
-        entries: [
-          { content: 'First preference.', target: 'user', importance: 'normal' },
-          { content: 'Second preference.', target: 'user', importance: 'normal' },
-        ],
-        targets: { user: { used: 4_090, limit: 4_096 } },
-      })),
-      compactTarget: vi.fn(async () => ({})),
+      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('user', plan.used, plan.projected, plan.limit)),
+      planMaintenance: vi.fn(async () => plan),
+      compactAndMutate: vi.fn(),
     } as unknown as RuntimeMemoryController
     const coordinator = createCoordinator(host.value, runtime)
 
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'user', content: 'Pending preference.' }, new AbortController().signal)).rejects.toThrow('omitted committed entries')
-    expect(runtime.compactTarget).not.toHaveBeenCalled()
+    expect(runtime.compactAndMutate).not.toHaveBeenCalled()
   })
 
   it('disposes failed delegated writes and reports the bounded provider error', async () => {
@@ -1013,19 +1097,15 @@ describe('Mnemon memory subagent coordinator', () => {
         sourceIndexes: [1, 2],
       }],
     })
+    const plan = maintenancePlan('user', [
+      { content: 'User prefers concise {{language}} Chinese release notes.', importance: 'critical' },
+      { content: 'User wants blockers listed first in release notes.', importance: 'normal' },
+    ])
+    plan.pending = { content: 'User prefers direct answers.', importance: 'normal' }
     const runtime = {
-      mutate: vi.fn()
-        .mockRejectedValueOnce(new RuntimeMemoryCapacityError('user', 4_090, 4_180, 4_096))
-        .mockResolvedValueOnce({ success: true, message: 'Entry added.', target: 'user', entryCount: 2, usage: { used: 180, limit: 4_096 }, added: 'User prefers direct answers.' }),
-      snapshot: vi.fn(() => ({
-        revision: 'user-revision',
-        entries: [
-          { content: 'User prefers concise {{language}} Chinese release notes.', target: 'user', importance: 'critical' },
-          { content: 'User wants blockers listed first in release notes.', target: 'user', importance: 'normal' },
-        ],
-        targets: { user: { used: 4_090, limit: 4_096 } },
-      })),
-      compactTarget: vi.fn(async () => ({})),
+      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('user', plan.used, plan.projected, plan.limit)),
+      planMaintenance: vi.fn(async () => plan),
+      compactAndMutate: vi.fn(async () => ({ success: true, message: 'Entry added.', target: 'user', entryCount: 2, usage: { used: 180, limit: 4_096 }, added: plan.pending!.content })),
     } as unknown as RuntimeMemoryController
     const resultTools = toolRegistry()
     const coordinator = new MnemonSubagentCoordinator(
