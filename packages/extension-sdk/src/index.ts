@@ -44,6 +44,40 @@ function reverseDispose(disposers: Array<() => void>): void {
   for (const dispose of disposers.reverse()) dispose()
 }
 
+function deepFreeze<T>(value: T): T {
+  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) return value
+  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child)
+  return Object.freeze(value)
+}
+
+function captureExtension(extension: MemoryExtension, id: string): MemoryExtension {
+  const layers = extension.layers?.map(registration => Object.freeze({
+    descriptor: deepFreeze(structuredClone(registration.descriptor)),
+    ...(registration.execute === undefined ? {} : { execute: registration.execute }),
+  }))
+  const adapters = extension.adapters?.map(registration => Object.freeze({
+    descriptor: deepFreeze(structuredClone(registration.descriptor)),
+  }))
+  const strategies = extension.strategies?.map(registration => Object.freeze({
+    descriptor: deepFreeze(structuredClone(registration.descriptor)),
+    propose: registration.propose,
+  }))
+  const sources = extension.sources?.map(source => Object.freeze({
+    layerId: source.layerId,
+    mode: source.mode,
+    snapshot: source.snapshot,
+  }))
+  const guards = extension.guards?.map(guard => Object.freeze({ id: guard.id, decide: guard.decide }))
+  return Object.freeze({
+    descriptor: deepFreeze({ ...structuredClone(extension.descriptor), id }),
+    ...(layers === undefined ? {} : { layers: Object.freeze(layers) }),
+    ...(adapters === undefined ? {} : { adapters: Object.freeze(adapters) }),
+    ...(strategies === undefined ? {} : { strategies: Object.freeze(strategies) }),
+    ...(sources === undefined ? {} : { sources: Object.freeze(sources) }),
+    ...(guards === undefined ? {} : { guards: Object.freeze(guards) }),
+  })
+}
+
 /**
  * Minimal Boot assembler for one Host. It applies the same captured extension
  * set to every runtime graph while each graph owns its Catalog, Kernel, and
@@ -57,10 +91,7 @@ export class MemoryBoot {
     const id = extension.descriptor.id.trim()
     if (!EXTENSION_ID.test(id)) throw new Error('memory extension id must match [a-z][a-z0-9-]{0,127}')
     if (this.extensions.has(id)) throw new Error(`memory extension is already registered: ${id}`)
-    const normalized: MemoryExtension = {
-      ...extension,
-      descriptor: { ...extension.descriptor, id },
-    }
+    const normalized = captureExtension(extension, id)
     const applied: AttachedTarget[] = []
     try {
       for (const target of this.targets) {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { MemoryBoot, MemoryExtensionHost, memoryBoot, memoryExtensions } from '../packages/extension-sdk/src/index.ts'
-import { MemoryCatalog, MemoryKernel, MemoryTopologyManager, MemoryViewManager, type MemoryStrategyRegistration } from '../packages/kernel/src/index.ts'
+import { MemoryCatalog, MemoryKernel, MemoryTopologyManager, MemoryViewManager, type MemoryGuardRegistration, type MemoryStrategyRegistration } from '../packages/kernel/src/index.ts'
 import { DEFAULT_THREE_TIER_TOPOLOGY, registerDefaultMemorySystem } from '../packages/strategy-default-three-tier/src/index.ts'
 import { defineMemoryStrategyPlugin, replayMemoryStrategy } from '../packages/strategy-sdk/src/index.ts'
 
@@ -50,6 +50,53 @@ describe('Memory extension workspace SDK', () => {
       adapters: [{ descriptor: { id: 'late-adapter', label: 'Late', description: 'Late adapter.', locality: 'local', scopes: ['global'], capabilities: ['recall'] } }],
     })
     expect(catalog.adapter('late-adapter')).toBeUndefined()
+  })
+
+  it('captures one immutable contribution set for runtime graphs attached later', async () => {
+    const host = new MemoryBoot()
+    const layer = {
+      descriptor: { id: 'captured', label: 'Captured', description: 'Original layer.', role: 'captured-memory', order: 400, capabilities: ['project' as const] },
+    }
+    const source = {
+      layerId: 'captured', mode: 'routed' as const,
+      snapshot: () => ({ revision: 'captured-1', wake: 'Original source cover.' }),
+    }
+    const guard: MemoryGuardRegistration = {
+      id: 'captured-guard',
+      decide: () => ({ kind: 'deny' as const, reason: 'original guard' }),
+    }
+    const descriptor = { id: 'captured-extension', version: '1', label: 'Captured extension', description: 'Original extension.' }
+    host.register({ descriptor, layers: [layer], sources: [source], guards: [guard] })
+
+    descriptor.label = 'Mutated extension'
+    layer.descriptor.label = 'Mutated layer'
+    source.snapshot = () => ({ revision: 'captured-2', wake: 'Mutated source cover.' })
+    guard.decide = () => ({ kind: 'allow' as const })
+
+    const catalog = new MemoryCatalog()
+    registerDefaultMemorySystem(catalog)
+    const attachment = host.attach(catalog)
+    const off = { recall: 'automatic' as const, write: 'automatic' as const, projection: 'off' as const, maintenance: 'automatic' as const }
+    const topology = new MemoryTopologyManager(catalog, {
+      id: 'captured-topology', strategyId: 'default-three-tier',
+      layers: [
+        ...DEFAULT_THREE_TIER_TOPOLOGY.layers.map(item => ({ ...item, participation: off })),
+        { id: 'captured', enabled: true, participation: { ...off, projection: 'automatic' }, adapterIds: [] },
+      ],
+    })
+    const kernel = new MemoryKernel(catalog, topology)
+    attachment.bindKernel(kernel)
+    const views = new MemoryViewManager(kernel)
+    attachment.bindTurnViews(views)
+
+    expect(host.descriptors()).toContainEqual(expect.objectContaining({ label: 'Captured extension' }))
+    expect(catalog.layer('captured')?.descriptor.label).toBe('Captured')
+    await expect(kernel.plan({ operation: 'recall', capability: 'recall', trigger: 'manual', scope: { storage: 'global' } })).rejects.toThrow('original guard')
+    const view = await views.publish({ storage: 'global' })
+    expect(views.wake(view.id).text).toContain('Original source cover.')
+    expect(views.wake(view.id).text).not.toContain('Mutated source cover.')
+    attachment.dispose()
+    topology.dispose()
   })
 
   it('rolls back a Source-only unload that would break an automatic Layer', async () => {
