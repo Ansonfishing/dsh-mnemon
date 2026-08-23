@@ -133,6 +133,10 @@ describe('LiveMnemonRuntime workspace routing', () => {
     expect(runtime.snapshot()).toBe(second)
     expect(runtime.forAgent(sessionAgent)).toBe(first)
     expect(runtime.forAgent(sessionAgent).memoryViews.activeTurn(sessionAgent.id)).toEqual(context)
+    const childCwd = sessionAgent.session.header!.cwd!
+    const child = agent('child-1', childCwd)
+    child.session.header = { origin: 'subagent', parentSession: sessionAgent.id, cwd: childCwd }
+    expect(runtime.forAgent(child)).toBe(first)
 
     first.memoryViews.endTurn(context.turnId)
     release()

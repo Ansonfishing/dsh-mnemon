@@ -807,7 +807,9 @@ export class MnemonSubagentCoordinator {
   private readonly counters: SubagentCounters = { recalls: 0, writes: 0, answers: 0, reviews: 0, placements: 0, migrations: 0, compactions: 0, documentArchives: 0, metadataMaintenances: 0, failures: 0 }
   private runtimeQueue: Promise<unknown> = Promise.resolve()
   private documentQueue: Promise<unknown> = Promise.resolve()
-  private readonly recallScopes = new Map<string, { parentViewId: string; memoryBodyIds: string[] }>()
+  private readonly recallCapabilities = new Map<string, { token: string; parentAgentId: string; parentViewId: string; memoryBodyIds: string[]; childId?: string }>()
+  private readonly recallCapabilityByChild = new Map<string, string>()
+  private readonly pendingRecallParents = new Map<string, number>()
 
   constructor(
     private readonly subagents: HostSubagentsService,
@@ -844,8 +846,8 @@ export class MnemonSubagentCoordinator {
   }
 
   /** Enforce the parent View at the child tool boundary even if the worker asks wider. */
-  scopeRecallRequest(child: HostAgent, request: SearchRequest): SearchRequest {
-    const scope = this.recallScopes.get(child.id)
+  scopeRecallRequest(child: HostAgent, request: SearchRequest, capabilityToken?: string): SearchRequest {
+    const scope = this.recallScopeFor(child, capabilityToken)
     const { parentViewId: _parentViewId, viewNodeId: _viewNodeId, ...search } = request
     if (scope === undefined) return search
     const requested = [...new Set((request.memoryBodyIds ?? []).map(id => id.trim()).filter(Boolean))]
@@ -854,8 +856,8 @@ export class MnemonSubagentCoordinator {
     return { ...search, memoryBodyIds: requested.length === 0 ? [...scope.memoryBodyIds] : requested }
   }
 
-  scopeRelatedMemoryBody(child: HostAgent, memoryBodyId?: string): string | undefined {
-    const scope = this.recallScopes.get(child.id)
+  scopeRelatedMemoryBody(child: HostAgent, memoryBodyId?: string, capabilityToken?: string): string | undefined {
+    const scope = this.recallScopeFor(child, capabilityToken)
     if (scope === undefined) return memoryBodyId
     const requested = memoryBodyId?.trim()
     if (requested === undefined || requested === '') {
@@ -864,6 +866,25 @@ export class MnemonSubagentCoordinator {
     }
     if (!scope.memoryBodyIds.includes(requested)) throw new Error(`Recall worker requested related evidence outside parent View ${scope.parentViewId}: ${requested}`)
     return requested
+  }
+
+  private recallScopeFor(child: HostAgent, capabilityToken?: string): { parentViewId: string; memoryBodyIds: string[] } | undefined {
+    const exactToken = this.recallCapabilityByChild.get(child.id)
+    const suppliedToken = capabilityToken?.trim()
+    const token = exactToken ?? (suppliedToken === undefined || suppliedToken === '' ? undefined : suppliedToken)
+    const parentAgentId = child.session.header?.origin === 'subagent' ? child.session.header.parentSession?.trim() : undefined
+    if (token === undefined) {
+      if (parentAgentId !== undefined && (this.pendingRecallParents.get(parentAgentId) ?? 0) > 0) {
+        throw new Error('Recall worker View capability is not yet bound; refusing an unscoped memory read')
+      }
+      return undefined
+    }
+    if (suppliedToken !== token) throw new Error('Recall worker must present its exact run-specific View capability')
+    const capability = this.recallCapabilities.get(token)
+    if (capability === undefined || parentAgentId !== capability.parentAgentId || (capability.childId !== undefined && capability.childId !== child.id)) {
+      throw new Error('Recall worker presented an invalid or expired View capability')
+    }
+    return capability
   }
 
   async related(parent: HostAgent, id: string, memoryBodyId: string | undefined, signal: AbortSignal): Promise<DelegatedRecallResult> {
@@ -1249,6 +1270,12 @@ ${runtimeSnapshotContext('user', targetEntries)}`
     // inherited-tool filter. Register a unique inherited result tool first so
     // the same hard allowlist can admit it without exposing another capability.
     const resultToolName = `${RESULT_TOOL_PREFIX}${randomUUID().replaceAll('-', '')}`
+    const recallCapability: { token: string; parentAgentId: string; parentViewId: string; memoryBodyIds: string[]; childId?: string } | undefined = recallScope === undefined ? undefined : {
+      token: randomUUID(),
+      parentAgentId: parent.id,
+      parentViewId: recallScope.parentViewId,
+      memoryBodyIds: [...recallScope.memoryBodyIds],
+    }
     let captured: CapturedSubagentResult | undefined
     let pending: (CapturedSubagentResult & { parent: symbol }) | undefined
     let activeResultExecution: object | undefined
@@ -1320,7 +1347,10 @@ ${runtimeSnapshotContext('user', targetEntries)}`
       })
       if (typeof registration !== 'function') throw new Error('dsh-mnemon subagent result tool registration did not return a disposer')
       disposeResultTool = registration as () => unknown
-      const completionPersona = `${persona}
+      const scopedPersona = recallCapability === undefined ? persona : `${persona}
+
+Run-specific View capability: pass \`viewCapability="${recallCapability.token}"\` on every \`mnemon_recall\` and \`mnemon_related\` call. The Host rejects missing, different, or expired capabilities.`
+      const completionPersona = `${scopedPersona}
 
 Completion protocol: call \`${resultToolName}\` exactly once with the final result matching its parameter schema. This is the only completion channel for this run. Do not finish with a plain-text answer.`
       const perOpMaxTokens = operation === 'migration' ? 16_384
@@ -1330,17 +1360,32 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
       const fixed = this.taskAgentModelResolver?.()
       const baseAgentOptions = perOpMaxTokens === undefined ? undefined : { maxTokens: perOpMaxTokens }
       const resolvedAgentOptions = fixed === undefined ? baseAgentOptions : { ...(baseAgentOptions ?? {}), provider: fixed.provider, model: fixed.model }
-      run = await this.subagents.start(provider, {
-        label,
-        prompt: [{ type: 'text', text: prompt }],
-        parent,
-        signal,
-        ...(resolvedAgentOptions === undefined ? {} : { agentOptions: resolvedAgentOptions }),
-        maxDepth: 1,
-        toolFilter: { allow: [...tools, resultToolName] },
-        persona: completionPersona,
-      })
-      if (recallScope !== undefined) this.recallScopes.set(run.id, { parentViewId: recallScope.parentViewId, memoryBodyIds: [...recallScope.memoryBodyIds] })
+      if (recallCapability !== undefined) {
+        this.recallCapabilities.set(recallCapability.token, recallCapability)
+        this.pendingRecallParents.set(parent.id, (this.pendingRecallParents.get(parent.id) ?? 0) + 1)
+      }
+      try {
+        run = await this.subagents.start(provider, {
+          label,
+          prompt: [{ type: 'text', text: prompt }],
+          parent,
+          signal,
+          ...(resolvedAgentOptions === undefined ? {} : { agentOptions: resolvedAgentOptions }),
+          maxDepth: 1,
+          toolFilter: { allow: [...tools, resultToolName] },
+          persona: completionPersona,
+        })
+        if (recallCapability !== undefined) {
+          recallCapability.childId = run.id
+          this.recallCapabilityByChild.set(run.id, recallCapability.token)
+        }
+      } finally {
+        if (recallCapability !== undefined) {
+          const remaining = (this.pendingRecallParents.get(parent.id) ?? 1) - 1
+          if (remaining <= 0) this.pendingRecallParents.delete(parent.id)
+          else this.pendingRecallParents.set(parent.id, remaining)
+        }
+      }
       const activeRun = run
       const result = await activeRun.result
       if (captured !== undefined && captured.agentId !== activeRun.id) throw new Error('Mnemon subagent result was recorded by a different child')
@@ -1373,13 +1418,14 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
     } finally {
       let cleanupFailure: unknown
       if (run !== undefined) {
-        this.recallScopes.delete(run.id)
+        this.recallCapabilityByChild.delete(run.id)
         try {
           await run.dispose()
         } catch (error) {
           if (failure === undefined) cleanupFailure = error
         }
       }
+      if (recallCapability !== undefined) this.recallCapabilities.delete(recallCapability.token)
       if (disposeResultTool !== undefined) {
         try {
           await disposeResultTool()

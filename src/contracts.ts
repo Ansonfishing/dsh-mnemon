@@ -150,7 +150,7 @@ export interface HostAgent {
   status: 'idle' | 'running'
   options?: { provider?: string; model?: string; maxTokens?: number }
   session: {
-    header?: { origin?: 'subagent'; delegationDepth?: number; cwd?: string; agentPreset?: string }
+    header?: { origin?: 'subagent'; parentSession?: string; delegationDepth?: number; cwd?: string; agentPreset?: string }
     events: readonly HostSessionEvent[]
   }
   ctx: HostAgentContext

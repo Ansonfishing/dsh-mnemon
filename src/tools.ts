@@ -130,6 +130,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
         memoryBodyIds: { type: 'array', items: { type: 'string' }, description: 'One or more active Memory Space ids. Omit to search every active space; the service accepts at most 20 ids.' },
         parentViewId: { type: 'string', description: 'Pinned View id shown in the current Mnemon Memory Map. The Host rejects a stale or different View.' },
         viewNodeId: { type: 'string', description: 'Relevant Memory Spaces node id from that View. Narrows Recall to the selected branch.' },
+        viewCapability: { type: 'string', description: 'Ephemeral Host capability supplied only to a bounded Recall worker. Root calls omit it.' },
       },
       required: ['query'],
     },
@@ -137,11 +138,12 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
       schema: JSON_OBJECT_OUTPUT,
       render: (_args: unknown, value: unknown) => text(value),
     },
-    async execute(args: { query: string; mode?: 'smart' | 'keyword' | 'basic'; limit?: number; category?: Category; source?: Source; intent?: Intent; memoryBodyIds?: string[]; parentViewId?: string; viewNodeId?: string }, exec: ToolExecution) {
+    async execute(args: { query: string; mode?: 'smart' | 'keyword' | 'basic'; limit?: number; category?: Category; source?: Source; intent?: Intent; memoryBodyIds?: string[]; parentViewId?: string; viewNodeId?: string; viewCapability?: string }, exec: ToolExecution) {
       const runtime = requireLayer(exec, 'memory-spaces', 'recall')
+      const { viewCapability, ...request } = args
       return isSubagent(exec.agent)
-        ? runtime.service.search(coordinator.scopeRecallRequest(requireAgent(exec), args), exec.signal)
-        : coordinator.recall(requireAgent(exec), args, exec.signal, { requirePinnedView: true })
+        ? runtime.service.search(coordinator.scopeRecallRequest(requireAgent(exec), request, viewCapability), exec.signal)
+        : coordinator.recall(requireAgent(exec), request, exec.signal, { requirePinnedView: true })
     },
     presentCall: (args: { query: string }) => ({ card: 'generic', title: 'Recall Mnemon memory', kind: 'search', rawInput: args.query }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon recall complete' }),
@@ -157,14 +159,15 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
         depth: { type: 'integer', description: 'Traversal depth. The service accepts 1 through 5.' },
         edge: { type: 'string', enum: [...EDGE_TYPES] },
         memoryBodyId: { type: 'string', description: 'Active Memory Space that returned this insight id.' },
+        viewCapability: { type: 'string', description: 'Ephemeral Host capability supplied only to a bounded Recall worker. Root calls omit it.' },
       },
       required: ['id'],
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    async execute(args: { id: string; depth?: number; edge?: EdgeType; memoryBodyId?: string }, exec: ToolExecution) {
+    async execute(args: { id: string; depth?: number; edge?: EdgeType; memoryBodyId?: string; viewCapability?: string }, exec: ToolExecution) {
       const runtime = requireLayer(exec, 'memory-spaces', 'related')
       if (!isSubagent(exec.agent)) return coordinator.related(requireAgent(exec), args.id, args.memoryBodyId, exec.signal)
-      const memoryBodyId = coordinator.scopeRelatedMemoryBody(requireAgent(exec), args.memoryBodyId)
+      const memoryBodyId = coordinator.scopeRelatedMemoryBody(requireAgent(exec), args.memoryBodyId, args.viewCapability)
       const results = await runtime.service.related(args.id, args.depth, args.edge, exec.signal, memoryBodyId)
       // DSH tool output validation requires the declared object shape. Keep the
       // underlying service array internal and expose a stable traversal receipt.
