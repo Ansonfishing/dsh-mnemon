@@ -4,16 +4,22 @@
 
 ## 每轮上下文
 
-插件会注册稳定的路由指导和动态 runtime-context 贡献：
+插件会注册稳定的路由指导和一个 Wake context 槽位：
 
 - `mnemon:routing`：system prompt section；当 `routingGuidance=true` 时提供简短的分层查询边界；
-- `mnemon:runtime-memory`：DSH runtime-context snapshot；每次组装模型输入时读取最新 `USER.md` 和 `MEMORY.md`，并附带保存准入规则。内容变化时会追加到消息尾部，不再重写稳定的 system-prompt 前缀。
+- `mnemon:runtime-memory`：由当前 root 回合固定的不可变 Wake 填充。Runtime Memory 原样进入；Documents 与 Memory Spaces 只贡献有界封面，不注入完整目录。
 
-生命周期 hook 不会在每轮开始无条件读取记忆体目录或执行 recall：
+生命周期会在 Host 组装 System Prompt 前固定 TurnView，并让本回合所有模型 step 使用同一个 View：
 
 ```text
-agent/session-start
-  -> mark primePending
+turn/start
+  -> system-prompt/assemble
+  -> beginTurn(root turn + operation scope)
+  -> snapshot eager and routed MemorySources
+  -> pin Source revisions/digests and Host-only authority
+  -> build bounded Wake
+  -> continue Host prompt assembly
+  -> replace mnemon:runtime-memory with that Wake
 
 agent/pre-step(step=1)
   -> cancel pending/running background review for a new turn
@@ -22,38 +28,33 @@ agent/pre-step(step=1)
   -> main Agent decides whether to call a memory tool
 ```
 
-Prime 只初始化路由状态，不执行异步 CLI 状态查询。
+Source snapshot 不执行语义召回。Prime 只初始化路由状态，不执行异步 CLI 状态查询。
 
 ## 主 Agent 召回
 
 ```text
-Root Agent calls mnemon_recall(query)
+Root or child Agent calls mnemon_recall(query, optional memoryBodyIds)
           |
           v
-MnemonSubagentCoordinator
-          |
-          | spawn + recall persona
-          | allow: memory_bodies, recall, related
-          v
-Recall worker lists the catalog
+resolve the root turn (child follows parentSession)
           |
           v
-select active Memory Space(s) by name + description
+read the pinned Memory Space Source state on the Host
           |
           v
-call mnemon_recall from the worker
+validate requested IDs are a subset; otherwise use every pinned active ID
           |
           v
-MnemonService searches selected Store(s)
+MnemonService searches authorized Providers concurrently
           |
           v
-normalize and attach memoryBodyId / memoryBodyName
+quality normalization + reciprocal-rank fusion
           |
           v
-一次性结果工具，Host 校验 schema 并将结果限制为 12 条
+结果限制为 12 条，hint 限制为 1,000 字符，并省略 Source 诊断
           |
           v
-Root Agent receives evidence, not the raw routing trace
+Agent receives evidence directly, without a second model call
 ```
 
 如果用户已经提供当前事实，或仓库可以直接回答，Agent 不应为了“展示记忆”而召回。需要关系解释时，先使用 recall 返回的完整 `memoryBodyId + id`，再执行 related。
@@ -75,7 +76,7 @@ Agent search
   -> Host filters citations to actual memoryBodyId/id pairs
 ```
 
-“实体”和“内容”页也直接读取确定性服务，不启动 recall worker。“内容”使用图谱快照，不增加 Mnemon recall 访问计数。
+“实体”和“内容”页也直接读取确定性服务，不需要第二个模型。“内容”使用图谱快照，不增加 Mnemon recall 访问计数。
 
 ## 显式长期写入
 

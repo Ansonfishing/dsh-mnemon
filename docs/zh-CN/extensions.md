@@ -12,7 +12,7 @@
 | Adapter | 外部数据面的身份、位置、范围与能力描述 | 绕过 Layer 与 Kernel 执行任意操作 |
 | Strategy | 根据请求和只读描述符提出有界步骤 | 持有数据库、网络客户端或秘密 |
 | Guard | 在 Strategy 前拒绝请求，只能收紧权限 | 放宽 Host、配置或其他 Guard 已拒绝的权限 |
-| Projector | 把一个 Layer 以无查询、感知 scope 的方式物化为不可变 Memory View | 执行召回查询、mutation、选择 Strategy 或读取其他 Layer 的 Authority |
+| MemorySource | 以无查询方式快照一个 Layer 的 revision、Wake 投影与 Host-only 召回状态 | 执行召回查询、mutation、选择 Strategy、构造节点树或读取其他 Layer 的 Authority |
 | Surface | 把 DSH 工具、命令、RPC 或 UI 转换为操作请求 | 自行建立第二套路由与权限规则 |
 
 公共入口如下；不要从 `dsh-mnemon/src/*` 或仓库内的 `packages/*` 导入。
@@ -55,17 +55,13 @@ export const episodicExtension = defineMemoryExtension({
       return { layer: step.layerId, capability: step.capability, items: [] }
     },
   }],
-  projectors: [{
+  sources: [{
     layerId: 'episodic',
-    mode: 'outline',
-    project: () => ({
+    mode: 'routed',
+    snapshot: () => ({
       revision: 'episodes-v1',
-      nodes: [{
-        key: 'episodes',
-        kind: 'root',
-        label: 'Recent Episodes',
-        summary: 'A bounded cover of recent event memory.',
-      }],
+      wake: 'Recent episodic evidence is available.',
+      state: { stream: 'recent' },
     }),
   }],
 })
@@ -89,11 +85,16 @@ mnemon:
 
 关闭或卸载扩展不会删除其数据。卸载会让新操作停止使用该组件，并使已生成的 Plan 因 Catalog/Topology generation 改变而失效。
 
-### 把 Layer 投影进 Memory View
+### 把 Layer 暴露为 MemorySource
 
-声明 `project` 能力的 Layer 在把 `projection` 设为 `automatic` 前，必须存在对应的 `extension.projectors` contribution。Projector 只接收固定的 Catalog、Topology、Guard generation 和 operation scope；它必须在没有用户查询的情况下确定性读取 Authority，并返回稳定的 `revision` 与 JSON-safe 节点树。直接进入 Wake 的内容使用 `exact`，可通过 Zoom 展开的有界地图使用 `outline`，只提供路由封面、详细证据仍需 Recall 的来源使用 `query-only`。
+声明 `project` 能力的 Layer 在把 `projection` 设为 `automatic` 前，必须存在对应的 `extension.sources` contribution。`snapshot()` 只接收固定的 Catalog、Topology、Guard generation 和 operation scope，并返回稳定的 `revision`、一段 `wake` 字符串以及可选的 JSON-safe `state`。state 参与 digest、只作为 Host 权限，绝不会进入 System Prompt。
 
-启用自动投影的 Layer 缺少 Projector 时，运行图构造会失败关闭。运行中注册与卸载也会在所有已附着运行图上事务性执行同一就绪检查。如果 Projector 来自另一个扩展，在 Layer 仍自动投影时卸载 Projector 会被拒绝并回滚；应先通过完整验证的新拓扑把该 Layer 的 projection 切为 `off` 或 `manual`。把 Layer 与 Projector 放在同一扩展中，生命周期最简单且保持原子性。
+模式只保留两个：
+
+- `eager` 原样注入 `wake`，只用于几乎每个模型步骤都需要的小型上下文，例如 Runtime Memory；
+- `routed` 把 `wake` 当作一个紧凑封面：统一空白、单个最多 500 字符、以“不可信路由数据”进行 JSON 引用，并共同受 4 KiB 封面预算约束。被预算省略的封面仍通过 Host-only state 保持完整权限。
+
+Wake 总长度上限为 64 KiB。系统不再维护节点树、Zoom 或模型可见的 View ID。Recall 只接收 query 与可选 Memory Space ID；Host 从 root 回合固定的 Source state 派生权限、校验请求子集，再直接查询 Provider。启用自动投影的 Layer 缺少 MemorySource 时，运行图构造会失败关闭；热注册与卸载在所有已附着图上事务性执行同一就绪检查。把 Layer 与 Source 放在同一扩展中，生命周期最简单。
 
 ## 通过 Cordis 拥有生命周期
 
@@ -101,12 +102,12 @@ mnemon:
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
-import type { MemoryExtensionHost } from 'dsh-mnemon/extension-sdk'
+import type { MemoryBoot } from 'dsh-mnemon/extension-sdk'
 import { episodicExtension } from './episodic.js'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    mnemonMemory: MemoryExtensionHost
+    mnemonMemory: MemoryBoot
   }
 }
 
@@ -204,5 +205,5 @@ export const focusedRecall = defineMemoryStrategyPlugin({
 - `manual` 不等于“模型主动调用工具”：模型、生命周期和系统自动化都属于 `automatic` trigger。
 - Guard 只能返回 allow/deny，不能执行数据面副作用；Guard 集合变化会使旧 Plan 失效。
 - executor 必须尊重 `AbortSignal`，并把部分失败交给 Kernel 形成 `partial` 回执。
-- 自动参与 `project` 的 Layer 必须有 Projector；测试正常发布以及被拒绝并回滚的运行中卸载。
+- 自动参与 `project` 的 Layer 必须有 MemorySource；测试正常发布、Wake 预算、Host-only state，以及被拒绝并回滚的运行中卸载。
 - 为注册、热卸载、重复 ID、越权 Strategy、取消和回执状态编写测试。

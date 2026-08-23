@@ -40,8 +40,8 @@ Headless 会获得完整模型工具面。它把命令行任务作为普通用�
 |---|---|---|
 | `mnemon_status` | CLI、配置、存储与目录聚合状态 | 直接服务 |
 | `mnemon_memory_bodies` | 读取记忆体目录、Provider 能力、健康与可用统计 | 直接服务 |
-| `mnemon_recall` | 从一个或多个 active Provider 召回；异构结果排名融合 | `spawn` recall worker |
-| `mnemon_related` | 在 `capabilities.related=true` 的记忆体中遍历关系 | `spawn` related worker；Root 默认两跳 |
+| `mnemon_recall` | 从一个或多个 active Provider 召回；异构结果排名融合 | 受 pinned Source 权限约束的 Host 直接服务 |
+| `mnemon_related` | 在 `capabilities.related=true` 的记忆体中遍历关系 | 受 pinned Source 权限约束的 Host 直接服务；Root 默认两跳 |
 | `mnemon_document_search` | 确定性搜索受管档案 | Documents 控制层 |
 
 “只读”表示不修改受管正文或长期语义内容。`mnemon_document_search` 命中后仍会更新 `lastAccessedAt`，用于 LRU 排序，因此功能只读不等于磁盘只读。
@@ -218,13 +218,13 @@ MnemonLifecycle
 |---|---|
 | `dsh-mnemon/contracts` | wire-safe 描述符、Topology、Plan 与 Receipt 类型 |
 | `dsh-mnemon/kernel` | Catalog、Topology Manager、Kernel 与 Guard API |
-| `dsh-mnemon/extension-sdk` | `MemoryExtensionHost`、Layer/Adapter/Strategy/Guard/Projector contribution 与进程级预注册 |
+| `dsh-mnemon/extension-sdk` | `MemoryBoot`、Layer/Adapter/Strategy/Guard/MemorySource contribution 与进程级预注册 |
 | `dsh-mnemon/strategy-sdk` | Strategy 定义、权限清单和 replay |
 | `dsh-mnemon/provider-sdk` | Adapter Factory Registry 与当前 Provider Adapter 接口 |
 | `dsh-mnemon/layers/runtime`、`documents`、`memory-spaces` | 三个默认 Layer 描述符 |
 | `dsh-mnemon/strategy-default-three-tier` | 默认拓扑与调度策略 |
 
-Host 发布 Cordis 服务 `mnemonMemory: MemoryExtensionHost`。其他 DSH 插件声明 `inject = ['mnemonMemory']` 后，可以把 Layer、Adapter、Strategy、Guard 或 View Projector 注册到同一生命周期；卸载 disposer 会推动 generation 并使旧 Plan 失效，若卸载会让自动参与投影的 Layer 失去 Projector，则操作会被拒绝并回滚。完整示例见[记忆扩展开发](./extensions.md)。内部 RPC 与 `MnemonClient` 仍不属于公开 SDK。
+Host 发布 Cordis 服务 `mnemonMemory: MemoryBoot`（`MemoryExtensionHost` 保留为 v0.3 预发布别名）。其他 DSH 插件声明 `inject = ['mnemonMemory']` 后，可以把 Layer、Adapter、Strategy、Guard 或 MemorySource 注册到同一生命周期；卸载 disposer 会推动 generation 并使旧 Plan 与 TurnView 失效，若卸载会让自动参与投影的 Layer 失去 Source，则操作会被拒绝并回滚。完整示例见[记忆扩展开发](./extensions.md)。内部 RPC 与 `MnemonClient` 仍不属于公开 SDK。
 
 ## 国际化范围
 

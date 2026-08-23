@@ -4,7 +4,7 @@
 
 `dsh-mnemon` integrates long-term Memory Spaces with DeepSeek Harness, then adds Runtime hot memory, Project Documents, lifecycle routing, independent task Agents, a deterministic control layer, and native DSH interfaces. The third tier is provider-backed: Mnemon Native is the official, prioritized, full-capability implementation, while eight third-party engines reuse the same workflow through explicit adapters.
 
-The three tiers are now the default Topology of a composable kernel: Layers define semantics, Adapters describe data planes, Strategies propose Plans, Guards may only narrow authority, and Surfaces connect DSH. A normal installation keeps the same three-tier mental model, while extensions and per-Layer switches need no duplicate Host or WebUI.
+The three tiers are now the default Topology of a composable kernel. `MemoryBoot` assembles trusted contributions; each Layer exposes an eager or routed `MemorySource`; each root turn pins a lightweight `TurnView`; committed mutations emit Receipts for the next turn. Layers, Adapters, Strategies, and Guards remain internal control-plane boundaries. A normal installation keeps the same three-tier mental model, while extensions and per-Layer switches need no duplicate Host or WebUI.
 
 Its goal is not to store more text. It balances long-term continuity, current-fact priority, context cost, and recoverable writes.
 
@@ -114,7 +114,7 @@ Direct recall in the Web returns raw evidence. Agent Query retrieves the same ev
 | Decide when long-form work belongs in Documents | Locks, temporary files, rename, and revision fences |
 | Maintain conservatively within its persona | UTF-8 capacity and original-data preservation on failure |
 
-Durable recall and writes prefer isolated `spawn`. Score-based background review uses `fork` only after a completed turn crosses its threshold and remains idle. A new turn cancels pending or running review.
+Durable recall and related reads run directly through the Host under the pinned MemorySource authority. Semantic writes may use an isolated `spawn`; score-based background review uses `fork` only after a completed turn crosses its threshold and remains idle. A new turn cancels pending or running review.
 
 ## What users see
 

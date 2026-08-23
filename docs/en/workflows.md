@@ -4,16 +4,22 @@
 
 ## Per-Turn Context
 
-The plugin registers stable routing guidance and a dynamic runtime-context contribution:
+The plugin registers stable routing guidance and one Wake context slot:
 
 - `mnemon:routing`: a system prompt section that, when `routingGuidance=true`, provides concise boundaries for tiered queries;
-- `mnemon:runtime-memory`: a DSH runtime-context snapshot that reads the latest `USER.md` and `MEMORY.md` whenever model input is assembled and includes admission rules for saving content. Changes are appended at the message tail instead of rewriting the stable system-prompt prefix.
+- `mnemon:runtime-memory`: the slot filled from the immutable Wake pinned for the current root turn. Runtime Memory enters exactly; Documents and Memory Spaces contribute bounded covers rather than their complete catalogs.
 
-Lifecycle hooks do not unconditionally read the Memory Space catalog or run recall at the start of every turn:
+The lifecycle pins before the Host assembles the System Prompt, then keeps the same TurnView for every model step in that turn:
 
 ```text
-agent/session-start
-  -> mark primePending
+turn/start
+  -> system-prompt/assemble
+  -> beginTurn(root turn + operation scope)
+  -> snapshot eager and routed MemorySources
+  -> pin Source revisions/digests and Host-only authority
+  -> build bounded Wake
+  -> continue Host prompt assembly
+  -> replace mnemon:runtime-memory with that Wake
 
 agent/pre-step(step=1)
   -> cancel pending/running background review for a new turn
@@ -22,38 +28,33 @@ agent/pre-step(step=1)
   -> main Agent decides whether to call a memory tool
 ```
 
-Prime only initializes routing state; it does not run asynchronous CLI status queries.
+Source snapshotting does not run semantic recall. Prime only initializes routing state and does not run asynchronous CLI status queries.
 
 ## Root Agent Recall
 
 ```text
-Root Agent calls mnemon_recall(query)
+Root or child Agent calls mnemon_recall(query, optional memoryBodyIds)
           |
           v
-MnemonSubagentCoordinator
-          |
-          | spawn + recall persona
-          | allow: memory_bodies, recall, related
-          v
-Recall worker lists the catalog
+resolve the root turn (child follows parentSession)
           |
           v
-select active Memory Space(s) by name + description
+read the pinned Memory Space Source state on the Host
           |
           v
-call mnemon_recall from the worker
+validate requested IDs are a subset; otherwise use every pinned active ID
           |
           v
-MnemonService searches selected Store(s)
+MnemonService searches authorized Providers concurrently
           |
           v
-normalize and attach memoryBodyId / memoryBodyName
+quality normalization + reciprocal-rank fusion
           |
           v
-one-run result tool, Host validates schema and caps results at 12
+cap results at 12 and hint at 1,000 characters; omit Source diagnostics
           |
           v
-Root Agent receives evidence, not the raw routing trace
+Agent receives evidence directly, without a second model call
 ```
 
 If the user has already supplied current facts, or the repository can answer directly, the Agent should not recall merely to “show memory.” When relationship explanations are needed, first use the complete `memoryBodyId + id` returned by recall, then run related.
@@ -75,7 +76,7 @@ Agent search
   -> Host filters citations to actual memoryBodyId/id pairs
 ```
 
-The “Entities” and “Content” pages also read the deterministic service directly and do not start a recall worker. “Content” uses a graph snapshot and does not increment Mnemon recall access counts.
+The “Entities” and “Content” pages also read the deterministic service directly and do not need a second model. “Content” uses a graph snapshot and does not increment Mnemon recall access counts.
 
 ## Explicit Long-Term Writes
 

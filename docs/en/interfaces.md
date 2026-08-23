@@ -40,8 +40,8 @@ Model tools, lifecycle hooks, and system scheduling use an `automatic` trigger. 
 |---|---|---|
 | `mnemon_status` | Aggregated CLI, configuration, storage, and directory status | Direct service |
 | `mnemon_memory_bodies` | Read catalog, provider capabilities, health, and available statistics | Direct service |
-| `mnemon_recall` | Recall from active providers with heterogeneous rank fusion | `spawn` recall worker |
-| `mnemon_related` | Traverse only when `capabilities.related=true` | `spawn` related worker; Root defaults to two hops |
+| `mnemon_recall` | Recall from active providers with heterogeneous rank fusion | Direct Host service under pinned Source authority |
+| `mnemon_related` | Traverse only when `capabilities.related=true` | Direct Host service under pinned Source authority; Root defaults to two hops |
 | `mnemon_document_search` | Deterministically search managed Documents | Documents control layer |
 
 “Read only” means managed bodies and durable semantics do not change. `mnemon_document_search` still updates `lastAccessedAt` for LRU ordering, so feature read-only is not disk read-only.
@@ -218,13 +218,13 @@ Composable-memory APIs use dedicated subpaths:
 |---|---|
 | `dsh-mnemon/contracts` | Wire-safe descriptors, Topology, Plan, and Receipt types |
 | `dsh-mnemon/kernel` | Catalog, Topology Manager, Kernel, and Guard APIs |
-| `dsh-mnemon/extension-sdk` | `MemoryExtensionHost`, Layer/Adapter/Strategy/Guard/Projector contributions, and process-level pre-registration |
+| `dsh-mnemon/extension-sdk` | `MemoryBoot`, Layer/Adapter/Strategy/Guard/MemorySource contributions, and process-level pre-registration |
 | `dsh-mnemon/strategy-sdk` | Strategy definitions, permission manifests, and replay |
 | `dsh-mnemon/provider-sdk` | Adapter Factory Registry and current Provider Adapter interfaces |
 | `dsh-mnemon/layers/runtime`, `documents`, `memory-spaces` | The three default Layer descriptors |
 | `dsh-mnemon/strategy-default-three-tier` | Default topology and scheduling Strategy |
 
-The Host publishes `mnemonMemory: MemoryExtensionHost` as a Cordis service. Another DSH plugin can declare `inject = ['mnemonMemory']` and lifecycle-register Layers, Adapters, Strategies, Guards, or View Projectors. Disposal advances generations and invalidates stale Plans; an unload that would strand an automatic project-capable Layer is rejected and rolled back. See [Building Memory Extensions](./extensions.md) for a complete example. Internal RPC and `MnemonClient` remain outside the public SDK.
+The Host publishes `mnemonMemory: MemoryBoot` as a Cordis service (`MemoryExtensionHost` remains a v0.3 pre-release alias). Another DSH plugin can declare `inject = ['mnemonMemory']` and lifecycle-register Layers, Adapters, Strategies, Guards, or MemorySources. Disposal advances generations and invalidates stale Plans and TurnViews; unloading a Source required by an automatic project-capable Layer is rejected and rolled back. See [Building Memory Extensions](./extensions.md) for a complete example. Internal RPC and `MnemonClient` remain outside the public SDK.
 
 ## Internationalization
 

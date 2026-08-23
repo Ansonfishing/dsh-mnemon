@@ -10,28 +10,51 @@
 - 插件提供三层知识控制面、路由策略、事务屏障和 UI；
 - Mnemon Native 通过本地 `mnemon` CLI 提供命名 Store、SQLite、四类图、关系和软删除，是官方优先实现；8 个三方适配器提供由 Host 控制的 HTTP、本地文件或 CLI 数据面。
 
-三层现在是默认拓扑，不再是写死在各入口里的唯一拓扑。系统把五类对象分开管理：Layer 表示记忆语义层，Adapter 表示具体数据面，Strategy 只提出计划，Guard 只能收紧权限，Surface 负责 DSH 工具、命令、RPC 与 WebUI。
+三层现在是默认拓扑，不再是写死在各入口里的唯一拓扑。运行时心智刻意只保留四个主要概念：`MemoryBoot` 装配受信任 contribution，`MemorySource` 快照一类记忆，`TurnView` 为一个回合固定 Source generation，`MemoryReceipt` 在 mutation 提交后推进下一回合。Layer、Adapter、Strategy、Guard 仍是控制面扩展边界，不成为模型或普通用户必须理解的额外对象。
 
 ## 可组合记忆内核
 
 ```text
-Layer / Adapter / Strategy 插件
-              |
-              v
-      MemoryCatalog (generation)
-              |
-              v
-    MemoryTopology (generation)
-              |
- request -> Guard -> Strategy -> MemoryPlan
-                              -> Kernel validation
-                              -> executor -> MemoryReceipt
+Cordis lifecycle
+      |
+      v
+ MemoryBoot ---- trusted extensions
+      |
+      +---- Catalog / Topology / Kernel
+      |
+      +---- MemorySources (eager | routed)
+                       |
+turn begins -------- snapshot --------> TurnView
+                       |                   |
+                       |                   +--> bounded Wake --> System Prompt
+                       |                   +--> Host-only Source state
+                       |                                      |
+model recall(query, optional source ids) ---------------------+
+                                                              v
+                                                    MnemonService / Provider
+
+committed mutation --> MemoryReceipt --> next turn snapshots a new TurnView
 ```
 
-- `MemoryCatalog` 是 Host 全局的贡献目录；注册和卸载都由 Cordis 生命周期拥有，并单调增加 generation。
+`TurnView` 是轻量 generation snapshot，不是知识节点树。eager Source 文本原样进入 Wake；routed Source 在共享预算内只贡献一条 JSON 引用封面，完整 ID 权限留在 Host 并参与 digest。Recall 不再需要模型可见的 View ID、node ID、Zoom、capability token 或第二个 LLM worker。Host 从 root 回合（child agent 则沿 `parentSession`）派生权限、验证请求 ID 是子集，然后直接调用数据面。
+
+Plan 只保留为受 Guard 约束或多 Layer 操作的内部事务机制：
+
+```text
+request -> Guard -> Strategy proposal -> Kernel validation -> MemoryPlan
+                                                    |
+                                                    v
+                                      one atomic claim + executor(s)
+                                                    |
+                                                    v
+                                             MemoryReceipt
+```
+
+- `MemoryBoot` 是最小 Host 装配器；它把同一套受信任扩展应用到每个独立运行图，作用域、卸载与 isolate 生命周期仍由 Cordis 拥有。
+- `MemoryCatalog` 是运行图的贡献目录；注册和卸载都由生命周期拥有，并单调增加 generation。
 - `MemoryTopologyManager` 原子保存某一代组合，并跟随运行中的 Catalog 把新 Layer 加为关闭候选、把已卸载 Layer 移出候选。一次操作固定同一组 Catalog/Topology/Guard generation；任一代变化后，旧计划必须重新规划。
 - `MemoryKernel` 在 Strategy 之后再次校验 Layer、能力、Adapter 绑定、参与模式、预算与不可绕过的 Guard。Strategy 没有数据面句柄，不能直接读写记忆。
-- Strategy 没有提出任何可执行步骤时操作失败关闭；执行结果使用 `succeeded / partial / failed / cancelled` 回执，不把部分失败伪装成成功。
+- Strategy 没有提出任何可执行步骤时操作失败关闭；Plan 是 claim-once 权限，顺序或并发重放都会在第二次数据面步骤前被拒绝。执行结果使用 `succeeded / partial / failed / cancelled` 回执，不把部分失败伪装成成功。
 - 关闭 Layer 只停止参与，不删除、迁移或隐藏其控制面元数据。重新开启仍使用原有存储。
 
 每层有四个独立参与通道：`recall`、`write`、`projection`、`maintenance`。`off` 完全拒绝该通道；`manual` 只接受用户/控制面显式操作；`automatic` 同时允许显式操作和模型、生命周期或系统自动操作。模型工具属于 `automatic` 触发，不能借“工具调用是显式的”绕过 `manual`。
@@ -50,14 +73,16 @@ Runtime、Documents、Memory Spaces 由三个 Layer workspace 包提供；`defau
 | `packages/strategy-sdk` | `dsh-mnemon/strategy-sdk` | Strategy 定义、权限清单与 replay 测试原语 |
 | `packages/strategy-default-three-tier` | `dsh-mnemon/strategy-default-three-tier` | 当前兼容行为的默认 Strategy 和拓扑 |
 | `packages/provider-sdk` | `dsh-mnemon/provider-sdk` | Adapter Factory Registry 与第三层 Provider 扩展接口 |
-| `packages/extension-sdk` | `dsh-mnemon/extension-sdk` | Host 全局扩展注册与每个运行图的生命周期附着 |
+| `packages/extension-sdk` | `dsh-mnemon/extension-sdk` | `MemoryBoot`、Host 全局扩展注册与每个运行图的生命周期附着 |
 | 根 `src/` | `dsh-mnemon` / `dsh-mnemon/client` | DSH Host、现有控制器、Provider 实现、RPC 与 WebUI 组合根 |
 
 内部 workspace 当前标记为 `private`；公开且受兼容承诺的是 `dsh-mnemon/*` exports。未来只有在生态确实需要独立发布节奏时，才将内部包拆成多个 npm 制品。
 
-## Cordis 时空组合与扩展生命周期
+## Cordis 时空组合之上的 MemoryBoot
 
-Host 通过 Cordis 发布 `mnemonMemory` 服务，同时 `dsh-mnemon/extension-sdk` 提供进程级预注册入口。扩展可以在 Host 挂载前注册，也可以在运行中注册或卸载；每个 global/workspace 运行图拥有独立 Catalog、Topology 和 Kernel，但接收同一套 Host 扩展贡献。运行中的 Catalog 变更与 Topology 新代同步；设置切换则先完整构造并验证下一代运行图，再原子交换稳定代理。
+Cordis 提供作用域、所有权、依赖注入和卸载；`MemoryBoot` 只在其上增加记忆领域的装配约定：收集受信任 contribution、附着到每个运行图、校验 Source readiness，并按逆序释放。Host 把这个 Boot 发布为 Cordis 服务 `mnemonMemory`，`dsh-mnemon/extension-sdk` 同时提供进程级预注册入口。
+
+扩展可以在 Host 挂载前注册，也可以在运行中注册或卸载；每个 global/workspace 运行图拥有独立 Catalog、Topology、Kernel 和 TurnView manager，但接收同一套 Boot contribution。运行中的 Catalog 变更与 Topology 新代同步；设置切换则先完整构造并验证下一代运行图，再原子交换稳定代理。
 
 Cordis isolate 用于所有权、装卸和作用域组合，不是安全沙箱。Layer executor、Provider Adapter 和普通 JavaScript Strategy 都与 Host 同进程，只有受信任的已安装插件才能提供。模型生成的 Strategy 必须先经过 `MemoryStrategyPlugin` 不可变清单、Layer/Adapter/Capability/maxSteps 权限约束和 replay；Kernel 随后仍执行权威校验。当前版本不会自动执行模型刚写出的任意代码；未来的 shadow、canary、签名制品和回滚流程建立在这些边界之上。
 
@@ -84,10 +109,13 @@ Cordis isolate 用于所有权、装卸和作用域组合，不是安全沙箱�
 ```text
 settings.register("mnemon")
   -> resolveConfig
-  -> attach MemoryExtensionHost contributions
-  -> MemoryCatalog / MemoryTopology / MemoryKernel
+  -> MemoryCatalog + default contributions
+  -> attach MemoryBoot contributions
+  -> MemoryTopology / MemoryKernel
   -> createRunner / MnemonService
   -> RuntimeMemoryController / DocumentManager / StorageScopeInspector
+  -> create default MemorySources / TurnView manager
+  -> bind Boot MemorySources / validate readiness
   -> MnemonSubagentCoordinator
   -> MnemonLifecycle
   -> tools / commands / prompt sections
@@ -102,26 +130,27 @@ Host 声明依赖 `tools`、`settings`、`commands`、`agents` 和 `subagents`�
 
 Web 额外提供 `workspaceRegistry`、客户端 slots 和 `connection`，用于跨工作区查看、RPC、Sidebar / Buildin、设置界面、本回合记忆和存入记忆。Headless 不提供这些浏览器服务；一次性 runner 把任务作为普通用户消息提交，等待 Agent idle、flush session、输出最终答案后退出。插件销毁会取消尚未执行的延迟审查，因此 Headless 依赖任务内完成的显式或模型引导写入，而不是 idle 后维护。
 
-## 主 Agent 与 worker 的双路径
+## 直接召回与受监督 mutation
 
-同名 `mnemon_*` 工具根据调用者是否为 subagent 分流，防止递归委派：
+Recall 是受 System Prompt 组装前固定的 Source 权限约束的确定性 Host 读取。Root 与 child agent 走同一路径；child 通过 `parentSession` 找到 root 回合，不能获取更新或更宽的运行图：
 
 ```text
-root Agent calls mnemon_recall
-  -> coordinator starts a bounded recall worker
-  -> worker calls mnemon_memory_bodies and mnemon_recall
-  -> tool sees origin=subagent
-  -> call reaches MnemonService directly
-  -> structured evidence returns to root Agent
+Agent calls mnemon_recall(query, optional memoryBodyIds)
+  -> resolve root turn and pinned TurnView manager
+  -> read Host-only Memory Space Source state
+  -> reject requested IDs outside the pinned set
+  -> MnemonService searches authorized Providers concurrently
+  -> normalize quality and reciprocal-rank fusion
+  -> return at most 12 results and a 1,000-character hint
 ```
 
-长期语义写入、关系、删除以及记忆体创建/更新采用相同监督模式，但确定性服务会先校验目标 Provider 的能力。Mnemon Native 仍是完整参考实现；三方适配器只开放各自能兑现的精确/异步写入、图谱、浏览、关联与删除语义。运行时记忆和 Documents 的普通变更仍由确定性控制层提交。
+模型输出不携带完整 Source 目录与路由诊断；`mnemon_related` 使用同一套 pinned-source 校验。长期语义写入、关系、删除以及记忆体创建/更新仍会在需要语义判断时受监督，但确定性服务会先校验目标 Provider 的能力。Mnemon Native 仍是完整参考实现；三方适配器只开放各自能兑现的精确/异步写入、图谱、浏览、关联与删除语义。运行时记忆和 Documents 的普通变更仍由确定性控制层提交。
 
 记忆体目录的移除是独立危险操作：Mnemon Native 经确认后调用 `store remove`，成功才移除登记；所有三方 Provider 都使用“断开”语义，只删除本地连接元数据，绝不删除 Provider 记忆。
 
 ## 独立任务 Agent 与内部 Worker
 
-Web 工作台发起的 AI 元信息、Agent 查询、记忆沉淀和档案归档先创建一个新的顶层任务 Agent。这个 Agent 不借用对话历史，cwd 明确绑定工作台选中的工作区，并组合 DSH 的默认 preset；任务完成后立即释放。它的模型路由默认跟随 DSH 新会话默认值，也可以用 `taskAgentModel` 固定完整 Provider + Model。同一 `taskAgentModel` 路由也会作用到 coordinator 派发的所有子代理委托（空闲复盘、召回、写入、问答、Provider 选择、迁移、压缩、档案归档、元信息维护），因此 `fixed` 模式下顶层任务 Agent 与所有内部 worker 共用同一条模型路由。
+Web 工作台发起的 AI 元信息、Agent 查询、记忆沉淀和档案归档先创建一个新的顶层任务 Agent。这个 Agent 不借用对话历史，cwd 明确绑定工作台选中的工作区，并组合 DSH 的默认 preset；任务完成后立即释放。它的模型路由默认跟随 DSH 新会话默认值，也可以用 `taskAgentModel` 固定完整 Provider + Model。同一 `taskAgentModel` 路由也会作用到 coordinator 派发的所有子代理委托（空闲复盘、写入、问答、Provider 选择、迁移、压缩、档案归档、元信息维护），因此 `fixed` 模式下顶层任务 Agent 与所有内部 worker 共用同一条模型路由。
 
 顶层任务 Agent 是用户可感知的执行单元；下述 `spawn` / `fork` 是插件内部受限 Worker Provider。任务 Agent 需要语义判断时仍会调度 bounded worker，worker 继承其父任务 Agent 的模型路由。因此，界面统一使用“独立任务 Agent”，而诊断与架构文档保留 worker / subagent 术语。
 
@@ -135,7 +164,7 @@ Web 工作台发起的 AI 元信息、Agent 查询、记忆沉淀和档案归档
 - `maxDepth: 1`；
 - 可取消的 signal 和有界 token 预算。
 
-它用于召回、长期语义写入、证据限定问答、热记忆整理和 Document 归档。
+它用于长期语义写入、证据限定问答、热记忆整理和 Document 归档；Recall 与 related 读取不再消耗第二次模型调用。
 
 ### `fork` worker
 

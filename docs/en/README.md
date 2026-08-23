@@ -28,7 +28,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 | Troubleshoot empty recall, misalignment, CLI, or provider errors | [Operations and troubleshooting](./operations.md#troubleshooting) |
 | Use model tools, `/mnemon` commands, or internal RPC | [Interface reference](./interfaces.md) |
 | Understand Host, workers, control plane, and data plane | [Architecture](./architecture.md) |
-| Build a Layer, Adapter, Strategy, Guard, or Projector plugin | [Building Memory Extensions](./extensions.md) |
+| Build a Layer, Adapter, Strategy, Guard, or MemorySource plugin | [Building Memory Extensions](./extensions.md) |
 | Modify code, screenshots, tests, or releases | [Development and verification](./development.md) |
 | Upgrade from the previous release | [v0.3.0 release notes](./releases/v0.3.0.md) |
 | See planned work | [Roadmap](./roadmap.md) |

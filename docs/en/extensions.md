@@ -12,7 +12,7 @@ This page is for plugin authors adding memory semantics, data planes, or schedul
 | Adapter | Identity, locality, scope, and capabilities of an external data plane | A path around Layer and Kernel validation |
 | Strategy | Bounded step proposals from a request and read-only descriptors | Databases, network clients, or secrets |
 | Guard | Denial before Strategy planning; it may only narrow authority | Permission broader than the Host, configuration, or another Guard allows |
-| Projector | Query-independent, scope-aware materialization of one Layer into an immutable Memory View | Recall queries, mutations, Strategy selection, or another Layer's Authority |
+| MemorySource | Query-independent snapshot of one Layer's revision, Wake projection, and Host-only recall state | Recall queries, mutations, Strategy selection, node trees, or another Layer's authority |
 | Surface | Translation from DSH tools, commands, RPC, or UI into operation requests | A second routing or authorization system |
 
 Use these public entry points. Do not import from `dsh-mnemon/src/*` or repository-internal `packages/*` paths.
@@ -55,17 +55,13 @@ export const episodicExtension = defineMemoryExtension({
       return { layer: step.layerId, capability: step.capability, items: [] }
     },
   }],
-  projectors: [{
+  sources: [{
     layerId: 'episodic',
-    mode: 'outline',
-    project: () => ({
+    mode: 'routed',
+    snapshot: () => ({
       revision: 'episodes-v1',
-      nodes: [{
-        key: 'episodes',
-        kind: 'root',
-        label: 'Recent Episodes',
-        summary: 'A bounded cover of recent event memory.',
-      }],
+      wake: 'Recent episodic evidence is available.',
+      state: { stream: 'recent' },
     }),
   }],
 })
@@ -89,11 +85,16 @@ mnemon:
 
 Disabling or unloading an extension never deletes its data. Unloading stops new operations from selecting the component and invalidates existing Plans through Catalog/Topology generation changes.
 
-### Project a Layer into the Memory View
+### Expose a Layer as a MemorySource
 
-A Layer declaring `project` needs a matching `extension.projectors` contribution before its `projection` channel can be `automatic`. The Projector receives only pinned Catalog, Topology, and Guard generations plus the operation scope. It must read Authority deterministically without a user query and return a stable `revision` and JSON-safe node tree. Use `exact` for content that belongs directly in Wake, `outline` for a bounded map that can be expanded with Zoom, and `query-only` for routing covers whose detailed evidence still requires Recall.
+A Layer declaring `project` needs a matching `extension.sources` contribution before its `projection` channel can be `automatic`. `snapshot()` receives only pinned Catalog, Topology, and Guard generations plus the operation scope. It returns one stable `revision`, one `wake` string, and optional JSON-safe `state`. The state is digest-bound Host authority and never enters the System Prompt.
 
-Runtime-graph construction fails closed when an enabled automatic Layer has no Projector. Live registration and unloading use the same readiness check transactionally across every attached graph. If a Projector is supplied by a different extension, unloading it while the Layer still projects automatically is rejected and rolled back; switch that Layer's projection to `off` or `manual` in a validated topology generation first. Co-locating a Layer and its Projector in one extension gives the simplest atomic lifecycle.
+Choose only between two modes:
+
+- `eager` injects `wake` exactly. Reserve it for small context needed on virtually every model step, such as Runtime Memory.
+- `routed` treats `wake` as one compact cover. It is whitespace-normalized, limited to 500 characters, JSON-quoted as untrusted routing data, and competes within a 4 KiB routed-cover budget. A cover omitted by that budget remains fully authorized through Host-only state.
+
+The total Wake is limited to 64 KiB. There is no node tree, Zoom operation, or model-facing View ID. Recall takes only a query and optional Memory Space IDs; the Host derives the root turn's pinned Source state, validates the requested subset, and queries providers directly. Runtime-graph construction fails closed when an enabled automatic Layer has no MemorySource. Live registration and unloading apply the same readiness check transactionally across attached graphs. Co-locating a Layer and its Source gives the simplest atomic lifecycle.
 
 ## Let Cordis own the lifecycle
 
@@ -101,12 +102,12 @@ A normal DSH extension should depend on the Host's `mnemonMemory` service so reg
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
-import type { MemoryExtensionHost } from 'dsh-mnemon/extension-sdk'
+import type { MemoryBoot } from 'dsh-mnemon/extension-sdk'
 import { episodicExtension } from './episodic.js'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    mnemonMemory: MemoryExtensionHost
+    mnemonMemory: MemoryBoot
   }
 }
 
@@ -204,5 +205,5 @@ Evaluation should use redacted, reproducible operation descriptors and expected 
 - `manual` does not mean “the model explicitly called a tool.” Model, lifecycle, and system automation are `automatic` triggers.
 - Guards return allow/deny without data-plane side effects. A Guard-set change invalidates existing Plans.
 - Executors must honor `AbortSignal` and let the Kernel represent partial failure as a `partial` Receipt.
-- A Layer with automatic `project` participation must have a Projector; test publication plus rejected/rolled-back live unload.
+- A Layer with automatic `project` participation must have a MemorySource; test publication, Wake budgets, Host-only state, and rejected/rolled-back live unload.
 - Test registration, live unload, duplicate IDs, over-permission Strategies, cancellation, and Receipt states.
