@@ -9,6 +9,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
+  autonomousRecallScenario,
+  contextOnlyScenario,
   deterministicScenario,
   documents,
   idleReviewScenario,
@@ -33,11 +35,16 @@ function parseArguments(argv) {
     credentialFile: defaultCredentialFile,
     toolSurface: 'memory-only',
     idleReviewMs: 600_000,
+    corpus: 'realistic',
+    mnemon: 'on',
+    routingGuidance: 'on',
+    recallMode: 'guided',
+    writebackMode: 'guided',
   }
   for (let index = 0; index < argv.length; index += 1) {
     const name = argv[index]
     const value = argv[index + 1]
-    if (name === '--provider' || name === '--scenario' || name === '--package-root' || name === '--output' || name === '--mnemon-binary' || name === '--credential-file' || name === '--tool-surface' || name === '--idle-review-ms') {
+    if (name === '--provider' || name === '--scenario' || name === '--package-root' || name === '--output' || name === '--mnemon-binary' || name === '--credential-file' || name === '--tool-surface' || name === '--idle-review-ms' || name === '--corpus' || name === '--mnemon' || name === '--routing-guidance' || name === '--recall-mode' || name === '--writeback-mode') {
       if (value === undefined) throw new Error(`${name} requires a value`)
       const key = {
         '--package-root': 'packageRoot',
@@ -45,6 +52,9 @@ function parseArguments(argv) {
         '--credential-file': 'credentialFile',
         '--tool-surface': 'toolSurface',
         '--idle-review-ms': 'idleReviewMs',
+        '--routing-guidance': 'routingGuidance',
+        '--recall-mode': 'recallMode',
+        '--writeback-mode': 'writebackMode',
       }[name] ?? name.slice(2)
       options[key] = key === 'idleReviewMs' ? Number(value) : value
       index += 1
@@ -53,8 +63,14 @@ function parseArguments(argv) {
     throw new Error(`unknown argument: ${name}`)
   }
   if (!['mock', 'real'].includes(options.provider)) throw new Error('--provider must be mock or real')
-  if (!['deterministic', 'real-conversation', 'idle-review'].includes(options.scenario)) throw new Error('--scenario is unsupported')
+  if (!['deterministic', 'real-conversation', 'idle-review', 'context-only', 'autonomous-recall'].includes(options.scenario)) throw new Error('--scenario is unsupported')
   if (!['memory-only', 'full'].includes(options.toolSurface)) throw new Error('--tool-surface must be memory-only or full')
+  if (!['empty', 'realistic', 'max-runtime', 'scale'].includes(options.corpus)) throw new Error('--corpus is unsupported')
+  if (!['on', 'off'].includes(options.mnemon)) throw new Error('--mnemon must be on or off')
+  if (!['on', 'off'].includes(options.routingGuidance)) throw new Error('--routing-guidance must be on or off')
+  if (!['guided', 'off'].includes(options.recallMode)) throw new Error('--recall-mode must be guided or off')
+  if (!['guided', 'off'].includes(options.writebackMode)) throw new Error('--writeback-mode must be guided or off')
+  if (options.mnemon === 'off' && (options.scenario !== 'context-only' || options.corpus !== 'empty')) throw new Error('--mnemon off requires --scenario context-only --corpus empty')
   if (!Number.isInteger(options.idleReviewMs) || options.idleReviewMs < 5_000 || options.idleReviewMs > 600_000) throw new Error('--idle-review-ms must be within 5000..600000')
   options.packageRoot = resolve(options.packageRoot)
   options.output = resolve(options.output)
@@ -107,7 +123,25 @@ function memoryId(value) {
   return undefined
 }
 
-async function seedData(packageRoot, dataDir, workspaceRoot, mnemonBinary) {
+function scaledDocuments() {
+  return Array.from({ length: 80 }, (_, index) => index < documents.length ? documents[index] : {
+    title: `Scale document ${String(index + 1).padStart(3, '0')}`,
+    description: 'Synthetic catalog-scale record whose title and body must stay out of Wake.',
+    sourcePaths: [`scale/document-${index + 1}.md`],
+    content: `# Scale document ${index + 1}\n\nHidden catalog sentinel DOC-SCALE-${index + 1}.`,
+  })
+}
+
+function scaledSpaces() {
+  return Array.from({ length: 80 }, (_, index) => index < memorySpaces.length ? memorySpaces[index] : {
+    key: `scale-${index + 1}`,
+    name: `Scale Space ${String(index + 1).padStart(3, '0')}`,
+    description: 'Synthetic catalog-scale Memory Space whose metadata must stay Host-only.',
+    memories: [],
+  })
+}
+
+async function seedData(packageRoot, dataDir, workspaceRoot, mnemonBinary, corpus) {
   const modulePath = `${pathToFileURL(join(packageRoot, 'lib', 'index.js')).href}?eval=${randomUUID()}`
   const { createRuntimeGraph, resolveConfig } = await import(modulePath)
   const config = resolveConfig({
@@ -121,16 +155,23 @@ async function seedData(packageRoot, dataDir, workspaceRoot, mnemonBinary) {
   const graph = createRuntimeGraph(config, workspaceRoot)
   const seed = { runtime: [], documents: [], memorySpaces: [] }
   try {
-    for (const entry of runtimeEntries) {
+    const selectedRuntime = corpus === 'empty' ? [] : corpus === 'max-runtime' ? [
+      { target: 'user', importance: 'normal', content: `MAX-RUNTIME-USER ${'U'.repeat(3_700)}` },
+      { target: 'memory', importance: 'normal', content: `MAX-RUNTIME-MEMORY-A ${'A'.repeat(7_700)}` },
+      { target: 'memory', importance: 'normal', content: `MAX-RUNTIME-MEMORY-B ${'B'.repeat(2_300)}` },
+    ] : runtimeEntries
+    const selectedDocuments = corpus === 'empty' || corpus === 'max-runtime' ? [] : corpus === 'scale' ? scaledDocuments() : documents
+    const selectedSpaces = corpus === 'empty' || corpus === 'max-runtime' ? [] : corpus === 'scale' ? scaledSpaces() : memorySpaces
+    for (const entry of selectedRuntime) {
       const result = await graph.runtimeMemory.mutate({ action: 'add', ...entry })
       seed.runtime.push({ ...entry, action: result.action })
     }
     const documentController = graph.documents.forWorkspace(workspaceRoot)
-    for (const document of documents) {
+    for (const document of selectedDocuments) {
       const result = await documentController.mutate({ action: 'create', ...document })
       seed.documents.push({ title: document.title, id: result.id, revision: result.revision, contentHash: sha256(document.content) })
     }
-    for (const space of memorySpaces) {
+    for (const space of selectedSpaces) {
       const body = await graph.service.createBody({
         name: space.name,
         description: space.description,
@@ -168,27 +209,59 @@ async function seedData(packageRoot, dataDir, workspaceRoot, mnemonBinary) {
   }
 }
 
+async function inspectData(packageRoot, dataDir, workspaceRoot, mnemonBinary) {
+  const modulePath = `${pathToFileURL(join(packageRoot, 'lib', 'index.js')).href}?inspect=${randomUUID()}`
+  const { createRuntimeGraph, resolveConfig } = await import(modulePath)
+  const graph = createRuntimeGraph(resolveConfig({ storageScope: 'custom', dataDir, cliPath: mnemonBinary }), workspaceRoot)
+  try {
+    const runtime = graph.runtimeMemory.snapshot()
+    const documentSnapshot = graph.documents.forWorkspace(workspaceRoot).snapshot()
+    const bodies = graph.service.memoryBodies.list()
+    const view = await graph.memoryViews.publish({ storage: 'custom', workspaceId: workspaceRoot, sessionId: 'final-state' })
+    const wake = graph.memoryViews.wake(view.id)
+    return {
+      runtime: {
+        revision: runtime.revision,
+        entries: runtime.entries.map(entry => ({ target: entry.target, importance: entry.importance, content: entry.content })),
+        targets: runtime.targets,
+      },
+      documents: {
+        revision: documentSnapshot.revision,
+        items: documentSnapshot.documents.map(document => ({ id: document.id, title: document.title, status: document.status, contentHash: document.contentHash })),
+      },
+      memorySpaces: bodies.map(body => ({ id: body.id, name: body.name, description: body.description, active: body.active, providerId: body.provider.id })),
+      finalView: { id: view.id, digest: view.digest, wakeCharacters: wake.text.length, wakeHash: sha256(wake.text) },
+    }
+  } finally {
+    graph.dispose()
+  }
+}
+
 function scenarioFixture(name, workspaceRoot) {
   const selected = name === 'deterministic'
     ? deterministicScenario
     : name === 'idle-review'
       ? idleReviewScenario
-      : realConversationScenario
+      : name === 'context-only'
+        ? contextOnlyScenario
+        : name === 'autonomous-recall'
+          ? autonomousRecallScenario
+          : realConversationScenario
   return { ...structuredClone(selected), workspaceRoot, sessionId: `mnemon-eval-${name}-${randomUUID()}` }
 }
 
 function profilePatch(options, dataDir) {
-  const rows = [
+  const rows = options.mnemon === 'off' ? [] : [
     `- id: mnemon`,
     `  config:`,
     `    storageScope: custom`,
     `    dataDir: ${JSON.stringify(dataDir)}`,
     `    cliPath: ${JSON.stringify(options.mnemonBinary)}`,
-    `    routingGuidance: true`,
+    `    routingGuidance: ${options.routingGuidance === 'on'}`,
     `    displayMode: sidebar`,
     `    lifecycleEnabled: true`,
-    `    recallMode: guided`,
-    `    writebackMode: guided`,
+    `    recallMode: ${options.recallMode}`,
+    `    writebackMode: ${options.writebackMode}`,
     `    idleReviewMs: ${options.idleReviewMs}`,
     `    tabEnabled: true`,
     `    writeEnabled: true`,
@@ -251,6 +324,7 @@ function mockDecision(body) {
   if (call !== undefined) return { kind: 'tool', name: call[0], arguments: call[1] }
   if (marker === '[EVAL:MOCK:runtime]') return { kind: 'text', text: '12% at Tuesday 21:30 Asia/Shanghai.' }
   if (marker === '[EVAL:MOCK:receipt]') return { kind: 'text', text: 'ECHO-731' }
+  if (marker === '[EVAL:context-only]') return { kind: 'text', text: 'OK' }
   return { kind: 'text', text: `MOCK_UNHANDLED ${marker}` }
 }
 
@@ -290,6 +364,46 @@ function responseUsage(text) {
     } catch {}
   }
   return undefined
+}
+
+function responseFinishReasons(text) {
+  const reasons = []
+  for (const line of text.split(/\r?\n/u)) {
+    if (!line.startsWith('data: ') || line === 'data: [DONE]') continue
+    try {
+      const value = JSON.parse(line.slice(6))
+      for (const choice of value?.choices ?? []) {
+        if (typeof choice?.finish_reason === 'string' && !reasons.includes(choice.finish_reason)) reasons.push(choice.finish_reason)
+      }
+    } catch {}
+  }
+  return reasons
+}
+
+function responseToolCalls(text) {
+  const calls = new Map()
+  for (const line of text.split(/\r?\n/u)) {
+    if (!line.startsWith('data: ') || line === 'data: [DONE]') continue
+    try {
+      const value = JSON.parse(line.slice(6))
+      for (const choice of value?.choices ?? []) {
+        for (const call of choice?.delta?.tool_calls ?? []) {
+          const key = String(call.id ?? call.index ?? calls.size)
+          const current = calls.get(key) ?? { id: call.id, index: call.index, name: '', arguments: '' }
+          if (typeof call.id === 'string') current.id = call.id
+          if (typeof call.function?.name === 'string') current.name += call.function.name
+          if (typeof call.function?.arguments === 'string') current.arguments += call.function.arguments
+          calls.set(key, current)
+        }
+      }
+    } catch {}
+  }
+  return [...calls.values()].map(call => ({
+    ...call,
+    parsedArguments: (() => {
+      try { return JSON.parse(call.arguments) } catch { return undefined }
+    })(),
+  }))
 }
 
 function proxyHeaders(headers) {
@@ -332,7 +446,7 @@ async function startCaptureServer(provider) {
         const payload = mockSse(body, index)
         response.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
         response.end(payload)
-        Object.assign(record, { finishedAt: new Date().toISOString(), status: 200, usage: responseUsage(payload), usageKind: 'mock-character-estimate' })
+        Object.assign(record, { finishedAt: new Date().toISOString(), status: 200, usage: responseUsage(payload), finishReasons: responseFinishReasons(payload), responseToolCalls: responseToolCalls(payload), usageKind: 'mock-character-estimate' })
         return
       }
       const upstream = new URL(request.url ?? '/', 'https://api.deepseek.com')
@@ -351,6 +465,8 @@ async function startCaptureServer(provider) {
         finishedAt: new Date().toISOString(),
         status: upstreamResponse.status,
         usage: responseUsage(responseBody),
+        finishReasons: responseFinishReasons(responseBody),
+        responseToolCalls: responseToolCalls(responseBody),
         usageKind: 'provider-reported',
         responseBytes: Buffer.byteLength(responseBody),
       })
@@ -402,7 +518,9 @@ async function main() {
   let capture
   try {
     if (options.provider === 'real') await copyFile(options.credentialFile, join(dshHome, '.credentials.yaml'))
-    const seed = await seedData(options.packageRoot, dataDir, workspaceRoot, options.mnemonBinary)
+    const seed = options.mnemon === 'off'
+      ? { runtime: [], documents: [], memorySpaces: [], mnemonDisabled: true }
+      : await seedData(options.packageRoot, dataDir, workspaceRoot, options.mnemonBinary, options.corpus)
     await writeFile(join(options.output, 'seed.json'), `${JSON.stringify(seed, null, 2)}\n`)
     const scenario = scenarioFixture(options.scenario, workspaceRoot)
     await writeFile(scenarioPath, `${JSON.stringify(scenario, null, 2)}\n`)
@@ -420,8 +538,10 @@ async function main() {
       ...(options.provider === 'mock' ? { DEEPSEEK_API_KEY: 'mnemon-evaluation-mock-key' } : {}),
     }
 
-    const installMnemon = await run(process.execPath, [dshBin, 'plugin', '--profile', 'headless', 'add', `link:${options.packageRoot}`], { env })
-    assertSuccess('installing dsh-mnemon', installMnemon)
+    if (options.mnemon === 'on') {
+      const installMnemon = await run(process.execPath, [dshBin, 'plugin', '--profile', 'headless', 'add', `link:${options.packageRoot}`], { env })
+      assertSuccess('installing dsh-mnemon', installMnemon)
+    }
     const installRunner = await run(process.execPath, [dshBin, 'plugin', '--profile', 'headless', 'add', `link:${runnerPluginRoot}`], { env })
     assertSuccess('installing evaluation runner', installRunner)
     const patch = profilePatch(options, dataDir)
@@ -440,18 +560,27 @@ async function main() {
       writeFile(join(options.output, 'requests.json'), `${JSON.stringify(capture.requests, null, 2)}\n`),
     ])
     assertSuccess('running evaluation scenario', execution)
+    if (options.mnemon === 'on') {
+      const finalState = await inspectData(options.packageRoot, dataDir, workspaceRoot, options.mnemonBinary)
+      await writeFile(join(options.output, 'final-state.json'), `${JSON.stringify(finalState, null, 2)}\n`)
+    }
     const metadata = await gitMetadata(options.packageRoot)
     const manifest = {
       schemaVersion: 1,
       createdAt: new Date().toISOString(),
       provider: options.provider,
       scenario: options.scenario,
+      corpus: options.corpus,
+      mnemon: options.mnemon,
+      routingGuidance: options.routingGuidance,
+      recallMode: options.recallMode,
+      writebackMode: options.writebackMode,
       toolSurface: options.toolSurface,
       idleReviewMs: options.idleReviewMs,
       package: metadata,
       dshVersion: '0.1.1-rc.2',
       mnemonBinary: options.mnemonBinary,
-      artifacts: ['scenario.json', 'seed.json', 'profile.patch.yml', 'session.json', 'requests.json', 'dsh.stdout.log', 'dsh.stderr.log'],
+      artifacts: ['scenario.json', 'seed.json', 'profile.patch.yml', 'session.json', 'requests.json', ...(options.mnemon === 'on' ? ['final-state.json'] : []), 'dsh.stdout.log', 'dsh.stderr.log'],
     }
     await writeFile(join(options.output, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
     process.stdout.write(`${options.output}\n`)

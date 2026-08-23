@@ -145,7 +145,7 @@ function summaryMarkdown(analysis, directory) {
     { label: 'Turn', value: row => row.id },
     { label: 'Memory tools', value: row => row.assessment.memoryTools.join(', ') || 'none' },
     { label: 'Check', value: row => row.assessment.passed ? 'pass' : 'FAIL' },
-    { label: 'Root calls', value: row => row.requestCount },
+    { label: 'Model calls', value: row => row.requestCount },
     { label: 'Prompt tokens', value: row => row.promptTokens },
     { label: 'Completion tokens', value: row => row.completionTokens },
   ])
