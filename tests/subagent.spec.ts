@@ -1255,6 +1255,63 @@ describe('Mnemon root/child tool split', () => {
     expect(JSON.stringify(recall.parameters)).toContain('do not list the catalog only to populate it')
   })
 
+  it('projects status as a bounded health summary without control-plane paths or detailed statistics', async () => {
+    const registered: ToolDefinition[] = []
+    const memoryService = service()
+    vi.mocked(memoryService.status).mockResolvedValue({
+      healthy: true,
+      version: '0.3.0',
+      dshMnemonVersion: '0.3.0',
+      cliPath: '/private/bin/mnemon',
+      commandFound: true,
+      dataDir: '/private/mnemon-data',
+      store: 'project',
+      mnemonDefaultStore: 'project',
+      dshActiveStores: ['project'],
+      writeEnabled: true,
+      timeoutMs: 30_000,
+      defaultRecallLimit: 20,
+      recallQuality: {},
+      memoryBodyDirectory: '/private/mnemon-data/memory-bodies',
+      memoryBodies: [
+        { active: true, providerEnabled: true, healthy: true },
+        { active: true, providerEnabled: true, healthy: false, error: 'connection refused' },
+        { active: false, providerEnabled: false, healthy: false },
+      ],
+      providerServices: [{
+        providerId: 'openviking', label: 'OpenViking', enabled: true, configured: true,
+        status: 'unhealthy', memoryBodyCount: 2, activeMemoryBodyCount: 1, error: 'connection refused',
+      }],
+      stats: {
+        totalInsights: 10, deletedInsights: 1, edgeCount: 4, oplogCount: 12, dbSizeBytes: 4096,
+        byCategory: { decision: 9 }, topEntities: [{ entity: 'secret-project', count: 8 }], dbPath: '/private/project.db',
+      },
+    } as never)
+    const coordinator = { recall: vi.fn(), runtime: vi.fn() } as unknown as MnemonSubagentCoordinator
+    registerTools(
+      { tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape,
+      memoryService,
+      coordinator,
+      { mutate: vi.fn() } as unknown as RuntimeMemoryController,
+      {} as DocumentManager,
+    )
+
+    const status = await registered.find(tool => tool.name === 'mnemon_status')!.execute(
+      {} as never,
+      { agent: parent(), signal: new AbortController().signal },
+    ) as Record<string, unknown>
+
+    expect(status).toMatchObject({
+      healthy: false,
+      commandFound: true,
+      writeEnabled: true,
+      memorySpaces: { total: 3, active: 2, healthy: 1, unhealthy: 1, providerDisabled: 1 },
+      aggregate: { totalInsights: 10, edgeCount: 4, dbSizeBytes: 4096 },
+    })
+    expect(JSON.stringify(status)).not.toMatch(/cliPath|dataDir|memoryBodyDirectory|dbPath|byCategory|topEntities|secret-project/)
+    expect(JSON.stringify(status).length).toBeLessThan(2_000)
+  })
+
   it('enforces automatic topology participation without hiding the management catalog', async () => {
     const registered: ToolDefinition[] = []
     const memoryService = {

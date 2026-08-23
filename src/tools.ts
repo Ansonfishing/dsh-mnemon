@@ -16,6 +16,7 @@ import {
   type MnemonService,
   type MemoryBodyCatalog,
   type Source,
+  type StatusView,
 } from './service.ts'
 
 const text = (value: unknown): Array<{ type: 'text'; text: string }> => [{
@@ -107,6 +108,48 @@ function modelDocumentSearch(result: DocumentSearchResult) {
     total: result.total,
     results,
     hint: 'Document evidence is bounded. Use it, then one focused mnemon_recall only if exact durable history is still missing; do not repeat Document search this turn.',
+  }
+}
+
+/** Keep health diagnostics useful without exposing complete control-plane state. */
+function modelStatus(status: StatusView) {
+  const active = status.memoryBodies.filter(body => body.active && body.providerEnabled !== false)
+  const unhealthy = active.filter(body => !body.healthy)
+  const providers = status.providerServices?.slice(0, 16) ?? []
+  return {
+    healthy: status.healthy && unhealthy.length === 0,
+    ...(status.error === undefined ? {} : { error: boundedToolText(status.error, 1_000) }),
+    ...(status.version === undefined ? {} : { version: boundedToolText(status.version, 120) }),
+    ...(status.dshMnemonVersion === undefined ? {} : { dshMnemonVersion: boundedToolText(status.dshMnemonVersion, 120) }),
+    commandFound: status.commandFound,
+    writeEnabled: status.writeEnabled,
+    memorySpaces: {
+      total: status.memoryBodies.length,
+      active: active.length,
+      healthy: active.length - unhealthy.length,
+      unhealthy: unhealthy.length,
+      providerDisabled: status.memoryBodies.filter(body => body.providerEnabled === false).length,
+    },
+    providers: providers.map(provider => ({
+      providerId: provider.providerId,
+      label: boundedToolText(provider.label, 120),
+      enabled: provider.enabled,
+      configured: provider.configured,
+      status: provider.status,
+      memoryBodyCount: provider.memoryBodyCount,
+      activeMemoryBodyCount: provider.activeMemoryBodyCount,
+      ...(provider.error === undefined ? {} : { error: boundedToolText(provider.error, 500) }),
+    })),
+    omittedProviderCount: Math.max(0, (status.providerServices?.length ?? 0) - providers.length),
+    ...(status.stats === undefined ? {} : {
+      aggregate: {
+        totalInsights: status.stats.totalInsights,
+        deletedInsights: status.stats.deletedInsights,
+        edgeCount: status.stats.edgeCount,
+        oplogCount: status.stats.oplogCount,
+        dbSizeBytes: status.stats.dbSizeBytes,
+      },
+    }),
   }
 }
 
@@ -223,10 +266,12 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_status',
-    description: 'Check configured memory-provider integrations, active Memory Spaces, aggregate local database statistics, and configuration. Use when a memory operation fails or the user asks about memory health.',
+    description: 'Check a bounded health summary for memory-provider integrations and Memory Spaces. Use only when a memory operation fails or the user asks about memory health; full paths, settings, directories, and per-Space statistics stay in the control plane.',
     parameters: { type: 'object', properties: {} },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    execute: (_args: unknown, exec: ToolExecution) => runtimeFor(exec).service.status(exec.signal),
+    async execute(_args: unknown, exec: ToolExecution) {
+      return modelStatus(await runtimeFor(exec).service.status(exec.signal))
+    },
     presentCall: () => ({ card: 'generic', title: 'Check Mnemon status', kind: 'other' }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon status checked' }),
   } as never))
