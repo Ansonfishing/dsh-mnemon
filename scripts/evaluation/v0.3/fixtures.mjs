@@ -382,7 +382,7 @@ export const recallMatrixScenario = {
     {
       id: 'matrix-negative-control',
       prompt: '[EVAL:matrix-negative-control] 把“证据优先”翻译成英文，只给译文，不要查询任何记忆。',
-      expected: { mustContainAny: [['evidence first', 'evidence comes first', 'prioritize evidence']], memoryTools: [] },
+      expected: { mustContainAny: [['evidence first', 'evidence-first', 'evidence comes first', 'prioritize evidence']], memoryTools: [] },
     },
   ],
 }
