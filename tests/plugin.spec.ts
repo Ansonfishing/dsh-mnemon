@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apply, inject } from '../src/index.ts'
+import { memoryExtensions } from '../packages/extension-sdk/src/index.ts'
 
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
   dsh: { client: { inject: string[]; platform: string } }
@@ -38,6 +39,7 @@ function context(options: { connection?: boolean; workspaceRegistry?: boolean } 
   const registrations: unknown[] = []
   const commands: unknown[] = []
   const listeners: unknown[] = []
+  const effectCleanups: Array<() => unknown> = []
   const ctx = {
     tools: { register: vi.fn((tool: unknown) => { tools.push(tool) }) },
     commands: { register: vi.fn((command: unknown) => { commands.push(command) }) },
@@ -69,11 +71,19 @@ function context(options: { connection?: boolean; workspaceRegistry?: boolean } 
       callback(ctx)
     }),
     on: vi.fn((...args: unknown[]) => { listeners.push(args); return () => {} }),
-    effect: vi.fn((callback: () => unknown) => { callback(); return () => {} }),
+    effect: vi.fn((callback: () => unknown) => {
+      const cleanup = callback()
+      if (typeof cleanup === 'function') effectCleanups.push(cleanup as () => unknown)
+      return () => {
+        const index = effectCleanups.indexOf(cleanup as () => unknown)
+        if (index >= 0) effectCleanups.splice(index, 1)
+        if (typeof cleanup === 'function') cleanup()
+      }
+    }),
   }
   if (options.connection !== false) Object.assign(ctx, { connection })
   if (options.workspaceRegistry !== false) Object.assign(ctx, { workspaceRegistry: { get: vi.fn(), list: vi.fn(() => []) } })
-  return { ctx, tools, sections, contexts, variables, channels, registrations, commands, listeners }
+  return { ctx, tools, sections, contexts, variables, channels, registrations, commands, listeners, effectCleanups }
 }
 
 describe('dsh-mnemon plugin composition', () => {
@@ -287,5 +297,22 @@ describe('dsh-mnemon plugin composition', () => {
 
     expect(() => coreRegistration[2].validate({ cliPath: '/fake/mnemon', storageScope: 'custom', dataDir: invalidRoot })).toThrow()
     await expect(packRegistration[1]('target', {})).resolves.toMatchObject({ ok: true, value: { root: initialRoot } })
+  })
+
+  it('retires uncommitted settings candidates and disposes the active runtime with the Cordis effect', async () => {
+    const fixture = context()
+    const targets = (memoryExtensions as unknown as { targets: Set<unknown> }).targets
+    const baseline = targets.size
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
+    expect(targets.size).toBe(baseline + 1)
+
+    const coreRegistration = fixture.registrations.find(registration => (registration as unknown[])[0] === 'mnemon') as [string, unknown, { validate: (value: object) => void }]
+    coreRegistration[2].validate({ cliPath: '/fake/mnemon', dataDir: dataDir() })
+    expect(targets.size).toBe(baseline + 2)
+    await Promise.resolve()
+    expect(targets.size).toBe(baseline + 1)
+
+    for (const cleanup of fixture.effectCleanups.splice(0).reverse()) cleanup()
+    expect(targets.size).toBe(baseline)
   })
 })

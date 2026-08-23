@@ -55,20 +55,38 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   const ctx = rawContext as unknown as HostContextShape
   const extensions = memoryExtensions
   ctx.provide?.('mnemonMemory', extensions)
-  const prepared = new WeakMap<object, MnemonRuntimeGraph>()
+  const prepared = new Map<object, { graph: MnemonRuntimeGraph; token: symbol }>()
+  const disposePrepared = (): void => {
+    for (const candidate of prepared.values()) candidate.graph.dispose()
+    prepared.clear()
+  }
   const settings = ctx.settings.register<Config>('mnemon', Config, {
     base: config,
     applies: 'live',
     validate: value => {
-      prepared.set(value, createRuntimeGraph(resolveConfig(value), undefined, extensions))
+      disposePrepared()
+      const candidate = { graph: createRuntimeGraph(resolveConfig(value), undefined, extensions), token: Symbol('prepared-runtime') }
+      prepared.set(value, candidate)
+      // Settings commits synchronously after validation. A standalone/cancelled
+      // validation has no commit event, so retire its attached graph next tick.
+      queueMicrotask(() => {
+        if (prepared.get(value)?.token !== candidate.token) return
+        prepared.delete(value)
+        candidate.graph.dispose()
+      })
     },
   })
   const initialSettings = settings.get()
-  const runtime = new LiveMnemonRuntime(prepared.get(initialSettings) ?? createRuntimeGraph(resolveConfig(initialSettings), undefined, extensions), optionalWorkspaceRegistry(ctx), ctx.agents, extensions)
+  const initialCandidate = prepared.get(initialSettings)
+  if (initialCandidate !== undefined) prepared.delete(initialSettings)
+  const runtime = new LiveMnemonRuntime(initialCandidate?.graph ?? createRuntimeGraph(resolveConfig(initialSettings), undefined, extensions), optionalWorkspaceRegistry(ctx), ctx.agents, extensions)
   const resolved = runtime.config
   ctx.on('settings/updated', ((namespace: string, next: Config) => {
     if (namespace !== 'mnemon') return
-    runtime.swap(prepared.get(next) ?? createRuntimeGraph(resolveConfig(next), undefined, extensions))
+    const candidate = prepared.get(next)
+    if (candidate !== undefined) prepared.delete(next)
+    disposePrepared()
+    runtime.swap(candidate?.graph ?? createRuntimeGraph(resolveConfig(next), undefined, extensions))
   }) as never)
   ctx.settings.register('mnemon-ui', InteractionConfig, {
     base: resolveInteractionConfig(resolved.conversationInteraction),
@@ -83,7 +101,14 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     return { provider, model }
   })
   const lifecycle = new MnemonLifecycle(ctx, coordinator, runtime.config, runtime)
-  ctx.effect(() => lifecycle.start(), 'dsh-mnemon.lifecycle-root()')
+  ctx.effect(() => {
+    const stop = lifecycle.start()
+    return () => {
+      stop()
+      disposePrepared()
+      runtime.dispose()
+    }
+  }, 'dsh-mnemon.lifecycle-root()')
   registerTools(ctx, runtime, coordinator)
   registerCommands(ctx.commands, runtime, coordinator)
   registerGuidance(ctx, resolved)
