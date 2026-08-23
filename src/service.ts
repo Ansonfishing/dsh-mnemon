@@ -16,6 +16,7 @@ import { finalizeLlmPlacement, prepareMemoryPlacement, rulesOnlyPlacement, type 
 import { MEMORY_PROVIDER_CATALOG, memoryProviderDescriptor } from './providers/catalog.ts'
 import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus, type ProviderSearchResult } from './providers/provider.ts'
 import { memoryProviderAdapterFactories, type MemoryProviderAdapterRegistry } from './providers/registry.ts'
+import { lexicalSearchTokens, lexicalTokenMatchCount } from './search-tokens.ts'
 import {
   applyRecallQualityPolicy,
   prepareRecallQualityPolicy,
@@ -140,8 +141,9 @@ function readSource(
 const MAX_EXACT_SEARCH_ANCHORS = 8
 const EXACT_SEARCH_ANCHOR = /(?<!\d)\d{4}-\d{1,2}-\d{1,2}(?!\d)|(?<![A-Za-z0-9])[A-Za-z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)+(?![A-Za-z0-9])|(?<!\d)\d+(?:[.,]\d+)?\s*(?:[%％]|percent(?:age)?)(?![A-Za-z])|百分之\s*\d+(?:[.,]\d+)?|(?<!\d)\d{1,2}:\d{2}(?!\d)|(?<![A-Za-z0-9])v?\d+\.\d+(?:\.\d+)*(?![A-Za-z0-9])|(?<![\d.])\d+(?![\d.%％:-])/giu
 
-interface ExactSearchAnchorPlan {
-  anchors: string[]
+interface NativeSearchRecoveryPlan {
+  kind: 'exact' | 'lexical'
+  terms: string[]
   query: string
   requiredMatches: number
 }
@@ -160,30 +162,43 @@ function normalizedExactText(value: string): string {
  * should not be allowed to erase. This is a deterministic fallback inside an
  * already-authorized search, not another Recall trigger or model decision.
  */
-function exactSearchAnchorPlan(query: string): ExactSearchAnchorPlan | undefined {
+function exactSearchAnchorPlan(query: string): NativeSearchRecoveryPlan | undefined {
   const anchors = [...new Set([...query.matchAll(EXACT_SEARCH_ANCHOR)].map(match => normalizedExactText(match[0])))]
     .slice(0, MAX_EXACT_SEARCH_ANCHORS)
   if (anchors.length < 2) return undefined
   return {
-    anchors,
+    kind: 'exact',
+    terms: anchors,
     query: anchors.join(' '),
     requiredMatches: Math.min(4, anchors.length),
   }
 }
 
-function exactAnchorMatchCount(content: string, plan: ExactSearchAnchorPlan): number {
-  const normalized = normalizedExactText(content)
-  return plan.anchors.filter(anchor => normalized.includes(anchor)).length
+function lexicalSearchRecoveryPlan(query: string): NativeSearchRecoveryPlan | undefined {
+  const tokens = lexicalSearchTokens(query, 32)
+  if (tokens.length < 4) return undefined
+  return {
+    kind: 'lexical',
+    terms: tokens,
+    query,
+    requiredMatches: Math.max(2, Math.ceil(tokens.length / 4)),
+  }
 }
 
-function mergeExactAnchorResults(
+function recoveryMatchCount(content: string, plan: NativeSearchRecoveryPlan): number {
+  if (plan.kind === 'lexical') return lexicalTokenMatchCount(content, plan.terms)
+  const normalized = normalizedExactText(content)
+  return plan.terms.filter(anchor => normalized.includes(anchor)).length
+}
+
+function mergeRecoveryResults(
   original: readonly Insight[],
-  exact: readonly Insight[],
-  plan: ExactSearchAnchorPlan,
+  recovered: readonly Insight[],
+  plan: NativeSearchRecoveryPlan,
   limit: number,
 ): Insight[] {
-  const admitted = exact
-    .map(insight => ({ insight, matches: exactAnchorMatchCount(insight.content, plan) }))
+  const admitted = recovered
+    .map(insight => ({ insight, matches: recoveryMatchCount(insight.content, plan) }))
     .filter(candidate => candidate.matches >= plan.requiredMatches)
     .sort((left, right) => right.matches - left.matches || (right.insight.score ?? 0) - (left.insight.score ?? 0))
     .map(candidate => candidate.insight)
@@ -649,8 +664,8 @@ export class MnemonService {
         }
       }
     }))
-    const exactPlan = mode === 'smart' && category === undefined && source === undefined && intent === undefined
-      ? exactSearchAnchorPlan(query)
+    const recoveryPlan = mode === 'smart' && category === undefined && source === undefined && intent === undefined
+      ? exactSearchAnchorPlan(query) ?? lexicalSearchRecoveryPlan(query)
       : undefined
     const evaluate = (selectedBatches: typeof batches) => {
       const candidates: RecallQualityCandidate[] = []
@@ -675,30 +690,30 @@ export class MnemonService {
       return { hints, quality: applyRecallQualityPolicy(preparedPolicy, candidates, qualityContext) }
     }
     let evaluation = evaluate(batches)
-    const hasExactEvidence = exactPlan !== undefined && evaluation.quality.selected.some(candidate => (
-      exactAnchorMatchCount(candidate.candidate.insight.content, exactPlan) >= exactPlan.requiredMatches
+    const hasRecoveryEvidence = recoveryPlan !== undefined && evaluation.quality.selected.some(candidate => (
+      recoveryMatchCount(candidate.candidate.insight.content, recoveryPlan) >= recoveryPlan.requiredMatches
     ))
-    if (exactPlan !== undefined && !hasExactEvidence) {
+    if (recoveryPlan !== undefined && !hasRecoveryEvidence) {
       batches = await Promise.all(batches.map(async batch => {
         if (batch.body.provider.id !== 'mnemon-native' || batch.source.status === 'unsupported' || batch.source.status === 'unavailable') return batch
         try {
           const provider = this.providerFor(batch.body)
-          const exact = await provider.search(batch.body, {
-            query: exactPlan.query,
+          const recovered = await provider.search(batch.body, {
+            query: recoveryPlan.query,
             mode: 'keyword',
             limit: Math.min(limit, preparedPolicy.candidateLimit),
           }, signal)
-          const recovered = exact.results.some(insight => exactAnchorMatchCount(insight.content, exactPlan) >= exactPlan.requiredMatches)
-          const results = mergeExactAnchorResults(batch.result.results, exact.results, exactPlan, preparedPolicy.candidateLimit)
+          const admitted = recovered.results.some(insight => recoveryMatchCount(insight.content, recoveryPlan) >= recoveryPlan.requiredMatches)
+          const results = mergeRecoveryResults(batch.result.results, recovered.results, recoveryPlan, preparedPolicy.candidateLimit)
           return {
             ...batch,
             result: {
               results,
-              ...(recovered || batch.result.hint === undefined ? {} : { hint: batch.result.hint }),
+              ...(admitted || batch.result.hint === undefined ? {} : { hint: batch.result.hint }),
             },
           }
         } catch {
-          // Exact-anchor recovery is an optional local fallback. The original
+          // Deterministic Native recovery is an optional local fallback. The original
           // successful result remains authoritative if it is unavailable.
           return batch
         }

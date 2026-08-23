@@ -58,8 +58,9 @@ node scripts/evaluation/v0.3/run.mjs --provider real --scenario context-only \
 overflow archive/compaction/retry path. `--scenario single-recall` is a
 one-turn natural-language recall benchmark suitable for repeated A/B samples;
 `single-recall-fault` uses a known misleading paraphrase that misses the first
-native smart result and therefore gates deterministic exact-anchor recovery
-after the LLM has explicitly chosen Recall.
+native smart result and therefore gates deterministic Native keyword recovery
+after the LLM has explicitly chosen Recall. The direct retrieval matrix also
+contains a focused non-numeric correction query to gate lexical recovery.
 `--routing-guidance off --recall-mode off --writeback-mode off` isolates the
 base protocol and tool-schema cost. `--package-root` can point to a built older
 worktree for a like-for-like baseline. The harness detects pre-TurnView v0.2

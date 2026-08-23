@@ -15,6 +15,7 @@ import type { HostAgent } from './contracts.ts'
 import type { DocumentMutation, DocumentMutationResult, DocumentRecord, DocumentSearchResult, DocumentSnapshot, DocumentStatus, DocumentView } from './shared/contracts.ts'
 import type { AuthorityCommitRecorder } from './memory-receipts.ts'
 import type { MemoryMigrationLineage } from '../packages/contracts/src/index.ts'
+import { lexicalSearchTokens } from './search-tokens.ts'
 
 export type { DocumentMutation, DocumentMutationResult, DocumentRecord, DocumentSearchResult, DocumentSnapshot, DocumentStatus, DocumentView } from './shared/contracts.ts'
 
@@ -249,7 +250,7 @@ export class DocumentController {
       const index = this.readIndex()
       const beforeRevision = indexRevision(index)
       const normalized = query.trim().normalize('NFKC').toLocaleLowerCase()
-      const tokens = normalized.match(/[\p{L}\p{N}_-]+/gu) ?? []
+      const tokens = lexicalSearchTokens(normalized)
       const includeArchived = options.includeArchived === true
       const limit = Math.max(1, Math.min(50, Math.trunc(options.limit ?? 20)))
       const ranked = index.documents

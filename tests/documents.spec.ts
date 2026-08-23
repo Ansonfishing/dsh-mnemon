@@ -54,6 +54,20 @@ describe('Mnemon Documents control plane', () => {
     expect(result.results[0]).toMatchObject({ status: 'active', score: expect.any(Number) })
   })
 
+  it('matches focused Chinese queries by bounded bigrams instead of one full sentence token', async () => {
+    const controller = new DocumentController(workspace())
+    const release = await controller.mutate({
+      action: 'create',
+      title: 'Project Lantern 发布运行手册',
+      content: '数据库 migration 完成后，依次提升到 5%、12%、35%、65%、100%。自动回滚按错误率和延迟阈值执行。',
+    })
+    await controller.mutate({ action: 'create', title: '事故记录', content: '数据库故障复盘与发布历史。' })
+
+    const result = await controller.search('数据库迁移后灰度阶段顺序 自动回滚阈值 发布手册')
+    expect(result.results[0]?.id).toBe(release.document.id)
+    expect(result.results[0]?.score).toBeGreaterThan(result.results[1]?.score ?? 0)
+  })
+
   it('uses actual active bytes, excludes cold archives, and proposes LRU eviction', async () => {
     const root = workspace()
     let tick = 0

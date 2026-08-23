@@ -387,6 +387,31 @@ describe('MnemonService', () => {
     ]), expect.anything())
   })
 
+  it('recovers a lexically precise Native result when graph search loses the user wording', async () => {
+    const query = '普通用户是否应该选择或理解 View id？过去的明确纠正是什么？'
+    const process = vi.fn<ProcessRunner>(async (_command, args) => {
+      if (args.includes('search')) return {
+        stdout: JSON.stringify([
+          { id: 'target', content: '用户曾明确纠正：View 是内部 generation snapshot，不应要求普通用户选择或理解 View id。', score: 0.52 },
+          { id: 'zoom', content: '收敛版移除了模型可见 View id 和 Zoom。', score: 0.3 },
+        ]),
+        stderr: '', exitCode: 0,
+      }
+      return {
+        stdout: JSON.stringify({ results: [{ id: 'generic', content: '架构说明默认使用中文，UI 变更需要用户明确授权。', score: 0.4 }] }),
+        stderr: '', exitCode: 0,
+      }
+    })
+    const config = resolveConfig({ cliPath: '/fake/mnemon', dataDir: populatedDataDir(), store: 'work' })
+    const runner = createRunner(config, process)
+    const service = new MnemonService(runner, config, new MemoryBodyRegistry(runner, true))
+
+    const result = await service.search({ query, limit: 3 })
+    expect(result.results.map(insight => insight.id)).toEqual(['target', 'generic'])
+    expect(JSON.stringify(result.results)).not.toContain('收敛版移除')
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['search', query]), expect.anything())
+  })
+
   it('does not run exact-anchor recovery when smart search already found covering evidence', async () => {
     const process = vi.fn<ProcessRunner>(async () => ({
       stdout: JSON.stringify({ results: [{
