@@ -216,7 +216,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_recall',
-    description: 'Recall bounded durable evidence from the MemorySource pinned to this turn. Make one focused query: the Host permits one Provider Recall, validates requested Memory Spaces, ignores brittle model-selected category filters, and replays admitted evidence if called again. Omit memoryBodyIds to search every pinned active space.',
+    description: 'Recall bounded durable evidence from this turn\'s pinned MemorySource only when the current question needs history. The Host allows one initial query plus one LLM-chosen different-query refinement, shares one evidence envelope, validates Memory Spaces, ignores brittle semantic filters, and replays duplicate queries. Omit memoryBodyIds to search every pinned active space.',
     parameters: {
       type: 'object',
       properties: {

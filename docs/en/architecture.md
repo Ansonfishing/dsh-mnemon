@@ -141,10 +141,12 @@ Agent calls mnemon_recall(query, optional memoryBodyIds)
   -> reject requested IDs outside the pinned set
   -> MnemonService searches authorized Providers concurrently
   -> normalize quality and reciprocal-rank fusion
-  -> omit the authorized ID set; return at most 12 compact results
+  -> admit at most 4 initial results while reserving recovery capacity
+  -> LLM either answers or explicitly submits one different refinement query
+  -> deduplicate both attempts inside one 6-result / 4,800-character envelope
 ```
 
-The model-facing result omits the complete Source catalog, selected-ID echo, and routing diagnostics. It limits each evidence body to 2,000 characters, tags/entities to eight each, and the aggregate hint to 1,000 characters. `mnemon_related` uses the same pinned-source check and evidence envelope. Long-term semantic writes, relationships, deletion, and Memory Space creation or updates remain supervised where semantic judgment is useful, while the deterministic service first checks the target provider's capabilities. Mnemon Native remains the complete reference implementation; external adapters expose only their exact, async, graph, browse, related, and deletion semantics. Ordinary Runtime Memory and Document mutations remain deterministic.
+The model decides whether Recall happens at all; ordinary turns therefore perform zero Provider Recall. After an initial call, it may explicitly make one materially different query only when the returned evidence is insufficient. Same-query calls join or replay, a third distinct query cannot reach a Provider, and both attempts together admit at most six results, 1,200 characters per result, and 4,800 content characters. The initial attempt is capped at four results and 3,600 content characters so the recovery path always has capacity. The model-facing result omits the complete Source catalog, selected-ID echo, and routing diagnostics; tags and entities are limited to eight each. `mnemon_related` uses the same pinned-source check and a separate bounded envelope. Long-term semantic writes, relationships, deletion, and Memory Space creation or updates remain supervised where semantic judgment is useful, while the deterministic service first checks the target provider's capabilities. Mnemon Native remains the complete reference implementation; external adapters expose only their exact, async, graph, browse, related, and deletion semantics. Ordinary Runtime Memory and Document mutations remain deterministic.
 
 Memory Space removal is a separate dangerous action. Mnemon Native invokes `store remove` after confirmation and removes registration only after success. Every third-party provider uses **Disconnect** semantics: it removes local connection metadata and never deletes provider memory.
 

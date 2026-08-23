@@ -51,17 +51,23 @@ MnemonService searches authorized Providers concurrently
 quality normalization + reciprocal-rank fusion
           |
           v
-丢弃低相关项并去重；最多准入 6 条结果，
-每条正文最多 1,200 字符，总正文最多 4,800 字符
+丢弃低相关项；首次最多准入 4 条 / 3,600 字符
           |
           v
-只返回回答所需 evidence 与 provenance；省略原始分数和诊断
+LLM 判断 evidence 是否足够
+          | 足够                        | 不足
+          v                             v
+直接回答，不再 Recall             显式提交一个不同查询
+                                        |
+                                        v
+                              再检索一次、去重并关闭 Recall
           |
           v
-在当前 root 回合缓存已准入结果
+两次在当前 root 回合共享至多 6 条、每条 1,200 字符、
+总正文 4,800 字符的 envelope
 ```
 
-模型工具不暴露 `category`、`source` 或 `intent` 过滤器：模型猜错过滤条件不能遮住精确证据。一个 root 回合只执行一次 Provider Recall；完全相同、变体或并发重复请求会 join 或重放同一份已准入结果，不再查询 Provider，也不会返回容易诱发继续搜索的空数组。随后至多执行一次 Related，而且只能使用本轮 Recall 已准入的 `memoryBodyId + id`；重复 Related 同样重放结果。
+模型工具不暴露 `category`、`source` 或 `intent` 过滤器：模型猜错过滤条件不能遮住精确证据。Recall 并非强制执行，普通 root 回合是 0 次 Provider 查询。LLM 主动调用后，Host 允许一个首次查询；只有 LLM 查看 evidence 后仍认为不足，才允许再提交一个实质不同的精炼查询。同查询和并发重复请求会 join 或重放；第三个不同查询只重放最新 evidence，不再到达 Provider。随后至多执行一次 Related，而且只能使用两次 Recall 任一已准入的 `memoryBodyId + id`；重复 Related 同样重放结果。
 
 Document search 另有独立边界：最多 4 条记录、每条最多 2,600 个查询附近字符、总正文最多 6,000 字符。模型侧 Memory Space 目录最多 16 项，`mnemon_status` 只返回紧凑健康汇总。完整记录、Provider 设置、路径和逐 Space 统计仍由 Web/RPC 控制面读取，不进入对话历史。
 

@@ -51,17 +51,23 @@ MnemonService searches authorized Providers concurrently
 quality normalization + reciprocal-rank fusion
           |
           v
-drop low relevance, deduplicate, then admit at most 6 results
-with at most 1,200 characters each and 4,800 total content characters
+drop low relevance and admit at most 4 initial results / 3,600 characters
           |
           v
-return only answer evidence and provenance; omit raw scores and diagnostics
+LLM judges whether the evidence is sufficient
+          | yes                         | no
+          v                             v
+answer without more Recall       explicitly submit one different query
+                                        |
+                                        v
+                              search once, deduplicate, and close Recall
           |
           v
-cache the admitted result for this root turn
+both attempts share at most 6 results, 1,200 characters each,
+and 4,800 total content characters for this root turn
 ```
 
-The model-facing tool deliberately exposes no `category`, `source`, or `intent` filter: a guessed filter must not hide exact evidence. One root turn can issue one Provider Recall. Exact, variant, and concurrent repeats join or replay the same admitted result instead of querying again or returning an ambiguous empty array. One Related traversal may follow, but only from a `memoryBodyId + id` admitted by that Recall; its repeated result is replayed in the same way.
+The model-facing tool deliberately exposes no `category`, `source`, or `intent` filter: a guessed filter must not hide exact evidence. Recall is not forced: a root turn normally issues zero Provider queries. If the LLM calls it, the Host permits one initial query and at most one LLM-chosen, materially different refinement after evidence inspection. Same-query and concurrent repeats join or replay; a third distinct query replays the latest evidence without reaching a Provider. One Related traversal may follow, but only from a `memoryBodyId + id` admitted by either Recall attempt; its repeated result is replayed in the same way.
 
 Document search is separately bounded to four records, 2,600 query-local characters per record, and 6,000 content characters total. The model-facing Memory Space catalog is capped at 16 entries, and `mnemon_status` returns only a compact health aggregate. Full records, provider settings, paths, and per-Space statistics remain available to Web/RPC control-plane surfaces, not conversation history.
 

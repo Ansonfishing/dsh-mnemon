@@ -173,6 +173,9 @@ describe('dsh-mnemon plugin composition', () => {
       expect.objectContaining({ output: expect.objectContaining({ schema: { type: 'object', additionalProperties: true } }) }),
     ]))
     expect(fixture.tools.every(tool => (tool as { output: { schema: { type: string } } }).output.schema.type !== 'json')).toBe(true)
+    const recallTool = fixture.tools.find(tool => (tool as { name: string }).name === 'mnemon_recall') as { description: string }
+    expect(recallTool.description).toContain('one initial query plus one LLM-chosen different-query refinement')
+    expect(recallTool.description).toContain('only when the current question needs history')
     expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:routing' })])
     expect(fixture.contexts).toEqual([])
     expect(fixture.variables).toHaveLength(1)
