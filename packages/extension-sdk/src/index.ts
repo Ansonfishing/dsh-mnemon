@@ -1,6 +1,6 @@
 import type { MemoryAdapterRegistration, MemoryCatalog, MemoryLayerRegistration, MemoryStrategyRegistration } from '../../kernel/src/catalog.ts'
 import type { MemoryGuardRegistration, MemoryKernel } from '../../kernel/src/kernel.ts'
-import type { MemorySource, MemoryViewManager } from '../../kernel/src/view.ts'
+import type { MemorySource, MemoryTurnViewManager } from '../../kernel/src/view.ts'
 
 const EXTENSION_ID = /^[a-z][a-z0-9-]{0,127}$/u
 
@@ -22,17 +22,20 @@ export interface MemoryExtension {
   guards?: readonly MemoryGuardRegistration[]
 }
 
-export interface MemoryExtensionAttachment {
+export interface MemoryBootAttachment {
   bindKernel(kernel: MemoryKernel): void
-  bindViewManager(manager: MemoryViewManager): void
+  bindTurnViews(manager: MemoryTurnViewManager): void
   dispose(): void
   release(): void
 }
 
+/** Compatibility name for the v0.3 pre-release API. */
+export type MemoryExtensionAttachment = MemoryBootAttachment
+
 interface AttachedTarget {
   catalog: MemoryCatalog
   kernel?: MemoryKernel
-  viewManager?: MemoryViewManager
+  viewManager?: MemoryTurnViewManager
   releases: Map<string, () => void>
   released: boolean
 }
@@ -42,10 +45,11 @@ function reverseDispose(disposers: Array<() => void>): void {
 }
 
 /**
- * Host-global extension control plane. Every runtime graph receives the same
- * contribution set while retaining its own Catalog, Topology and Kernel state.
+ * Minimal Boot assembler for one Host. It applies the same captured extension
+ * set to every runtime graph while each graph owns its Catalog, Kernel, and
+ * TurnView state. Cordis remains responsible for lifecycle and isolation.
  */
-export class MemoryExtensionHost {
+export class MemoryBoot {
   private readonly extensions = new Map<string, MemoryExtension>()
   private readonly targets = new Set<AttachedTarget>()
 
@@ -83,7 +87,7 @@ export class MemoryExtensionHost {
     }
   }
 
-  attach(catalog: MemoryCatalog): MemoryExtensionAttachment {
+  attach(catalog: MemoryCatalog): MemoryBootAttachment {
     const target: AttachedTarget = { catalog, releases: new Map(), released: false }
     try {
       for (const extension of this.extensions.values()) {
@@ -124,9 +128,9 @@ export class MemoryExtensionHost {
           throw error
         }
       },
-      bindViewManager: manager => {
+      bindTurnViews: manager => {
         if (target.released) throw new Error('memory extension attachment is released')
-        if (target.viewManager !== undefined) throw new Error('memory extension attachment already has a View manager')
+        if (target.viewManager !== undefined) throw new Error('memory Boot attachment already has a TurnView manager')
         target.viewManager = manager
         const sourceReleases = new Map<string, () => void>()
         try {
@@ -245,15 +249,21 @@ export class MemoryExtensionHost {
   }
 }
 
+/** Compatibility name for the v0.3 pre-release API. */
+export { MemoryBoot as MemoryExtensionHost }
+
 export function defineMemoryExtension<T extends MemoryExtension>(extension: T): T {
   return extension
 }
 
-/** Process-global registry, allowing extension modules to contribute before the DSH Host mounts. */
-export const memoryExtensions = new MemoryExtensionHost()
+/** Process-global Boot, allowing extensions to contribute before the DSH Host mounts. */
+export const memoryBoot = new MemoryBoot()
+
+/** Compatibility name for the v0.3 pre-release API. */
+export const memoryExtensions = memoryBoot
 
 export function registerMemoryExtension(extension: MemoryExtension): () => void {
-  return memoryExtensions.register(extension)
+  return memoryBoot.register(extension)
 }
 
 export type { MemoryAdapterRegistration, MemoryLayerRegistration, MemoryStrategyRegistration } from '../../kernel/src/catalog.ts'

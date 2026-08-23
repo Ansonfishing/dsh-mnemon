@@ -12,7 +12,7 @@ import { MemoryKernel } from './memory-system/kernel.ts'
 import { registerDefaultMemorySystem } from './memory-system/defaults.ts'
 import { MemoryTopologyManager } from './memory-system/topology.ts'
 import { registerBuiltinMemoryAdapters } from './providers/memory-system.ts'
-import type { MemoryExtensionHost } from '../packages/extension-sdk/src/index.ts'
+import type { MemoryBoot } from '../packages/extension-sdk/src/index.ts'
 import type { MemoryViewManager } from '../packages/kernel/src/index.ts'
 import { createDefaultMemoryViewManager } from './memory-view.ts'
 import { MemoryReceiptBridge, type AuthorityCommitRecorder } from './memory-receipts.ts'
@@ -45,7 +45,7 @@ export interface MnemonAgentRuntimeSource {
  * validate and initialize the selected storage root, so a failed candidate is
  * rejected by DSH settings validation without disturbing the active graph.
  */
-export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: string, extensions?: MemoryExtensionHost): MnemonRuntimeGraph {
+export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: string, extensions?: MemoryBoot): MnemonRuntimeGraph {
   const memoryCatalog = new MemoryCatalog()
   registerDefaultMemorySystem(memoryCatalog)
   registerBuiltinMemoryAdapters(memoryCatalog)
@@ -90,7 +90,7 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: strin
       }
     })
     const memoryViews = createDefaultMemoryViewManager(memoryKernel, { runtimeMemory, documents, service })
-    extensionAttachment?.bindViewManager(memoryViews)
+    extensionAttachment?.bindTurnViews(memoryViews)
     memoryViews.assertSourcesReady()
     receiptBridge = new MemoryReceiptBridge(memoryKernel, memoryViews)
     const detachReceiptSink = memoryKernel.registerReceiptSink(receiptBridge)
@@ -156,7 +156,7 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
   readonly memoryKernel: MemoryKernel
   readonly memoryViews: MemoryViewManager
 
-  constructor(initial: MnemonRuntimeGraph, private readonly workspaceRegistry?: HostWorkspaceRegistry, private readonly agents?: HostAgentsService, private readonly extensions?: MemoryExtensionHost) {
+  constructor(initial: MnemonRuntimeGraph, private readonly workspaceRegistry?: HostWorkspaceRegistry, private readonly agents?: HostAgentsService, private readonly extensions?: MemoryBoot) {
     this.current = initial
     this.config = liveProxy(() => this.current.config)
     this.runner = liveProxy(() => this.current.runner)

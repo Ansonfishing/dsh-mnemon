@@ -1,12 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
-import { MemoryExtensionHost } from '../packages/extension-sdk/src/index.ts'
+import { MemoryBoot, MemoryExtensionHost, memoryBoot, memoryExtensions } from '../packages/extension-sdk/src/index.ts'
 import { MemoryCatalog, MemoryKernel, MemoryTopologyManager, MemoryViewManager, type MemoryStrategyRegistration } from '../packages/kernel/src/index.ts'
 import { DEFAULT_THREE_TIER_TOPOLOGY, registerDefaultMemorySystem } from '../packages/strategy-default-three-tier/src/index.ts'
 import { defineMemoryStrategyPlugin, replayMemoryStrategy } from '../packages/strategy-sdk/src/index.ts'
 
 describe('Memory extension workspace SDK', () => {
+  it('exposes MemoryBoot as the preferred minimal assembler with stable pre-release aliases', () => {
+    expect(MemoryExtensionHost).toBe(MemoryBoot)
+    expect(memoryExtensions).toBe(memoryBoot)
+  })
+
   it('attaches catalog contributions and monotonic guards to each runtime generation', async () => {
-    const host = new MemoryExtensionHost()
+    const host = new MemoryBoot()
     const disposeExtension = host.register({
       descriptor: { id: 'example-extension', version: '1.0.0', label: 'Example', description: 'Test contribution.' },
       layers: [{
@@ -76,7 +81,7 @@ describe('Memory extension workspace SDK', () => {
     const kernel = new MemoryKernel(catalog, topology)
     attachment.bindKernel(kernel)
     const views = new MemoryViewManager(kernel)
-    attachment.bindViewManager(views)
+    attachment.bindTurnViews(views)
 
     expect(() => disposeSource()).toThrow('no MemorySource: episodes')
     expect(host.descriptors().map(descriptor => descriptor.id)).toContain('episodes-source')
