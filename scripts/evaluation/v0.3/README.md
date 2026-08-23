@@ -142,7 +142,11 @@ logs before failing the run. `--execution-timeout-ms` can extend the default
 300-second ceiling for a diagnostic rerun without changing the release pass
 criterion. `--max-tokens` overrides a fixture's root response budget; a release
 suite case may also pin that value explicitly and records the effective budget
-in each manifest.
+in each manifest. The recall matrix and Runtime mutation journey use 4,096 so
+an occasional long reasoning trace cannot turn an otherwise correct tool call
+into an artificial 1,024/1,536-token failure. Resumption validates the complete
+case configuration as well as the package commit, so changing a pinned budget
+cannot silently reuse incomparable evidence.
 
 Request bodies contain the synthetic evaluation corpus and conversation, so
 they should be treated as evaluation evidence rather than committed fixtures.

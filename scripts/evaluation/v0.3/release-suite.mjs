@@ -22,8 +22,8 @@ const CASES = [
   { id: 'continuous-conversation', provider: 'real', scenario: 'real-conversation', repetitions: 2 },
   { id: 'autonomous-recall', provider: 'real', scenario: 'autonomous-recall', repetitions: 2 },
   { id: 'isolated-recall', provider: 'real', scenario: 'single-recall', repetitions: 5 },
-  { id: 'recall-matrix', provider: 'real', scenario: 'recall-matrix', repetitions: 1 },
-  { id: 'runtime-mutations', provider: 'real', scenario: 'runtime-mutations', repetitions: 2 },
+  { id: 'recall-matrix', provider: 'real', scenario: 'recall-matrix', repetitions: 1, maxTokens: 4096 },
+  { id: 'runtime-mutations', provider: 'real', scenario: 'runtime-mutations', repetitions: 2, maxTokens: 4096 },
   { id: 'idle-no-write', provider: 'real', scenario: 'idle-review', idleReviewMs: 5_000, repetitions: 2 },
   { id: 'capacity-maintenance', provider: 'real', scenario: 'capacity-maintenance', corpus: 'capacity', repetitions: 3 },
   { id: 'recall-gate-natural', provider: 'real', scenario: 'single-recall', versions: ['current'], repetitions: 20, maxTokens: 4096, releaseOnly: true },
@@ -111,13 +111,33 @@ function runArguments(item, packageRoot, output, options) {
   ]
 }
 
-async function completedRun(directory, expectedCommit) {
+function expectedManifest(item, options) {
+  return {
+    provider: item.provider,
+    scenario: item.scenario,
+    corpus: item.corpus ?? 'realistic',
+    mnemon: item.mnemon ?? 'on',
+    routingGuidance: item.routingGuidance ?? 'on',
+    recallMode: item.recallMode ?? 'guided',
+    writebackMode: item.writebackMode ?? 'guided',
+    toolSurface: 'memory-only',
+    idleReviewMs: item.idleReviewMs ?? 600_000,
+    executionTimeoutMs: item.scenario === 'idle-review' ? 180_000 : 300_000,
+    mnemonBinary: options.mnemonBinary,
+    ...(item.maxTokens === undefined ? {} : { maxTokens: item.maxTokens }),
+  }
+}
+
+async function completedRun(directory, expectedCommit, expected) {
   try {
     const [manifest, analysis] = await Promise.all([
       readFile(join(directory, 'manifest.json'), 'utf8').then(JSON.parse),
       readFile(join(directory, 'analysis.json'), 'utf8').then(JSON.parse),
     ])
-    return manifest.package?.commit === expectedCommit && analysis.totals?.completedModelCalls === analysis.totals?.modelCalls
+    return manifest.package?.commit === expectedCommit
+      && manifest.package?.status === ''
+      && Object.entries(expected).every(([key, value]) => manifest[key] === value)
+      && analysis.totals?.completedModelCalls === analysis.totals?.modelCalls
   } catch {
     return false
   }
@@ -179,7 +199,7 @@ async function main() {
     const runId = `${item.id}__${version}__r${sample}`
     const directory = join(options.output, runId)
     process.stdout.write(`\n[release-benchmark ${index + 1}/${plan.length}] ${runId}\n`)
-    if (await completedRun(directory, commits[version])) {
+    if (await completedRun(directory, commits[version], expectedManifest(item, options))) {
       records.set(runId, { id: runId, caseId: item.id, scenario: item.scenario, version, sample, directory: relative(options.output, directory), status: 'completed', resumed: true })
       await writeProgress()
       process.stdout.write(`[release-benchmark] reuse ${runId}\n`)

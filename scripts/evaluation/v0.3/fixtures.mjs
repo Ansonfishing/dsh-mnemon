@@ -344,7 +344,7 @@ export const steadyStateScenario = {
  */
 export const recallMatrixScenario = {
   id: 'v03-recall-routing-matrix',
-  maxTokens: 1536,
+  maxTokens: 4096,
   turns: [
     {
       id: 'matrix-document-incident',
@@ -394,7 +394,7 @@ export const recallMatrixScenario = {
  */
 export const runtimeMutationScenario = {
   id: 'v03-runtime-mutation-journey',
-  maxTokens: 1024,
+  maxTokens: 4096,
   turns: [
     {
       id: 'mutation-add',
