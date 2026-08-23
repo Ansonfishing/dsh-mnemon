@@ -1,0 +1,464 @@
+#!/usr/bin/env node
+
+import { spawn } from 'node:child_process'
+import { createHash, randomUUID } from 'node:crypto'
+import { createServer } from 'node:http'
+import { existsSync } from 'node:fs'
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import {
+  deterministicScenario,
+  documents,
+  idleReviewScenario,
+  memorySpaces,
+  realConversationScenario,
+  runtimeEntries,
+} from './fixtures.mjs'
+
+const harnessRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+const runnerPluginRoot = join(dirname(fileURLToPath(import.meta.url)), 'runner-plugin')
+const dshBin = join(harnessRoot, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+const defaultMnemonBinary = '/private/tmp/dsh-mnemon-v03-eval-mnemon'
+const defaultCredentialFile = resolve(process.env.DSH_HOME ?? join(process.env.HOME ?? '', '.dsh'), '.credentials.yaml')
+
+function parseArguments(argv) {
+  const options = {
+    provider: 'mock',
+    scenario: 'deterministic',
+    packageRoot: harnessRoot,
+    output: resolve(harnessRoot, 'evaluation-results', 'v0.3', new Date().toISOString().replaceAll(/[:.]/gu, '-')),
+    mnemonBinary: defaultMnemonBinary,
+    credentialFile: defaultCredentialFile,
+    toolSurface: 'memory-only',
+    idleReviewMs: 600_000,
+  }
+  for (let index = 0; index < argv.length; index += 1) {
+    const name = argv[index]
+    const value = argv[index + 1]
+    if (name === '--provider' || name === '--scenario' || name === '--package-root' || name === '--output' || name === '--mnemon-binary' || name === '--credential-file' || name === '--tool-surface' || name === '--idle-review-ms') {
+      if (value === undefined) throw new Error(`${name} requires a value`)
+      const key = {
+        '--package-root': 'packageRoot',
+        '--mnemon-binary': 'mnemonBinary',
+        '--credential-file': 'credentialFile',
+        '--tool-surface': 'toolSurface',
+        '--idle-review-ms': 'idleReviewMs',
+      }[name] ?? name.slice(2)
+      options[key] = key === 'idleReviewMs' ? Number(value) : value
+      index += 1
+      continue
+    }
+    throw new Error(`unknown argument: ${name}`)
+  }
+  if (!['mock', 'real'].includes(options.provider)) throw new Error('--provider must be mock or real')
+  if (!['deterministic', 'real-conversation', 'idle-review'].includes(options.scenario)) throw new Error('--scenario is unsupported')
+  if (!['memory-only', 'full'].includes(options.toolSurface)) throw new Error('--tool-surface must be memory-only or full')
+  if (!Number.isInteger(options.idleReviewMs) || options.idleReviewMs < 5_000 || options.idleReviewMs > 600_000) throw new Error('--idle-review-ms must be within 5000..600000')
+  options.packageRoot = resolve(options.packageRoot)
+  options.output = resolve(options.output)
+  options.mnemonBinary = resolve(options.mnemonBinary)
+  options.credentialFile = resolve(options.credentialFile)
+  return options
+}
+
+function run(command, args, { cwd = harnessRoot, env = process.env, timeoutMs = 120_000 } = {}) {
+  return new Promise((resolveRun, reject) => {
+    const child = spawn(command, args, { cwd, env, shell: false, stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.setEncoding('utf8').on('data', chunk => { stdout += chunk })
+    child.stderr.setEncoding('utf8').on('data', chunk => { stderr += chunk })
+    const timeout = setTimeout(() => {
+      child.kill('SIGTERM')
+      reject(new Error(`${command} timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
+    child.once('error', error => {
+      clearTimeout(timeout)
+      reject(error)
+    })
+    child.once('exit', (code, signal) => {
+      clearTimeout(timeout)
+      resolveRun({ code, signal, stdout, stderr })
+    })
+  })
+}
+
+function assertSuccess(label, result) {
+  if (result.code === 0) return
+  throw new Error([`${label} failed with code ${String(result.code)}${result.signal === null ? '' : ` (${result.signal})`}`, result.stdout.trim(), result.stderr.trim()].filter(Boolean).join('\n'))
+}
+
+function sha256(value) {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+function memoryId(value) {
+  if (typeof value !== 'object' || value === null) return undefined
+  for (const key of ['id', 'insightId', 'memoryId']) {
+    const candidate = value[key]
+    if (typeof candidate === 'string' && candidate.trim() !== '') return candidate.trim()
+  }
+  for (const child of Object.values(value)) {
+    const candidate = memoryId(child)
+    if (candidate !== undefined) return candidate
+  }
+  return undefined
+}
+
+async function seedData(packageRoot, dataDir, workspaceRoot, mnemonBinary) {
+  const modulePath = `${pathToFileURL(join(packageRoot, 'lib', 'index.js')).href}?eval=${randomUUID()}`
+  const { createRuntimeGraph, resolveConfig } = await import(modulePath)
+  const config = resolveConfig({
+    storageScope: 'custom',
+    dataDir,
+    cliPath: mnemonBinary,
+    writeEnabled: true,
+    recallMode: 'guided',
+    writebackMode: 'guided',
+  })
+  const graph = createRuntimeGraph(config, workspaceRoot)
+  const seed = { runtime: [], documents: [], memorySpaces: [] }
+  try {
+    for (const entry of runtimeEntries) {
+      const result = await graph.runtimeMemory.mutate({ action: 'add', ...entry })
+      seed.runtime.push({ ...entry, action: result.action })
+    }
+    const documentController = graph.documents.forWorkspace(workspaceRoot)
+    for (const document of documents) {
+      const result = await documentController.mutate({ action: 'create', ...document })
+      seed.documents.push({ title: document.title, id: result.id, revision: result.revision, contentHash: sha256(document.content) })
+    }
+    for (const space of memorySpaces) {
+      const body = await graph.service.createBody({
+        name: space.name,
+        description: space.description,
+        providerId: 'mnemon-native',
+        active: true,
+      })
+      const remembered = []
+      for (const [content, category, importance, tags, entities] of space.memories) {
+        const result = await graph.service.remember({
+          content,
+          category,
+          importance,
+          tags,
+          entities,
+          source: 'external',
+          memoryBodyId: body.id,
+        })
+        remembered.push({ id: memoryId(result), contentHash: sha256(content), category, importance })
+      }
+      seed.memorySpaces.push({ key: space.key, id: body.id, name: body.name, count: remembered.length, memories: remembered })
+    }
+    const view = await graph.memoryViews.publish({ storage: 'custom', workspaceId: workspaceRoot, sessionId: 'seed-check' })
+    const wake = graph.memoryViews.wake(view.id)
+    seed.initialView = {
+      id: view.id,
+      digest: view.digest,
+      sources: view.sources.map(source => ({ layerId: source.layerId, mode: source.mode, revision: source.revision, digest: source.digest })),
+      wakeCharacters: wake.text.length,
+      wakeHash: sha256(wake.text),
+      wake: wake.text,
+    }
+    return seed
+  } finally {
+    graph.dispose()
+  }
+}
+
+function scenarioFixture(name, workspaceRoot) {
+  const selected = name === 'deterministic'
+    ? deterministicScenario
+    : name === 'idle-review'
+      ? idleReviewScenario
+      : realConversationScenario
+  return { ...structuredClone(selected), workspaceRoot, sessionId: `mnemon-eval-${name}-${randomUUID()}` }
+}
+
+function profilePatch(options, dataDir) {
+  const rows = [
+    `- id: mnemon`,
+    `  config:`,
+    `    storageScope: custom`,
+    `    dataDir: ${JSON.stringify(dataDir)}`,
+    `    cliPath: ${JSON.stringify(options.mnemonBinary)}`,
+    `    routingGuidance: true`,
+    `    displayMode: sidebar`,
+    `    lifecycleEnabled: true`,
+    `    recallMode: guided`,
+    `    writebackMode: guided`,
+    `    idleReviewMs: ${options.idleReviewMs}`,
+    `    tabEnabled: true`,
+    `    writeEnabled: true`,
+    `    remoteAccess: read-only`,
+    `    timeoutMs: 30000`,
+    `    defaultRecallLimit: 10`,
+  ]
+  if (options.toolSurface === 'memory-only') {
+    rows.push(
+      '- id: subprocess', '  disabled: true',
+      '- id: bash-sandbox', '  disabled: true',
+      '- id: pwsh-sandbox', '  disabled: true',
+      '- id: tool-bash', '  disabled: true',
+      '- id: tool-pwsh', '  disabled: true',
+      '- id: permission', '  disabled: true',
+      '- id: tool-fs-search', '  disabled: true',
+    )
+  }
+  return `${rows.join('\n')}\n`
+}
+
+function textContent(content) {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content.map(block => typeof block === 'string' ? block : typeof block?.text === 'string' ? block.text : '').join('\n')
+}
+
+function currentMarker(body) {
+  const messages = Array.isArray(body.messages) ? body.messages : []
+  for (const message of messages.toReversed()) {
+    const match = textContent(message.content).match(/\[EVAL:[^\]]+\]/u)
+    if (match !== null) return match[0]
+  }
+  return '[EVAL:unknown]'
+}
+
+function toolResultAfterMarker(body) {
+  const messages = Array.isArray(body.messages) ? body.messages : []
+  let markerIndex = -1
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (/\[EVAL:[^\]]+\]/u.test(textContent(messages[index]?.content))) {
+      markerIndex = index
+      break
+    }
+  }
+  return messages.slice(markerIndex + 1).some(message => message?.role === 'tool')
+}
+
+function mockDecision(body) {
+  const marker = currentMarker(body)
+  const completedTool = toolResultAfterMarker(body)
+  if (completedTool) return { kind: 'text', text: `DONE ${marker}` }
+  const calls = {
+    '[EVAL:MOCK:status]': ['mnemon_status', {}],
+    '[EVAL:MOCK:document]': ['mnemon_document_search', { query: 'ORCHID-47 schema digest', limit: 3 }],
+    '[EVAL:MOCK:recall]': ['mnemon_recall', { query: 'Redis Streams ORCHID-31 17 entries', mode: 'smart', limit: 5 }],
+    '[EVAL:MOCK:write]': ['mnemon_runtime_memory', { action: 'add', target: 'memory', content: 'Deterministic receipt sentinel ECHO-731 persists to the next TurnView.', importance: 'normal' }],
+  }
+  const call = calls[marker]
+  if (call !== undefined) return { kind: 'tool', name: call[0], arguments: call[1] }
+  if (marker === '[EVAL:MOCK:runtime]') return { kind: 'text', text: '12% at Tuesday 21:30 Asia/Shanghai.' }
+  if (marker === '[EVAL:MOCK:receipt]') return { kind: 'text', text: 'ECHO-731' }
+  return { kind: 'text', text: `MOCK_UNHANDLED ${marker}` }
+}
+
+function mockSse(body, requestIndex) {
+  const decision = mockDecision(body)
+  const id = `chatcmpl-mnemon-eval-${requestIndex}`
+  const chunks = []
+  if (decision.kind === 'tool') {
+    chunks.push({
+      id,
+      choices: [{
+        index: 0,
+        delta: {
+          role: 'assistant',
+          tool_calls: [{ index: 0, id: `call-${requestIndex}`, type: 'function', function: { name: decision.name, arguments: JSON.stringify(decision.arguments) } }],
+        },
+        finish_reason: null,
+      }],
+    })
+    chunks.push({ id, choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] })
+  } else {
+    chunks.push({ id, choices: [{ index: 0, delta: { role: 'assistant', content: decision.text }, finish_reason: null }] })
+    chunks.push({ id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })
+  }
+  const promptTokens = Math.ceil(JSON.stringify(body).length / 4)
+  const completionTokens = Math.ceil(JSON.stringify(decision).length / 4)
+  chunks.push({ id, choices: [], usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens } })
+  return `${chunks.map(chunk => `data: ${JSON.stringify(chunk)}\n\n`).join('')}data: [DONE]\n\n`
+}
+
+function responseUsage(text) {
+  for (const line of text.split(/\r?\n/u).toReversed()) {
+    if (!line.startsWith('data: ') || line === 'data: [DONE]') continue
+    try {
+      const value = JSON.parse(line.slice(6))
+      if (value?.usage !== undefined) return value.usage
+    } catch {}
+  }
+  return undefined
+}
+
+function proxyHeaders(headers) {
+  const forwarded = {}
+  for (const name of ['authorization', 'content-type', 'user-agent', 'x-deepseek-harness-user-id', 'x-deepseek-harness-session-id']) {
+    const value = headers[name]
+    if (typeof value === 'string') forwarded[name] = value
+  }
+  return forwarded
+}
+
+async function startCaptureServer(provider) {
+  const requests = []
+  const server = createServer(async (request, response) => {
+    const index = requests.length + 1
+    const startedAt = new Date().toISOString()
+    let rawBody = ''
+    request.setEncoding('utf8')
+    for await (const chunk of request) rawBody += chunk
+    let body
+    try {
+      body = rawBody === '' ? {} : JSON.parse(rawBody)
+    } catch (error) {
+      response.writeHead(400, { 'content-type': 'application/json' })
+      response.end(JSON.stringify({ error: { message: `invalid JSON: ${error instanceof Error ? error.message : String(error)}` } }))
+      return
+    }
+    const record = {
+      index,
+      startedAt,
+      method: request.method,
+      path: request.url,
+      sessionId: typeof request.headers['x-deepseek-harness-session-id'] === 'string' ? request.headers['x-deepseek-harness-session-id'] : undefined,
+      marker: currentMarker(body),
+      body,
+    }
+    requests.push(record)
+    try {
+      if (provider === 'mock') {
+        const payload = mockSse(body, index)
+        response.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
+        response.end(payload)
+        Object.assign(record, { finishedAt: new Date().toISOString(), status: 200, usage: responseUsage(payload), usageKind: 'mock-character-estimate' })
+        return
+      }
+      const upstream = new URL(request.url ?? '/', 'https://api.deepseek.com')
+      const upstreamResponse = await fetch(upstream, {
+        method: request.method,
+        headers: proxyHeaders(request.headers),
+        body: request.method === 'GET' || request.method === 'HEAD' ? undefined : rawBody,
+      })
+      const responseBody = await upstreamResponse.text()
+      response.writeHead(upstreamResponse.status, {
+        'content-type': upstreamResponse.headers.get('content-type') ?? 'application/octet-stream',
+        'cache-control': upstreamResponse.headers.get('cache-control') ?? 'no-cache',
+      })
+      response.end(responseBody)
+      Object.assign(record, {
+        finishedAt: new Date().toISOString(),
+        status: upstreamResponse.status,
+        usage: responseUsage(responseBody),
+        usageKind: 'provider-reported',
+        responseBytes: Buffer.byteLength(responseBody),
+      })
+      if (!upstreamResponse.ok) record.error = responseBody.slice(0, 2_000)
+    } catch (error) {
+      record.finishedAt = new Date().toISOString()
+      record.error = error instanceof Error ? error.message : String(error)
+      response.writeHead(502, { 'content-type': 'application/json' })
+      response.end(JSON.stringify({ error: { message: record.error } }))
+    }
+  })
+  await new Promise((resolveListen, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', resolveListen)
+  })
+  const address = server.address()
+  if (address === null || typeof address === 'string') throw new Error('capture server did not expose a TCP port')
+  return {
+    baseURL: `http://127.0.0.1:${address.port}`,
+    requests,
+    close: () => new Promise(resolveClose => server.close(resolveClose)),
+  }
+}
+
+async function gitMetadata(packageRoot) {
+  const [commit, branch, status] = await Promise.all([
+    run('git', ['rev-parse', 'HEAD'], { cwd: packageRoot }),
+    run('git', ['branch', '--show-current'], { cwd: packageRoot }),
+    run('git', ['status', '--short'], { cwd: packageRoot }),
+  ])
+  return { commit: commit.stdout.trim(), branch: branch.stdout.trim(), status: status.stdout.trim() }
+}
+
+async function main() {
+  const options = parseArguments(process.argv.slice(2))
+  if (!existsSync(dshBin)) throw new Error(`DSH binary is unavailable: ${dshBin}`)
+  if (!existsSync(join(options.packageRoot, 'lib', 'index.js'))) throw new Error(`build output is unavailable: ${options.packageRoot}/lib/index.js`)
+  if (!existsSync(options.mnemonBinary)) throw new Error(`Mnemon binary is unavailable: ${options.mnemonBinary}`)
+  if (options.provider === 'real' && !existsSync(options.credentialFile)) throw new Error(`DSH credential file is unavailable: ${options.credentialFile}`)
+
+  await mkdir(options.output, { recursive: true })
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'dsh-mnemon-v03-eval-'))
+  const dshHome = join(temporaryRoot, 'dsh-home')
+  const dataDir = join(temporaryRoot, 'mnemon-data')
+  const workspaceRoot = join(temporaryRoot, 'workspace')
+  const scenarioPath = join(temporaryRoot, 'scenario.json')
+  const sessionResultPath = join(options.output, 'session.json')
+  await Promise.all([mkdir(dshHome), mkdir(dataDir), mkdir(workspaceRoot)])
+  let capture
+  try {
+    if (options.provider === 'real') await copyFile(options.credentialFile, join(dshHome, '.credentials.yaml'))
+    const seed = await seedData(options.packageRoot, dataDir, workspaceRoot, options.mnemonBinary)
+    await writeFile(join(options.output, 'seed.json'), `${JSON.stringify(seed, null, 2)}\n`)
+    const scenario = scenarioFixture(options.scenario, workspaceRoot)
+    await writeFile(scenarioPath, `${JSON.stringify(scenario, null, 2)}\n`)
+    await writeFile(join(options.output, 'scenario.json'), `${JSON.stringify({ ...scenario, workspaceRoot: '<isolated-workspace>' }, null, 2)}\n`)
+
+    capture = await startCaptureServer(options.provider)
+    const env = {
+      ...process.env,
+      DSH_HOME: dshHome,
+      DSH_TELEMETRY_DISABLED: '1',
+      DEEPSEEK_BASE_URL: capture.baseURL,
+      MNEMON_DATA_DIR: dataDir,
+      MNEMON_EVAL_SCENARIO_PATH: scenarioPath,
+      MNEMON_EVAL_RESULT_PATH: sessionResultPath,
+      ...(options.provider === 'mock' ? { DEEPSEEK_API_KEY: 'mnemon-evaluation-mock-key' } : {}),
+    }
+
+    const installMnemon = await run(process.execPath, [dshBin, 'plugin', '--profile', 'headless', 'add', `link:${options.packageRoot}`], { env })
+    assertSuccess('installing dsh-mnemon', installMnemon)
+    const installRunner = await run(process.execPath, [dshBin, 'plugin', '--profile', 'headless', 'add', `link:${runnerPluginRoot}`], { env })
+    assertSuccess('installing evaluation runner', installRunner)
+    const patch = profilePatch(options, dataDir)
+    const profilePatchPath = join(dshHome, 'profiles', 'headless', 'cordis.patch.yml')
+    await writeFile(profilePatchPath, patch)
+    await writeFile(join(options.output, 'profile.patch.yml'), patch.replaceAll(dataDir, '<isolated-data-dir>').replaceAll(options.mnemonBinary, '<mnemon-binary>'))
+
+    const execution = await run(process.execPath, [dshBin, '--profile', 'headless', 'mnemon-evaluation'], {
+      cwd: workspaceRoot,
+      env,
+      timeoutMs: options.scenario === 'idle-review' ? 180_000 : 300_000,
+    })
+    await Promise.all([
+      writeFile(join(options.output, 'dsh.stdout.log'), execution.stdout),
+      writeFile(join(options.output, 'dsh.stderr.log'), execution.stderr),
+      writeFile(join(options.output, 'requests.json'), `${JSON.stringify(capture.requests, null, 2)}\n`),
+    ])
+    assertSuccess('running evaluation scenario', execution)
+    const metadata = await gitMetadata(options.packageRoot)
+    const manifest = {
+      schemaVersion: 1,
+      createdAt: new Date().toISOString(),
+      provider: options.provider,
+      scenario: options.scenario,
+      toolSurface: options.toolSurface,
+      idleReviewMs: options.idleReviewMs,
+      package: metadata,
+      dshVersion: '0.1.1-rc.2',
+      mnemonBinary: options.mnemonBinary,
+      artifacts: ['scenario.json', 'seed.json', 'profile.patch.yml', 'session.json', 'requests.json', 'dsh.stdout.log', 'dsh.stderr.log'],
+    }
+    await writeFile(join(options.output, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+    process.stdout.write(`${options.output}\n`)
+  } finally {
+    await capture?.close()
+    await rm(temporaryRoot, { recursive: true, force: true })
+  }
+}
+
+await main()
