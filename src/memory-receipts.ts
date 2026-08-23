@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { MemoryCapability, MemoryJsonValue, MemoryReceipt } from '../packages/contracts/src/index.ts'
 import type { MemoryKernel, MemoryReceiptSink } from '../packages/kernel/src/index.ts'
-import type { MemoryViewManager } from '../packages/kernel/src/index.ts'
+import type { MemoryTurnViewManager } from '../packages/kernel/src/index.ts'
 
 export interface CommittedAuthorityOperation {
   layerId: string
@@ -17,7 +17,7 @@ export type AuthorityCommitRecorder = (operation: CommittedAuthorityOperation) =
 export class MemoryReceiptBridge implements MemoryReceiptSink {
   constructor(
     private readonly kernel: Pick<MemoryKernel, 'descriptor' | 'guardGeneration'>,
-    private readonly views: Pick<MemoryViewManager, 'apply'>,
+    private readonly views: Pick<MemoryTurnViewManager, 'apply'>,
     private readonly now: () => Date = () => new Date(),
     private readonly id: () => string = randomUUID,
   ) {}

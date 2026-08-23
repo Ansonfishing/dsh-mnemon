@@ -5,8 +5,8 @@ import type {
   MemoryReceipt,
   MemorySourceMode,
   MemoryTurnContext,
-  MemoryView,
-  MemoryViewSource,
+  MemoryTurnView,
+  MemoryTurnViewSource,
   MemoryWake,
   MemoryWakeSection,
 } from '../../contracts/src/index.ts'
@@ -46,15 +46,18 @@ export interface MemorySource {
   snapshot(context: MemorySourceContext): MemorySourceSnapshot | Promise<MemorySourceSnapshot>
 }
 
-export interface MemoryViewManagerOptions {
+export interface MemoryTurnViewManagerOptions {
   now?: () => Date
   maxViews?: number
   maxWakeCharacters?: number
   maxCoverCharacters?: number
 }
 
-interface StoredMemoryView {
-  view: MemoryView
+/** Compatibility name for the v0.3 pre-release API. */
+export type MemoryViewManagerOptions = MemoryTurnViewManagerOptions
+
+interface StoredMemoryTurnView {
+  view: MemoryTurnView
   states: ReadonlyMap<string, MemoryJsonValue>
 }
 
@@ -138,15 +141,15 @@ function scopeKey(scope: MemoryOperationScope | undefined): string {
  * Owns immutable Source snapshots and turn pins. Source state is Host-only;
  * Wake is a separately budgeted projection and never defines recall authority.
  */
-export class MemoryViewManager {
+export class MemoryTurnViewManager {
   private readonly sources = new Map<string, MemorySource>()
   private sourceGeneration = 0
-  private readonly views = new Map<string, StoredMemoryView>()
+  private readonly views = new Map<string, StoredMemoryTurnView>()
   private readonly turns = new Map<string, MemoryTurnContext>()
   private readonly pendingReceipts = new Map<string, MemoryReceipt>()
-  private current: MemoryView | undefined
-  private readonly currentByScope = new Map<string, MemoryView>()
-  private readonly publishing = new Map<string, Promise<MemoryView>>()
+  private current: MemoryTurnView | undefined
+  private readonly currentByScope = new Map<string, MemoryTurnView>()
+  private readonly publishing = new Map<string, Promise<MemoryTurnView>>()
   private failure: string | undefined
   private readonly now: () => Date
   private readonly maxViews: number
@@ -156,7 +159,7 @@ export class MemoryViewManager {
   constructor(
     readonly kernel: Pick<MemoryKernel, 'descriptor' | 'guardGeneration'>,
     sources: Iterable<MemorySource> = [],
-    options: MemoryViewManagerOptions = {},
+    options: MemoryTurnViewManagerOptions = {},
   ) {
     this.now = options.now ?? (() => new Date())
     this.maxViews = options.maxViews ?? 32
@@ -201,11 +204,11 @@ export class MemoryViewManager {
     }
   }
 
-  latest(): MemoryView | undefined {
+  latest(): MemoryTurnView | undefined {
     return this.current
   }
 
-  get(viewId: string): MemoryView | undefined {
+  get(viewId: string): MemoryTurnView | undefined {
     return this.views.get(viewId)?.view
   }
 
@@ -274,7 +277,7 @@ export class MemoryViewManager {
   }
 
   /** Compile and publish a candidate. On failure, preserve the last valid scoped View. */
-  async reconcile(scope?: MemoryOperationScope): Promise<MemoryView> {
+  async reconcile(scope?: MemoryOperationScope): Promise<MemoryTurnView> {
     try {
       return await this.publish(scope)
     } catch (error) {
@@ -286,7 +289,7 @@ export class MemoryViewManager {
   }
 
   /** Strict publication API used by tests, diagnostics, and initial startup. */
-  async publish(scope?: MemoryOperationScope): Promise<MemoryView> {
+  async publish(scope?: MemoryOperationScope): Promise<MemoryTurnView> {
     const publicationKey = scopeKey(scope)
     const inFlight = this.publishing.get(publicationKey)
     if (inFlight !== undefined) return inFlight
@@ -317,7 +320,7 @@ export class MemoryViewManager {
     }
   }
 
-  private async buildCandidate(scope?: MemoryOperationScope): Promise<StoredMemoryView> {
+  private async buildCandidate(scope?: MemoryOperationScope): Promise<StoredMemoryTurnView> {
     const descriptor = this.kernel.descriptor()
     const guardGeneration = this.kernel.guardGeneration
     const sourceGeneration = this.sourceGeneration
@@ -359,7 +362,7 @@ export class MemoryViewManager {
       createdAt: this.now().toISOString(),
       ...payload,
       digest,
-    } satisfies MemoryView)
+    } satisfies MemoryTurnView)
     this.renderWake(view)
     return {
       view,
@@ -369,7 +372,7 @@ export class MemoryViewManager {
     }
   }
 
-  private normalizeSource(layerId: string, mode: MemorySourceMode, snapshot: MemorySourceSnapshot): { source: MemoryViewSource; state?: MemoryJsonValue } {
+  private normalizeSource(layerId: string, mode: MemorySourceMode, snapshot: MemorySourceSnapshot): { source: MemoryTurnViewSource; state?: MemoryJsonValue } {
     if (typeof snapshot !== 'object' || snapshot === null) throw new Error(`memory source returned an invalid snapshot: ${layerId}`)
     const revision = text(snapshot.revision, `memory source revision for ${layerId}`, 500)
     const wake = wakeText(snapshot.wake, mode, layerId)
@@ -387,11 +390,11 @@ export class MemoryViewManager {
       mode,
       digest: hash(canonical(sourcePayload)),
       wake,
-    } satisfies MemoryViewSource)
+    } satisfies MemoryTurnViewSource)
     return { source, ...(state === undefined ? {} : { state }) }
   }
 
-  private renderWake(view: MemoryView): MemoryWake {
+  private renderWake(view: MemoryTurnView): MemoryWake {
     const sections: MemoryWakeSection[] = []
     const eager: string[] = []
     const routedLines: string[] = []
@@ -429,14 +432,14 @@ export class MemoryViewManager {
     })
   }
 
-  private requireStoredView(viewId: string): StoredMemoryView {
+  private requireStoredView(viewId: string): StoredMemoryTurnView {
     const id = text(viewId, 'memory view id', 300)
     const stored = this.views.get(id)
     if (stored === undefined) throw new Error(`memory View is unavailable: ${id}`)
     return stored
   }
 
-  private rememberScopeCurrent(scope: string, view: MemoryView): void {
+  private rememberScopeCurrent(scope: string, view: MemoryTurnView): void {
     this.currentByScope.delete(scope)
     this.currentByScope.set(scope, view)
     while (this.currentByScope.size > this.maxViews) {
@@ -461,5 +464,5 @@ export class MemoryViewManager {
   }
 }
 
-/** Preferred name; MemoryViewManager remains as the v0.3 pre-release compatibility alias. */
-export { MemoryViewManager as MemoryTurnViewManager }
+/** Compatibility name for the v0.3 pre-release API. */
+export { MemoryTurnViewManager as MemoryViewManager }

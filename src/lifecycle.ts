@@ -21,7 +21,7 @@ import { applyAgentMemoryViewWake, registerAgentMemoryViewContext } from './guid
 import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot, ReviewActivityScore, TaskAgentModelCatalog } from './shared/contracts.ts'
 import type { PreparedMemoryPlacement } from './provider-placement.ts'
 import type { MemoryOperationScope, MemoryTurnContext, MemoryWake } from '../packages/contracts/src/index.ts'
-import type { MemoryViewManager } from '../packages/kernel/src/index.ts'
+import type { MemoryTurnViewManager } from '../packages/kernel/src/index.ts'
 import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from './live-runtime.ts'
 
 type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'forAgent' | 'bindAgentRuntime'>
@@ -181,7 +181,7 @@ class MnemonAgentLifecycle {
   private lastPhase: LifecyclePhase = 'idle'
   private lastAt: string | undefined
   private lastError: string | undefined
-  private pinnedView: { turn: number; manager: MemoryViewManager; context: MemoryTurnContext; releaseRuntime: () => void } | undefined
+  private pinnedView: { turn: number; manager: MemoryTurnViewManager; context: MemoryTurnContext; releaseRuntime: () => void } | undefined
 
   constructor(
     readonly agent: HostAgent,

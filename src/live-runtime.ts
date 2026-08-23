@@ -13,8 +13,8 @@ import { registerDefaultMemorySystem } from './memory-system/defaults.ts'
 import { MemoryTopologyManager } from './memory-system/topology.ts'
 import { registerBuiltinMemoryAdapters } from './providers/memory-system.ts'
 import type { MemoryBoot } from '../packages/extension-sdk/src/index.ts'
-import type { MemoryViewManager } from '../packages/kernel/src/index.ts'
-import { createDefaultMemoryViewManager } from './memory-view.ts'
+import type { MemoryTurnViewManager } from '../packages/kernel/src/index.ts'
+import { createDefaultMemoryTurnViewManager } from './memory-view.ts'
 import { MemoryReceiptBridge, type AuthorityCommitRecorder } from './memory-receipts.ts'
 
 export interface MnemonRuntimeGraph {
@@ -28,7 +28,7 @@ export interface MnemonRuntimeGraph {
   memoryCatalog: MemoryCatalog
   memoryTopology: MemoryTopologyManager
   memoryKernel: MemoryKernel
-  memoryViews: MemoryViewManager
+  memoryViews: MemoryTurnViewManager
   /** Detach this generation from future Host-global extension changes. */
   dispose(): void
 }
@@ -89,7 +89,7 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: strin
         })
       }
     })
-    const memoryViews = createDefaultMemoryViewManager(memoryKernel, { runtimeMemory, documents, service })
+    const memoryViews = createDefaultMemoryTurnViewManager(memoryKernel, { runtimeMemory, documents, service })
     extensionAttachment?.bindTurnViews(memoryViews)
     memoryViews.assertSourcesReady()
     receiptBridge = new MemoryReceiptBridge(memoryKernel, memoryViews)
@@ -154,7 +154,7 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
   readonly memoryCatalog: MemoryCatalog
   readonly memoryTopology: MemoryTopologyManager
   readonly memoryKernel: MemoryKernel
-  readonly memoryViews: MemoryViewManager
+  readonly memoryViews: MemoryTurnViewManager
 
   constructor(initial: MnemonRuntimeGraph, private readonly workspaceRegistry?: HostWorkspaceRegistry, private readonly agents?: HostAgentsService, private readonly extensions?: MemoryBoot) {
     this.current = initial

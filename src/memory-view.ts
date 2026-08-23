@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { MemoryOperationScope } from '../packages/contracts/src/index.ts'
-import { MemoryViewManager, type MemorySource } from '../packages/kernel/src/index.ts'
+import { MemoryTurnViewManager, type MemorySource } from '../packages/kernel/src/index.ts'
 import type { DocumentManager } from './documents.ts'
 import type { MemoryKernel } from './memory-system/kernel.ts'
 import type { RuntimeMemoryController } from './runtime-memory.ts'
@@ -99,10 +99,13 @@ function memorySpacesSource(service: MnemonService): MemorySource {
   }
 }
 
-export function createDefaultMemoryViewManager(kernel: MemoryKernel, sources: DefaultMemorySources): MemoryViewManager {
-  return new MemoryViewManager(kernel, [
+export function createDefaultMemoryTurnViewManager(kernel: MemoryKernel, sources: DefaultMemorySources): MemoryTurnViewManager {
+  return new MemoryTurnViewManager(kernel, [
     runtimeSource(sources.runtimeMemory),
     documentsSource(sources.documents),
     memorySpacesSource(sources.service),
   ])
 }
+
+/** Compatibility name for the v0.3 pre-release API. */
+export const createDefaultMemoryViewManager = createDefaultMemoryTurnViewManager

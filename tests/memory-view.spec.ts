@@ -6,12 +6,12 @@ import {
   MemoryCatalog,
   MemoryKernel,
   MemoryTopologyManager,
-  MemoryViewManager,
+  MemoryTurnViewManager,
   registerDefaultMemorySystem,
   type MemorySource,
 } from '../src/memory-system/index.ts'
 
-function harness(sources: MemorySource[], options: ConstructorParameters<typeof MemoryViewManager>[2] = {}) {
+function harness(sources: MemorySource[], options: ConstructorParameters<typeof MemoryTurnViewManager>[2] = {}) {
   const catalog = new MemoryCatalog()
   registerDefaultMemorySystem(catalog)
   const topology = new MemoryTopologyManager(catalog, DEFAULT_THREE_TIER_TOPOLOGY)
@@ -20,7 +20,7 @@ function harness(sources: MemorySource[], options: ConstructorParameters<typeof 
     if (!sourceLayers.has(layer.id)) topology.configureLayer(layer.id, { participation: { projection: 'off' } })
   }
   const kernel = new MemoryKernel(catalog, topology)
-  const views = new MemoryViewManager(kernel, sources, {
+  const views = new MemoryTurnViewManager(kernel, sources, {
     now: () => new Date('2026-08-23T00:00:00.000Z'),
     ...options,
   })
@@ -52,7 +52,7 @@ function receipt(id: string, capability: MemoryReceipt['capability'] = 'write'):
   }
 }
 
-describe('MemoryViewManager', () => {
+describe('MemoryTurnViewManager', () => {
   it('normalizes committed compatibility operations into the existing MemoryReceipt contract', async () => {
     const { kernel, views } = harness([{
       layerId: 'runtime',

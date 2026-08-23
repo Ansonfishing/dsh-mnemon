@@ -228,7 +228,7 @@ export interface MemorySystemDescriptor {
 export const MEMORY_SOURCE_MODES = ['eager', 'routed'] as const
 export type MemorySourceMode = typeof MEMORY_SOURCE_MODES[number]
 
-export interface MemoryViewSource {
+export interface MemoryTurnViewSource {
   layerId: MemoryLayerId
   revision: string
   mode: MemorySourceMode
@@ -245,12 +245,15 @@ export interface MemoryTurnView {
   catalogGeneration: number
   topologyGeneration: number
   guardGeneration: number
-  sources: MemoryViewSource[]
+  sources: MemoryTurnViewSource[]
   digest: string
 }
 
 /** Compatibility name for the v0.3 pre-release API. */
 export type MemoryView = MemoryTurnView
+
+/** Compatibility name for the v0.3 pre-release API. */
+export type MemoryViewSource = MemoryTurnViewSource
 
 export interface MemoryWakeSection {
   layerId: MemoryLayerId
