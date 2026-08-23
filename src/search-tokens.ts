@@ -18,3 +18,10 @@ export function lexicalTokenMatchCount(value: string, tokens: readonly string[])
   const available = new Set(lexicalSearchTokens(value, 512))
   return tokens.filter(token => available.has(token)).length
 }
+
+/** Require broader coverage only after a query is focused enough to support it. */
+export function lexicalRequiredMatchCount(tokens: readonly string[]): number {
+  if (tokens.length === 0) return 0
+  if (tokens.length < 4) return 1
+  return Math.max(2, Math.ceil(tokens.length / 4))
+}

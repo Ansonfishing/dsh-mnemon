@@ -15,7 +15,7 @@ import type { HostAgent } from './contracts.ts'
 import type { DocumentMutation, DocumentMutationResult, DocumentRecord, DocumentSearchResult, DocumentSnapshot, DocumentStatus, DocumentView } from './shared/contracts.ts'
 import type { AuthorityCommitRecorder } from './memory-receipts.ts'
 import type { MemoryMigrationLineage } from '../packages/contracts/src/index.ts'
-import { lexicalSearchTokens } from './search-tokens.ts'
+import { lexicalRequiredMatchCount, lexicalSearchTokens } from './search-tokens.ts'
 
 export type { DocumentMutation, DocumentMutationResult, DocumentRecord, DocumentSearchResult, DocumentSnapshot, DocumentStatus, DocumentView } from './shared/contracts.ts'
 
@@ -251,6 +251,7 @@ export class DocumentController {
       const beforeRevision = indexRevision(index)
       const normalized = query.trim().normalize('NFKC').toLocaleLowerCase()
       const tokens = lexicalSearchTokens(normalized)
+      const requiredTokenMatches = lexicalRequiredMatchCount(tokens)
       const includeArchived = options.includeArchived === true
       const limit = Math.max(1, Math.min(50, Math.trunc(options.limit ?? 20)))
       const ranked = index.documents
@@ -261,12 +262,20 @@ export class DocumentController {
           const description = view.description.normalize('NFKC').toLocaleLowerCase()
           const content = view.content.normalize('NFKC').toLocaleLowerCase()
           let score = normalized === '' ? 1 : title.includes(normalized) ? 12 : description.includes(normalized) ? 7 : content.includes(normalized) ? 4 : 0
-          for (const token of tokens) score += title.includes(token) ? 4 : description.includes(token) ? 2 : content.includes(token) ? 1 : 0
-          return { ...view, score, excerpt: excerpt(view.content) }
+          let tokenMatches = 0
+          for (const token of tokens) {
+            const titleMatch = title.includes(token)
+            const descriptionMatch = description.includes(token)
+            const contentMatch = content.includes(token)
+            if (titleMatch || descriptionMatch || contentMatch) tokenMatches += 1
+            score += titleMatch ? 4 : descriptionMatch ? 2 : contentMatch ? 1 : 0
+          }
+          return { result: { ...view, score, excerpt: excerpt(view.content) }, tokenMatches }
         })
-        .filter(result => normalized === '' || result.score > 0)
-        .sort((left, right) => right.score - left.score || Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+        .filter(candidate => normalized === '' || (candidate.result.score > 0 && candidate.tokenMatches >= requiredTokenMatches))
+        .sort((left, right) => right.result.score - left.result.score || Date.parse(right.result.updatedAt) - Date.parse(left.result.updatedAt))
         .slice(0, limit)
+        .map(candidate => candidate.result)
       if (ranked.length > 0) {
         const accessedAt = this.now().toISOString()
         const ids = new Set(ranked.map(result => result.id))

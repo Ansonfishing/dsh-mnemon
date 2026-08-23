@@ -16,7 +16,7 @@ import { finalizeLlmPlacement, prepareMemoryPlacement, rulesOnlyPlacement, type 
 import { MEMORY_PROVIDER_CATALOG, memoryProviderDescriptor } from './providers/catalog.ts'
 import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus, type ProviderSearchResult } from './providers/provider.ts'
 import { memoryProviderAdapterFactories, type MemoryProviderAdapterRegistry } from './providers/registry.ts'
-import { lexicalSearchTokens, lexicalTokenMatchCount } from './search-tokens.ts'
+import { lexicalRequiredMatchCount, lexicalSearchTokens, lexicalTokenMatchCount } from './search-tokens.ts'
 import {
   applyRecallQualityPolicy,
   prepareRecallQualityPolicy,
@@ -182,7 +182,7 @@ function lexicalSearchRecoveryPlan(query: string): NativeSearchRecoveryPlan | un
     kind: 'lexical',
     terms: tokens,
     query,
-    requiredMatches: Math.max(2, Math.ceil(tokens.length / 4)),
+    requiredMatches: lexicalRequiredMatchCount(tokens),
   }
 }
 

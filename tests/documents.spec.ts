@@ -64,8 +64,7 @@ describe('Mnemon Documents control plane', () => {
     await controller.mutate({ action: 'create', title: '事故记录', content: '数据库故障复盘与发布历史。' })
 
     const result = await controller.search('数据库迁移后灰度阶段顺序 自动回滚阈值 发布手册')
-    expect(result.results[0]?.id).toBe(release.document.id)
-    expect(result.results[0]?.score).toBeGreaterThan(result.results[1]?.score ?? 0)
+    expect(result.results.map(document => document.id)).toEqual([release.document.id])
   })
 
   it('uses actual active bytes, excludes cold archives, and proposes LRU eviction', async () => {
