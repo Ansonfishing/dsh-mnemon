@@ -230,6 +230,7 @@ describe('Mnemon memory subagent coordinator', () => {
       id: `m${index + 1}`,
       content: index === 0 ? `Evidence ${index + 1} ${'x'.repeat(3_000)}` : `Evidence ${index + 1}`,
       tags: index === 0 ? Array.from({ length: 20 }, (_, tag) => `tag-${tag + 1}`) : undefined,
+      relevanceTier: 'high' as const,
       memoryBodyId: 'project',
       memoryBodyName: 'Project',
     }))
@@ -241,7 +242,7 @@ describe('Mnemon memory subagent coordinator', () => {
       sources: [{ memoryBodyId: 'project' }],
     } as never)
     const memoryViews = {
-      activeTurn: vi.fn(() => ({ viewId: 'view-pinned' })),
+      activeTurn: vi.fn(() => ({ turnId: 'root:1', viewId: 'view-pinned' })),
       sourceState: vi.fn(() => ({ memoryBodyIds: authorizedIds })),
     }
     const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
@@ -249,10 +250,10 @@ describe('Mnemon memory subagent coordinator', () => {
 
     const recalled = await coordinator.recall(parent(), { query: 'database choice', limit: 50 }, new AbortController().signal, { requirePinnedView: true })
 
-    expect(memoryService.search).toHaveBeenCalledWith({ query: 'database choice', limit: 12, memoryBodyIds: authorizedIds }, expect.any(AbortSignal))
+    expect(memoryService.search).toHaveBeenCalledWith({ query: 'database choice', limit: 6, memoryBodyIds: authorizedIds }, expect.any(AbortSignal))
     expect(recalled).toMatchObject({ results: expect.any(Array) })
-    expect(recalled.results).toHaveLength(12)
-    expect(recalled.results[0]?.content).toHaveLength(2_000)
+    expect(recalled.results).toHaveLength(6)
+    expect(recalled.results[0]?.content).toHaveLength(1_200)
     expect(recalled.results[0]?.content.endsWith('…')).toBe(true)
     expect(recalled.results[0]?.tags).toHaveLength(8)
     expect(recalled.hint).toHaveLength(1_000)
@@ -264,11 +265,50 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(coordinator.snapshot()).toMatchObject({ recalls: 1, failures: 0, lastOperation: 'recall' })
   })
 
+  it('admits one bounded direct Recall per turn and suppresses duplicate or variant queries', async () => {
+    const host = subagents(undefined)
+    const memoryService = service()
+    vi.mocked(memoryService.search).mockResolvedValue({
+      query: 'release history',
+      mode: 'smart',
+      results: [
+        { id: 'high-1', content: 'Canary at 35%.', relevanceTier: 'high', memoryBodyId: 'project' },
+        { id: 'high-duplicate', content: 'Canary at 35%.', relevanceTier: 'high', memoryBodyId: 'other' },
+        { id: 'medium-1', content: 'Medium clue one.', relevanceTier: 'medium', memoryBodyId: 'project' },
+        { id: 'medium-2', content: 'Medium clue two.', relevanceTier: 'medium', memoryBodyId: 'project' },
+        { id: 'unknown-1', content: 'Unknown clue one.', memoryBodyId: 'project' },
+        { id: 'unknown-2', content: 'Unknown clue two.', memoryBodyId: 'project' },
+        { id: 'low-1', content: 'Low clue.', relevanceTier: 'low', memoryBodyId: 'project' },
+      ],
+    } as never)
+    let turnId = 'root:9'
+    const memoryViews = {
+      activeTurn: vi.fn(() => ({ turnId, viewId: `view-${turnId}` })),
+      sourceState: vi.fn(() => ({ memoryBodyIds: ['project', 'other'] })),
+    }
+    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
+    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+    const signal = new AbortController().signal
+
+    const first = await coordinator.recall(parent(), { query: '  Release   History ' }, signal, { requirePinnedView: true })
+    const duplicate = await coordinator.recall(parent(), { query: 'release history', limit: 1 }, signal, { requirePinnedView: true })
+    const variant = await coordinator.recall(parent(), { query: 'rollback drill' }, signal, { requirePinnedView: true })
+    turnId = 'root:10'
+    const nextTurn = await coordinator.recall(parent(), { query: 'rollback drill' }, signal, { requirePinnedView: true })
+
+    expect(first.results.map(result => result.id)).toEqual(['high-1', 'medium-1', 'unknown-1'])
+    expect(duplicate).toMatchObject({ results: [], hint: expect.stringContaining('exact Recall already ran') })
+    expect(variant).toMatchObject({ results: [], hint: expect.stringContaining('budget for this turn is exhausted') })
+    expect(nextTurn.results.map(result => result.id)).toEqual(['high-1', 'medium-1', 'unknown-1'])
+    expect(memoryService.search).toHaveBeenCalledTimes(2)
+    expect(coordinator.snapshot()).toMatchObject({ recalls: 2, failures: 0 })
+  })
+
   it('derives a child read from its root parent turn with no model-facing capability', async () => {
     const host = subagents(undefined)
     const memoryService = service()
     const memoryViews = {
-      activeTurn: vi.fn((agentId: string) => agentId === 'root' ? { viewId: 'view-pinned' } : undefined),
+      activeTurn: vi.fn((agentId: string) => agentId === 'root' ? { turnId: 'root:1', viewId: 'view-pinned' } : undefined),
       sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
     }
     const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
@@ -289,7 +329,7 @@ describe('Mnemon memory subagent coordinator', () => {
     const host = subagents(undefined)
     const memoryService = service()
     const memoryViews = {
-      activeTurn: vi.fn(() => undefined as { viewId: string } | undefined),
+      activeTurn: vi.fn(() => undefined as { turnId: string; viewId: string } | undefined),
       sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
     }
     const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
@@ -302,14 +342,23 @@ describe('Mnemon memory subagent coordinator', () => {
     await expect(coordinator.recall(child, { query: 'database choice' }, signal, { requirePinnedView: true })).rejects.toThrow('MemorySource generation pinned')
     expect(memoryService.search).not.toHaveBeenCalled()
 
-    memoryViews.activeTurn.mockReturnValue({ viewId: 'view-pinned' })
-    vi.mocked(memoryService.related).mockResolvedValue([{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: 'Project' }])
+    memoryViews.activeTurn.mockReturnValue({ turnId: 'root:2', viewId: 'view-pinned' })
+    await coordinator.recall(parent(), { query: 'SQLite' }, signal, { requirePinnedView: true })
+    vi.mocked(memoryService.related).mockResolvedValue([
+      { id: 'duplicate', content: 'SQLite', memoryBodyId: 'project', memoryBodyName: 'Project' },
+      { id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: 'Project' },
+    ])
     await expect(coordinator.related(parent(), 'm1', undefined, signal, { depth: 3, edge: 'causal', requirePinnedView: true })).resolves.toEqual({
       query: 'related:m1',
       mode: 'related',
       results: [{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: 'Project' }],
     })
+    await expect(coordinator.related(parent(), 'm1', undefined, signal, { depth: 3, edge: 'causal', requirePinnedView: true })).resolves.toMatchObject({
+      results: [],
+      hint: expect.stringContaining('exact related traversal already ran'),
+    })
     expect(memoryService.related).toHaveBeenCalledWith('m1', 3, 'causal', signal, 'project')
+    expect(memoryService.related).toHaveBeenCalledOnce()
     expect(host.start).not.toHaveBeenCalled()
   })
 

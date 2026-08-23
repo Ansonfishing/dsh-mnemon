@@ -107,6 +107,20 @@ interface ToolReceiptRecovery {
   terminalTools: readonly string[]
 }
 
+interface RecallAuthority {
+  turnId: string
+  viewId: string
+  memoryBodyIds: string[]
+}
+
+interface TurnRetrievalState {
+  recallDigest?: string
+  recallResultDigest?: string
+  relatedDigest?: string
+  evidenceDigests: Set<string>
+  evidenceReferences: Set<string>
+}
+
 const WRITE_SCHEMA = {
   type: 'object',
   properties: {
@@ -325,8 +339,11 @@ export interface RecallResult {
   hint?: string
 }
 
-const MODEL_RECALL_RESULT_LIMIT = 12
-const MODEL_RECALL_CONTENT_LIMIT = 2_000
+const MODEL_RECALL_RESULT_LIMIT = 6
+const MODEL_RECALL_CONTENT_LIMIT = 1_200
+const MODEL_RECALL_TOTAL_CONTENT_LIMIT = 4_800
+const MODEL_RECALL_MEDIUM_LIMIT = 1
+const MODEL_RECALL_UNKNOWN_LIMIT = 1
 const MODEL_RECALL_LIST_LIMIT = 8
 const MODEL_RECALL_METADATA_LIMIT = 300
 
@@ -334,14 +351,71 @@ function boundedModelText(value: string, maximum: number): string {
   return value.length <= maximum ? value : `${value.slice(0, maximum - 1)}…`
 }
 
-/** Keep provider-owned evidence useful without letting one row dominate model context. */
-function boundedModelInsights(results: readonly Insight[]): Insight[] {
-  return results
-    .filter(result => result.id.length > 0 && result.id.length <= 1_000)
-    .slice(0, MODEL_RECALL_RESULT_LIMIT)
-    .map(result => ({
+interface ModelInsightAdmission {
+  resultLimit?: number
+  contentLimit?: number
+  totalContentLimit?: number
+  mediumLimit?: number
+  unknownLimit?: number
+  excludeDigests?: ReadonlySet<string>
+}
+
+function insightDigest(result: Pick<Insight, 'content'>): string {
+  return sha256(result.content.trim().replace(/\s+/gu, ' '))
+}
+
+function recallRequestDigest(request: SearchRequest): string {
+  return sha256(JSON.stringify({
+    query: request.query.trim().replace(/\s+/gu, ' ').toLocaleLowerCase(),
+    mode: request.mode ?? 'smart',
+    category: request.category ?? '',
+    source: request.source ?? '',
+    intent: request.intent ?? '',
+    memoryBodyIds: [...(request.memoryBodyIds ?? [])].sort(),
+  }))
+}
+
+function admittedResultDigest(results: readonly Insight[]): string {
+  return sha256(JSON.stringify(results.map(result => ({
+    reference: `${result.memoryBodyId ?? ''}/${result.id}`,
+    digest: insightDigest(result),
+  }))))
+}
+
+/** Admit a small, deduplicated evidence envelope after Provider quality policy. */
+function boundedModelInsights(results: readonly Insight[], admission: ModelInsightAdmission = {}): Insight[] {
+  const resultLimit = admission.resultLimit ?? MODEL_RECALL_RESULT_LIMIT
+  const contentLimit = admission.contentLimit ?? MODEL_RECALL_CONTENT_LIMIT
+  const totalContentLimit = admission.totalContentLimit ?? MODEL_RECALL_TOTAL_CONTENT_LIMIT
+  const mediumLimit = admission.mediumLimit ?? MODEL_RECALL_MEDIUM_LIMIT
+  const unknownLimit = admission.unknownLimit ?? MODEL_RECALL_UNKNOWN_LIMIT
+  const seenReferences = new Set<string>()
+  const seenDigests = new Set<string>(admission.excludeDigests)
+  let mediumCount = 0
+  let unknownCount = 0
+  let contentCharacters = 0
+  const admitted: Insight[] = []
+  for (const result of results) {
+    if (admitted.length >= resultLimit || result.id.length === 0 || result.id.length > 1_000) continue
+    const tier = result.relevanceTier ?? 'unknown'
+    if (tier === 'low') continue
+    if (tier === 'medium' && mediumCount >= mediumLimit) continue
+    if (tier === 'unknown' && unknownCount >= unknownLimit) continue
+    const reference = `${result.memoryBodyId ?? ''}/${result.id}`
+    const digest = insightDigest(result)
+    if (seenReferences.has(reference) || seenDigests.has(digest)) continue
+    const remainingContent = totalContentLimit - contentCharacters
+    if (remainingContent <= 0) break
+    const content = boundedModelText(result.content, Math.min(contentLimit, remainingContent))
+    if (content === '') continue
+    seenReferences.add(reference)
+    seenDigests.add(digest)
+    contentCharacters += content.length
+    if (tier === 'medium') mediumCount += 1
+    if (tier === 'unknown') unknownCount += 1
+    admitted.push({
       ...result,
-      content: boundedModelText(result.content, MODEL_RECALL_CONTENT_LIMIT),
+      content,
       ...(result.category === undefined ? {} : { category: boundedModelText(result.category, MODEL_RECALL_METADATA_LIMIT) }),
       ...(result.tags === undefined ? {} : { tags: result.tags.slice(0, MODEL_RECALL_LIST_LIMIT).map(tag => boundedModelText(tag, MODEL_RECALL_METADATA_LIMIT)) }),
       ...(result.entities === undefined ? {} : { entities: result.entities.slice(0, MODEL_RECALL_LIST_LIMIT).map(entity => boundedModelText(entity, MODEL_RECALL_METADATA_LIMIT)) }),
@@ -353,7 +427,9 @@ function boundedModelInsights(results: readonly Insight[]): Insight[] {
       ...(result.edgeType === undefined ? {} : { edgeType: boundedModelText(result.edgeType, MODEL_RECALL_METADATA_LIMIT) }),
       ...(result.memoryBodyName === undefined ? {} : { memoryBodyName: boundedModelText(result.memoryBodyName, MODEL_RECALL_METADATA_LIMIT) }),
       ...(result.externalUri === undefined ? {} : { externalUri: boundedModelText(result.externalUri, 2_000) }),
-    }))
+    })
+  }
+  return admitted
 }
 
 /** Compatibility name for the v0.3 pre-release API. Recall no longer delegates. */
@@ -810,6 +886,7 @@ export class MnemonSubagentCoordinator {
   private readonly counters: SubagentCounters = { recalls: 0, writes: 0, answers: 0, reviews: 0, placements: 0, migrations: 0, compactions: 0, documentArchives: 0, metadataMaintenances: 0, failures: 0 }
   private runtimeQueue: Promise<unknown> = Promise.resolve()
   private documentQueue: Promise<unknown> = Promise.resolve()
+  private readonly retrievalTurns = new Map<string, TurnRetrievalState>()
 
   constructor(
     private readonly subagents: HostSubagentsService,
@@ -836,19 +913,43 @@ export class MnemonSubagentCoordinator {
   }
 
   async recall(parent: HostAgent, request: SearchRequest, signal: AbortSignal, options: { requirePinnedView?: boolean } = {}): Promise<RecallResult> {
+    const authority = this.recallAuthority(parent, options.requirePinnedView === true)
+    const limited = { ...request, limit: Math.min(request.limit ?? MODEL_RECALL_RESULT_LIMIT, MODEL_RECALL_RESULT_LIMIT) }
+    const scoped = this.scopeRecallWithAuthority(limited, authority)
+    const digest = authority === undefined ? undefined : recallRequestDigest(scoped)
+    const retrieval = authority === undefined ? undefined : this.turnRetrievalState(authority.turnId)
+    if (retrieval?.recallDigest !== undefined) {
+      const duplicate = retrieval.recallDigest === digest
+      return {
+        query: scoped.query,
+        mode: scoped.mode ?? 'smart',
+        results: [],
+        hint: duplicate
+          ? 'This exact Recall already ran in the current turn. Reuse its prior evidence; no Provider query was repeated.'
+          : 'The direct Recall budget for this turn is exhausted. Use the evidence already returned or ask a focused follow-up next turn.',
+      }
+    }
+    if (retrieval !== undefined && digest !== undefined) retrieval.recallDigest = digest
     try {
-      const limited = { ...request, limit: Math.min(request.limit ?? MODEL_RECALL_RESULT_LIMIT, MODEL_RECALL_RESULT_LIMIT) }
-      const scoped = this.scopeRecallRequest(parent, limited, options.requirePinnedView === true)
       const result = await this.serviceFor(parent).search(scoped, signal)
+      const results = boundedModelInsights(result.results)
+      if (retrieval !== undefined) {
+        retrieval.recallResultDigest = admittedResultDigest(results)
+        for (const insight of results) {
+          retrieval.evidenceDigests.add(insightDigest(insight))
+          retrieval.evidenceReferences.add(`${insight.memoryBodyId ?? ''}/${insight.id}`)
+        }
+      }
       this.recordRecall()
       const hint = result.hint?.trim()
       return {
         query: result.query,
         mode: result.mode,
-        results: boundedModelInsights(result.results),
+        results,
         ...(hint === undefined || hint === '' ? {} : { hint: hint.length <= 1_000 ? hint : `${hint.slice(0, 999)}…` }),
       }
     } catch (error) {
+      if (retrieval !== undefined && retrieval.recallDigest === digest && retrieval.recallResultDigest === undefined) delete retrieval.recallDigest
       this.counters.failures += 1
       throw error
     }
@@ -857,6 +958,10 @@ export class MnemonSubagentCoordinator {
   /** Bind a model read to the Source state pinned by its root turn. */
   scopeRecallRequest(agent: HostAgent, request: SearchRequest, requirePinnedView = false): SearchRequest {
     const authority = this.recallAuthority(agent, requirePinnedView)
+    return this.scopeRecallWithAuthority(request, authority)
+  }
+
+  private scopeRecallWithAuthority(request: SearchRequest, authority: RecallAuthority | undefined): SearchRequest {
     if (authority === undefined) return request
     const requested = [...new Set((request.memoryBodyIds ?? []).map(id => id.trim()).filter(Boolean))]
     const outside = requested.filter(id => !authority.memoryBodyIds.includes(id))
@@ -866,6 +971,10 @@ export class MnemonSubagentCoordinator {
 
   scopeRelatedMemoryBody(agent: HostAgent, memoryBodyId?: string, requirePinnedView = false): string | undefined {
     const authority = this.recallAuthority(agent, requirePinnedView)
+    return this.scopeRelatedWithAuthority(memoryBodyId, authority)
+  }
+
+  private scopeRelatedWithAuthority(memoryBodyId: string | undefined, authority: RecallAuthority | undefined): string | undefined {
     if (authority === undefined) return memoryBodyId
     const requested = memoryBodyId?.trim()
     if (requested === undefined || requested === '') {
@@ -883,16 +992,58 @@ export class MnemonSubagentCoordinator {
     signal: AbortSignal,
     options: { depth?: number; edge?: EdgeType; requirePinnedView?: boolean } = {},
   ): Promise<RecallResult> {
+    const authority = this.recallAuthority(parent, options.requirePinnedView === true)
+    const selected = this.scopeRelatedWithAuthority(memoryBodyId, authority)
+    const retrieval = authority === undefined ? undefined : this.turnRetrievalState(authority.turnId)
+    const reference = `${selected ?? ''}/${id}`
+    if (retrieval !== undefined && !retrieval.evidenceReferences.has(reference)) {
+      return {
+        query: `related:${id}`,
+        mode: 'related',
+        results: [],
+        hint: 'Related traversal requires an insight admitted by the current turn\'s direct Recall. No Provider query was made.',
+      }
+    }
+    const digest = authority === undefined ? undefined : sha256(JSON.stringify({
+      id,
+      memoryBodyId: selected ?? '',
+      depth: options.depth ?? 2,
+      edge: options.edge ?? '',
+    }))
+    if (retrieval?.relatedDigest !== undefined) {
+      return {
+        query: `related:${id}`,
+        mode: 'related',
+        results: [],
+        hint: retrieval.relatedDigest === digest
+          ? 'This exact related traversal already ran in the current turn. Reuse its prior evidence.'
+          : 'The related-traversal budget for this turn is exhausted. Use the evidence already returned.',
+      }
+    }
+    if (retrieval !== undefined && digest !== undefined) retrieval.relatedDigest = digest
     try {
-      const selected = this.scopeRelatedMemoryBody(parent, memoryBodyId, options.requirePinnedView === true)
       const results = await this.serviceFor(parent).related(id, options.depth, options.edge, signal, selected)
+      const admitted = boundedModelInsights(results, {
+        resultLimit: 4,
+        totalContentLimit: 4_000,
+        mediumLimit: 4,
+        unknownLimit: 4,
+        ...(retrieval === undefined ? {} : { excludeDigests: retrieval.evidenceDigests }),
+      })
+      if (retrieval !== undefined) {
+        for (const insight of admitted) {
+          retrieval.evidenceDigests.add(insightDigest(insight))
+          retrieval.evidenceReferences.add(`${insight.memoryBodyId ?? ''}/${insight.id}`)
+        }
+      }
       this.recordRecall()
       return {
         query: `related:${id}`,
         mode: 'related',
-        results: boundedModelInsights(results),
+        results: admitted,
       }
     } catch (error) {
+      if (retrieval !== undefined && retrieval.relatedDigest === digest) delete retrieval.relatedDigest
       this.counters.failures += 1
       throw error
     }
@@ -1500,7 +1651,7 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
     return selected
   }
 
-  private recallAuthority(agent: HostAgent, required: boolean): { viewId: string; memoryBodyIds: string[] } | undefined {
+  private recallAuthority(agent: HostAgent, required: boolean): RecallAuthority | undefined {
     if (!isAgentRuntimeSource(this.runtimeMemoryOrSource)) return undefined
     const views = this.runtimeMemoryOrSource.forAgent(agent).memoryViews
     const parentId = isSubagent(agent) ? agent.session.header?.parentSession?.trim() : undefined
@@ -1517,7 +1668,23 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
     }
     const memoryBodyIds = [...new Set(value.memoryBodyIds.map(id => String(id).trim()))]
     if (memoryBodyIds.length === 0) throw new Error(`pinned MemorySource has no recall-authorized Memory Spaces: ${pinned.viewId}`)
-    return { viewId: pinned.viewId, memoryBodyIds }
+    return { turnId: pinned.turnId, viewId: pinned.viewId, memoryBodyIds }
+  }
+
+  private turnRetrievalState(turnId: string): TurnRetrievalState {
+    const current = this.retrievalTurns.get(turnId)
+    if (current !== undefined) return current
+    while (this.retrievalTurns.size >= 128) {
+      const oldest = this.retrievalTurns.keys().next().value as string | undefined
+      if (oldest === undefined) break
+      this.retrievalTurns.delete(oldest)
+    }
+    const created: TurnRetrievalState = {
+      evidenceDigests: new Set(),
+      evidenceReferences: new Set(),
+    }
+    this.retrievalTurns.set(turnId, created)
+    return created
   }
 
   private recordRecall(): void {

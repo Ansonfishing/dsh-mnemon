@@ -88,13 +88,13 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_recall',
-    description: 'Recall query-dependent durable evidence from the MemorySource generation pinned to this turn. The Host derives the generation and validates any requested Memory Space IDs; no View identifier is model-facing. Omit memoryBodyIds to search every active space authorized for the turn. Provider-native scores are rank-fused rather than compared directly.',
+    description: 'Recall bounded durable evidence from the MemorySource pinned to this turn. Make the query focused: the Host permits one Provider Recall per turn, validates requested Memory Spaces, and admits only a small deduplicated evidence set. Omit memoryBodyIds to search every pinned active space. Provider-native scores are rank-fused rather than compared directly.',
     parameters: {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Focused natural-language memory query.' },
         mode: { type: 'string', enum: ['smart', 'keyword', 'basic'], description: 'smart=graph-enhanced default, keyword=token ranking, basic=SQL LIKE fallback.' },
-        limit: { type: 'integer', description: 'Maximum number of results. The model path caps output at 12.' },
+        limit: { type: 'integer', description: 'Maximum number of results. The model path caps output at 6.' },
         category: { type: 'string', enum: [...CATEGORIES] },
         source: { type: 'string', enum: [...SOURCES] },
         intent: { type: 'string', enum: [...INTENTS] },
@@ -117,7 +117,7 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
 
   ctx.tools.register(definition({
     name: 'mnemon_related',
-    description: 'Traverse a provider graph from a known insight id. Use after mnemon_recall only when the owning Memory Space reports capabilities.related=true and causal, semantic, temporal, or entity neighbors help explain or verify a remembered fact. OpenViking does not currently support this operation.',
+    description: 'Traverse one insight admitted by this turn\'s mnemon_recall. At most one traversal is allowed per turn; use it only when the owning Memory Space reports capabilities.related=true and graph neighbors materially help. OpenViking does not currently support this operation.',
     parameters: {
       type: 'object',
       properties: {
