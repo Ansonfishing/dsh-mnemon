@@ -15,7 +15,7 @@ import {
   type RuntimeMemoryMutation,
   type RuntimeMemoryMutationResult,
 } from './runtime-memory.ts'
-import type { Insight, MemoryBodyMetadataSample, MnemonService, RememberRequest, SearchRequest } from './service.ts'
+import { mutationResultCommitted, type Insight, type MemoryBodyMetadataSample, type MnemonService, type RememberRequest, type SearchRequest } from './service.ts'
 import { finalizeLlmPlacement, rulesOnlyPlacement, type PreparedMemoryPlacement } from './provider-placement.ts'
 import { MEMORY_PROVIDER_IDS } from './providers/catalog.ts'
 import type { MemoryBodyMetadataMaintenanceResult, MemoryBodyMetadataUpdate, MemoryPlacementDecision, SubagentCounters } from './shared/contracts.ts'
@@ -652,8 +652,7 @@ function destinationFromReceipt(
   if (receipt.name === 'mnemon_remember') {
     const args = optionalObject(receipt.arguments)
     const value = optionalObject(receipt.value)
-    const state = [value?.action, value?.status].filter((entry): entry is string => typeof entry === 'string').map(entry => entry.toLocaleLowerCase())
-    if (value?.success === false || value?.ok === false || state.some(entry => ['skipped', 'failed', 'cancelled', 'canceled', 'error'].includes(entry))) {
+    if (!mutationResultCommitted(receipt.value)) {
       throw new Error('migration lineage cannot use an uncommitted remember receipt')
     }
     if (!receiptMemoryBodyIds(receipt).includes(memoryBodyId)) throw new Error('migration lineage Memory Space does not match its remember receipt')

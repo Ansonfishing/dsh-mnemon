@@ -866,6 +866,25 @@ describe('Mnemon memory subagent coordinator', () => {
     await expect(new MnemonSubagentCoordinator(skippedHost.value, runtime, undefined, skippedTools.value)
       .runtime(parent(), { action: 'add', target: 'memory', content: 'Pending.' }, new AbortController().signal))
       .rejects.toThrow('uncommitted remember receipt')
+
+    const queuedTools = toolRegistry()
+    const queuedHost = observedSubagents(queuedTools, child => {
+      emitSuccessfulToolResult(queuedTools, child, 'mnemon_remember', { content: 'Use pnpm.', memoryBodyId: 'project' }, {
+        action: 'queued', status: 'pending', taskId: 'task-slow', memoryBodyId: 'project', memoryBodyName: 'Project',
+      })
+    }, 'completed', {
+      summary: 'Queued write.', action: 'archived', memoryBodyIds: ['project'], compactedEntries: [],
+      lineage: [{
+        sourceIndex: 1,
+        sourceDigest: createHash('sha256').update(JSON.stringify(sourceEntry)).digest('hex'),
+        destinationReceiptIndex: 1,
+        destinationMemoryBodyId: 'project',
+        destinationId: 'task-slow',
+      }],
+    })
+    await expect(new MnemonSubagentCoordinator(queuedHost.value, runtime, undefined, queuedTools.value)
+      .runtime(parent(), { action: 'add', target: 'memory', content: 'Pending.' }, new AbortController().signal))
+      .rejects.toThrow('uncommitted remember receipt')
     expect(runtime.compactTarget).not.toHaveBeenCalled()
   })
 

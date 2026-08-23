@@ -490,6 +490,14 @@ describe('MnemonService', () => {
     await service.remember({ content: 'Duplicate provider mutation.' })
     expect(service.memoryRevision()).toBe(beforeSkipped)
     expect(recordCommit).not.toHaveBeenCalled()
+
+    process.mockImplementation(async (_command, args) => args.includes('remember')
+      ? { stdout: JSON.stringify({ action: 'queued', status: 'pending', taskId: 'task-slow' }), stderr: '', exitCode: 0 }
+      : { stdout: '{}', stderr: '', exitCode: 0 })
+    const beforeQueued = service.memoryRevision()
+    await service.remember({ content: 'Provider has only accepted this mutation.' })
+    expect(service.memoryRevision()).toBe(beforeQueued)
+    expect(recordCommit).not.toHaveBeenCalled()
   })
 
   it('refuses mutations in read-only plugin mode', async () => {
