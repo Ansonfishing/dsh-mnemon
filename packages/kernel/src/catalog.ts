@@ -104,17 +104,21 @@ export class MemoryCatalog {
 
   registerLayer(registration: MemoryLayerRegistration): () => void {
     const descriptor = cloneLayer(registration.descriptor)
-    return this.register(this.layers, descriptor.id, { ...registration, descriptor })
+    const value: MemoryLayerRegistration = Object.freeze({
+      descriptor,
+      ...(registration.execute === undefined ? {} : { execute: registration.execute }),
+    })
+    return this.register(this.layers, descriptor.id, value)
   }
 
   registerAdapter(registration: MemoryAdapterRegistration): () => void {
     const descriptor = cloneAdapter(registration.descriptor)
-    return this.register(this.adapters, descriptor.id, { ...registration, descriptor })
+    return this.register(this.adapters, descriptor.id, Object.freeze({ descriptor }))
   }
 
   registerStrategy(registration: MemoryStrategyRegistration): () => void {
     const descriptor = cloneStrategy(registration.descriptor)
-    return this.register(this.strategies, descriptor.id, { ...registration, descriptor })
+    return this.register(this.strategies, descriptor.id, Object.freeze({ descriptor, propose: registration.propose }))
   }
 
   layer(id: string): MemoryLayerRegistration | undefined {

@@ -34,6 +34,9 @@ describe('composable memory system', () => {
       layers: [{ id: 'runtime' }, { id: 'documents' }, { id: 'memory-spaces' }],
       strategies: [{ id: 'default-three-tier', version: '1' }],
     })
+    expect(Object.isFrozen(catalog.layer('runtime'))).toBe(true)
+    expect(Object.isFrozen(catalog.strategy('default-three-tier'))).toBe(true)
+    expect(() => Object.assign(catalog.layer('runtime')!, { execute: vi.fn() })).toThrow()
     dispose()
     expect(catalog.snapshot()).toEqual({ generation: 8, layers: [], adapters: [], strategies: [] })
     expect(changes).toHaveBeenCalledTimes(8)
@@ -206,6 +209,69 @@ describe('composable memory system', () => {
       { layerId: 'memory-spaces', status: 'failed', error: 'provider unavailable' },
     ])
     expect(receipts).toEqual([result.receipt])
+  })
+
+  it('captures every executor before awaiting the first step', async () => {
+    let enterFirst!: () => void
+    let releaseFirst!: () => void
+    const firstEntered = new Promise<void>(resolve => { enterFirst = resolve })
+    const firstGate = new Promise<void>(resolve => { releaseFirst = resolve })
+    const firstExecute = vi.fn(async () => {
+      enterFirst()
+      await firstGate
+      return { generation: 'original-first' }
+    })
+    const originalSecond = vi.fn(async () => ({ generation: 'original-second' }))
+    const replacementSecond = vi.fn(async () => ({ generation: 'replacement-second' }))
+    const catalog = new MemoryCatalog()
+    catalog.registerLayer({
+      descriptor: { id: 'first-layer', label: 'First', description: 'First async layer.', role: 'first', order: 100, capabilities: ['recall'] },
+      execute: firstExecute,
+    })
+    const disposeSecond = catalog.registerLayer({
+      descriptor: { id: 'second-layer', label: 'Second', description: 'Second replaceable layer.', role: 'second', order: 200, capabilities: ['recall'] },
+      execute: originalSecond,
+    })
+    catalog.registerStrategy({
+      descriptor: { id: 'capture-test', version: '1', label: 'Capture test', description: 'Select both layers.', hooks: ['retrieval-planning'], deterministic: true },
+      propose: () => ({
+        strategyId: 'capture-test', strategyVersion: '1', reason: 'Exercise two sequential executors.',
+        steps: [
+          { layerId: 'first-layer', capability: 'recall' },
+          { layerId: 'second-layer', capability: 'recall' },
+        ],
+      }),
+    })
+    const automatic = { recall: 'automatic' as const, write: 'automatic' as const, projection: 'automatic' as const, maintenance: 'automatic' as const }
+    const topology = new MemoryTopologyManager(catalog, {
+      id: 'capture-test', strategyId: 'capture-test',
+      layers: [
+        { id: 'first-layer', enabled: true, participation: automatic, adapterIds: [] },
+        { id: 'second-layer', enabled: true, participation: automatic, adapterIds: [] },
+      ],
+    })
+    const kernel = new MemoryKernel(catalog, topology)
+    const plannedRequest = request({ candidateLayerIds: ['first-layer', 'second-layer'] })
+    const plan = await kernel.plan(plannedRequest)
+    const executing = kernel.execute(plan, plannedRequest)
+    await firstEntered
+
+    disposeSecond()
+    catalog.registerLayer({
+      descriptor: { id: 'second-layer', label: 'Second v2', description: 'Replacement layer.', role: 'second', order: 200, capabilities: ['recall'] },
+      execute: replacementSecond,
+    })
+    releaseFirst()
+
+    await expect(executing).resolves.toMatchObject({
+      status: 'succeeded',
+      steps: [
+        { layerId: 'first-layer', output: { generation: 'original-first' } },
+        { layerId: 'second-layer', output: { generation: 'original-second' } },
+      ],
+    })
+    expect(originalSecond).toHaveBeenCalledOnce()
+    expect(replacementSecond).not.toHaveBeenCalled()
   })
 
   it('fans receipts out to live sinks and detaches them without replacing the constructor sink', async () => {

@@ -259,13 +259,14 @@ export class MemoryKernel {
     const id = guard.id.trim()
     if (!/^[a-z][a-z0-9-]{0,127}$/u.test(id)) throw new Error('memory guard id must match [a-z][a-z0-9-]{0,127}')
     if (this.guards.has(id)) throw new Error(`memory guard is already registered: ${id}`)
-    this.guards.set(id, guard)
+    const registration: MemoryGuardRegistration = Object.freeze({ id, decide: guard.decide })
+    this.guards.set(id, registration)
     this.currentGuardGeneration += 1
     let active = true
     return () => {
       if (!active) return
       active = false
-      if (this.guards.get(id) !== guard) return
+      if (this.guards.get(id) !== registration) return
       this.guards.delete(id)
       this.currentGuardGeneration += 1
     }
@@ -275,15 +276,16 @@ export class MemoryKernel {
     const normalizedRequest = normalizeRequest(request)
     const descriptor = deepFreeze(jsonClone(this.descriptor(), 'memory system descriptor'))
     const guardGeneration = this.currentGuardGeneration
-    for (const guard of this.guards.values()) {
+    const guards = [...this.guards.values()]
+    const strategy = this.catalog.strategy(descriptor.topology.strategyId)
+    if (strategy === undefined) throw new Error(`active memory strategy is unavailable: ${descriptor.topology.strategyId}`)
+    for (const guard of guards) {
       const decision = await guard.decide(normalizedRequest, { descriptor })
       if (typeof decision !== 'object' || decision === null || (decision.kind !== 'allow' && decision.kind !== 'deny')) {
         throw new Error(`memory guard returned an invalid decision: ${guard.id}`)
       }
       if (decision.kind === 'deny') throw new Error(`memory operation denied by ${guard.id}: ${decision.reason}`)
     }
-    const strategy = this.catalog.strategy(descriptor.topology.strategyId)
-    if (strategy === undefined) throw new Error(`active memory strategy is unavailable: ${descriptor.topology.strategyId}`)
     const proposal = await strategy.propose(normalizedRequest, descriptor)
     if (proposal.strategyId !== strategy.descriptor.id || proposal.strategyVersion !== strategy.descriptor.version) {
       throw new Error('memory strategy proposal identity does not match its registration')
@@ -364,17 +366,24 @@ export class MemoryKernel {
       const participation = this.validateStep(step, authorizedRequest, current, 'memory plan')
       if (step.participation !== participation) throw new Error(`memory plan participation changed for step ${step.id}`)
     }
+    // Resolve and bind every data-plane function before the first await. A
+    // Catalog generation may be unloaded and replaced while an earlier step is
+    // running; this operation must continue on the generation it authorized.
+    const executableSteps = authorizedPlan.steps.map(step => {
+      const layer = this.catalog.layer(step.layerId)
+      return { step, execute: layer?.execute?.bind(layer) }
+    })
     const executionTopology = deepFreeze(jsonClone(current.topology, 'memory execution topology'))
     const startedAt = this.now().toISOString()
     const steps: MemoryReceiptStep[] = []
-    for (const step of authorizedPlan.steps) {
+    for (const executable of executableSteps) {
+      const { step, execute } = executable
       const stepStartedAt = this.now().toISOString()
       if (aborted(signal)) {
         steps.push({ stepId: step.id, layerId: step.layerId, ...(step.adapterId === undefined ? {} : { adapterId: step.adapterId }), status: 'cancelled', startedAt: stepStartedAt, finishedAt: this.now().toISOString(), error: 'operation cancelled' })
         continue
       }
-      const layer = this.catalog.layer(step.layerId)
-      if (layer?.execute === undefined) {
+      if (execute === undefined) {
         steps.push({ stepId: step.id, layerId: step.layerId, ...(step.adapterId === undefined ? {} : { adapterId: step.adapterId }), status: 'failed', startedAt: stepStartedAt, finishedAt: this.now().toISOString(), error: `memory layer has no executor: ${step.layerId}` })
         continue
       }
@@ -385,7 +394,7 @@ export class MemoryKernel {
         ...(signal === undefined ? {} : { signal }),
       }
       try {
-        const output = deepFreeze(jsonClone(await layer.execute(step, context), 'memory layer output'))
+        const output = deepFreeze(jsonClone(await execute(step, context), 'memory layer output'))
         steps.push({ stepId: step.id, layerId: step.layerId, ...(step.adapterId === undefined ? {} : { adapterId: step.adapterId }), status: 'succeeded', startedAt: stepStartedAt, finishedAt: this.now().toISOString(), output })
       } catch (error) {
         const status = aborted(signal) ? 'cancelled' as const : 'failed' as const
