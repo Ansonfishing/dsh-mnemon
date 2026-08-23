@@ -71,6 +71,21 @@ node scripts/evaluation/v0.3/components.mjs \
   --output /private/tmp/dsh-mnemon-v03-components.json
 ```
 
+Query robustness is measured separately from LLM scheduling. Five fresh native
+corpora are queried with natural, sparse, misleading, English, and absent
+paraphrases; both versions read each exact same corpus:
+
+```sh
+node scripts/evaluation/v0.3/retrieval-benchmark.mjs \
+  --baseline-root /private/tmp/dsh-mnemon-eval-v0216 \
+  --repetitions 5 \
+  --output /private/tmp/dsh-mnemon-v03-retrieval-benchmark.json
+```
+
+This reports hit@1, hit@6, empty-result behavior, result characters, and native
+tool latency. It does not use a Provider model and therefore must not be used
+to infer autonomous tool-choice quality.
+
 The cross-version suite opens one canonical data root in both directions:
 
 ```sh
