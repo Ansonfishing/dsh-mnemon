@@ -45,11 +45,12 @@ function parseArguments(argv) {
     routingGuidance: 'on',
     recallMode: 'guided',
     writebackMode: 'guided',
+    executionTimeoutMs: undefined,
   }
   for (let index = 0; index < argv.length; index += 1) {
     const name = argv[index]
     const value = argv[index + 1]
-    if (name === '--provider' || name === '--scenario' || name === '--package-root' || name === '--output' || name === '--mnemon-binary' || name === '--credential-file' || name === '--tool-surface' || name === '--idle-review-ms' || name === '--corpus' || name === '--mnemon' || name === '--routing-guidance' || name === '--recall-mode' || name === '--writeback-mode') {
+    if (name === '--provider' || name === '--scenario' || name === '--package-root' || name === '--output' || name === '--mnemon-binary' || name === '--credential-file' || name === '--tool-surface' || name === '--idle-review-ms' || name === '--execution-timeout-ms' || name === '--corpus' || name === '--mnemon' || name === '--routing-guidance' || name === '--recall-mode' || name === '--writeback-mode') {
       if (value === undefined) throw new Error(`${name} requires a value`)
       const key = {
         '--package-root': 'packageRoot',
@@ -57,11 +58,12 @@ function parseArguments(argv) {
         '--credential-file': 'credentialFile',
         '--tool-surface': 'toolSurface',
         '--idle-review-ms': 'idleReviewMs',
+        '--execution-timeout-ms': 'executionTimeoutMs',
         '--routing-guidance': 'routingGuidance',
         '--recall-mode': 'recallMode',
         '--writeback-mode': 'writebackMode',
       }[name] ?? name.slice(2)
-      options[key] = key === 'idleReviewMs' ? Number(value) : value
+      options[key] = key === 'idleReviewMs' || key === 'executionTimeoutMs' ? Number(value) : value
       index += 1
       continue
     }
@@ -77,6 +79,7 @@ function parseArguments(argv) {
   if (!['guided', 'off'].includes(options.writebackMode)) throw new Error('--writeback-mode must be guided or off')
   if (options.mnemon === 'off' && (options.scenario !== 'context-only' || options.corpus !== 'empty')) throw new Error('--mnemon off requires --scenario context-only --corpus empty')
   if (!Number.isInteger(options.idleReviewMs) || options.idleReviewMs < 5_000 || options.idleReviewMs > 600_000) throw new Error('--idle-review-ms must be within 5000..600000')
+  if (options.executionTimeoutMs !== undefined && (!Number.isInteger(options.executionTimeoutMs) || options.executionTimeoutMs < 60_000 || options.executionTimeoutMs > 900_000)) throw new Error('--execution-timeout-ms must be within 60000..900000')
   options.packageRoot = resolve(options.packageRoot)
   options.output = resolve(options.output)
   options.mnemonBinary = resolve(options.mnemonBinary)
@@ -89,26 +92,31 @@ function run(command, args, { cwd = harnessRoot, env = process.env, timeoutMs = 
     const child = spawn(command, args, { cwd, env, shell: false, stdio: ['ignore', 'pipe', 'pipe'] })
     let stdout = ''
     let stderr = ''
+    let timedOut = false
+    let forceTimer
     child.stdout.setEncoding('utf8').on('data', chunk => { stdout += chunk })
     child.stderr.setEncoding('utf8').on('data', chunk => { stderr += chunk })
     const timeout = setTimeout(() => {
+      timedOut = true
       child.kill('SIGTERM')
-      reject(new Error(`${command} timed out after ${timeoutMs}ms`))
+      forceTimer = setTimeout(() => child.kill('SIGKILL'), 5_000)
     }, timeoutMs)
     child.once('error', error => {
       clearTimeout(timeout)
+      clearTimeout(forceTimer)
       reject(error)
     })
     child.once('exit', (code, signal) => {
       clearTimeout(timeout)
-      resolveRun({ code, signal, stdout, stderr })
+      clearTimeout(forceTimer)
+      resolveRun({ code, signal, stdout, stderr, timedOut })
     })
   })
 }
 
 function assertSuccess(label, result) {
-  if (result.code === 0) return
-  throw new Error([`${label} failed with code ${String(result.code)}${result.signal === null ? '' : ` (${result.signal})`}`, result.stdout.trim(), result.stderr.trim()].filter(Boolean).join('\n'))
+  if (result.code === 0 && !result.timedOut) return
+  throw new Error([`${label} failed with code ${String(result.code)}${result.signal === null ? '' : ` (${result.signal})`}${result.timedOut ? ' after timeout' : ''}`, result.stdout.trim(), result.stderr.trim()].filter(Boolean).join('\n'))
 }
 
 function sha256(value) {
@@ -639,7 +647,7 @@ async function main() {
     const execution = await run(process.execPath, [dshBin, '--profile', 'headless', 'mnemon-evaluation'], {
       cwd: workspaceRoot,
       env,
-      timeoutMs: options.scenario === 'idle-review' ? 180_000 : 300_000,
+      timeoutMs: options.executionTimeoutMs ?? (options.scenario === 'idle-review' ? 180_000 : 300_000),
     })
     await Promise.all([
       writeFile(join(options.output, 'dsh.stdout.log'), execution.stdout),
@@ -664,6 +672,7 @@ async function main() {
       writebackMode: options.writebackMode,
       toolSurface: options.toolSurface,
       idleReviewMs: options.idleReviewMs,
+      executionTimeoutMs: options.executionTimeoutMs ?? (options.scenario === 'idle-review' ? 180_000 : 300_000),
       package: metadata,
       dshVersion: '0.1.1-rc.2',
       mnemonBinary: options.mnemonBinary,

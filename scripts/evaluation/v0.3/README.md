@@ -115,6 +115,10 @@ headers, first byte, and completion separately. Analysis schema v2 also reports
 turn wall time, memory-tool result characters, tool event latency, failures,
 and unexpected memory calls. Provider request latency is still reported, but
 must not be mistaken for user wall time because concurrent calls can overlap.
+An execution timeout now terminates DSH but still flushes captured requests and
+logs before failing the run. `--execution-timeout-ms` can extend the default
+300-second ceiling for a diagnostic rerun without changing the release pass
+criterion.
 
 Request bodies contain the synthetic evaluation corpus and conversation, so
 they should be treated as evaluation evidence rather than committed fixtures.
