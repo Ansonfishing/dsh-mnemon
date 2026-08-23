@@ -109,6 +109,8 @@ describe('MemoryTurnViewManager', () => {
     })
     expect(views.wake(first.id).text).toContain('exact runtime context')
     expect(views.wake(first.id).text).toContain('"documents": "12 active project Documents."')
+    expect(views.wake(first.id).text.split('\n').filter(line => line.startsWith('MNEMON ROUTES'))).toHaveLength(1)
+    expect(views.wake(first.id).text).not.toContain('END MNEMON ROUTED MEMORY SOURCES')
     expect(Object.isFrozen(first)).toBe(true)
     expect(Object.isFrozen(first.sources)).toBe(true)
     expect(Object.isFrozen(first.sources[0])).toBe(true)

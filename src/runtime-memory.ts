@@ -347,7 +347,7 @@ export class RuntimeMemoryController {
     return {
       revision: snapshot.revision,
       text: `MNEMON RUNTIME MEMORY PROTOCOL
-You are operating with compact hot memory. The system has loaded USER.md and MEMORY.md below for every turn. They are always relevant when their subject matches the current task; comply implicitly and do not recite this protocol or the files merely to prove that you read them.
+USER.md and MEMORY.md below are compact hot memory for every turn. They are always relevant when applicable; apply them silently and never recite them merely to prove they were read.
 
 SEMANTICS AND PRIORITY
 - The user's explicit request in the current turn wins over both files.
@@ -375,7 +375,7 @@ Contents of MEMORY.md (working reference; ${memoryUsage.used}/${memoryUsage.limi
 ${memory || '(empty)'}
 </runtime-memory-file>
 
-IMPORTANT: USER.md and MEMORY.md above are always relevant when applicable. Follow the current user's request first, use mnemon_runtime_memory proactively only when the write criteria are met, and otherwise continue without a memory mutation.`,
+IMPORTANT: These files are always relevant when applicable, after the current request. Use mnemon_runtime_memory only when the criteria above are met; otherwise do not mutate memory.`,
     }
   }
 
