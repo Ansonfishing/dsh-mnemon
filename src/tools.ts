@@ -115,7 +115,10 @@ function modelDocumentSearch(result: DocumentSearchResult) {
 function modelStatus(status: StatusView) {
   const active = status.memoryBodies.filter(body => body.active && body.providerEnabled !== false)
   const unhealthy = active.filter(body => !body.healthy)
-  const providers = status.providerServices?.slice(0, 16) ?? []
+  const relevantProviders = status.providerServices?.filter(provider => (
+    provider.enabled || provider.configured || provider.memoryBodyCount > 0 || provider.status === 'unhealthy'
+  )) ?? []
+  const providers = relevantProviders.slice(0, 16)
   return {
     healthy: status.healthy && unhealthy.length === 0,
     ...(status.error === undefined ? {} : { error: boundedToolText(status.error, 1_000) }),
@@ -140,7 +143,7 @@ function modelStatus(status: StatusView) {
       activeMemoryBodyCount: provider.activeMemoryBodyCount,
       ...(provider.error === undefined ? {} : { error: boundedToolText(provider.error, 500) }),
     })),
-    omittedProviderCount: Math.max(0, (status.providerServices?.length ?? 0) - providers.length),
+    omittedProviderCount: Math.max(0, relevantProviders.length - providers.length),
     ...(status.stats === undefined ? {} : {
       aggregate: {
         totalInsights: status.stats.totalInsights,
