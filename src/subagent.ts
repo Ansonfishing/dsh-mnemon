@@ -314,7 +314,37 @@ export interface RecallResult {
   mode: string
   results: Insight[]
   hint?: string
-  selectedMemoryBodyIds: string[]
+}
+
+const MODEL_RECALL_RESULT_LIMIT = 12
+const MODEL_RECALL_CONTENT_LIMIT = 2_000
+const MODEL_RECALL_LIST_LIMIT = 8
+const MODEL_RECALL_METADATA_LIMIT = 300
+
+function boundedModelText(value: string, maximum: number): string {
+  return value.length <= maximum ? value : `${value.slice(0, maximum - 1)}…`
+}
+
+/** Keep provider-owned evidence useful without letting one row dominate model context. */
+function boundedModelInsights(results: readonly Insight[]): Insight[] {
+  return results
+    .filter(result => result.id.length > 0 && result.id.length <= 1_000)
+    .slice(0, MODEL_RECALL_RESULT_LIMIT)
+    .map(result => ({
+      ...result,
+      content: boundedModelText(result.content, MODEL_RECALL_CONTENT_LIMIT),
+      ...(result.category === undefined ? {} : { category: boundedModelText(result.category, MODEL_RECALL_METADATA_LIMIT) }),
+      ...(result.tags === undefined ? {} : { tags: result.tags.slice(0, MODEL_RECALL_LIST_LIMIT).map(tag => boundedModelText(tag, MODEL_RECALL_METADATA_LIMIT)) }),
+      ...(result.entities === undefined ? {} : { entities: result.entities.slice(0, MODEL_RECALL_LIST_LIMIT).map(entity => boundedModelText(entity, MODEL_RECALL_METADATA_LIMIT)) }),
+      ...(result.source === undefined ? {} : { source: boundedModelText(result.source, MODEL_RECALL_METADATA_LIMIT) }),
+      ...(result.confidence === undefined ? {} : { confidence: boundedModelText(result.confidence, MODEL_RECALL_METADATA_LIMIT) }),
+      ...(result.intent === undefined ? {} : { intent: boundedModelText(result.intent, MODEL_RECALL_METADATA_LIMIT) }),
+      ...(result.matchedVia === undefined ? {} : { matchedVia: boundedModelText(result.matchedVia, MODEL_RECALL_METADATA_LIMIT) }),
+      ...(result.createdAt === undefined ? {} : { createdAt: boundedModelText(result.createdAt, MODEL_RECALL_METADATA_LIMIT) }),
+      ...(result.edgeType === undefined ? {} : { edgeType: boundedModelText(result.edgeType, MODEL_RECALL_METADATA_LIMIT) }),
+      ...(result.memoryBodyName === undefined ? {} : { memoryBodyName: boundedModelText(result.memoryBodyName, MODEL_RECALL_METADATA_LIMIT) }),
+      ...(result.externalUri === undefined ? {} : { externalUri: boundedModelText(result.externalUri, 2_000) }),
+    }))
 }
 
 /** Compatibility name for the v0.3 pre-release API. Recall no longer delegates. */
@@ -749,7 +779,7 @@ export class MnemonSubagentCoordinator {
 
   async recall(parent: HostAgent, request: SearchRequest, signal: AbortSignal, options: { requirePinnedView?: boolean } = {}): Promise<RecallResult> {
     try {
-      const limited = { ...request, limit: Math.min(request.limit ?? 12, 12) }
+      const limited = { ...request, limit: Math.min(request.limit ?? MODEL_RECALL_RESULT_LIMIT, MODEL_RECALL_RESULT_LIMIT) }
       const scoped = this.scopeRecallRequest(parent, limited, options.requirePinnedView === true)
       const result = await this.serviceFor(parent).search(scoped, signal)
       this.recordRecall()
@@ -757,9 +787,8 @@ export class MnemonSubagentCoordinator {
       return {
         query: result.query,
         mode: result.mode,
-        results: result.results.slice(0, 12),
+        results: boundedModelInsights(result.results),
         ...(hint === undefined || hint === '' ? {} : { hint: hint.length <= 1_000 ? hint : `${hint.slice(0, 999)}…` }),
-        selectedMemoryBodyIds: scoped.memoryBodyIds ?? result.sources.map(source => source.memoryBodyId),
       }
     } catch (error) {
       this.counters.failures += 1
@@ -803,8 +832,7 @@ export class MnemonSubagentCoordinator {
       return {
         query: `related:${id}`,
         mode: 'related',
-        results: results.slice(0, 12),
-        selectedMemoryBodyIds: selected === undefined ? [] : [selected],
+        results: boundedModelInsights(results),
       }
     } catch (error) {
       this.counters.failures += 1

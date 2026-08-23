@@ -160,9 +160,11 @@ describe('Mnemon memory subagent coordinator', () => {
   it('executes bounded Recall directly against the pinned MemorySource without starting a child', async () => {
     const host = subagents(undefined)
     const memoryService = service()
+    const authorizedIds = Array.from({ length: 80 }, (_, index) => index === 0 ? 'project' : `space-${index + 1}`)
     const results = Array.from({ length: 20 }, (_, index) => ({
       id: `m${index + 1}`,
-      content: `Evidence ${index + 1}`,
+      content: index === 0 ? `Evidence ${index + 1} ${'x'.repeat(3_000)}` : `Evidence ${index + 1}`,
+      tags: index === 0 ? Array.from({ length: 20 }, (_, tag) => `tag-${tag + 1}`) : undefined,
       memoryBodyId: 'project',
       memoryBodyName: 'Project',
     }))
@@ -171,23 +173,28 @@ describe('Mnemon memory subagent coordinator', () => {
       mode: 'smart',
       results,
       hint: 'h'.repeat(1_500),
-      sources: [{ memoryBodyId: 'project' }, { memoryBodyId: 'release' }],
+      sources: [{ memoryBodyId: 'project' }],
     } as never)
     const memoryViews = {
       activeTurn: vi.fn(() => ({ viewId: 'view-pinned' })),
-      sourceState: vi.fn(() => ({ memoryBodyIds: ['project', 'release'] })),
+      sourceState: vi.fn(() => ({ memoryBodyIds: authorizedIds })),
     }
     const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
     const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
 
     const recalled = await coordinator.recall(parent(), { query: 'database choice', limit: 50 }, new AbortController().signal, { requirePinnedView: true })
 
-    expect(memoryService.search).toHaveBeenCalledWith({ query: 'database choice', limit: 12, memoryBodyIds: ['project', 'release'] }, expect.any(AbortSignal))
-    expect(recalled).toMatchObject({ selectedMemoryBodyIds: ['project', 'release'], results: expect.any(Array) })
+    expect(memoryService.search).toHaveBeenCalledWith({ query: 'database choice', limit: 12, memoryBodyIds: authorizedIds }, expect.any(AbortSignal))
+    expect(recalled).toMatchObject({ results: expect.any(Array) })
     expect(recalled.results).toHaveLength(12)
+    expect(recalled.results[0]?.content).toHaveLength(2_000)
+    expect(recalled.results[0]?.content.endsWith('…')).toBe(true)
+    expect(recalled.results[0]?.tags).toHaveLength(8)
     expect(recalled.hint).toHaveLength(1_000)
     expect(recalled).not.toHaveProperty('sources')
+    expect(recalled).not.toHaveProperty('selectedMemoryBodyIds')
     expect(recalled).not.toHaveProperty('delegation')
+    expect(JSON.stringify(recalled).length).toBeLessThan(5_000)
     expect(host.start).not.toHaveBeenCalled()
     expect(coordinator.snapshot()).toMatchObject({ recalls: 1, failures: 0, lastOperation: 'recall' })
   })
@@ -208,7 +215,7 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(() => coordinator.scopeRecallRequest(child, { query: 'database choice', memoryBodyIds: ['outside'] })).toThrow('outside pinned Source')
     expect(coordinator.scopeRelatedMemoryBody(child)).toBe('project')
     expect(() => coordinator.scopeRelatedMemoryBody(child, 'outside')).toThrow('outside pinned Source')
-    await expect(coordinator.recall(child, { query: 'database choice' }, new AbortController().signal)).resolves.toMatchObject({ selectedMemoryBodyIds: ['project'] })
+    await expect(coordinator.recall(child, { query: 'database choice' }, new AbortController().signal)).resolves.not.toHaveProperty('selectedMemoryBodyIds')
     expect(memoryViews.activeTurn).toHaveBeenCalledWith('root')
     expect(host.start).not.toHaveBeenCalled()
   })
@@ -236,7 +243,6 @@ describe('Mnemon memory subagent coordinator', () => {
       query: 'related:m1',
       mode: 'related',
       results: [{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: 'Project' }],
-      selectedMemoryBodyIds: ['project'],
     })
     expect(memoryService.related).toHaveBeenCalledWith('m1', 3, 'causal', signal, 'project')
     expect(host.start).not.toHaveBeenCalled()
@@ -1044,8 +1050,8 @@ describe('Mnemon root/child tool split', () => {
     const registered: ToolDefinition[] = []
     const memoryService = service()
     const coordinator = {
-      recall: vi.fn(async () => ({ query: 'x', mode: 'smart', results: [], selectedMemoryBodyIds: ['project'] })),
-      related: vi.fn(async () => ({ query: 'related:m1', mode: 'related', results: [{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }], selectedMemoryBodyIds: ['project'] })),
+      recall: vi.fn(async () => ({ query: 'x', mode: 'smart', results: [] })),
+      related: vi.fn(async () => ({ query: 'related:m1', mode: 'related', results: [{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }] })),
       runtime: vi.fn(async () => ({ success: true, message: 'Entry added.', target: 'user', entryCount: 1, usage: { used: 20, limit: 4096 } })),
     } as unknown as MnemonSubagentCoordinator
     const runtimeMemory = { mutate: vi.fn() } as unknown as RuntimeMemoryController
@@ -1077,11 +1083,11 @@ describe('Mnemon root/child tool split', () => {
       query: 'related:m1',
       mode: 'related',
       results: [{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }],
-      selectedMemoryBodyIds: ['project'],
     })
     expect(coordinator.related).toHaveBeenCalledWith(parent('subagent'), 'm1', 'project', signal, { depth: 2, requirePinnedView: true })
     expect(registered.some(tool => tool.name === 'mnemon_memory_zoom')).toBe(false)
     expect(JSON.stringify(recall.parameters)).not.toMatch(/viewId|viewNodeId|viewCapability/u)
+    expect(JSON.stringify(recall.parameters)).toContain('do not list the catalog only to populate it')
   })
 
   it('enforces automatic topology participation without hiding the management catalog', async () => {

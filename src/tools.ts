@@ -94,11 +94,11 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
       properties: {
         query: { type: 'string', description: 'Focused natural-language memory query.' },
         mode: { type: 'string', enum: ['smart', 'keyword', 'basic'], description: 'smart=graph-enhanced default, keyword=token ranking, basic=SQL LIKE fallback.' },
-        limit: { type: 'integer', description: 'Maximum number of results. The service accepts 1 through 50.' },
+        limit: { type: 'integer', description: 'Maximum number of results. The model path caps output at 12.' },
         category: { type: 'string', enum: [...CATEGORIES] },
         source: { type: 'string', enum: [...SOURCES] },
         intent: { type: 'string', enum: [...INTENTS] },
-        memoryBodyIds: { type: 'array', items: { type: 'string' }, description: 'Optional active Memory Space ids from mnemon_memory_bodies. The Host rejects ids outside the pinned Source.' },
+        memoryBodyIds: { type: 'array', items: { type: 'string' }, description: 'Optional known active Memory Space ids to narrow recall. Omit this field to search every pinned active space; do not list the catalog only to populate it. The Host rejects ids outside the pinned Source.' },
       },
       required: ['query'],
     },
