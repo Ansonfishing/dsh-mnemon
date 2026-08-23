@@ -196,7 +196,9 @@ export const idleReviewScenario = {
     },
     {
       id: 'checkpoint-part-two',
-      waitAfterMs: 20_000,
+      // Leave enough time for a cold provider response from the detached idle
+      // review child before the headless runner tears down its capture proxy.
+      waitAfterMs: 60_000,
       prompt: '[EVAL:idle-review-2] 再补充隔离约定：所有评测运行在独立 dataDir；当前轮 Receipt 只能影响下一轮；provider credential 不得进入模型上下文。请简短总结，但仍不要主动写记忆。',
     },
   ],
@@ -242,6 +244,30 @@ export const autonomousRecallScenario = {
       id: 'unrelated-no-retrieval',
       prompt: '[EVAL:auto-negative] 把“保持简单”翻译成英文，只给译文。',
       expected: { memoryTools: [] },
+    },
+  ],
+}
+
+export const singleRecallScenario = {
+  id: 'v03-single-durable-recall',
+  maxTokens: 1536,
+  turns: [
+    {
+      id: 'single-durable-recall',
+      prompt: '[EVAL:single-recall] 哪次演练让我们增加了 35% 和 65% 两个灰度阶段？直接从 12% 升到 100% 当时暴露了什么？',
+      expected: { mustContain: ['2026-06-02', '租户'], memoryTools: ['mnemon_recall'] },
+    },
+  ],
+}
+
+export const capacityMaintenanceScenario = {
+  id: 'v03-runtime-capacity-maintenance',
+  maxTokens: 4096,
+  turns: [
+    {
+      id: 'capacity-maintenance',
+      prompt: '[EVAL:capacity-maintenance] 请把这条长期适用的生产约定保存到 Runtime Memory，并保留代号 CAPACITY-NEXT-731：任何跨租户数据回滚都必须先保存审计游标、当前 schema digest 和负责人的确认，再执行流量切换；若其中一项缺失必须失败关闭。保存后只说明是否成功。',
+      expected: { mustContain: ['成功'], memoryTools: ['mnemon_runtime_memory'] },
     },
   ],
 }

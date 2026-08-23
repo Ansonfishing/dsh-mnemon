@@ -35,6 +35,12 @@ function nestedId(value) {
   return undefined
 }
 
+function runtimeProjection(graph) {
+  if (typeof graph.runtimeMemory.contextProjection === 'function') return graph.runtimeMemory.contextProjection()
+  const snapshot = graph.runtimeMemory.snapshot()
+  return { revision: snapshot.revision, text: graph.runtimeMemory.contextText() }
+}
+
 async function main() {
   const options = argumentsFrom(process.argv.slice(2))
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'dsh-mnemon-v03-components-'))
@@ -64,7 +70,7 @@ async function main() {
       await graph.runtimeMemory.mutate({ action: 'replace', target: 'memory', oldText: 'COMPONENT-RUNTIME-OLD', content: 'COMPONENT-RUNTIME-NEW reusable fact.', importance: 'critical' })
       await graph.runtimeMemory.mutate({ action: 'add', target: 'user', content: 'COMPONENT-USER temporary preference.', importance: 'normal' })
       await graph.runtimeMemory.mutate({ action: 'remove', target: 'user', oldText: 'COMPONENT-USER' })
-      const projection = graph.runtimeMemory.contextProjection()
+      const projection = runtimeProjection(graph)
       assert.match(projection.text, /COMPONENT-RUNTIME-NEW/u)
       assert.doesNotMatch(projection.text, /COMPONENT-RUNTIME-OLD|COMPONENT-USER/u)
       evidence.runtimeRevision = projection.revision
@@ -132,23 +138,34 @@ async function main() {
       evidence.status = { healthy: status.healthy, activeStores: status.dshActiveStores, totalInsights: status.stats?.totalInsights }
     })
 
-    await check('TurnView pin, receipt isolation, and next-turn publication', async () => {
-      const scope = { storage: 'custom', workspaceId: workspace, sessionId: 'component-session', agentId: 'component-agent' }
-      const firstTurn = await graph.memoryViews.beginTurn('component-session:1', scope)
-      const firstWake = graph.memoryViews.wake(firstTurn.viewId)
-      await graph.runtimeMemory.mutate({ action: 'add', target: 'memory', content: 'COMPONENT-NEXT-VIEW receipt sentinel.', importance: 'normal' })
-      assert.ok(graph.memoryViews.pendingReceiptCount() > 0)
-      assert.deepEqual(graph.memoryViews.wake(firstTurn.viewId), firstWake)
-      assert.equal((await graph.memoryViews.beginTurn('component-session:1', scope)).viewId, firstTurn.viewId)
-      graph.memoryViews.endTurn('component-session:1')
-      const secondTurn = await graph.memoryViews.beginTurn('component-session:2', scope)
-      const secondWake = graph.memoryViews.wake(secondTurn.viewId)
-      assert.notEqual(secondTurn.viewId, firstTurn.viewId)
-      assert.match(secondWake.text, /COMPONENT-NEXT-VIEW/u)
-      assert.equal(graph.memoryViews.pendingReceiptCount(), 0)
-      evidence.turnViews = { firstViewId: firstTurn.viewId, secondViewId: secondTurn.viewId, firstWakeCharacters: firstWake.text.length, secondWakeCharacters: secondWake.text.length }
-      graph.memoryViews.endTurn('component-session:2')
-    })
+    if (graph.memoryViews === undefined) {
+      await check('legacy runtime projection changes immediately after commit', async () => {
+        const first = runtimeProjection(graph)
+        await graph.runtimeMemory.mutate({ action: 'add', target: 'memory', content: 'COMPONENT-LEGACY-LIVE sentinel.', importance: 'normal' })
+        const second = runtimeProjection(graph)
+        assert.notEqual(second.revision, first.revision)
+        assert.match(second.text, /COMPONENT-LEGACY-LIVE/u)
+        evidence.turnViews = { supported: false, firstWakeCharacters: first.text.length, secondWakeCharacters: second.text.length }
+      })
+    } else {
+      await check('TurnView pin, receipt isolation, and next-turn publication', async () => {
+        const scope = { storage: 'custom', workspaceId: workspace, sessionId: 'component-session', agentId: 'component-agent' }
+        const firstTurn = await graph.memoryViews.beginTurn('component-session:1', scope)
+        const firstWake = graph.memoryViews.wake(firstTurn.viewId)
+        await graph.runtimeMemory.mutate({ action: 'add', target: 'memory', content: 'COMPONENT-NEXT-VIEW receipt sentinel.', importance: 'normal' })
+        assert.ok(graph.memoryViews.pendingReceiptCount() > 0)
+        assert.deepEqual(graph.memoryViews.wake(firstTurn.viewId), firstWake)
+        assert.equal((await graph.memoryViews.beginTurn('component-session:1', scope)).viewId, firstTurn.viewId)
+        graph.memoryViews.endTurn('component-session:1')
+        const secondTurn = await graph.memoryViews.beginTurn('component-session:2', scope)
+        const secondWake = graph.memoryViews.wake(secondTurn.viewId)
+        assert.notEqual(secondTurn.viewId, firstTurn.viewId)
+        assert.match(secondWake.text, /COMPONENT-NEXT-VIEW/u)
+        assert.equal(graph.memoryViews.pendingReceiptCount(), 0)
+        evidence.turnViews = { supported: true, firstViewId: firstTurn.viewId, secondViewId: secondTurn.viewId, firstWakeCharacters: firstWake.text.length, secondWakeCharacters: secondWake.text.length }
+        graph.memoryViews.endTurn('component-session:2')
+      })
+    }
 
     await check('runtime capacity rejects overflow before mutation', async () => {
       const before = graph.runtimeMemory.snapshot().revision
@@ -159,7 +176,7 @@ async function main() {
       assert.equal(graph.runtimeMemory.snapshot().revision, before)
     })
   } finally {
-    graph.dispose()
+    graph.dispose?.()
     await rm(temporaryRoot, { recursive: true, force: true })
   }
 

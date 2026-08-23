@@ -51,7 +51,7 @@ function requestContexts(request) {
     .map(message => textContent(message.content))
 }
 
-function requestMetrics(request, rootSessionId) {
+function requestMetrics(request, rootSessionId, attribution) {
   const messages = Array.isArray(request.body?.messages) ? request.body.messages : []
   const tools = Array.isArray(request.body?.tools) ? request.body.tools : []
   const contexts = requestContexts(request)
@@ -65,7 +65,9 @@ function requestMetrics(request, rootSessionId) {
   const finished = Date.parse(request.finishedAt)
   return {
     index: request.index,
-    marker: request.marker,
+    marker: attribution.marker,
+    rawMarker: request.marker,
+    markerAttribution: attribution.kind,
     sessionId: request.sessionId,
     agentRole: request.sessionId === rootSessionId ? 'root' : 'child-or-background',
     status: request.status,
@@ -89,12 +91,34 @@ function requestMetrics(request, rootSessionId) {
     routingGuidancePresent: system.includes('Use memory only by need.'),
     providerUsage: request.usage,
     usageKind: request.usageKind,
+    finishReasons: request.finishReasons ?? [],
+    responseToolCalls: request.responseToolCalls ?? [],
     latencyMs: Number.isFinite(started) && Number.isFinite(finished) ? finished - started : undefined,
   }
 }
 
+function requestAttribution(request, index, requests, rootSessionId) {
+  if (request.marker !== '[EVAL:unknown]') return { marker: request.marker, kind: 'request-body' }
+  if (request.sessionId === rootSessionId) return { marker: request.marker, kind: 'unattributed-root' }
+  const previousRoot = requests.slice(0, index).findLast(candidate => candidate.sessionId === rootSessionId && !titleRequest(candidate))
+  return previousRoot === undefined
+    ? { marker: request.marker, kind: 'unattributed-child' }
+    : { marker: previousRoot.marker, kind: 'nearest-prior-root' }
+}
+
 function sum(values) {
   return values.reduce((total, value) => total + (Number(value) || 0), 0)
+}
+
+function cacheHitTokens(request) {
+  return request.providerUsage?.prompt_cache_hit_tokens
+    ?? request.providerUsage?.prompt_tokens_details?.cached_tokens
+    ?? 0
+}
+
+function cacheMissTokens(request) {
+  return request.providerUsage?.prompt_cache_miss_tokens
+    ?? Math.max(0, (request.providerUsage?.prompt_tokens ?? 0) - cacheHitTokens(request))
 }
 
 function toolNames(turn) {
@@ -193,7 +217,11 @@ async function main() {
   ])
   const titleRequests = requests.filter(titleRequest)
   const evaluatedRequests = requests.filter(request => !titleRequest(request))
-  const metrics = evaluatedRequests.map(request => requestMetrics(request, session.sessionId))
+  const metrics = evaluatedRequests.map((request, index) => requestMetrics(
+    request,
+    session.sessionId,
+    requestAttribution(request, index, evaluatedRequests, session.sessionId),
+  ))
   const scenarioById = new Map(scenario.turns.map(turn => [turn.id, turn]))
   const turns = session.turns.map(turn => {
     const related = metrics.filter(request => request.marker === turn.prompt.match(/\[EVAL:[^\]]+\]/u)?.[0])
@@ -212,6 +240,8 @@ async function main() {
   })
   const firstMnemonContext = requestContexts(evaluatedRequests.find(request => request.sessionId === session.sessionId) ?? { body: {} }).map(mnemonSlice).at(-1) ?? ''
   const usageKinds = [...new Set(metrics.map(request => request.usageKind).filter(Boolean))]
+  const completeMetrics = metrics.filter(request => request.status !== undefined && request.providerUsage !== undefined)
+  const incompleteCalls = metrics.length - completeMetrics.length
   const analysis = {
     schemaVersion: 1,
     scenarioId: session.scenarioId,
@@ -227,9 +257,24 @@ async function main() {
       promptTokens: sum(metrics.map(request => request.providerUsage?.prompt_tokens)),
       completionTokens: sum(metrics.map(request => request.providerUsage?.completion_tokens)),
       totalTokens: sum(metrics.map(request => request.providerUsage?.total_tokens)),
+      rootPromptTokens: sum(metrics.filter(request => request.agentRole === 'root').map(request => request.providerUsage?.prompt_tokens)),
+      rootCompletionTokens: sum(metrics.filter(request => request.agentRole === 'root').map(request => request.providerUsage?.completion_tokens)),
+      childPromptTokens: sum(metrics.filter(request => request.agentRole !== 'root').map(request => request.providerUsage?.prompt_tokens)),
+      childCompletionTokens: sum(metrics.filter(request => request.agentRole !== 'root').map(request => request.providerUsage?.completion_tokens)),
+      cacheHitTokens: sum(metrics.map(cacheHitTokens)),
+      cacheMissTokens: sum(metrics.map(cacheMissTokens)),
+      rootCacheHitTokens: sum(metrics.filter(request => request.agentRole === 'root').map(cacheHitTokens)),
+      rootCacheMissTokens: sum(metrics.filter(request => request.agentRole === 'root').map(cacheMissTokens)),
+      childCacheHitTokens: sum(metrics.filter(request => request.agentRole !== 'root').map(cacheHitTokens)),
+      childCacheMissTokens: sum(metrics.filter(request => request.agentRole !== 'root').map(cacheMissTokens)),
+      latencyMs: sum(metrics.map(request => request.latencyMs)),
+      rootLatencyMs: sum(metrics.filter(request => request.agentRole === 'root').map(request => request.latencyMs)),
+      childLatencyMs: sum(metrics.filter(request => request.agentRole !== 'root').map(request => request.latencyMs)),
       titlePromptTokens: sum(titleRequests.map(request => request.usage?.prompt_tokens)),
       titleCompletionTokens: sum(titleRequests.map(request => request.usage?.completion_tokens)),
-      usageKind: usageKinds.join(', ') || 'missing',
+      completedModelCalls: completeMetrics.length,
+      incompleteModelCalls: incompleteCalls,
+      usageKind: [...usageKinds, ...(incompleteCalls > 0 ? ['missing'] : [])].join(', ') || 'missing',
       passedTurns: turns.filter(turn => turn.assessment.passed).length,
     },
   }

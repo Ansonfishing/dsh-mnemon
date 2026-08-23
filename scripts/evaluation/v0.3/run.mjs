@@ -10,6 +10,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   autonomousRecallScenario,
+  capacityMaintenanceScenario,
   contextOnlyScenario,
   deterministicScenario,
   documents,
@@ -17,6 +18,7 @@ import {
   memorySpaces,
   realConversationScenario,
   runtimeEntries,
+  singleRecallScenario,
 } from './fixtures.mjs'
 
 const harnessRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -63,9 +65,9 @@ function parseArguments(argv) {
     throw new Error(`unknown argument: ${name}`)
   }
   if (!['mock', 'real'].includes(options.provider)) throw new Error('--provider must be mock or real')
-  if (!['deterministic', 'real-conversation', 'idle-review', 'context-only', 'autonomous-recall'].includes(options.scenario)) throw new Error('--scenario is unsupported')
+  if (!['deterministic', 'real-conversation', 'idle-review', 'context-only', 'autonomous-recall', 'single-recall', 'capacity-maintenance'].includes(options.scenario)) throw new Error('--scenario is unsupported')
   if (!['memory-only', 'full'].includes(options.toolSurface)) throw new Error('--tool-surface must be memory-only or full')
-  if (!['empty', 'realistic', 'max-runtime', 'scale'].includes(options.corpus)) throw new Error('--corpus is unsupported')
+  if (!['empty', 'realistic', 'max-runtime', 'capacity', 'scale'].includes(options.corpus)) throw new Error('--corpus is unsupported')
   if (!['on', 'off'].includes(options.mnemon)) throw new Error('--mnemon must be on or off')
   if (!['on', 'off'].includes(options.routingGuidance)) throw new Error('--routing-guidance must be on or off')
   if (!['guided', 'off'].includes(options.recallMode)) throw new Error('--recall-mode must be guided or off')
@@ -141,6 +143,42 @@ function scaledSpaces() {
   })
 }
 
+function capacityRuntimeEntry(label, marker) {
+  const prefix = `${label}: retained migration source ${marker}; `
+  return { target: 'memory', importance: 'normal', content: `${prefix}${marker.repeat(3_375 - prefix.length)}` }
+}
+
+function runtimeProjection(graph) {
+  if (typeof graph.runtimeMemory.contextProjection === 'function') return graph.runtimeMemory.contextProjection()
+  const snapshot = graph.runtimeMemory.snapshot()
+  return { revision: snapshot.revision, text: graph.runtimeMemory.contextText() }
+}
+
+async function publishedProjection(graph, workspaceRoot, sessionId) {
+  if (graph.memoryViews !== undefined) {
+    const view = await graph.memoryViews.publish({ storage: 'custom', workspaceId: workspaceRoot, sessionId })
+    const wake = graph.memoryViews.wake(view.id)
+    return {
+      kind: 'turn-view',
+      id: view.id,
+      digest: view.digest,
+      sources: view.sources.map(source => ({ layerId: source.layerId, mode: source.mode, revision: source.revision, digest: source.digest })),
+      wakeCharacters: wake.text.length,
+      wakeHash: sha256(wake.text),
+      wake: wake.text,
+    }
+  }
+  const projection = runtimeProjection(graph)
+  return {
+    kind: 'legacy-runtime',
+    digest: sha256(projection.text),
+    sources: [{ layerId: 'runtime', mode: 'eager', revision: projection.revision, digest: sha256(projection.text) }],
+    wakeCharacters: projection.text.length,
+    wakeHash: sha256(projection.text),
+    wake: projection.text,
+  }
+}
+
 async function seedData(packageRoot, dataDir, workspaceRoot, mnemonBinary, corpus) {
   const modulePath = `${pathToFileURL(join(packageRoot, 'lib', 'index.js')).href}?eval=${randomUUID()}`
   const { createRuntimeGraph, resolveConfig } = await import(modulePath)
@@ -159,6 +197,10 @@ async function seedData(packageRoot, dataDir, workspaceRoot, mnemonBinary, corpu
       { target: 'user', importance: 'normal', content: `MAX-RUNTIME-USER ${'U'.repeat(3_700)}` },
       { target: 'memory', importance: 'normal', content: `MAX-RUNTIME-MEMORY-A ${'A'.repeat(7_700)}` },
       { target: 'memory', importance: 'normal', content: `MAX-RUNTIME-MEMORY-B ${'B'.repeat(2_300)}` },
+    ] : corpus === 'capacity' ? [
+      capacityRuntimeEntry('CAPACITY-SOURCE-A', 'A'),
+      capacityRuntimeEntry('CAPACITY-SOURCE-B', 'B'),
+      capacityRuntimeEntry('CAPACITY-SOURCE-C', 'C'),
     ] : runtimeEntries
     const selectedDocuments = corpus === 'empty' || corpus === 'max-runtime' ? [] : corpus === 'scale' ? scaledDocuments() : documents
     const selectedSpaces = corpus === 'empty' || corpus === 'max-runtime' ? [] : corpus === 'scale' ? scaledSpaces() : memorySpaces
@@ -193,19 +235,10 @@ async function seedData(packageRoot, dataDir, workspaceRoot, mnemonBinary, corpu
       }
       seed.memorySpaces.push({ key: space.key, id: body.id, name: body.name, count: remembered.length, memories: remembered })
     }
-    const view = await graph.memoryViews.publish({ storage: 'custom', workspaceId: workspaceRoot, sessionId: 'seed-check' })
-    const wake = graph.memoryViews.wake(view.id)
-    seed.initialView = {
-      id: view.id,
-      digest: view.digest,
-      sources: view.sources.map(source => ({ layerId: source.layerId, mode: source.mode, revision: source.revision, digest: source.digest })),
-      wakeCharacters: wake.text.length,
-      wakeHash: sha256(wake.text),
-      wake: wake.text,
-    }
+    seed.initialView = await publishedProjection(graph, workspaceRoot, 'seed-check')
     return seed
   } finally {
-    graph.dispose()
+    graph.dispose?.()
   }
 }
 
@@ -217,8 +250,7 @@ async function inspectData(packageRoot, dataDir, workspaceRoot, mnemonBinary) {
     const runtime = graph.runtimeMemory.snapshot()
     const documentSnapshot = graph.documents.forWorkspace(workspaceRoot).snapshot()
     const bodies = graph.service.memoryBodies.list()
-    const view = await graph.memoryViews.publish({ storage: 'custom', workspaceId: workspaceRoot, sessionId: 'final-state' })
-    const wake = graph.memoryViews.wake(view.id)
+    const projection = await publishedProjection(graph, workspaceRoot, 'final-state')
     return {
       runtime: {
         revision: runtime.revision,
@@ -230,10 +262,16 @@ async function inspectData(packageRoot, dataDir, workspaceRoot, mnemonBinary) {
         items: documentSnapshot.documents.map(document => ({ id: document.id, title: document.title, status: document.status, contentHash: document.contentHash })),
       },
       memorySpaces: bodies.map(body => ({ id: body.id, name: body.name, description: body.description, active: body.active, providerId: body.provider.id })),
-      finalView: { id: view.id, digest: view.digest, wakeCharacters: wake.text.length, wakeHash: sha256(wake.text) },
+      finalView: {
+        kind: projection.kind,
+        ...(projection.id === undefined ? {} : { id: projection.id }),
+        digest: projection.digest,
+        wakeCharacters: projection.wakeCharacters,
+        wakeHash: projection.wakeHash,
+      },
     }
   } finally {
-    graph.dispose()
+    graph.dispose?.()
   }
 }
 
@@ -246,7 +284,11 @@ function scenarioFixture(name, workspaceRoot) {
         ? contextOnlyScenario
         : name === 'autonomous-recall'
           ? autonomousRecallScenario
-          : realConversationScenario
+          : name === 'single-recall'
+            ? singleRecallScenario
+            : name === 'capacity-maintenance'
+              ? capacityMaintenanceScenario
+              : realConversationScenario
   return { ...structuredClone(selected), workspaceRoot, sessionId: `mnemon-eval-${name}-${randomUUID()}` }
 }
 
@@ -388,7 +430,14 @@ function responseToolCalls(text) {
       const value = JSON.parse(line.slice(6))
       for (const choice of value?.choices ?? []) {
         for (const call of choice?.delta?.tool_calls ?? []) {
-          const key = String(call.id ?? call.index ?? calls.size)
+          // Providers commonly send the id/name in the first delta and only
+          // the numeric index plus argument fragments afterwards. Key by the
+          // stable stream index so one logical tool call is not split in two.
+          const key = Number.isInteger(call.index)
+            ? `index:${call.index}`
+            : typeof call.id === 'string'
+              ? `id:${call.id}`
+              : `unknown:${calls.size}`
           const current = calls.get(key) ?? { id: call.id, index: call.index, name: '', arguments: '' }
           if (typeof call.id === 'string') current.id = call.id
           if (typeof call.function?.name === 'string') current.name += call.function.name

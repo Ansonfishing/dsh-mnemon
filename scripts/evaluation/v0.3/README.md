@@ -54,16 +54,29 @@ node scripts/evaluation/v0.3/run.mjs --provider real --scenario context-only \
 ```
 
 `--corpus max-runtime` fills Runtime Memory close to its configured limits.
+`--corpus capacity --scenario capacity-maintenance` exercises the real
+overflow archive/compaction/retry path. `--scenario single-recall` is a
+one-turn natural-language recall benchmark suitable for repeated A/B samples.
 `--routing-guidance off --recall-mode off --writeback-mode off` isolates the
 base protocol and tool-schema cost. `--package-root` can point to a built older
-worktree for a like-for-like baseline. The idle-review scenario uses two turns
-and a short idle interval to measure the background child-agent path.
+worktree for a like-for-like baseline. The harness detects pre-TurnView v0.2
+graphs and records their live Runtime projection instead of inventing a View.
+The idle-review scenario uses two turns and a short idle interval to measure
+the background child-agent path.
 
 The direct component suite covers mutations and boundaries without a model:
 
 ```sh
 node scripts/evaluation/v0.3/components.mjs \
   --output /private/tmp/dsh-mnemon-v03-components.json
+```
+
+The cross-version suite opens one canonical data root in both directions:
+
+```sh
+node scripts/evaluation/v0.3/compatibility.mjs \
+  --baseline-root /private/tmp/dsh-mnemon-eval-v0216 \
+  --output /private/tmp/dsh-mnemon-v0216-v03-compatibility.json
 ```
 
 The output directory contains the redacted profile patch, seeded corpus
