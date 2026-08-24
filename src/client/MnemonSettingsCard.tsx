@@ -5,8 +5,6 @@ import type {
   ClientSettingsSnapshot,
   Config,
   InteractionConfig,
-  MemoryParticipationChannel,
-  MemoryParticipationMode,
   MemorySystemDescriptor,
   MemoryTopologyDefinition,
   SettingsOperation,
@@ -50,9 +48,6 @@ interface Draft extends Record<InteractionField, boolean> {
 const CORE_FIELDS: CoreField[] = ['displayMode', 'storageScope', 'dataDir']
 const INTERACTION_FIELDS: InteractionField[] = ['turnBar', 'saveAction']
 const TASK_AGENT_FIELDS: TaskAgentField[] = ['taskAgentModelMode', 'taskAgentProvider', 'taskAgentModel']
-const PARTICIPATION_CHANNELS: MemoryParticipationChannel[] = ['recall', 'write', 'projection', 'maintenance']
-const PARTICIPATION_MODES: MemoryParticipationMode[] = ['off', 'manual', 'automatic']
-
 function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
@@ -98,18 +93,6 @@ function topologyOf(descriptor: MemorySystemDescriptor): MemoryTopologyDefinitio
       participation: { ...layer.participation },
       adapterIds: [...layer.adapterIds],
     })),
-  }
-}
-
-function topologyValue(topology: MemoryTopologyDefinition): NonNullable<Config['memoryTopology']> {
-  return {
-    id: topology.id,
-    strategyId: topology.strategyId,
-    layers: Object.fromEntries(topology.layers.map(layer => [layer.id, {
-      enabled: layer.enabled,
-      participation: { ...layer.participation },
-      adapterIds: [...layer.adapterIds],
-    }])),
   }
 }
 
@@ -307,7 +290,10 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
         })
       }
       if (topologyChanged && topologyDraft !== null) {
-        coreOps.push({ op: 'set', path: ['memoryTopology'], value: topologyValue(topologyDraft) })
+        for (const layer of topologyDraft.layers) {
+          if (!dirty.has(`memoryTopology.${layer.id}.enabled`)) continue
+          coreOps.push({ op: 'set', path: ['memoryTopology', 'layers', layer.id, 'enabled'], value: layer.enabled })
+        }
       }
       const interactionOps = operations(INTERACTION_FIELDS, dirty, draft)
       await Promise.all([
@@ -333,18 +319,6 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
       layers: current.layers.map(layer => layer.id === layerId ? { ...layer, enabled } : layer),
     })
     setDirty(current => new Set(current).add(`memoryTopology.${layerId}.enabled`))
-    setFailed(null)
-    setApplied(false)
-  }
-  const editLayerParticipation = (layerId: string, channel: MemoryParticipationChannel, mode: MemoryParticipationMode): void => {
-    setTopologyDraft(current => current === null ? current : {
-      ...current,
-      layers: current.layers.map(layer => layer.id === layerId ? {
-        ...layer,
-        participation: { ...layer.participation, [channel]: mode },
-      } : layer),
-    })
-    setDirty(current => new Set(current).add(`memoryTopology.${layerId}.${channel}`))
     setFailed(null)
     setApplied(false)
   }
@@ -382,7 +356,6 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           state={topologyState}
           disabled={coreDisabled}
           onEnabled={editLayerEnabled}
-          onParticipation={editLayerParticipation}
           t={t}
         />
 
@@ -492,22 +465,9 @@ function MemoryTopologySection(props: {
   state: 'unavailable' | 'loading' | 'ready' | 'error'
   disabled: boolean
   onEnabled: (layerId: string, enabled: boolean) => void
-  onParticipation: (layerId: string, channel: MemoryParticipationChannel, mode: MemoryParticipationMode) => void
   t: MnemonTranslate
 }): JSX.Element {
   const layerDescriptors = new Map(props.descriptor?.catalog.layers.map(layer => [layer.id, layer]) ?? [])
-  const strategy = props.descriptor?.catalog.strategies.find(candidate => candidate.id === props.topology?.strategyId)
-  const channelLabel = (channel: MemoryParticipationChannel): string => {
-    if (channel === 'recall') return props.t('config.topologyRecall')
-    if (channel === 'write') return props.t('config.topologyWrite')
-    if (channel === 'projection') return props.t('config.topologyProjection')
-    return props.t('config.topologyMaintenance')
-  }
-  const modeLabel = (mode: MemoryParticipationMode): string => {
-    if (mode === 'off') return props.t('config.topologyModeOff')
-    if (mode === 'manual') return props.t('config.topologyModeManual')
-    return props.t('config.topologyModeAutomatic')
-  }
 
   return <section className={css.section} aria-labelledby="mnemon-topology-heading">
     <div className={css.sectionHeading}>
@@ -517,10 +477,6 @@ function MemoryTopologySection(props: {
     {props.topology === null
       ? <p className={css.topologyUnavailable}>{props.state === 'loading' ? props.t('config.topologyLoading') : props.t('config.topologyUnavailable')}</p>
       : <>
-        <div className={css.topologyMeta}>
-          <span>{props.t('config.topologyStrategy')}</span>
-          <code>{strategy?.label ?? props.topology.strategyId}</code>
-        </div>
         <div className={css.topologyList}>
           {props.topology.layers.map(layer => {
             const descriptor = layerDescriptors.get(layer.id)
@@ -534,23 +490,6 @@ function MemoryTopologySection(props: {
                   <i aria-hidden="true" />
                 </label>
               </header>
-              <div className={css.topologyChannels}>
-                {PARTICIPATION_CHANNELS.map(channel => <label key={channel}>
-                  <span>{channelLabel(channel)}</span>
-                  <select
-                    aria-label={props.t('config.topologyChannelAria', { layer: label, channel: channelLabel(channel) })}
-                    value={layer.participation[channel]}
-                    disabled={props.disabled || !layer.enabled}
-                    onChange={event => props.onParticipation(layer.id, channel, event.target.value as MemoryParticipationMode)}
-                  >
-                    {PARTICIPATION_MODES.map(mode => <option key={mode} value={mode}>{modeLabel(mode)}</option>)}
-                  </select>
-                </label>)}
-              </div>
-              <footer>
-                <span>{props.t('config.topologyRole')}: <code>{descriptor?.role ?? layer.id}</code></span>
-                <span>{props.t('config.topologyAdapters', { count: layer.adapterIds.length })}</span>
-              </footer>
             </article>
           })}
         </div>

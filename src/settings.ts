@@ -58,6 +58,7 @@ const INTERACTION_PATHS: string[][] = [
 ]
 
 const UI_FIELDS = ['turnBar', 'saveAction']
+const MEMORY_LAYER_ID = /^[a-z][a-z0-9-]{0,127}$/u
 
 function namespaceOf(payload: Record<string, unknown>): string {
   const namespace = payload.namespace === undefined ? MNEMON_SETTINGS_NAMESPACE : String(payload.namespace)
@@ -69,6 +70,9 @@ function namespaceOf(payload: Record<string, unknown>): string {
 function mutablePath(namespace: string, path: string[]): boolean {
   if (namespace === MNEMON_UI_SETTINGS_NAMESPACE) return path.length === 1 && UI_FIELDS.includes(path[0]!)
   if (path.length === 1) return MUTABLE_FIELDS.includes(path[0]!)
+  if (path.length === 4 && path[0] === 'memoryTopology' && path[1] === 'layers' && path[3] === 'enabled') {
+    return MEMORY_LAYER_ID.test(path[2]!)
+  }
   // Accepted only for legacy clients; the current UI writes `mnemon-ui`.
   return INTERACTION_PATHS.some(allowed => allowed.length === path.length && allowed.every((segment, index) => segment === path[index]))
 }
@@ -89,6 +93,7 @@ export function createSettingsHandler(settings: HostSettingsService): HostRpcHan
         if (!mutablePath(namespace, path)) throw new Error(`unsupported ${namespace} settings field: ${path.join('.')}`)
         if (op.op === 'unset') return { op: 'unset' as const, path }
         if (op.op !== 'set') throw new Error(`unsupported settings operation: ${String(op.op)}`)
+        if (path[0] === 'memoryTopology' && typeof op.value !== 'boolean') throw new Error('memory layer enabled must be boolean')
         return { op: 'set' as const, path, value: op.value }
       })
       const revision = payload.expectedRevision === undefined ? undefined : Number(payload.expectedRevision)

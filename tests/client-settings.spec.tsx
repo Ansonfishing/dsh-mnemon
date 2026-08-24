@@ -17,7 +17,7 @@ function deferred<T>() {
 }
 
 describe('MnemonSettingsCard', () => {
-  it('renders the live Catalog topology and persists layer participation as one atomic setting', async () => {
+  it('renders one switch per live Catalog layer and persists only its enabled state', async () => {
     const mutate = vi.fn(async () => {})
     const snapshot = {
       status: 'ready' as const,
@@ -58,15 +58,14 @@ describe('MnemonSettingsCard', () => {
     render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call } } as ClientConnectionHandle} />)
 
     const enabled = await screen.findByRole('checkbox', { name: '启用 Documents' })
+    expect(screen.queryByRole('combobox', { name: /Documents/ })).toBeNull()
     fireEvent.click(enabled)
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
-    await waitFor(() => expect(mutate).toHaveBeenCalledWith([expect.objectContaining({
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{
       op: 'set',
-      path: ['memoryTopology'],
-      value: expect.objectContaining({
-        layers: expect.objectContaining({ documents: expect.objectContaining({ enabled: false }) }),
-      }),
-    })]))
+      path: ['memoryTopology', 'layers', 'documents', 'enabled'],
+      value: false,
+    }]))
   })
 
   it('ignores a Provider catalog response from the previously selected workspace', async () => {

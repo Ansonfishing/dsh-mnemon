@@ -90,8 +90,6 @@
   line-height: 17px;
 }
 
-.topologyMeta { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; color: var(--dsw-alias-label-tertiary); font-size: 10px; }
-.topologyMeta code { overflow: hidden; border-radius: 999px; padding: 3px 8px; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-layer-2); text-overflow: ellipsis; white-space: nowrap; }
 .topologyList { display: grid; min-width: 0; gap: 8px; }
 .topologyLayer { overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-alias-bg-layer-3); }
 .topologyLayer[data-enabled='false'] { background: color-mix(in srgb, var(--dsw-alias-bg-layer-3) 68%, transparent); }
@@ -106,14 +104,6 @@
 .topologyToggle input:checked + i { background: var(--dsw-alias-label-primary); }
 .topologyToggle input:checked + i::after { transform: translateX(14px); }
 .topologyToggle:has(input:disabled) { cursor: default; opacity: .45; }
-.topologyChannels { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; border-top: 1px solid var(--dsw-alias-border-l2); padding: 10px 13px; }
-.topologyChannels label { display: grid; min-width: 0; gap: 4px; }
-.topologyChannels label > span { color: var(--dsw-alias-label-tertiary); font-size: 9px; line-height: 14px; }
-.topologyChannels select { width: 100%; min-width: 0; height: 32px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; outline: none; padding: 0 7px; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-layer-2); font-size: 10px; }
-.topologyChannels select:focus-visible { box-shadow: 0 0 0 2px var(--dsw-alias-border-l3); }
-.topologyChannels select:disabled { cursor: default; opacity: .4; }
-.topologyLayer > footer { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--dsw-alias-border-l2); padding: 7px 13px; color: var(--dsw-alias-label-tertiary); font-size: 9px; line-height: 14px; }
-.topologyLayer > footer code { color: var(--dsw-alias-label-secondary); }
 
 .miniSpinner {
   width: 16px;
@@ -560,7 +550,6 @@
 @media (max-width: 620px) {
   .page { gap: 24px; }
   .choiceGrid { grid-template-columns: minmax(0, 1fr); }
-  .topologyChannels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .settingRow { align-items: stretch; flex-direction: column; gap: 9px; }
   .directoryControl { max-width: none; justify-content: space-between; }
   .rowActions { width: 100%; }

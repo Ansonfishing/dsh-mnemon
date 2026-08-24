@@ -73,6 +73,21 @@ describe('Mnemon config and resolution', () => {
     expect(() => resolveConfig({ memoryTopology: { strategyId: '../unsafe' } })).toThrow('memory strategy id')
   })
 
+  it('resolves all eight built-in Layer switch combinations without changing the fixed default policy', () => {
+    const ids = ['runtime', 'documents', 'memory-spaces'] as const
+    for (let mask = 0; mask < 8; mask += 1) {
+      const layers = Object.fromEntries(ids.map((id, index) => [id, { enabled: (mask & (1 << index)) !== 0 }]))
+      const resolved = resolveConfig({ memoryTopology: { layers } }).memoryTopology.layers
+      for (const id of ids) {
+        expect(resolved[id]).toEqual({
+          enabled: layers[id]!.enabled,
+          participation: { recall: 'automatic', write: 'automatic', projection: 'automatic', maintenance: 'automatic' },
+          adapterIds: [],
+        })
+      }
+    }
+  })
+
   it('validates configurable recall quality policy thresholds and expansion', () => {
     expect(resolveConfig({
       recallQuality: { policy: 'team-v2', lowScoreThreshold: 0.2, highScoreThreshold: 0.7, candidateMultiplier: 2, maxMediumResults: 5, maxUnknownResults: 1 },

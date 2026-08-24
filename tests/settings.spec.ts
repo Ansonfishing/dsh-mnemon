@@ -64,6 +64,25 @@ describe('Mnemon settings bridge', () => {
     expect(settings.mutate).not.toHaveBeenCalled()
   })
 
+  it('accepts only Boolean Layer switches from the Web settings surface', async () => {
+    const mutate = vi.fn(async () => {})
+    const settings = {
+      writable: true,
+      register: vi.fn(),
+      mutate,
+      describe: () => [{ ns: 'mnemon', value: {}, revision: 0, applies: 'live' as const }],
+    } as unknown as HostSettingsService
+    const handler = createSettingsHandler(settings)
+    const switchOp = { op: 'set', path: ['memoryTopology', 'layers', 'documents', 'enabled'], value: false }
+
+    await expect(handler('mutate', { ops: [switchOp] })).resolves.toMatchObject({ ok: true })
+    expect(mutate).toHaveBeenCalledWith('mnemon', [switchOp], undefined)
+
+    await expect(handler('mutate', { ops: [{ ...switchOp, value: 'off' }] })).resolves.toMatchObject({ ok: false })
+    await expect(handler('mutate', { ops: [{ op: 'set', path: ['memoryTopology'], value: {} }] })).resolves.toMatchObject({ ok: false })
+    await expect(handler('mutate', { ops: [{ op: 'set', path: ['memoryTopology', 'layers', 'documents', 'participation'], value: {} }] })).resolves.toMatchObject({ ok: false })
+  })
+
   it('accepts the whole persistence strategy through the Mnemon namespace', async () => {
     const persistenceStrategy = {
       mode: 'automatic',
