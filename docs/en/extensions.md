@@ -67,7 +67,7 @@ export const episodicExtension = defineMemoryExtension({
 })
 ```
 
-When the extension first appears, the live Catalog advances its generation. Topology follows with a new generation and adds the Layer as an `enabled=false`, manual-only candidate. Settings cards come from the `memory-system` descriptor, so a new ID needs no frontend enum change. After review, a user can save:
+When the extension first appears, the live Catalog advances its generation. Topology follows with a new generation and adds the Layer as a disabled candidate. Settings cards come from the `memory-system` descriptor, so a new ID needs no frontend enum change. An ordinary user decides only whether to enable it:
 
 ```yaml
 mnemon:
@@ -75,15 +75,9 @@ mnemon:
     layers:
       episodic:
         enabled: true
-        participation:
-          recall: automatic
-          write: manual
-          projection: automatic
-          maintenance: manual
-        adapterIds: []
 ```
 
-Disabling or unloading an extension never deletes its data. Unloading stops new operations from selecting the component and invalidates existing Plans through Catalog/Topology generation changes.
+Once enabled, the Host's fixed compatibility policy and the extension declaration determine executable capabilities. Fine-grained participation remains a Kernel/SDK control-plane constraint, not an ordinary setting. Disabling or unloading an extension never deletes its data. Unloading stops new operations from selecting the component and invalidates existing Plans through Catalog/Topology generation changes.
 
 ### Expose a Layer as a MemorySource
 

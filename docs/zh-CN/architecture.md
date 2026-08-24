@@ -67,7 +67,7 @@ request -> Guard -> Strategy proposal -> Kernel validation -> MemoryPlan
 
 每层有四个独立参与通道：`recall`、`write`、`projection`、`maintenance`。`off` 完全拒绝该通道；`manual` 只接受用户/控制面显式操作；`automatic` 同时允许显式操作和模型、生命周期或系统自动操作。模型工具属于 `automatic` 触发，不能借“工具调用是显式的”绕过 `manual`。
 
-Runtime、Documents、Memory Spaces 由三个 Layer workspace 包提供；`default-three-tier` Strategy 只是默认组合。扩展 Layer 首次被 Catalog 发现时以“关闭 + 仅手动”加入候选拓扑，用户可以在描述符驱动的设置页检查后再启用。
+Runtime、Documents、Memory Spaces 由三个 Layer workspace 包提供；`default-three-tier` Strategy 只是默认组合。扩展 Layer 首次被 Catalog 发现时以关闭状态加入候选拓扑，用户在描述符驱动的设置页只决定是否启用；四通道策略留在 Kernel/SDK 控制面。
 
 ## Workspace 与单包发布
 

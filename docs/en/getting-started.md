@@ -156,7 +156,7 @@ Save initializes a candidate runtime graph before atomically switching the Host.
 
 ### Layer topology
 
-A first installation should show Runtime, Documents, and Memory Spaces enabled with all four participation channels set to Automatic. Disabling a Layer stops routing and context participation without deleting data. Manual-only preserves direct Web/RPC operations while rejecting model tools, lifecycle hooks, and system automation. Keep the defaults for the first complete workflow, then narrow them if needed.
+A first installation should show Runtime, Documents, and Memory Spaces enabled. Each Layer has one master switch. Enabling only permits on-demand use; it does not force recall on every turn. Disabling stops that Layer's context, tools, background work, and data-plane Web/RPC together without deleting data. Its Sidebar tab is marked Off, and re-enabling restores the existing data. Keep all three defaults on for the first workflow.
 
 In Workspace mode, conversation Agents, tools, and lifecycle hooks use the current conversation's effective root. Independent task Agents launched by the workbench use the inspected workspace explicitly, including when no main session is selected. The header reports a mismatch and offers one-click alignment.
 

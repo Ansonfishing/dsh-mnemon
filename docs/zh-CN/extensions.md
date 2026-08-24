@@ -67,7 +67,7 @@ export const episodicExtension = defineMemoryExtension({
 })
 ```
 
-扩展第一次出现时，运行中的 Catalog 会增加 generation，Topology 随后生成新代，并把新 Layer 加为 `enabled=false`、四个通道均为 `manual` 的候选。设置页从 `memory-system` 描述符生成卡片，不需要为新 ID 修改前端枚举。用户检查后可以保存：
+扩展第一次出现时，运行中的 Catalog 会增加 generation，Topology 随后生成新代，并把新 Layer 加为关闭候选。设置页从 `memory-system` 描述符生成卡片，不需要为新 ID 修改前端枚举。普通用户只决定是否开启：
 
 ```yaml
 mnemon:
@@ -75,15 +75,9 @@ mnemon:
     layers:
       episodic:
         enabled: true
-        participation:
-          recall: automatic
-          write: manual
-          projection: automatic
-          maintenance: manual
-        adapterIds: []
 ```
 
-关闭或卸载扩展不会删除其数据。卸载会让新操作停止使用该组件，并使已生成的 Plan 因 Catalog/Topology generation 改变而失效。
+开启后由 Host 的固定兼容策略和扩展声明决定可执行能力；细粒度参与约束保留在 Kernel/SDK 控制面，不是普通设置项。关闭或卸载扩展不会删除其数据。卸载会让新操作停止使用该组件，并使已生成的 Plan 因 Catalog/Topology generation 改变而失效。
 
 ### 把 Layer 暴露为 MemorySource
 

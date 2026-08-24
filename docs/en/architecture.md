@@ -67,7 +67,7 @@ request -> Guard -> Strategy proposal -> Kernel validation -> MemoryPlan
 
 Every Layer has independent `recall`, `write`, `projection`, and `maintenance` participation channels. `off` denies the channel, `manual` accepts only explicit user/control-plane operations, and `automatic` accepts both explicit and model/lifecycle/system operations. A model tool is an `automatic` trigger and cannot bypass `manual` merely because the model explicitly called a tool.
 
-Runtime, Documents, and Memory Spaces are three Layer workspace packages. The `default-three-tier` Strategy is only the default composition. A newly discovered extension Layer enters the candidate topology disabled and manual-only, so the user can inspect it in the descriptor-driven settings UI before enabling it.
+Runtime, Documents, and Memory Spaces are three Layer workspace packages. The `default-three-tier` Strategy is only the default composition. A newly discovered extension Layer enters the candidate topology disabled. The descriptor-driven Settings UI exposes only its enabled switch; four-channel policy remains in the Kernel/SDK control plane.
 
 ## Workspace with One Published Package
 
