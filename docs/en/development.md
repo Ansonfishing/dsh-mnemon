@@ -135,7 +135,7 @@ node scripts/evaluation/v0.3/retrieval-benchmark.mjs \
   --output /private/tmp/dsh-mnemon-v03-retrieval.json
 ```
 
-The frozen v0.3.0 results from 2026-08-24, machine-readable metrics, and methodology are recorded in the [final release benchmark](https://github.com/mnemon-dev/docs/blob/main/mnemon-boot-memory-kernel/evaluations/2026-08-24-v0.3-release-benchmark/README.md), [metrics.json](https://github.com/mnemon-dev/docs/blob/main/mnemon-boot-memory-kernel/evaluations/2026-08-24-v0.3-release-benchmark/metrics.json), and [methodology.md](https://github.com/mnemon-dev/docs/blob/main/mnemon-boot-memory-kernel/evaluations/2026-08-24-v0.3-release-benchmark/methodology.md). Product documentation keeps only the stable summary; raw request/session traces containing synthetic conversations are not committed.
+The benchmark tables in the [v0.3.0 release notes](./releases/v0.3.0.md#benchmark-and-behavioral-verification) are the public frozen release record for 2026-08-24. The public [evaluation harness guide](../../scripts/evaluation/v0.3/README.md) documents the scenarios, methodology, safety boundaries, and rerun commands; each run writes machine-readable metrics and run evidence into the caller's chosen output directory. Raw request/session traces containing synthetic conversations and machine-specific paths are intentionally not committed. Public release claims therefore remain self-contained without linking to a private working archive.
 
 ## Real WebUI Verification
 

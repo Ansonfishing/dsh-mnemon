@@ -135,7 +135,7 @@ node scripts/evaluation/v0.3/retrieval-benchmark.mjs \
   --output /private/tmp/dsh-mnemon-v03-retrieval.json
 ```
 
-2026-08-24 的 v0.3.0 冻结结果、机器可读指标与方法分别保存在 [最终发布 Benchmark](https://github.com/mnemon-dev/docs/blob/main/mnemon-boot-memory-kernel/evaluations/2026-08-24-v0.3-release-benchmark/README.md)、[metrics.json](https://github.com/mnemon-dev/docs/blob/main/mnemon-boot-memory-kernel/evaluations/2026-08-24-v0.3-release-benchmark/metrics.json)和[methodology.md](https://github.com/mnemon-dev/docs/blob/main/mnemon-boot-memory-kernel/evaluations/2026-08-24-v0.3-release-benchmark/methodology.md)。产品文档只保留稳定摘要；含合成对话的原始 request/session trace 不提交到仓库。
+[v0.3.0 发布说明中的 Benchmark 表格](./releases/v0.3.0.md#benchmark-与行为验证)是 2026-08-24 冻结结果的公开发布记录。公开的[评测 Harness 说明](../../scripts/evaluation/v0.3/README.md)记录场景、方法、安全边界与复跑命令；每次运行会把机器可读指标和运行证据写入调用者指定的输出目录。含合成对话的原始 request/session trace 与本机路径刻意不提交。这样，公开发布结论保持自包含，不链接私有工作归档。
 
 ## 真实 WebUI 验证
 

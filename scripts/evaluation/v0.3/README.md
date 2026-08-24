@@ -4,6 +4,14 @@ This harness runs a real DSH Headless profile against an isolated Mnemon data
 root. It seeds Runtime Memory, managed Documents, and three Mnemon Native
 Memory Spaces, then records every provider request and durable Agent event.
 
+The frozen public aggregates are recorded in the
+[English](../../../docs/en/releases/v0.3.0.md#benchmark-and-behavioral-verification)
+and [Chinese](../../../docs/zh-CN/releases/v0.3.0.md#benchmark-与行为验证)
+v0.3.0 release notes. This guide documents how to reproduce the scenarios and
+generate machine-readable run evidence under a caller-selected output
+directory. Raw request/session traces and machine-specific paths are
+intentionally not committed.
+
 The mock path is deterministic and never uses a credential:
 
 ```sh
