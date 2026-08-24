@@ -110,6 +110,33 @@ The existing Vitest suites cover:
 
 These are primarily integration tests using temporary directories, fake runners, and a mock Host. In addition, `verify:headless` builds the package, installs it into an isolated real DSH Headless profile, serves a local mock model, and asserts that representative Mnemon tools reach the model request. Automated end-to-end testing of the real DSH + Mnemon WebUI remains separate.
 
+## v0.3 Release Benchmark
+
+`scripts/evaluation/v0.3` provides an isolated mock/real Provider harness, cross-version data compatibility checks, direct retrieval measurement, and a resumable release suite. See the [evaluation harness guide](../../scripts/evaluation/v0.3/README.md) for the full parameters, evidence layout, and safety boundaries. A formal A/B run must pin the baseline and current commits, DSH version, model, scenario configuration, and output directory. Token and wall-time results from a real Provider are observations for that environment, not universal performance guarantees.
+
+```sh
+node scripts/evaluation/v0.3/release-suite.mjs \
+  --baseline-root /path/to/clean/v0.2.16-worktree \
+  --output /private/tmp/dsh-mnemon-v03-release
+
+node scripts/evaluation/v0.3/release-suite.mjs \
+  --baseline-root /path/to/clean/v0.2.16-worktree \
+  --output /private/tmp/dsh-mnemon-v03-recall-gates \
+  --only recall-gate-natural,recall-gate-fault \
+  --versions current
+
+node scripts/evaluation/v0.3/compatibility.mjs \
+  --baseline-root /path/to/clean/v0.2.16-worktree \
+  --output /private/tmp/dsh-mnemon-v03-compatibility.json
+
+node scripts/evaluation/v0.3/retrieval-benchmark.mjs \
+  --baseline-root /path/to/clean/v0.2.16-worktree \
+  --repetitions 5 \
+  --output /private/tmp/dsh-mnemon-v03-retrieval.json
+```
+
+The frozen v0.3.0 results from 2026-08-24, machine-readable metrics, and methodology are recorded in the [final release benchmark](https://github.com/mnemon-dev/docs/blob/main/mnemon-boot-memory-kernel/evaluations/2026-08-24-v0.3-release-benchmark/README.md), [metrics.json](https://github.com/mnemon-dev/docs/blob/main/mnemon-boot-memory-kernel/evaluations/2026-08-24-v0.3-release-benchmark/metrics.json), and [methodology.md](https://github.com/mnemon-dev/docs/blob/main/mnemon-boot-memory-kernel/evaluations/2026-08-24-v0.3-release-benchmark/methodology.md). Product documentation keeps only the stable summary; raw request/session traces containing synthetic conversations are not committed.
+
 ## Real WebUI Verification
 
 Use an isolated environment before release to avoid contaminating personal memory:
@@ -209,6 +236,8 @@ When the Web locale changes, the Chinese key set remains the type source of trut
 [ ] verify Chinese and English workspaces
 [ ] verify global/workspace/custom paths as applicable
 [ ] record tested DSH and Mnemon versions
+[ ] record the evaluated product/baseline commits, model, scenario matrix, and release-gate result
+[ ] distinguish behavioral gates from environment-specific token and latency observations
 [ ] back up any data root used for upgrade testing
 ```
 

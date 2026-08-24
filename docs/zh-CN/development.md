@@ -110,6 +110,33 @@ Host 将所有 package dependency 保持为 external。Client 将 React、ReactD
 
 这些主要是临时目录、fake runner 和 mock Host 集成测试。此外，`verify:headless` 会构建包、安装到隔离的真实 DSH Headless profile、启动本地模拟模型，并断言代表性 Mnemon 工具进入模型请求。真实 DSH + Mnemon WebUI 的自动化端到端测试仍是独立工作。
 
+## v0.3 发布 Benchmark
+
+`scripts/evaluation/v0.3` 提供隔离的 mock/真实 Provider harness、跨版本数据兼容、direct retrieval 和可恢复 release suite。完整参数、evidence 结构与安全边界见[评测 Harness 说明](../../scripts/evaluation/v0.3/README.md)。正式 A/B 必须固定 baseline/current commit、DSH、模型、场景配置和输出目录；真实 Provider 的 token 与 wall 只表示该环境下的观测，不是普遍性能承诺。
+
+```sh
+node scripts/evaluation/v0.3/release-suite.mjs \
+  --baseline-root /path/to/clean/v0.2.16-worktree \
+  --output /private/tmp/dsh-mnemon-v03-release
+
+node scripts/evaluation/v0.3/release-suite.mjs \
+  --baseline-root /path/to/clean/v0.2.16-worktree \
+  --output /private/tmp/dsh-mnemon-v03-recall-gates \
+  --only recall-gate-natural,recall-gate-fault \
+  --versions current
+
+node scripts/evaluation/v0.3/compatibility.mjs \
+  --baseline-root /path/to/clean/v0.2.16-worktree \
+  --output /private/tmp/dsh-mnemon-v03-compatibility.json
+
+node scripts/evaluation/v0.3/retrieval-benchmark.mjs \
+  --baseline-root /path/to/clean/v0.2.16-worktree \
+  --repetitions 5 \
+  --output /private/tmp/dsh-mnemon-v03-retrieval.json
+```
+
+2026-08-24 的 v0.3.0 冻结结果、机器可读指标与方法分别保存在 [最终发布 Benchmark](https://github.com/mnemon-dev/docs/blob/main/mnemon-boot-memory-kernel/evaluations/2026-08-24-v0.3-release-benchmark/README.md)、[metrics.json](https://github.com/mnemon-dev/docs/blob/main/mnemon-boot-memory-kernel/evaluations/2026-08-24-v0.3-release-benchmark/metrics.json)和[methodology.md](https://github.com/mnemon-dev/docs/blob/main/mnemon-boot-memory-kernel/evaluations/2026-08-24-v0.3-release-benchmark/methodology.md)。产品文档只保留稳定摘要；含合成对话的原始 request/session trace 不提交到仓库。
+
 ## 真实 WebUI 验证
 
 发布前使用隔离环境，避免污染个人记忆：
@@ -209,6 +236,8 @@ Web locale 变更时，中文键集合仍是类型事实源；英文词典必须
 [ ] verify Chinese and English workspaces
 [ ] verify global/workspace/custom paths as applicable
 [ ] record tested DSH and Mnemon versions
+[ ] record the evaluated product/baseline commits, model, scenario matrix, and release-gate result
+[ ] distinguish behavioral gates from environment-specific token and latency observations
 [ ] back up any data root used for upgrade testing
 ```
 
