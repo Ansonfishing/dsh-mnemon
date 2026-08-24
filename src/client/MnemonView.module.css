@@ -103,6 +103,8 @@
 .navGroupDivider { width: 1px; height: 22px; flex: 0 0 auto; align-self: center; background: var(--mn-line); }
 .nav button { position: relative; display: flex; min-width: max-content; min-height: 44px; align-items: center; gap: 7px; padding: 0 3px; border: 0; color: var(--mn-muted); background: transparent; text-align: left; cursor: pointer; }
 .nav button:hover { color: var(--mn-text); }
+.nav button[data-layer-disabled] { color: var(--mn-faint); }
+.nav .layerDisabledBadge { display: inline-flex; align-items: center; border: 1px solid var(--mn-line); border-radius: 999px; padding: 1px 5px; color: var(--mn-faint); background: var(--mn-layer-2); font: 500 8px/1.4 var(--mn-code); font-style: normal; }
 .nav button[aria-current="page"] { color: var(--mn-text); }
 .nav button[aria-current="page"]::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; border-radius: 2px 2px 0 0; content: ""; background: var(--mn-accent); }
 .nav button[aria-current="page"] .navGlyph { color: var(--mn-accent); }

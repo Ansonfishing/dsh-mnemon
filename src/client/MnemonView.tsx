@@ -252,6 +252,14 @@ const MEMORY_PAGE_TABS: Array<{ id: SidebarMemoryPage; label: MnemonKey }> = [
 ]
 
 const MEMORY_PAGES = new Set<Page>(MEMORY_PAGE_TABS.map(item => item.id))
+type ConfigurableMemoryLayerId = 'runtime' | 'documents' | 'memory-spaces'
+
+function pageLayer(page: Page): ConfigurableMemoryLayerId | undefined {
+  if (page === 'runtime') return 'runtime'
+  if (page === 'documents') return 'documents'
+  if (isMemoryPage(page) || page === 'remember') return 'memory-spaces'
+  return undefined
+}
 
 function isMemoryPage(page: Page): page is SidebarMemoryPage {
   return MEMORY_PAGES.has(page)
@@ -330,6 +338,14 @@ function EmptyState(props: { glyph: string; title: string; children: string }): 
   )
 }
 
+function LayerDisabledPage(props: { title: string }): JSX.Element {
+  const t = useT()
+  return <div className={css.page}>
+    <PageHeader title={props.title} description={t('layers.disabledDescription')} meta={t('layers.disabledBadge')} />
+    <EmptyState glyph="⊘" title={t('layers.disabledTitle', { layer: props.title })}>{t('layers.disabledText')}</EmptyState>
+  </div>
+}
+
 function MemoryProviderBadge(props: { providerId: MemoryProviderId; label: string }): JSX.Element {
   const compactLabel = props.providerId === 'mnemon-native' ? 'mnemon' : props.label
   return <span className={css.providerBadge} data-provider={props.providerId} title={compactLabel}>{compactLabel}</span>
@@ -359,7 +375,7 @@ function ReadSourcePanel(props: {
 }
 
 /** Sidebar mirrors the SSH panel's flat tab model; Buildin keeps the grouped navigation unchanged. */
-function WorkspaceNavigation(props: { page: Page; onSelect: (page: Page) => void; activeBodies: number; bodyCount: number; catalogKnown: boolean; activationEnabled: boolean; writeEnabled: boolean }): JSX.Element {
+function WorkspaceNavigation(props: { page: Page; onSelect: (page: Page) => void; activeBodies: number; bodyCount: number; catalogKnown: boolean; activationEnabled: boolean; writeEnabled: boolean; layers: Record<ConfigurableMemoryLayerId, boolean | undefined> }): JSX.Element {
   const t = useT()
   const appearance = useMnemonViewAppearance()
   return (
@@ -368,7 +384,10 @@ function WorkspaceNavigation(props: { page: Page; onSelect: (page: Page) => void
         ? <div className={appearanceClass(css.nav, appearance.classes.nav)} role="tablist" aria-label={t('nav.aria')}>
           {SIDEBAR_PAGE_TABS.map(item => {
             const active = item.id === 'overview' ? isMemoryPage(props.page) : props.page === item.id
-            return <button key={item.id} type="button" role="tab" aria-selected={active} data-active={active ? '' : undefined} onClick={() => props.onSelect(item.id)}>{t(item.label)}</button>
+            const layer = pageLayer(item.id)
+            const disabled = layer !== undefined && props.layers[layer] === false
+            const label = t(item.label)
+            return <button key={item.id} type="button" role="tab" aria-selected={active} data-active={active ? '' : undefined} data-layer-disabled={disabled ? '' : undefined} aria-label={disabled ? `${label} · ${t('layers.disabledBadge')}` : undefined} onClick={() => props.onSelect(item.id)}><span>{label}</span>{disabled && <em className={css.layerDisabledBadge}>{t('layers.disabledBadge')}</em>}</button>
           })}
         </div>
         : <nav className={appearanceClass(css.nav, appearance.classes.nav)} aria-label={t('nav.aria')}>
@@ -2358,6 +2377,13 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const status = currentStatusState.value
   const statusLoading = currentStatusState.loading
   const statusError = currentStatusState.error
+  const layerEnabled = useCallback((id: ConfigurableMemoryLayerId): boolean | undefined => {
+    if (status === null) return undefined
+    return status.memorySystem?.topology.layers.find(layer => layer.id === id)?.enabled ?? true
+  }, [status])
+  const runtimeLayerEnabled = layerEnabled('runtime')
+  const documentsLayerEnabled = layerEnabled('documents')
+  const memorySpacesLayerEnabled = layerEnabled('memory-spaces')
   const metadataSessionId = status?.lifecycle?.current?.sessionId
   const taskClient = useMemo(() => new MnemonClient(connection, undefined, workspaceId), [connection, workspaceId])
   const statusRequest = useRef(0)
@@ -2377,9 +2403,16 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   }, [viewContextKey])
 
   const openRemember = useCallback((seed = '') => {
+    if (memorySpacesLayerEnabled === false) return
     setRememberSeed(seed)
     setRememberOpen(true)
-  }, [])
+  }, [memorySpacesLayerEnabled])
+
+  useEffect(() => {
+    if (memorySpacesLayerEnabled !== false) return
+    setRememberOpen(false)
+    setStrategyOpen(false)
+  }, [memorySpacesLayerEnabled])
 
   /** Conversation surfaces ask this view to open a page (optionally with a seed). */
   const applyAnchor = useCallback((anchor: MnemonAnchor) => {
@@ -2508,20 +2541,20 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       {(statusError !== null || status?.healthy === false) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
       {appearance.surface === 'buildin' && workspaceDiverged && <div className={css.workspaceMismatch} role="status"><div><strong>{t('workspace.mismatchTitle')}</strong><span>{t('workspace.mismatchDescription')}</span><div><code>{t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}</code><code>{t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}</code></div></div>{canAlignWorkspace && <button type="button" className={css.secondaryButton} onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button>}</div>}
       <div className={css.workspace}>
-        <WorkspaceNavigation page={page} onSelect={selectPrimaryPage} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} activationEnabled={activationEnabled} writeEnabled={writeEnabled} />
-        <MemoryNavigation page={page} activationEnabled={activationEnabled} writeEnabled={writeEnabled} onSelect={selectPage} onRemember={() => openRemember()} onStrategy={() => setStrategyOpen(true)} />
+        <WorkspaceNavigation page={page} onSelect={selectPrimaryPage} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} activationEnabled={activationEnabled} writeEnabled={writeEnabled} layers={{ runtime: runtimeLayerEnabled, documents: documentsLayerEnabled, 'memory-spaces': memorySpacesLayerEnabled }} />
+        {memorySpacesLayerEnabled !== false && <MemoryNavigation page={page} activationEnabled={activationEnabled} writeEnabled={writeEnabled} onSelect={selectPage} onRemember={() => openRemember()} onStrategy={() => setStrategyOpen(true)} />}
         <section key={viewContextKey} className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={!isMemoryPage(page) ? '' : undefined}>
-          {page === 'overview' && <OverviewPage client={client} metadataClient={taskClient} revision={revision} activationEnabled={activationEnabled} writeEnabled={writeEnabled} agentAvailable={taskAgentAvailable} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onAgentRefresh={() => void loadStatus()} onBodyReconnect={bodyReconnected} onBodyMetadata={bodyMetadataUpdated} onExplore={explore} />}
-          {page === 'runtime' && <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} />}
-          {page === 'documents' && <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} />}
-          {page === 'explore' && <ExplorePage client={client} agentClient={taskClient} agentAvailable={taskAgentAvailable} status={status} seed={searchSeed} writeEnabled={writeEnabled} onForget={forget} />}
-          {page === 'entities' && <EntitiesPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onExplore={explore} />}
-          {page === 'remember' && appearance.surface === 'buildin' && <RememberPage client={taskClient} agentAvailable={taskAgentAvailable} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} />}
-          {page === 'list' && <ListPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onClone={clone} onExplore={explore} />}
+          {page === 'overview' && (memorySpacesLayerEnabled !== false ? <OverviewPage client={client} metadataClient={taskClient} revision={revision} activationEnabled={activationEnabled} writeEnabled={writeEnabled} agentAvailable={taskAgentAvailable} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onAgentRefresh={() => void loadStatus()} onBodyReconnect={bodyReconnected} onBodyMetadata={bodyMetadataUpdated} onExplore={explore} /> : <LayerDisabledPage title={t('overview.title')} />)}
+          {page === 'runtime' && (runtimeLayerEnabled !== false ? <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} /> : <LayerDisabledPage title={t('runtime.title')} />)}
+          {page === 'documents' && (documentsLayerEnabled !== false ? <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} /> : <LayerDisabledPage title={t('documents.title')} />)}
+          {page === 'explore' && (memorySpacesLayerEnabled !== false ? <ExplorePage client={client} agentClient={taskClient} agentAvailable={taskAgentAvailable} status={status} seed={searchSeed} writeEnabled={writeEnabled} onForget={forget} /> : <LayerDisabledPage title={t('overview.title')} />)}
+          {page === 'entities' && (memorySpacesLayerEnabled !== false ? <EntitiesPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onExplore={explore} /> : <LayerDisabledPage title={t('overview.title')} />)}
+          {page === 'remember' && appearance.surface === 'buildin' && (memorySpacesLayerEnabled !== false ? <RememberPage client={taskClient} agentAvailable={taskAgentAvailable} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} /> : <LayerDisabledPage title={t('overview.title')} />)}
+          {page === 'list' && (memorySpacesLayerEnabled !== false ? <ListPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onClone={clone} onExplore={explore} /> : <LayerDisabledPage title={t('overview.title')} />)}
           {page === 'status' && <StatusPage client={client} status={status} loading={statusLoading} writeEnabled={writeEnabled} onRefresh={() => void loadStatus()} />}
         </section>
-        {appearance.surface === 'sidebar' && rememberOpen && <RememberPage client={taskClient} agentAvailable={taskAgentAvailable} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} onClose={() => setRememberOpen(false)} onComplete={() => setRememberOpen(false)} />}
-        {appearance.surface === 'sidebar' && strategyOpen && <PersistenceStrategyDialog client={taskClient} settingsScope={settingsScope} config={settingsSnapshot.value} writable={settingsSnapshot.writable} agentAvailable={taskAgentAvailable} onClose={() => setStrategyOpen(false)} />}
+        {appearance.surface === 'sidebar' && memorySpacesLayerEnabled !== false && rememberOpen && <RememberPage client={taskClient} agentAvailable={taskAgentAvailable} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} onClose={() => setRememberOpen(false)} onComplete={() => setRememberOpen(false)} />}
+        {appearance.surface === 'sidebar' && memorySpacesLayerEnabled !== false && strategyOpen && <PersistenceStrategyDialog client={taskClient} settingsScope={settingsScope} config={settingsSnapshot.value} writable={settingsSnapshot.writable} agentAvailable={taskAgentAvailable} onClose={() => setStrategyOpen(false)} />}
       </div>
     </main>
   )

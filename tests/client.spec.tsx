@@ -25,7 +25,7 @@ describe('MnemonView', () => {
     getSnapshot: () => readOnlySettingsSnapshot,
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean; versionsDeferred?: boolean } = {}) {
+  function createConnection(options: { isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean; versionsDeferred?: boolean; layerSwitches?: Record<'runtime' | 'documents' | 'memory-spaces', boolean> } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -120,6 +120,29 @@ describe('MnemonView', () => {
           lastAt: '2026-08-13T03:00:00.000Z',
         },
       },
+      ...(options.layerSwitches === undefined ? {} : {
+        memorySystem: {
+          catalog: {
+            generation: 1,
+            layers: [
+              { id: 'runtime', label: 'Runtime Memory', description: 'Hot context', role: 'working-context', order: 100, capabilities: ['read', 'write', 'project'] },
+              { id: 'documents', label: 'Documents', description: 'Narrative records', role: 'narrative', order: 200, capabilities: ['search', 'write'] },
+              { id: 'memory-spaces', label: 'Memory Spaces', description: 'Durable evidence', role: 'durable-evidence', order: 300, capabilities: ['recall', 'write'] },
+            ],
+            adapters: [],
+            strategies: [],
+          },
+          topology: {
+            id: 'default-three-tier', strategyId: 'default-three-tier', generation: 1, catalogGeneration: 1, createdAt: '2026-08-13T03:00:00.000Z',
+            layers: (['runtime', 'documents', 'memory-spaces'] as const).map(id => ({
+              id,
+              enabled: options.layerSwitches![id],
+              participation: { recall: 'automatic' as const, write: 'automatic' as const, projection: 'automatic' as const, maintenance: 'automatic' as const },
+              adapterIds: [],
+            })),
+          },
+        },
+      }),
       ...(options.workspaceMismatch === true ? {
         workspaceContext: {
           mode: 'workspace',
@@ -321,6 +344,34 @@ describe('MnemonView', () => {
       resolveVersions: (index: number) => versionResolvers[index]?.(versionResponse()),
     }
   }
+
+  it('renders all eight Layer switch combinations as reversible Sidebar states', async () => {
+    const ids = ['runtime', 'documents', 'memory-spaces'] as const
+    const labels = { runtime: '运行时', documents: '档案', 'memory-spaces': '记忆体' }
+    const disabledTitles = { runtime: '运行时记忆 已关闭', documents: '项目档案 已关闭', 'memory-spaces': '记忆体 已关闭' }
+    const endpoints = { runtime: ['runtime-memory'], documents: ['documents'], 'memory-spaces': ['bodies', 'body-directory', 'graph'] }
+
+    for (let mask = 0; mask < 8; mask += 1) {
+      const layerSwitches = Object.fromEntries(ids.map((id, index) => [id, (mask & (1 << index)) !== 0])) as Record<typeof ids[number], boolean>
+      const { connection, call } = createConnection({ layerSwitches })
+      render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+      await screen.findByText('已连接')
+      const tabs = screen.getByRole('tablist', { name: 'Mnemon 页面' })
+
+      for (const id of ids) {
+        const tab = within(tabs).getByRole('tab', { name: layerSwitches[id] ? labels[id] : `${labels[id]} · 已关闭` })
+        expect(tab.hasAttribute('data-layer-disabled')).toBe(!layerSwitches[id])
+        if (layerSwitches[id]) continue
+
+        const before = call.mock.calls.filter(([, endpoint]) => endpoints[id].includes(endpoint)).length
+        fireEvent.click(tab)
+        await screen.findByRole('heading', { name: disabledTitles[id] })
+        expect(screen.getByText('已有数据完整保留；在设置中重新开启后即可恢复读取、写入与按需调用。')).toBeTruthy()
+        expect(call.mock.calls.filter(([, endpoint]) => endpoints[id].includes(endpoint))).toHaveLength(before)
+      }
+      cleanup()
+    }
+  })
 
   it('shows the live graph and all eight Mnemon workspaces', async () => {
     const { connection } = createConnection()

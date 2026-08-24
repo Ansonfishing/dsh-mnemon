@@ -54,6 +54,28 @@ describe('composable memory system', () => {
     expect(initial.layers.find(layer => layer.id === 'documents')).toMatchObject({ enabled: true })
   })
 
+  it('treats the eight built-in switch combinations as complete Layer gates', () => {
+    const ids = ['runtime', 'documents', 'memory-spaces'] as const
+    const triggers = ['manual', 'automatic', 'system'] as const
+    for (let mask = 0; mask < 8; mask += 1) {
+      const catalog = new MemoryCatalog()
+      registerDefaultMemorySystem(catalog)
+      const enabled = Object.fromEntries(ids.map((id, index) => [id, (mask & (1 << index)) !== 0])) as Record<typeof ids[number], boolean>
+      const topology = new MemoryTopologyManager(catalog, {
+        ...DEFAULT_THREE_TIER_TOPOLOGY,
+        layers: DEFAULT_THREE_TIER_TOPOLOGY.layers.map(layer => ({ ...layer, enabled: enabled[layer.id as typeof ids[number]], participation: { ...layer.participation }, adapterIds: [...layer.adapterIds] })),
+      })
+      const kernel = new MemoryKernel(catalog, topology)
+
+      for (const id of ids) {
+        for (const capability of catalog.layer(id)!.descriptor.capabilities) {
+          for (const trigger of triggers) expect(kernel.allows(id, capability, trigger)).toBe(enabled[id])
+        }
+      }
+      topology.dispose()
+    }
+  })
+
   it('reconciles live Catalog additions and removals as disabled topology candidates', () => {
     const catalog = new MemoryCatalog()
     registerDefaultMemorySystem(catalog)
