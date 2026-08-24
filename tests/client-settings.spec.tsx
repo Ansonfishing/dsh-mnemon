@@ -55,12 +55,19 @@ describe('MnemonSettingsCard', () => {
       throw new Error(`unexpected ${channel} ${endpoint}`)
     })
 
-    render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call } } as ClientConnectionHandle} />)
+    const view = render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call } } as ClientConnectionHandle} />)
 
-    const enabled = await screen.findByRole('checkbox', { name: '启用 Documents' })
-    expect(screen.queryByRole('combobox', { name: /Documents/ })).toBeNull()
+    await screen.findByRole('checkbox', { name: '启用 项目档案' })
+    expect(screen.getByText('可版本化的叙事文档，先检索，再按需阅读全文。')).toBeTruthy()
+    expect(screen.queryByText('Narrative records')).toBeNull()
+
+    view.rerender(<MnemonSettingsCard scope={scope} connection={{ rpc: { call } } as ClientConnectionHandle} t={translateEn} />)
+    const enabled = await screen.findByRole('checkbox', { name: 'Enable Project Documents' })
+    expect(screen.getByText('Versioned narrative documents searched first and read in full on demand.')).toBeTruthy()
+    expect(screen.queryByText('Narrative records')).toBeNull()
+    expect(screen.queryByRole('combobox', { name: /Project Documents/ })).toBeNull()
     fireEvent.click(enabled)
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([{
       op: 'set',
       path: ['memoryTopology', 'layers', 'documents', 'enabled'],

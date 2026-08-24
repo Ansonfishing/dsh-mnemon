@@ -469,6 +469,13 @@ function MemoryTopologySection(props: {
 }): JSX.Element {
   const layerDescriptors = new Map(props.descriptor?.catalog.layers.map(layer => [layer.id, layer]) ?? [])
 
+  const builtInCopy = (layerId: string): { label: string; description: string } | undefined => {
+    if (layerId === 'runtime') return { label: props.t('layers.runtimeLabel'), description: props.t('layers.runtimeDescription') }
+    if (layerId === 'documents') return { label: props.t('layers.documentsLabel'), description: props.t('layers.documentsDescription') }
+    if (layerId === 'memory-spaces') return { label: props.t('layers.memorySpacesLabel'), description: props.t('layers.memorySpacesDescription') }
+    return undefined
+  }
+
   return <section className={css.section} aria-labelledby="mnemon-topology-heading">
     <div className={css.sectionHeading}>
       <div><h2 id="mnemon-topology-heading">{props.t('config.topologyTitle')}</h2><p>{props.t('config.topologyDescription')}</p></div>
@@ -480,10 +487,12 @@ function MemoryTopologySection(props: {
         <div className={css.topologyList}>
           {props.topology.layers.map(layer => {
             const descriptor = layerDescriptors.get(layer.id)
-            const label = descriptor?.label ?? layer.id
+            const copy = builtInCopy(layer.id)
+            const label = copy?.label ?? descriptor?.label ?? layer.id
+            const description = copy?.description ?? descriptor?.description ?? layer.id
             return <article className={css.topologyLayer} data-enabled={layer.enabled} key={layer.id}>
               <header>
-                <span><strong>{label}</strong><small>{descriptor?.description ?? layer.id}</small></span>
+                <span><strong>{label}</strong><small>{description}</small></span>
                 <label className={css.topologyToggle} htmlFor={`mnemon-layer-${layer.id}`}>
                   <span>{layer.enabled ? props.t('config.topologyEnabled') : props.t('config.topologyDisabled')}</span>
                   <input id={`mnemon-layer-${layer.id}`} type="checkbox" aria-label={props.t('config.topologyLayerToggle', { layer: label })} checked={layer.enabled} disabled={props.disabled} onChange={event => props.onEnabled(layer.id, event.target.checked)} />
