@@ -54,7 +54,11 @@ The tiers are not copies. A useful rule is: **every-turn context goes to Runtime
 | **Archive Document** | A task Agent creates a searchable cold reference before the Host moves the original | Supervised move |
 | **Turn memory** | Expands exact recall, write, and Document-search activity; each item navigates to its source | Read-only |
 
-These tasks do not reuse or consume the main conversation history. By default they follow DSH's new-session model route; **Settings → Memory System → Background task Agent** can select a dedicated Provider and model. That fixed route applies to every Mnemon subagent delegation (idle checkpoint review, recall, write, answer, provider placement, memory migration, USER compaction, document archive, and metadata maintenance). With DSH 0.1.1-rc.2, the first-party `deepseek-official/deepseek-v4-flash-vision-exp` route appears with an **Image input** label. Mnemon background jobs still send text-only prompts; multimodal conversation messages keep their DSH attachment references through lifecycle processing, and raw image bytes are never copied into memory.
+Only the rows that explicitly name a task Agent spend a separate model context; **Search** and **Turn memory** are deterministic Host reads.
+
+Task Agents do not reuse or consume the main conversation history. By default they follow DSH's new-session model route; **Settings → Memory System → Background task Agent** can select a dedicated Provider and model. That fixed route also applies to bounded Mnemon workers for idle checkpoint review, writes, evidence-bound answers, provider placement, memory migration, USER compaction, Document archiving, and metadata maintenance. Conversation Recall and Related stay direct Host reads and do not use this background route.
+
+With DSH 0.1.1-rc.2, the first-party `deepseek-official/deepseek-v4-flash-vision-exp` route appears with an **Image input** label. Mnemon background jobs still send text-only prompts; multimodal conversation messages keep their DSH attachment references through lifecycle processing, and raw image bytes are never copied into memory.
 
 ## One Memory Space workflow, nine providers
 

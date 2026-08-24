@@ -2,7 +2,9 @@
 
 [简体中文](../zh-CN/getting-started.md) | **English** | [Documentation hub](./README.md)
 
-This guide goes from a blank environment to the first verified recall. It uses Sidebar and global storage by default. If installation is complete, jump to [First verification](#6-complete-first-verification).
+This guide goes from a blank environment to the first verified recall. It uses Sidebar, global storage, and the compatible `default-three-tier` topology. You do not need to configure TurnView, Strategy, or generation concepts for normal use.
+
+If installation is complete, jump to [First verification](#6-complete-first-verification). If you are upgrading from v0.2.x, read the [v0.3.0 upgrade notes](./releases/v0.3.0.md#upgrade-and-data-compatibility) first.
 
 ## 1. Prerequisites
 

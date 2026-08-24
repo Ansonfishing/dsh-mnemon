@@ -12,6 +12,14 @@
 
 三层现在是默认拓扑，不再是写死在各入口里的唯一拓扑。运行时心智刻意只保留四个主要概念：`MemoryBoot` 装配受信任 contribution，`MemorySource` 快照一类记忆，`TurnView` 为一个回合固定 Source generation，`MemoryReceipt` 在 mutation 提交后推进下一回合。Layer、Adapter、Strategy、Guard 仍是控制面扩展边界，不成为模型或普通用户必须理解的额外对象。
 
+只需阅读与你角色对应的一层：
+
+| 读者 | 需要理解的概念 |
+|---|---|
+| 普通用户 | 运行时、档案、记忆体；默认界面与工作流保持不变 |
+| 运维者 | Topology，以及每层的召回、写入、投影、维护参与模式 |
+| 扩展作者 | MemoryBoot、MemorySource、TurnView、Receipt 与下文 Kernel 扩展边界 |
+
 ## 可组合记忆内核
 
 ```text

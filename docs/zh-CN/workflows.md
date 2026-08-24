@@ -13,12 +13,12 @@
 
 ```text
 turn/start
-  -> system-prompt/assemble
+  -> 进入 system-prompt/assemble hook
   -> beginTurn(root turn + operation scope)
   -> snapshot eager and routed MemorySources
   -> pin Source revisions/digests and Host-only authority
   -> build bounded Wake
-  -> continue Host prompt assembly
+  -> 继续真正的 Host prompt assembly
   -> replace mnemon:runtime-memory with that Wake
 
 agent/pre-step(step=1)

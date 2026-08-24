@@ -12,6 +12,14 @@
 
 The three tiers are now the default topology rather than the only topology hard-coded into every surface. The runtime model intentionally has four primary concepts: `MemoryBoot` assembles trusted contributions, `MemorySource` snapshots one kind of memory, `TurnView` pins one Source generation for a turn, and `MemoryReceipt` advances the next turn after a committed mutation. Layer, Adapter, Strategy, and Guard remain control-plane extension boundaries rather than extra concepts exposed to the model or ordinary user.
 
+Read only the layer that matches your role:
+
+| Reader | Concepts that matter |
+|---|---|
+| Ordinary user | Runtime, Documents, and Memory Spaces; the default UI and workflows are unchanged |
+| Operator | Topology plus each Layer's recall, write, projection, and maintenance participation |
+| Extension author | MemoryBoot, MemorySource, TurnView, Receipt, and the Kernel extension boundaries below |
+
 ## Composable Memory Kernel
 
 ```text

@@ -2,7 +2,7 @@
 
 [简体中文](../zh-CN/README.md) | **English** | [Project home](../../README.md)
 
-This hub is organized by what you need to accomplish. New users should follow Getting Started, then use the visual guide for the interface. Reference documents are for deployment, integration, and development work.
+This hub is organized by what you need to accomplish. New users should follow Getting Started, then use the visual guide for the interface. Existing v0.2.x users can go directly to the v0.3.0 release notes; reference documents are for deployment, integration, and development work.
 
 ## New-user path
 
@@ -16,7 +16,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 
 | I want to… | Document |
 |---|---|
-| Grasp the complete v0.2.0 scope at once | [Capability map](./capabilities.md) · [v0.2.0 upgrade notes](./releases/v0.2.0.md) |
+| Grasp the current product scope and v0.3 architecture | [Capability map](./capabilities.md) · [v0.3.0 release notes](./releases/v0.3.0.md) |
 | Decide which tier should retain something | [Storage and the three-tier model](./storage-model.md) |
 | Choose, configure, or compare a Memory Space provider | [Long-term memory providers](./memory-providers.md) |
 | Share durable memory between DSH and other Mnemon-enabled agents | [Project overview: Cross-agent sharing](./project-overview.md#cross-agent-sharing-boundary) · [Configuration: Sharing scope](./configuration.md#choose-a-cross-agent-sharing-scope) |

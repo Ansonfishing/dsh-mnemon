@@ -13,12 +13,12 @@ The lifecycle pins before the Host assembles the System Prompt, then keeps the s
 
 ```text
 turn/start
-  -> system-prompt/assemble
+  -> enter system-prompt/assemble hook
   -> beginTurn(root turn + operation scope)
   -> snapshot eager and routed MemorySources
   -> pin Source revisions/digests and Host-only authority
   -> build bounded Wake
-  -> continue Host prompt assembly
+  -> continue the actual Host prompt assembly
   -> replace mnemon:runtime-memory with that Wake
 
 agent/pre-step(step=1)

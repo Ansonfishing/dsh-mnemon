@@ -54,7 +54,11 @@
 | **归档档案** | 任务 Agent 先建立可检索冷引用，Host 验证后移动原文 | 受监督迁移 |
 | **本回合记忆** | 展开本轮召回、写入和档案检索；点击条目精确跳转 | 只读 |
 
-这些任务不会复用或挤占主对话历史。默认跟随 DSH 新建会话时的模型路由；也可以在**设置 → 记忆系统 → 后台任务 Agent**单独指定 Provider 与模型。该固定路由同时作用于 coordinator 派发的所有子代理委托（空闲复盘、召回、写入、问答、Provider 选择、记忆迁移、USER 压缩、档案归档、元信息维护）。在 DSH 0.1.1-rc.2 中，第一方 `deepseek-official/deepseek-v4-flash-vision-exp` 路由会标记为**图片输入**。Mnemon 后台任务目前仍只发送文本 Prompt；多模态对话消息在生命周期处理中保留 DSH attachment 引用，不会把原始图片字节复制到记忆。
+只有明确写出“任务 Agent”的行才会消耗独立模型上下文；**检索**和**本回合记忆**都是确定性的 Host 读取。
+
+任务 Agent 不会复用或挤占主对话历史，默认跟随 DSH 新建会话时的模型路由；也可以在**设置 → 记忆系统 → 后台任务 Agent**单独指定 Provider 与模型。该固定路由也作用于空闲复盘、写入、证据问答、Provider 选择、记忆迁移、USER 压缩、档案归档和元信息维护等受限 Mnemon worker；对话中的 Recall 与 Related 仍由 Host 直接读取，不使用后台路由。
+
+在 DSH 0.1.1-rc.2 中，第一方 `deepseek-official/deepseek-v4-flash-vision-exp` 路由会标记为**图片输入**。Mnemon 后台任务目前仍只发送文本 Prompt；多模态对话消息在生命周期处理中保留 DSH attachment 引用，不会把原始图片字节复制到记忆。
 
 ## 一套记忆体工作流，九种 Provider
 

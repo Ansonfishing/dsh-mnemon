@@ -2,7 +2,7 @@
 
 **简体中文** | [English](../en/README.md) | [项目首页](../../README.zh-CN.md)
 
-这里按“你现在要完成什么”组织文档。第一次使用从快速开始进入；需要理解页面时看 UI 指南；只有在部署、集成或开发时才需要进入参考文档。
+这里按“你现在要完成什么”组织文档。第一次使用从快速开始进入；需要理解页面时看 UI 指南；已有 v0.2.x 用户可以直接查看 v0.3.0 发布说明；只有在部署、集成或开发时才需要进入参考文档。
 
 ## 新用户路径
 
@@ -16,7 +16,7 @@
 
 | 我想要…… | 文档 |
 |---|---|
-| 一次看懂 v0.2.0 的完整能力范围 | [能力地图](./capabilities.md) · [v0.2.0 升级说明](./releases/v0.2.0.md) |
+| 一次看懂当前产品范围与 v0.3 架构 | [能力地图](./capabilities.md) · [v0.3.0 发布说明](./releases/v0.3.0.md) |
 | 决定一条信息应放在哪一层 | [存储与三层记忆模型](./storage-model.md) |
 | 选择、配置或比较记忆体 Provider | [长期记忆 Provider](./memory-providers.md) |
 | 让 DSH 与其他 Mnemon-enabled Agent 共享长期记忆 | [项目介绍：跨 Agent 共享边界](./project-overview.md#跨-agent-共享边界) · [配置参考：共享范围](./configuration.md#选择跨-agent-共享范围) |
