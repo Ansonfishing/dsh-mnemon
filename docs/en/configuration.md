@@ -87,7 +87,11 @@ Both the `mnemon` Host/storage namespace and the `mnemon-ui` browser-presentatio
 
 Each Layer has one master switch. `enabled=true` permits the default strategy to use the Layer when needed; it does not force recall or writes on every turn. `enabled=false` stops that Layer's context injection, model calls, background processing, and data-plane Web/RPC operations together.
 
+[![The isolated v0.3 settings page gives each default Memory Layer one master switch](../assets/screenshots/settings-memory-layers.jpg)](../assets/screenshots/settings-memory-layers.jpg)
+
 Disabling is reversible routing state, not deletion. The corresponding Sidebar tab remains visible with an Off badge and does not read the data plane; Status, Catalog, and management directories remain observable. Re-enabling uses the original directories and data.
+
+[![The actual Sidebar after disabling Documents: its tab remains while data is neither read nor deleted](../assets/screenshots/sidebar-layer-disabled.jpg)](../assets/screenshots/sidebar-layer-disabled.jpg)
 
 The WebUI reads the live `memory-system` descriptor, so a Layer contributed by an extension does not require a frontend enum change. Settings submit only changed `enabled` Booleans under one revision fence. If the candidate runtime graph cannot validate, the current generation remains active. The Kernel still authoritatively checks capability, trigger source, and Guards, but those are not ordinary-user settings in v0.3.
 
