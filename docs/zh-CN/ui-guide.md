@@ -153,13 +153,13 @@
 
 下面是隔离安装的 `dsh-mnemon@0.3.0` 实际设置页。三个默认 Layer 各自只有一个总开关；“已开启”表示允许系统按需使用，并不表示每回合强制 Recall。
 
-[![v0.3 实际设置页中的 Runtime Memory、Documents 与 Memory Spaces 总开关](../assets/screenshots/settings-memory-layers.jpg)](../assets/screenshots/settings-memory-layers.jpg)
+[![v0.3 实际设置页中的运行时记忆、项目档案与记忆体总开关](../assets/screenshots/settings-memory-layers-zh-CN.jpg)](../assets/screenshots/settings-memory-layers-zh-CN.jpg)
 
 Mnemon 自己的自定义目录、备份与迁移留在 Mnemon 专属折叠区。自定义本质上是显式路径的全局范围。
 
 关闭 Layer 不删除数据。Sidebar 中对应 Tab 保留并标记“已关闭”，点击后显示可逆停用说明而不读取数据面；重新开启后原数据恢复可用。扩展贡献的新 Layer 首次出现时默认关闭；保存前当前运行代继续服务，候选配置验证失败也不会产生半切换。
 
-[![实际关闭 Documents 后，Sidebar 保留“档案”Tab 并显示可逆停用说明](../assets/screenshots/sidebar-layer-disabled.jpg)](../assets/screenshots/sidebar-layer-disabled.jpg)
+[![实际关闭项目档案后，Sidebar 保留“档案”Tab 并显示可逆停用说明](../assets/screenshots/sidebar-layer-disabled-zh-CN.jpg)](../assets/screenshots/sidebar-layer-disabled-zh-CN.jpg)
 
 ### 后台任务 Agent 模型路由
 

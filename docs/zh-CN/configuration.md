@@ -87,11 +87,11 @@ mnemon:
 
 每层只有一个总开关。`enabled=true` 表示允许默认策略在需要时使用该层，并不强制每回合召回或写入；`enabled=false` 会同时停止该层的上下文注入、模型调用、后台处理和数据面 Web/RPC 操作。
 
-[![隔离安装的 v0.3 设置页：三个默认记忆层各有一个总开关](../assets/screenshots/settings-memory-layers.jpg)](../assets/screenshots/settings-memory-layers.jpg)
+[![隔离安装的 v0.3 中文设置页：三个默认记忆层各有一个总开关](../assets/screenshots/settings-memory-layers-zh-CN.jpg)](../assets/screenshots/settings-memory-layers-zh-CN.jpg)
 
 关闭是可逆的路由状态，不是删除操作。Sidebar 中对应 Tab 会保留并标记“已关闭”，页面不会读取数据面；状态、Catalog 和管理目录仍可观察。重新开启后使用原目录和原数据。
 
-[![关闭 Documents 后的实际 Sidebar：Tab 保留，数据不被读取或删除](../assets/screenshots/sidebar-layer-disabled.jpg)](../assets/screenshots/sidebar-layer-disabled.jpg)
+[![关闭项目档案后的实际中文 Sidebar：Tab 保留，数据不被读取或删除](../assets/screenshots/sidebar-layer-disabled-zh-CN.jpg)](../assets/screenshots/sidebar-layer-disabled-zh-CN.jpg)
 
 WebUI 从 `memory-system` 描述符读取真实 Layer，因此扩展插件新增 Layer 时不需要修改前端枚举。设置页只提交变化 Layer 的 `enabled` 布尔值；同一次保存带 revision fence，候选运行图无法验证时，当前运行代保持不变。Kernel 内部仍按能力、触发来源和 Guard 做权威校验，但这些不是 v0.3 的普通用户配置项。
 
