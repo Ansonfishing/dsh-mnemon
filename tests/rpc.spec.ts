@@ -15,6 +15,7 @@ function fakeService(writeEnabled = true): MnemonService {
     config: resolveConfig({ writeEnabled }),
     status: vi.fn(async () => ({ healthy: true })),
     statusSummary: vi.fn(() => ({ healthy: true, memoryBodies: [] })),
+    embeddingStatus: vi.fn(async () => ({ available: true, model: 'nomic-embed-text', totalInsights: 2, embedded: 1, coverage: '50%' })),
     updateProviderService: vi.fn(async (providerId, settings) => ({ providerId, configured: true, settings, configuredSecrets: [] })),
     memoryBodies: {
       providerServices: vi.fn(() => ({ providers: [], items: [], generatedAt: 'now' })),
@@ -99,6 +100,7 @@ describe('Mnemon RPC', () => {
     await expect(createReadHandler(service)('body-directory', {})).resolves.toMatchObject({ ok: true, value: { total: 1 } })
     await expect(createReadHandler(service)('body-reconnect', { memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { id: 'project', healthy: true } })
     await expect(createReadHandler(service)('status-summary', {})).resolves.toMatchObject({ ok: true, value: { healthy: true } })
+    await expect(createReadHandler(service)('embedding-status', {})).resolves.toMatchObject({ ok: true, value: { available: true, coverage: '50%' } })
     await expect(createReadHandler(service)('provider-services', {})).resolves.toMatchObject({ ok: true, value: { items: [] } })
     await expect(createReadHandler(service)('list', { category: 'decision' })).resolves.toMatchObject({ ok: true, value: { total: 0 } })
     await expect(createReadHandler(service)('entities', { entity: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { insights: [] } })

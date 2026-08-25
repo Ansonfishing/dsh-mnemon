@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type JSX } from 'react'
-import type {
-  ClientConnectionHandle,
-  ClientSettingsScope,
-  ClientSettingsSnapshot,
-  Config,
-  InteractionConfig,
-  MemorySystemDescriptor,
-  MemoryTopologyDefinition,
-  SettingsOperation,
-  TaskAgentModelCatalog,
+import {
+  DEFAULT_EMBEDDING_ENDPOINT,
+  DEFAULT_EMBEDDING_MODEL,
+  type ClientConnectionHandle,
+  type ClientSettingsScope,
+  type ClientSettingsSnapshot,
+  type Config,
+  type InteractionConfig,
+  type MemorySystemDescriptor,
+  type MemoryTopologyDefinition,
+  type MnemonEmbeddingStatus,
+  type SettingsOperation,
+  type TaskAgentModelCatalog,
 } from '../shared/contracts.ts'
 import { MnemonClient } from './api.ts'
 import css from './MnemonSettingsCard.module.css'
@@ -31,21 +34,26 @@ export interface MnemonSettingsCardProps {
 }
 
 type CoreField = 'displayMode' | 'storageScope' | 'dataDir'
+type EmbeddingField = 'embeddingEnabled' | 'embeddingEndpoint' | 'embeddingModel'
 type TaskAgentField = 'taskAgentModelMode' | 'taskAgentProvider' | 'taskAgentModel'
 type InteractionField = 'turnBar' | 'saveAction'
 type TopologyField = `memoryTopology.${string}`
-type DraftField = CoreField | TaskAgentField | InteractionField
+type DraftField = CoreField | EmbeddingField | TaskAgentField | InteractionField
 type Field = DraftField | TopologyField
 interface Draft extends Record<InteractionField, boolean> {
   displayMode: 'sidebar' | 'buildin'
   storageScope: string
   dataDir: string
+  embeddingEnabled: boolean
+  embeddingEndpoint: string
+  embeddingModel: string
   taskAgentModelMode: 'inherit' | 'fixed'
   taskAgentProvider: string
   taskAgentModel: string
 }
 
 const CORE_FIELDS: CoreField[] = ['displayMode', 'storageScope', 'dataDir']
+const EMBEDDING_FIELDS: EmbeddingField[] = ['embeddingEnabled', 'embeddingEndpoint', 'embeddingModel']
 const INTERACTION_FIELDS: InteractionField[] = ['turnBar', 'saveAction']
 const TASK_AGENT_FIELDS: TaskAgentField[] = ['taskAgentModelMode', 'taskAgentProvider', 'taskAgentModel']
 function record(value: unknown): Record<string, unknown> {
@@ -59,17 +67,38 @@ function legacyPackDirectory(value: Config): string {
     ?? ''
 }
 
-function coreDraft(value: Config | undefined): Pick<Draft, CoreField | TaskAgentField> {
+function coreDraft(value: Config | undefined): Pick<Draft, CoreField | EmbeddingField | TaskAgentField> {
   const resolved = value ?? {}
   const dataDir = resolved.dataDir?.trim() || legacyPackDirectory(resolved)
   return {
     displayMode: resolved.displayMode ?? 'sidebar',
     storageScope: resolved.storageScope ?? (dataDir === '' ? 'global' : 'custom'),
     dataDir,
+    embeddingEnabled: resolved.embedding?.enabled === true,
+    embeddingEndpoint: resolved.embedding?.endpoint?.trim() || DEFAULT_EMBEDDING_ENDPOINT,
+    embeddingModel: resolved.embedding?.model?.trim() || DEFAULT_EMBEDDING_MODEL,
     taskAgentModelMode: resolved.taskAgentModel?.mode === 'fixed' ? 'fixed' : 'inherit',
     taskAgentProvider: resolved.taskAgentModel?.provider?.trim() ?? '',
     taskAgentModel: resolved.taskAgentModel?.model?.trim() ?? '',
   }
+}
+
+function validEmbeddingEndpoint(value: string): boolean {
+  const endpoint = value.trim()
+  if (endpoint === '' || endpoint.length > 2048) return false
+  try {
+    const parsed = new URL(endpoint)
+    return ['http:', 'https:'].includes(parsed.protocol)
+      && parsed.username === '' && parsed.password === ''
+      && !endpoint.includes('?') && !endpoint.includes('#')
+  } catch {
+    return false
+  }
+}
+
+function validEmbeddingModel(value: string): boolean {
+  const model = value.trim()
+  return model.length > 0 && model.length <= 200 && !/[\u0000-\u001f\u007f]/u.test(model)
 }
 
 function interactionDraft(value: InteractionConfig | undefined): Pick<Draft, InteractionField> {
@@ -107,6 +136,8 @@ function validation(t: MnemonTranslate, draft: Draft): string | null {
     const windowsUncAbsolute = /^\\\\[^\\/]+[\\/][^\\/]+/.test(directory)
     if (!posixAbsolute && !homeRelative && !windowsDriveAbsolute && !windowsUncAbsolute) return t('config.customAbsolute')
   }
+  if (draft.embeddingEnabled && !validEmbeddingEndpoint(draft.embeddingEndpoint)) return t('config.embeddingEndpointInvalid')
+  if (draft.embeddingEnabled && !validEmbeddingModel(draft.embeddingModel)) return t('config.embeddingModelInvalid')
   if (draft.taskAgentModelMode === 'fixed' && (draft.taskAgentProvider.trim() === '' || draft.taskAgentModel.trim() === '')) return t('config.taskAgentRouteRequired')
   return null
 }
@@ -157,6 +188,10 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const [topologyDraft, setTopologyDraft] = useState<MemoryTopologyDefinition | null>(null)
   const [topologyState, setTopologyState] = useState<'unavailable' | 'loading' | 'ready' | 'error'>(connection === undefined ? 'unavailable' : 'loading')
   const topologyRequest = useRef(0)
+  const [embeddingStatus, setEmbeddingStatus] = useState<MnemonEmbeddingStatus | null>(null)
+  const [embeddingStatusState, setEmbeddingStatusState] = useState<'unavailable' | 'idle' | 'loading' | 'ready' | 'error'>(connection === undefined ? 'unavailable' : 'idle')
+  const [embeddingStatusError, setEmbeddingStatusError] = useState<string | null>(null)
+  const embeddingStatusRequest = useRef(0)
   const configuredTaskAgentMode = coreSnapshot.value?.taskAgentModel?.mode === 'fixed' ? 'fixed' : 'inherit'
 
   useEffect(() => {
@@ -235,6 +270,32 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
     return () => { topologyRequest.current += 1 }
   }, [connection, sessionId, workspaceId, targetRevision])
 
+  useEffect(() => {
+    embeddingStatusRequest.current += 1
+    setEmbeddingStatus(null)
+    setEmbeddingStatusError(null)
+    setEmbeddingStatusState(connection === undefined ? 'unavailable' : 'idle')
+    return () => { embeddingStatusRequest.current += 1 }
+  }, [connection, sessionId, workspaceId, targetRevision])
+
+  const testEmbedding = (): void => {
+    if (connection === undefined) return
+    const request = embeddingStatusRequest.current + 1
+    embeddingStatusRequest.current = request
+    setEmbeddingStatus(null)
+    setEmbeddingStatusError(null)
+    setEmbeddingStatusState('loading')
+    void new MnemonClient(connection, sessionId, workspaceId).embeddingStatus().then(status => {
+      if (embeddingStatusRequest.current !== request) return
+      setEmbeddingStatus(status)
+      setEmbeddingStatusState('ready')
+    }, reason => {
+      if (embeddingStatusRequest.current !== request) return
+      setEmbeddingStatusError(reason instanceof Error ? reason.message : String(reason))
+      setEmbeddingStatusState('error')
+    })
+  }
+
   const coreUser = useMemo(() => record(coreSnapshot.user), [coreSnapshot.user])
   const activeScope = coreDraft(coreSnapshot.value).storageScope === 'workspace' ? 'workspace' : 'global'
   const error = validation(t, draft)
@@ -274,6 +335,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
     try {
       const coreOps = operations(CORE_FIELDS, dirty, draft)
       const regularCoreChanged = coreOps.length > 0
+      const embeddingChanged = EMBEDDING_FIELDS.some(field => dirty.has(field))
       const taskAgentChanged = TASK_AGENT_FIELDS.some(field => dirty.has(field))
       const topologyChanged = [...dirty].some(field => field.startsWith('memoryTopology.'))
       if (regularCoreChanged) {
@@ -289,6 +351,25 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
             : { mode: 'fixed', provider: draft.taskAgentProvider.trim(), model: draft.taskAgentModel.trim() },
         })
       }
+      if (embeddingChanged) {
+        const validEndpoint = validEmbeddingEndpoint(draft.embeddingEndpoint)
+        const validModel = validEmbeddingModel(draft.embeddingModel)
+        coreOps.push({
+          op: 'set',
+          path: ['embedding'],
+          value: draft.embeddingEnabled
+            ? {
+                enabled: true,
+                endpoint: draft.embeddingEndpoint.trim().replace(/\/+$/u, ''),
+                model: draft.embeddingModel.trim(),
+              }
+            : {
+                enabled: false,
+                ...(validEndpoint ? { endpoint: draft.embeddingEndpoint.trim().replace(/\/+$/u, '') } : {}),
+                ...(validModel ? { model: draft.embeddingModel.trim() } : {}),
+              },
+        })
+      }
       if (topologyChanged && topologyDraft !== null) {
         for (const layer of topologyDraft.layers) {
           if (!dirty.has(`memoryTopology.${layer.id}.enabled`)) continue
@@ -302,7 +383,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
       ])
       setDirty(new Set())
       setApplied(true)
-      if (regularCoreChanged || topologyChanged) setTargetRevision(revision => revision + 1)
+      if (regularCoreChanged || embeddingChanged || topologyChanged) setTargetRevision(revision => revision + 1)
     } catch (reason) {
       setFailed(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -313,6 +394,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const coreDisabled = loading || saving || !coreSnapshot.writable
   const interactionDisabled = loading || saving || !interactionSnapshot.writable
   const scopeChanging = dirty.has('storageScope') || dirty.has('dataDir')
+  const embeddingChanging = EMBEDDING_FIELDS.some(field => dirty.has(field))
   const editLayerEnabled = (layerId: string, enabled: boolean): void => {
     setTopologyDraft(current => current === null ? current : {
       ...current,
@@ -403,6 +485,18 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
                   </div>
                 </div>
               </GlobalLocationSetting>
+              <EmbeddingSettingsSection
+                draft={draft}
+                disabled={coreDisabled}
+                connectionAvailable={connection !== undefined}
+                changing={embeddingChanging}
+                status={embeddingStatus}
+                state={embeddingStatusState}
+                error={embeddingStatusError}
+                onEdit={edit}
+                onTest={testEmbedding}
+                t={t}
+              />
               <MnemonPackSection {...(connection === undefined ? {} : { connection })} {...(sessionId === undefined ? {} : { sessionId })} {...(workspaceId === undefined ? {} : { workspaceId })} refreshKey={targetRevision} t={t} embedded />
             </div>
           </details>
@@ -457,6 +551,101 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
       </>}
     </section>
   )
+}
+
+function EmbeddingSettingsSection(props: {
+  draft: Draft
+  disabled: boolean
+  connectionAvailable: boolean
+  changing: boolean
+  status: MnemonEmbeddingStatus | null
+  state: 'unavailable' | 'idle' | 'loading' | 'ready' | 'error'
+  error: string | null
+  onEdit: (field: Field, value: string | boolean) => void
+  onTest: () => void
+  t: MnemonTranslate
+}): JSX.Element {
+  const feedback = props.changing
+    ? props.t('config.embeddingSaveBeforeTest')
+    : props.state === 'loading'
+      ? props.t('config.embeddingTesting')
+      : props.state === 'error'
+        ? props.t('config.embeddingStatusFailed', { error: props.error ?? '' })
+        : props.state === 'ready' && props.status !== null
+          ? props.status.available
+            ? props.t('config.embeddingStatusAvailable', {
+                model: props.status.model,
+                embedded: props.status.embedded,
+                total: props.status.totalInsights,
+                coverage: props.status.coverage,
+              })
+            : props.t('config.embeddingStatusUnavailable', {
+                model: props.status.model,
+                embedded: props.status.embedded,
+                total: props.status.totalInsights,
+                coverage: props.status.coverage,
+              })
+          : props.state === 'unavailable'
+            ? props.t('config.embeddingTestUnavailable')
+            : props.t('config.embeddingNotTested')
+  return <section className={css.embeddingSection} aria-labelledby="mnemon-embedding-heading">
+    <div className={css.embeddingHeading}>
+      <h3 id="mnemon-embedding-heading">{props.t('config.embeddingTitle')}</h3>
+      <p>{props.t('config.embeddingDescription')}</p>
+    </div>
+    <ToggleRow
+      id="mnemon-embedding-managed"
+      label={props.t('config.embeddingManaged')}
+      hint={props.t('config.embeddingManagedHint')}
+      checked={props.draft.embeddingEnabled}
+      disabled={props.disabled}
+      onChange={value => props.onEdit('embeddingEnabled', value)}
+    />
+    <div className={css.providerIdentityFields}>
+      <label>
+        {props.t('config.embeddingEndpoint')}
+        <input
+          type="url"
+          aria-label={props.t('config.embeddingEndpoint')}
+          aria-invalid={props.draft.embeddingEnabled && !validEmbeddingEndpoint(props.draft.embeddingEndpoint)}
+          value={props.draft.embeddingEndpoint}
+          disabled={props.disabled || !props.draft.embeddingEnabled}
+          autoComplete="off"
+          spellCheck={false}
+          autoCapitalize="none"
+          autoCorrect="off"
+          placeholder={DEFAULT_EMBEDDING_ENDPOINT}
+          onChange={event => props.onEdit('embeddingEndpoint', event.target.value)}
+        />
+      </label>
+      <label>
+        {props.t('config.embeddingModel')}
+        <input
+          type="text"
+          aria-label={props.t('config.embeddingModel')}
+          aria-invalid={props.draft.embeddingEnabled && !validEmbeddingModel(props.draft.embeddingModel)}
+          value={props.draft.embeddingModel}
+          disabled={props.disabled || !props.draft.embeddingEnabled}
+          autoComplete="off"
+          spellCheck={false}
+          autoCapitalize="none"
+          autoCorrect="off"
+          placeholder={DEFAULT_EMBEDDING_MODEL}
+          onChange={event => props.onEdit('embeddingModel', event.target.value)}
+        />
+      </label>
+    </div>
+    <p className={css.embeddingSecurity}>{props.t('config.embeddingSecurity')}</p>
+    <div className={css.embeddingTest} aria-live="polite">
+      <span className={props.state === 'error' ? css.error : undefined} role={props.state === 'error' ? 'alert' : undefined}>{feedback}</span>
+      <button
+        type="button"
+        className={css.textButton}
+        disabled={props.disabled || !props.connectionAvailable || props.changing || props.state === 'loading'}
+        onClick={props.onTest}
+      >{props.t('config.embeddingTest')}</button>
+    </div>
+  </section>
 }
 
 function MemoryTopologySection(props: {

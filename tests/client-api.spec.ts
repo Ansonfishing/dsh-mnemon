@@ -121,6 +121,17 @@ describe('MnemonClient turn activity batching', () => {
     expect(call).toHaveBeenCalledWith(expect.any(String), 'task-agent-models', {})
   })
 
+  it('checks Mnemon embedding status in the selected runtime scope', async () => {
+    const status = { available: true, model: 'qwen3-embedding:0.6b', totalInsights: 5, embedded: 4, coverage: '80%' }
+    const call = vi.fn(async () => ({ ok: true as const, value: status }))
+    const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle, 'session-1', 'workspace-1')
+
+    await expect(client.embeddingStatus()).resolves.toEqual(status)
+    expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'embedding-status', {
+      sessionId: 'session-1', workspaceId: 'workspace-1',
+    })
+  })
+
   it('routes a card-level Memory Space reconnect through the trusted-host read channel with the active scope', async () => {
     const call = vi.fn(async () => ({ ok: true as const, value: { id: 'mem0-body', healthy: true } }))
     const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle, 'session-1', 'workspace-1')

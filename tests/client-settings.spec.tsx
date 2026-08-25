@@ -17,6 +17,111 @@ function deferred<T>() {
 }
 
 describe('MnemonSettingsCard', () => {
+  it('persists a validated DSH-managed Mnemon embedding override as one live setting', async () => {
+    const mutate = vi.fn(async () => {})
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}), mutate,
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+
+    render(<MnemonSettingsCard scope={scope} />)
+
+    const managed = screen.getByRole('checkbox', { name: '由 DSH 管理嵌入配置' })
+    const endpoint = screen.getByRole('textbox', { name: 'Ollama Endpoint' }) as HTMLInputElement
+    const model = screen.getByRole('textbox', { name: '嵌入模型' }) as HTMLInputElement
+    expect((managed as HTMLInputElement).checked).toBe(false)
+    expect(endpoint.value).toBe('http://localhost:11434')
+    expect(model.value).toBe('nomic-embed-text')
+    expect(endpoint.disabled).toBe(true)
+
+    fireEvent.click(managed)
+    fireEvent.change(endpoint, { target: { value: 'ftp://invalid.example' } })
+    expect(screen.getByRole('alert').textContent).toContain('HTTP(S)')
+    expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
+
+    fireEvent.change(endpoint, { target: { value: 'http://127.0.0.1:11434?' } })
+    expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
+
+    fireEvent.change(endpoint, { target: { value: ' http://127.0.0.1:11434/// ' } })
+    fireEvent.change(model, { target: { value: ' qwen3-embedding:0.6b ' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{
+      op: 'set',
+      path: ['embedding'],
+      value: { enabled: true, endpoint: 'http://127.0.0.1:11434', model: 'qwen3-embedding:0.6b' },
+    }]))
+  })
+
+  it('drops an invalid embedding draft when management is disabled', async () => {
+    const mutate = vi.fn(async () => {})
+    const snapshot = {
+      status: 'ready' as const,
+      value: {
+        storageScope: 'global' as const,
+        embedding: { enabled: true, endpoint: 'http://127.0.0.1:11434', model: 'qwen3-embedding:0.6b' },
+      },
+      base: {}, user: {}, revision: 1, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}), mutate,
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+
+    render(<MnemonSettingsCard scope={scope} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Ollama Endpoint' }), { target: { value: 'ftp://invalid.example' } })
+    fireEvent.click(screen.getByRole('checkbox', { name: '由 DSH 管理嵌入配置' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{
+      op: 'set',
+      path: ['embedding'],
+      value: { enabled: false, model: 'qwen3-embedding:0.6b' },
+    }]))
+  })
+
+  it('tests the saved embedding runtime through Mnemon and reports connection plus coverage', async () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: {
+        storageScope: 'global' as const,
+        embedding: { enabled: true, endpoint: 'http://127.0.0.1:11434', model: 'qwen3-embedding:0.6b' },
+      },
+      base: {}, user: {}, revision: 1, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}), mutate: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+    const call = vi.fn(async (channel: string, endpoint: string) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'embedding-status') return {
+        ok: true as const,
+        value: { available: true, model: 'qwen3-embedding:0.6b', totalInsights: 8, embedded: 6, coverage: '75%' },
+      }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') return { ok: true as const, value: { groups: [], failures: [] } }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [], items: [], generatedAt: '' } }
+      if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/root/.mnemon', scope: 'global' as const } }
+      throw new Error(`unexpected ${channel} ${endpoint}`)
+    })
+
+    render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call } } as ClientConnectionHandle} />)
+    fireEvent.click(screen.getByRole('button', { name: '测试状态' }))
+
+    expect(await screen.findByText('Ollama 可用 · qwen3-embedding:0.6b · 已嵌入 6/8（75%）')).toBeTruthy()
+    expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'embedding-status', {})
+  })
+
   it('renders one switch per live Catalog layer and persists only its enabled state', async () => {
     const mutate = vi.fn(async () => {})
     const snapshot = {
