@@ -4,10 +4,13 @@
 
 ## Per-Turn Context
 
-The plugin registers stable routing guidance and one Wake context slot:
+The plugin registers stable routing guidance, one static Runtime Memory protocol, and one Wake context slot:
 
 - `mnemon:routing`: a system prompt section that, when `routingGuidance=true`, provides concise boundaries for tiered queries;
-- `mnemon:runtime-memory`: the slot filled from the immutable Wake pinned for the current root turn. Runtime Memory enters exactly; Documents and Memory Spaces contribute bounded covers rather than their complete catalogs.
+- `mnemon:runtime-memory-protocol`: a system prompt section containing the invariant Runtime Memory semantics and write rules. It is present only while the eager Runtime source participates in automatic projection and remains byte-identical across memory writes;
+- `mnemon:runtime-memory`: the slot filled from the immutable Wake pinned for the current root turn. Runtime Memory contributes a complete revisioned USER/MEMORY state snapshot without repeating the static protocol; Documents and Memory Spaces contribute bounded covers rather than their complete catalogs.
+
+DSH appends a new user-role runtime-context snapshot only when this dynamic Wake changes. The snapshot deliberately remains complete because DSH defines the newest runtime-context message as superseding earlier snapshots; keeping full state preserves resume, fork, compaction, deletion, and context-trimming behavior. Moving the invariant protocol into the stable system prefix removes those bytes from every changed tail snapshot without inventing an unsafe delta chain.
 
 The lifecycle pins before the Host assembles the System Prompt, then keeps the same TurnView for every model step in that turn:
 
@@ -19,6 +22,7 @@ turn/start
   -> pin Source revisions/digests and Host-only authority
   -> build bounded Wake
   -> continue the actual Host prompt assembly
+  -> align the static protocol section with the pinned Runtime source
   -> replace mnemon:runtime-memory with that Wake
 
 agent/pre-step(step=1)

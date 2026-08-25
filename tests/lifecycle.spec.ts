@@ -10,6 +10,7 @@ import type {
   HostUserMessage,
 } from '../src/contracts.ts'
 import { MnemonLifecycle } from '../src/lifecycle.ts'
+import { RUNTIME_MEMORY_PROTOCOL } from '../src/runtime-memory.ts'
 import type { MnemonService } from '../src/service.ts'
 import type { MnemonSubagentCoordinator } from '../src/subagent.ts'
 
@@ -31,8 +32,9 @@ function durableCandidate(filler = 97): HostUserMessage {
 function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: { taskModelRoute?: boolean } = {}) {
   const agentListeners = new Map<string, Listener>()
   const rootListeners = new Map<string, Listener>()
+  const agentSections: Array<{ name: string; order: number; text: () => string }> = []
   const agentContexts: Array<{ name: string; order: number; text: () => string }> = []
-  const promptAssemblies: Array<{ contexts: Array<{ name: string; text: string }> }> = []
+  const promptAssemblies: Array<{ sections: Array<{ name: string; text: string }>; contexts: Array<{ name: string; text: string }> }> = []
   const events: HostSessionEvent[] = []
   const followup = vi.fn()
   const steer = vi.fn()
@@ -64,6 +66,10 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     }),
     get: vi.fn((name: string) => name === 'systemPrompt'
       ? {
+          section: (value: { name: string; order: number; text: () => string }) => {
+            agentSections.push(value)
+            return () => undefined
+          },
           context: (value: { name: string; order: number; text: () => string }) => {
             agentContexts.push(value)
             return () => undefined
@@ -147,7 +153,12 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
       const turn = turnId.slice(turnId.lastIndexOf(':') + 1)
       return { turnId, viewId: `view-${turn}`, viewDigest: `digest-${turn}`, scope, startedAt: '2026-08-23T00:00:00.000Z' }
     }),
-    wake: vi.fn((viewId: string) => ({ viewId, viewDigest: viewId.replace('view-', 'digest-'), text: `Pinned Wake ${viewId}`, sections: [] })),
+    wake: vi.fn((viewId: string) => ({
+      viewId,
+      viewDigest: viewId.replace('view-', 'digest-'),
+      text: `Pinned Wake ${viewId}`,
+      sections: [{ layerId: 'runtime', mode: 'eager', text: `Pinned Wake ${viewId}` }],
+    })),
     endTurn: vi.fn(() => true),
     reconcile: vi.fn(async () => ({ id: 'next-view' })),
   }
@@ -165,7 +176,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     const listener = agentListeners.get('system-prompt/assemble')
     if (listener === undefined) throw new Error('system-prompt/assemble listener missing')
     const assembly = {
-      sections: [],
+      sections: agentSections.map(section => ({ name: section.name, text: section.text() })),
       contexts: agentContexts.map(context => ({ name: context.name, text: context.text() })),
       tools: [],
       variables: {},
@@ -191,7 +202,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
       agentListeners.get('session/event')?.(agent.session, event)
     }
   }
-  return { agent, agentListeners, agentContexts, promptAssemblies, events, followup, steer, lifecycle, service, coordinator, memoryViews, runtimeSource, createTaskAgent, disposedTaskAgents, defaultModel, llm, agentPresets, assemblePrompt, preStep, turnStopping, stop }
+  return { agent, agentListeners, agentSections, agentContexts, promptAssemblies, events, followup, steer, lifecycle, service, coordinator, memoryViews, runtimeSource, createTaskAgent, disposedTaskAgents, defaultModel, llm, agentPresets, assemblePrompt, preStep, turnStopping, stop }
 }
 
 afterEach(() => vi.useRealTimers())
@@ -204,6 +215,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(context?.text()).toBe('')
 
     await value.preStep([userMessage('First step')], 7, 1)
+    expect(value.promptAssemblies[0]?.sections).toContainEqual({ name: 'mnemon:runtime-memory-protocol', text: RUNTIME_MEMORY_PROTOCOL })
     expect(value.promptAssemblies[0]?.contexts).toContainEqual({ name: 'mnemon:runtime-memory', text: 'Pinned Wake view-7' })
     expect(context?.text()).toBe('Pinned Wake view-7')
     expect(value.memoryViews.beginTurn).toHaveBeenCalledOnce()

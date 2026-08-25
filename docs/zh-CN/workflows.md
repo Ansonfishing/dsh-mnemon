@@ -4,10 +4,13 @@
 
 ## 每轮上下文
 
-插件会注册稳定的路由指导和一个 Wake context 槽位：
+插件会注册稳定的路由指导、一份静态 Runtime Memory 协议和一个 Wake context 槽位：
 
 - `mnemon:routing`：system prompt section；当 `routingGuidance=true` 时提供简短的分层查询边界；
-- `mnemon:runtime-memory`：由当前 root 回合固定的不可变 Wake 填充。Runtime Memory 原样进入；Documents 与 Memory Spaces 只贡献有界封面，不注入完整目录。
+- `mnemon:runtime-memory-protocol`：system prompt section，只包含不变的 Runtime Memory 语义与写入规则。它只在 eager Runtime Source 参与自动投影时出现，记忆变更前后保持逐字节一致；
+- `mnemon:runtime-memory`：由当前 root 回合固定的不可变 Wake 填充。Runtime Memory 提供带 revision 的完整 USER/MEMORY 状态快照，不再重复静态协议；Documents 与 Memory Spaces 只贡献有界封面，不注入完整目录。
+
+DSH 只在这份动态 Wake 发生变化时追加新的 user-role runtime-context 快照。该快照仍刻意保持完整，因为 DSH 将最新 runtime-context 消息定义为取代旧快照；完整状态能保护 resume、fork、compaction、删除和上下文裁剪语义。把不变协议放入稳定 system 前缀，可以从每个变化后的尾部快照移除这些字节，又不需要构造不可恢复的 diff 链。
 
 生命周期会在 Host 组装 System Prompt 前固定 TurnView，并让本回合所有模型 step 使用同一个 View：
 
@@ -19,6 +22,7 @@ turn/start
   -> pin Source revisions/digests and Host-only authority
   -> build bounded Wake
   -> 继续真正的 Host prompt assembly
+  -> 让静态协议 section 与已固定的 Runtime Source 对齐
   -> replace mnemon:runtime-memory with that Wake
 
 agent/pre-step(step=1)

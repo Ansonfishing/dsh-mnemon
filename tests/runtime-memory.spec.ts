@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   RUNTIME_ENTRY_DELIMITER,
+  RUNTIME_MEMORY_PROTOCOL,
   RuntimeMemoryCapacityError,
   RuntimeMemoryController,
 } from '../src/runtime-memory.ts'
@@ -124,19 +125,36 @@ describe('RuntimeMemoryController', () => {
     const { controller } = fixture()
     await controller.mutate({ action: 'add', target: 'user', content: 'User prefers concise Chinese replies', importance: 'critical' })
     const context = controller.contextText()
-    expect(context).toContain('MNEMON RUNTIME MEMORY PROTOCOL')
-    expect(context).toContain('Manage hot memory exclusively with mnemon_runtime_memory')
-    expect(context).toContain('Use action="add" only for a new independent fact')
-    expect(context).toContain('Use action="replace" with a short unique old_text')
-    expect(context).toContain('Use action="remove" with a short unique old_text')
-    expect(context).toContain('The user\'s explicit request in the current turn wins over both files')
-    expect(context).toContain('call mnemon_recall instead of inferring or filling the gap')
-    expect(context).toContain('Contents of USER.md (user profile;')
+    expect(RUNTIME_MEMORY_PROTOCOL).toContain('Manage hot memory exclusively with mnemon_runtime_memory')
+    expect(RUNTIME_MEMORY_PROTOCOL).toContain('Use action="add" only for a new independent fact')
+    expect(RUNTIME_MEMORY_PROTOCOL).toContain('Use action="replace" with a short unique old_text')
+    expect(RUNTIME_MEMORY_PROTOCOL).toContain('Use action="remove" with a short unique old_text')
+    expect(RUNTIME_MEMORY_PROTOCOL).toContain('The user\'s explicit request in the current turn wins over both files')
+    expect(RUNTIME_MEMORY_PROTOCOL).toContain('call mnemon_recall instead of inferring or filling the gap')
+    expect(context).toContain('MNEMON RUNTIME MEMORY SNAPSHOT')
+    expect(context).toMatch(/Revision: [a-f0-9]{64}/u)
+    expect(context).toContain('Contents of USER.md (user profile; entries: 1; UTF-8 bytes:')
     expect(context).toContain('<runtime-memory-file name="USER.md">\nUser prefers concise Chinese replies\n</runtime-memory-file>')
-    expect(context).toContain('Contents of MEMORY.md (working reference; 0/10240 UTF-8 bytes)')
+    expect(context).toContain('Contents of MEMORY.md (working reference; entries: 0; UTF-8 bytes: 0/10240)')
     expect(context).toContain('<runtime-memory-file name="MEMORY.md">\n(empty)\n</runtime-memory-file>')
-    expect(context.match(/always relevant/gi)).toHaveLength(2)
+    expect(context).not.toContain('MNEMON RUNTIME MEMORY PROTOCOL')
+    expect(context).not.toContain('WRITE PROTOCOL')
     expect(context).not.toContain(controller.sourcePath)
+  })
+
+  it('removes the stable protocol bytes from every changed runtime-context snapshot', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'user', content: 'User prefers compact release notes', importance: 'critical' })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Release checks run with pnpm verify' })
+
+    const snapshot = controller.contextText()
+    const protocolBytes = Buffer.byteLength(RUNTIME_MEMORY_PROTOCOL, 'utf8')
+    const snapshotBytes = Buffer.byteLength(snapshot, 'utf8')
+    const formerCombinedBytes = Buffer.byteLength(`${RUNTIME_MEMORY_PROTOCOL}\n\n${snapshot}`, 'utf8')
+
+    expect(protocolBytes).toBe(3_450)
+    expect(formerCombinedBytes - snapshotBytes).toBe(3_452)
+    expect(snapshotBytes).toBeLessThan(protocolBytes)
   })
 
   it('assembles every prompt from the latest generated USER.md and MEMORY.md projections', async () => {
@@ -154,6 +172,33 @@ describe('RuntimeMemoryController', () => {
     expect(readFileSync(controller.memoryPath, 'utf8')).toBe('Release checks run with pnpm verify\n')
   })
 
+  it('keeps every changed snapshot complete across add, replace, and remove operations', async () => {
+    const { controller } = fixture()
+    const revisions = new Set([controller.contextProjection().revision])
+
+    await controller.mutate({ action: 'add', target: 'user', content: 'User prefers compact release notes' })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Release checks run with pnpm verify' })
+    const added = controller.contextProjection()
+    revisions.add(added.revision)
+    expect(added.text).toContain('User prefers compact release notes')
+    expect(added.text).toContain('Release checks run with pnpm verify')
+
+    await controller.mutate({ action: 'replace', target: 'memory', oldText: 'pnpm verify', content: 'Release checks run with pnpm run verify' })
+    const replaced = controller.contextProjection()
+    revisions.add(replaced.revision)
+    expect(replaced.text).toContain('User prefers compact release notes')
+    expect(replaced.text).toContain('Release checks run with pnpm run verify')
+    expect(replaced.text).not.toContain('Release checks run with pnpm verify\n')
+
+    await controller.mutate({ action: 'remove', target: 'user', oldText: 'compact release notes' })
+    const removed = controller.contextProjection()
+    revisions.add(removed.revision)
+    expect(removed.text).not.toContain('User prefers compact release notes')
+    expect(removed.text).toContain('Release checks run with pnpm run verify')
+    expect(removed.text).toContain('Contents of USER.md (user profile; entries: 0; UTF-8 bytes: 0/4096)')
+    expect(revisions.size).toBe(4)
+  })
+
   it('applies a compacted target only to the exact reviewed revision', async () => {
     const { controller } = fixture()
     await controller.mutate({ action: 'add', target: 'memory', content: 'Project uses pnpm.' })
@@ -165,6 +210,8 @@ describe('RuntimeMemoryController', () => {
       expect.objectContaining({ target: 'memory', content: 'Project uses pnpm for workspace dependency management.', importance: 'normal' }),
     ])
     expect(readFileSync(controller.memoryPath, 'utf8')).toBe('Project uses pnpm for workspace dependency management.\n')
+    expect(controller.contextText()).toContain('<runtime-memory-file name="MEMORY.md">\nProject uses pnpm for workspace dependency management.\n</runtime-memory-file>')
+    expect(controller.contextText()).not.toContain('pnpm manages workspace dependencies.')
   })
 
   it('records validated migration lineage only in the compaction receipt checkpoint', async () => {

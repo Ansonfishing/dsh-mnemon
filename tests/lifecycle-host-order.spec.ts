@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveConfig } from '../src/config.ts'
 import type { HostAgent, HostContextShape, HostSessionEvent } from '../src/contracts.ts'
 import { MnemonLifecycle } from '../src/lifecycle.ts'
+import { RUNTIME_MEMORY_PROTOCOL } from '../src/runtime-memory.ts'
 import type { MnemonSubagentCoordinator } from '../src/subagent.ts'
 
 describe('Mnemon lifecycle with the real DSH SystemPrompt', () => {
@@ -28,7 +29,12 @@ describe('Mnemon lifecycle with the real DSH SystemPrompt', () => {
         scope,
         startedAt: '2026-08-23T00:00:00.000Z',
       })),
-      wake: vi.fn(() => ({ viewId: 'view-first-turn', viewDigest: 'digest-first-turn', text: 'First-turn Wake', sections: [] })),
+      wake: vi.fn(() => ({
+        viewId: 'view-first-turn',
+        viewDigest: 'digest-first-turn',
+        text: 'First-turn Wake',
+        sections: [{ layerId: 'runtime', mode: 'eager', text: 'First-turn Wake' }],
+      })),
       endTurn: vi.fn(() => true),
       reconcile: vi.fn(async () => ({ id: 'view-next-turn' })),
     }
@@ -51,6 +57,7 @@ describe('Mnemon lifecycle with the real DSH SystemPrompt', () => {
       sessionId: 'real-prompt-session',
       agentId: 'real-prompt-session',
     })
+    expect(assembly.sections).toContainEqual({ name: 'mnemon:runtime-memory-protocol', text: RUNTIME_MEMORY_PROTOCOL })
     expect(assembly.contexts).toContainEqual({ name: 'mnemon:runtime-memory', text: 'First-turn Wake' })
     expect(runtimeSource.bindAgentRuntime).toHaveBeenCalledOnce()
     stop()
