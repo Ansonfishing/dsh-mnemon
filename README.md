@@ -23,7 +23,7 @@
 <p align="center">
   <a href="./docs/en/capabilities.md"><strong>Explore the capability map</strong></a> ·
   <a href="./docs/en/getting-started.md">Start in five minutes</a> ·
-  <a href="./docs/en/releases/v0.3.1.md">Read the v0.3.1 notes</a> ·
+  <a href="./docs/en/releases/v0.3.2.md">Read the v0.3.2 notes</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">Watch the widescreen demo</a>
 </p>
 
@@ -205,7 +205,7 @@ See [Operations, security, and troubleshooting](./docs/en/operations.md) for bac
 | Back up, update, or troubleshoot | [Operations](./docs/en/operations.md) |
 | Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |
 | Build a Layer, Adapter, Strategy, Guard, or MemorySource extension | [Extension guide](./docs/en/extensions.md) |
-| Review the release | [v0.3.1 release notes](./docs/en/releases/v0.3.1.md) |
+| Review the release | [v0.3.2 release notes](./docs/en/releases/v0.3.2.md) |
 
 See the [documentation hub](./docs/en/README.md) for the full map.
 
