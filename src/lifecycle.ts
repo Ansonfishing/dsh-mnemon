@@ -78,6 +78,7 @@ interface TurnStoppingPayload extends AgentEventPayload {
 }
 
 interface PromptAssembly {
+  sections: Array<{ name: string; text: string }>
   contexts: Array<{ name: string; text: string }>
   [key: string]: unknown
 }

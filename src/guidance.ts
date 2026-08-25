@@ -1,9 +1,10 @@
 import type { HostAgent, HostContextShape } from './contracts.ts'
 import type { ResolvedConfig } from './config.ts'
-import type { RuntimeMemoryController } from './runtime-memory.ts'
+import { RUNTIME_MEMORY_PROTOCOL, type RuntimeMemoryController } from './runtime-memory.ts'
 import type { MemoryWake } from '../packages/contracts/src/index.ts'
 
 export const GUIDANCE_SECTION_NAME = 'mnemon:routing'
+export const RUNTIME_MEMORY_PROTOCOL_SECTION_NAME = 'mnemon:runtime-memory-protocol'
 export const RUNTIME_MEMORY_CONTEXT_NAME = 'mnemon:runtime-memory'
 export const ROUTING_GUIDANCE = 'Use memory only when needed. Search Mnemon Documents for substantial project records. Call mnemon_recall for durable history or exact prior details; never infer a missing historical rule. Put only new user facts or explicit save/correction requests in mnemon_runtime_memory; never cache retrieved evidence. A write exists only after its receipt.'
 const RUNTIME_MEMORY_LITERAL_OPEN_BRACES_VARIABLE = 'mnemon_runtime_memory_literal_open_braces'
@@ -30,8 +31,28 @@ function memoryPromptText(value: string): string {
   )
 }
 
-/** Replace the already-materialized Agent context with the Wake pinned during assembly. */
-export function applyAgentMemoryViewWake<T extends { contexts: Array<{ name: string; text: string }> }>(assembly: T, wake: MemoryWake | undefined): T {
+function wakeHasRuntimeMemory(wake: MemoryWake | undefined): boolean {
+  return wake?.sections.some(section => section.layerId === 'runtime' && section.mode === 'eager') === true
+}
+
+function disposer(...values: unknown[]): () => void {
+  const disposes = values.filter((value): value is () => void => typeof value === 'function')
+  return () => {
+    for (let index = disposes.length - 1; index >= 0; index -= 1) disposes[index]!()
+  }
+}
+
+/** Replace the already-materialized Agent protocol and context with the Wake pinned during assembly. */
+export function applyAgentMemoryViewWake<T extends { sections: Array<{ name: string; text: string }>; contexts: Array<{ name: string; text: string }> }>(assembly: T, wake: MemoryWake | undefined): T {
+  const protocol = wakeHasRuntimeMemory(wake) ? RUNTIME_MEMORY_PROTOCOL : ''
+  let protocolFound = false
+  const sections = assembly.sections.map(section => {
+    if (section.name !== RUNTIME_MEMORY_PROTOCOL_SECTION_NAME) return section
+    protocolFound = true
+    return { ...section, text: protocol }
+  })
+  if (!protocolFound && protocol !== '') sections.push({ name: RUNTIME_MEMORY_PROTOCOL_SECTION_NAME, text: protocol })
+
   const rendered = wake === undefined ? '' : memoryPromptText(wake.text)
   let found = false
   const contexts = assembly.contexts.map(context => {
@@ -40,7 +61,7 @@ export function applyAgentMemoryViewWake<T extends { contexts: Array<{ name: str
     return { ...context, text: rendered }
   })
   if (!found) contexts.push({ name: RUNTIME_MEMORY_CONTEXT_NAME, text: rendered })
-  return { ...assembly, contexts }
+  return { ...assembly, sections, contexts }
 }
 
 /** Register the non-recursive escape used by both legacy Runtime and View Wake contexts. */
@@ -62,6 +83,11 @@ export function registerRuntimeMemoryContext(ctx: HostContextShape, runtimeMemor
   // Runtime Memory is quoted user data, so every interpolation opener must be
   // restored through a non-recursive variable substitution instead of parsed.
   registerMemoryPromptInterpolation(ctx)
+  prompt?.section?.({
+    name: RUNTIME_MEMORY_PROTOCOL_SECTION_NAME,
+    order: 145,
+    text: () => enabled() ? RUNTIME_MEMORY_PROTOCOL : '',
+  })
   prompt?.context?.({
     name: RUNTIME_MEMORY_CONTEXT_NAME,
     order: 145,
@@ -71,17 +97,29 @@ export function registerRuntimeMemoryContext(ctx: HostContextShape, runtimeMemor
 
 /** Shadow the global fallback with the current Agent workspace's hot memory. */
 export function registerAgentRuntimeMemoryContext(agent: HostAgent, runtimeMemory: () => RuntimeMemoryController, enabled: () => boolean = () => true): () => void {
-  const dispose = scopedSystemPrompt(agent)?.context?.({
+  const prompt = scopedSystemPrompt(agent)
+  const stopProtocol = prompt?.section?.({
+    name: RUNTIME_MEMORY_PROTOCOL_SECTION_NAME,
+    order: 145,
+    text: () => enabled() ? RUNTIME_MEMORY_PROTOCOL : '',
+  })
+  const stopContext = prompt?.context?.({
     name: RUNTIME_MEMORY_CONTEXT_NAME,
     order: 145,
     text: () => enabled() ? memoryPromptText(runtimeMemory().contextText()) : '',
   })
-  return typeof dispose === 'function' ? dispose as () => void : () => {}
+  return disposer(stopProtocol, stopContext)
 }
 
 /** Project only the immutable Wake pinned by the root Agent lifecycle. */
 export function registerAgentMemoryViewContext(agent: HostAgent, wake: () => MemoryWake | undefined): () => void {
-  const dispose = scopedSystemPrompt(agent)?.context?.({
+  const prompt = scopedSystemPrompt(agent)
+  const stopProtocol = prompt?.section?.({
+    name: RUNTIME_MEMORY_PROTOCOL_SECTION_NAME,
+    order: 145,
+    text: () => wakeHasRuntimeMemory(wake()) ? RUNTIME_MEMORY_PROTOCOL : '',
+  })
+  const stopContext = prompt?.context?.({
     name: RUNTIME_MEMORY_CONTEXT_NAME,
     order: 145,
     text: () => {
@@ -89,5 +127,5 @@ export function registerAgentMemoryViewContext(agent: HostAgent, wake: () => Mem
       return current === undefined ? '' : memoryPromptText(current.text)
     },
   })
-  return typeof dispose === 'function' ? dispose as () => void : () => {}
+  return disposer(stopProtocol, stopContext)
 }
