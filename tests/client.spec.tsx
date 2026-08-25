@@ -1399,6 +1399,21 @@ describe('MnemonView', () => {
     await waitFor(() => expect(screen.getByText('当前显示 6 / 15')).toBeTruthy())
     expect(screen.queryByText('实体 11 关联记忆 7')).toBeNull()
 
+    // entity rail live-filters the top-entity list as the user types into the name input
+    const entityInput = screen.getByRole('textbox', { name: '实体名称' })
+    fireEvent.change(entityInput, { target: { value: '实体 2' } })
+    await waitFor(() => expect(screen.queryByRole('button', { name: /实体 11/ })).toBeNull())
+    expect(screen.queryByRole('button', { name: /实体 3/ })).toBeNull()
+    expect(screen.getAllByRole('button', { name: /实体 2/ }).length).toBeGreaterThan(0)
+    expect(screen.queryByText('本地无匹配。点“查阅”向宿主发起查询。')).toBeNull()
+    fireEvent.change(entityInput, { target: { value: '实体 999' } })
+    expect(screen.getByText('本地无匹配。点“查阅”向宿主发起查询。')).toBeTruthy()
+    fireEvent.keyDown(entityInput, { key: 'Escape' })
+    expect(screen.queryByText('本地无匹配。点“查阅”向宿主发起查询。')).toBeNull()
+    expect(screen.getAllByRole('button', { name: /实体 1/ }).length).toBeGreaterThan(0)
+    // clear input so the rest of the test runs against the unfiltered rail
+    fireEvent.change(entityInput, { target: { value: '' } })
+
     fireEvent.click(within(screen.getByRole('tablist', { name: '记忆体页面' })).getByRole('tab', { name: '内容' }))
     await waitFor(() => expect(screen.getByText('当前显示 12 / 25')).toBeTruthy())
     expect(screen.queryByText('记忆条目 13')).toBeNull()

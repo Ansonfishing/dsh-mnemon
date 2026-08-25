@@ -1469,6 +1469,7 @@ function EntitiesPage(props: { client: MnemonClient; revision: number; writeEnab
   const insightPageSize = appearance.surface === 'sidebar' ? 6 : Number.MAX_SAFE_INTEGER
   const [view, setView] = useState<EntityView>({ items: [], insights: [] })
   const [entity, setEntity] = useState('')
+  const [entityFilter, setEntityFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [visibleEntityLimit, setVisibleEntityLimit] = useState(entityPageSize)
@@ -1491,7 +1492,15 @@ function EntitiesPage(props: { client: MnemonClient; revision: number; writeEnab
 
   useEffect(() => { void load() }, [load, props.revision])
   const submit = (event: FormEvent) => { event.preventDefault(); if (entity.trim() !== '') void load(entity) }
-  const visibleEntities = view.items.slice(0, visibleEntityLimit)
+  const visibleEntities = useMemo(() => {
+    const query = entityFilter.trim().toLocaleLowerCase()
+    const source = query === '' ? view.items : view.items.filter(item => item.entity.toLocaleLowerCase().includes(query))
+    return source.slice(0, visibleEntityLimit)
+  }, [view.items, visibleEntityLimit, entityFilter])
+  const filteredTotal = useMemo(() => {
+    const query = entityFilter.trim().toLocaleLowerCase()
+    return query === '' ? view.items.length : view.items.filter(item => item.entity.toLocaleLowerCase().includes(query)).length
+  }, [view.items, entityFilter])
   const visibleInsights = view.insights.slice(0, visibleInsightLimit)
   const sources = view.sources ?? []
   const hasEntityProvider = sources.length === 0 || sources.some(source => source.mode === 'entities' && source.status !== 'unavailable')
@@ -1504,11 +1513,12 @@ function EntitiesPage(props: { client: MnemonClient; revision: number; writeEnab
         ? <EmptyState glyph="◎" title={t('entities.unsupportedTitle')}>{t('entities.unsupportedText')}</EmptyState>
         : <div className={css.entityLayout}>
         <aside className={css.entityRail}>
-          <form className={css.entitySearch} onSubmit={submit}><input aria-label={t('entities.nameAria')} value={entity} onChange={event => setEntity(event.target.value)} placeholder={t('entities.placeholder')} /><button type="submit" className={css.primaryButton} disabled={loading || entity.trim() === ''}>{t('entities.action')}</button></form>
-          <div className={css.entityHeading}><span>{t('entities.top')}</span><small>{t('entities.frequency')}</small></div>
+          <form className={css.entitySearch} onSubmit={submit}><input aria-label={t('entities.nameAria')} value={entity} onChange={event => { setEntity(event.target.value); setEntityFilter(event.target.value) }} onKeyDown={event => { if (event.key === 'Escape' && entityFilter !== '') { event.preventDefault(); setEntityFilter('') } }} placeholder={t('entities.placeholder')} /><button type="submit" className={css.primaryButton} disabled={loading || entity.trim() === ''}>{t('entities.action')}</button></form>
+          <div className={css.entityHeading}><span>{t('entities.top')}</span><small>{entityFilter === '' ? t('entities.frequency') : t('entities.filterHint')}</small></div>
           <div className={css.entityList}>{visibleEntities.map(item => <button key={item.entity} type="button" aria-pressed={view.selected === item.entity} onClick={() => { setEntity(item.entity); void load(item.entity) }}><span>{item.entity}</span><strong>{item.count}</strong></button>)}</div>
-          {appearance.surface === 'sidebar' && <ProgressiveFooter compact visible={visibleEntities.length} total={view.items.length} pageSize={entityPageSize} onMore={() => setVisibleEntityLimit(value => value + entityPageSize)} />}
+          {appearance.surface === 'sidebar' && visibleEntities.length > 0 && filteredTotal > visibleEntityLimit && <ProgressiveFooter compact visible={visibleEntities.length} total={filteredTotal} pageSize={entityPageSize} onMore={() => setVisibleEntityLimit(value => value + entityPageSize)} />}
           {!loading && view.items.length === 0 && <p className={css.muted}>{t('entities.emptyRail')}</p>}
+          {!loading && view.items.length > 0 && visibleEntities.length === 0 && entityFilter !== '' && <p className={css.muted}>{t('entities.filterEmpty')}</p>}
         </aside>
         <section className={appearanceClass(css.entityResults, css.asyncResults)}>
           {loading && <SectionSpinner label={t('entities.loading')} />}
