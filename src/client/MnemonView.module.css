@@ -478,7 +478,8 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 .entityList { display: grid; gap: 3px; }
 .entityList button { display: flex; min-height: 34px; align-items: center; justify-content: space-between; gap: 10px; border: 0; border-radius: 7px; padding: 0 9px; color: var(--mn-muted); background: transparent; cursor: pointer; text-align: left; }
 .entityList button:hover, .entityList button[aria-pressed="true"] { color: var(--mn-text); background: var(--mn-hover); }
-.entityList strong { color: var(--mn-faint); font: 10px var(--mn-code); }
+.entityList button > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entityList strong { flex: none; color: var(--mn-faint); font: 10px var(--mn-code); }
 .entityResults > .emptyState { min-height: 360px; }
 
 .runtimeComposer, .runtimeTarget { border: 1px solid var(--mn-line); border-radius: 12px; background: var(--mn-layer-1); }
