@@ -54,6 +54,8 @@ export interface MemoryProviderAdapter {
   graph(body: MemoryBody, signal?: AbortSignal): Promise<MemoryGraphSnapshot>
   list(body: MemoryBody, request: MemoryListRequest, signal?: AbortSignal): Promise<Insight[]>
   remember(body: MemoryBody, request: RememberRequest, signal?: AbortSignal): Promise<JsonValue>
+  /** Persist an ordered host-authorized batch and return one receipt per request. */
+  rememberMany?(body: MemoryBody, requests: readonly RememberRequest[], signal?: AbortSignal): Promise<JsonValue[]>
   related?(body: MemoryBody, id: string, depth: number, edge?: EdgeType, signal?: AbortSignal): Promise<Insight[]>
   link?(body: MemoryBody, sourceId: string, targetId: string, type: EdgeType, weight: number, reason?: string, signal?: AbortSignal): Promise<JsonValue>
   forget?(body: MemoryBody, id: string, signal?: AbortSignal): Promise<JsonValue>
