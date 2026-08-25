@@ -2,7 +2,7 @@
 
 [简体中文](../zh-CN/ui-guide.md) | **English** | [Documentation hub](./README.md)
 
-This guide follows the v0.3.1 default `sidebar` experience and a real user path. The established v0.2 interaction flow is intentionally unchanged; compatible screenshots were captured from a live v0.2.0 1600×900 WebUI, while v0.3-specific Layer topology controls are described in the Settings section. Names, counts, and content vary with local data.
+This guide follows the v0.3.2 default `sidebar` experience and a real user path. The established v0.2 interaction flow is intentionally unchanged; compatible screenshots were captured from a live v0.2.0 1600×900 WebUI, while v0.3-specific Layer topology controls are described in the Settings section. Names, counts, and content vary with local data.
 
 ## Watch the complete interaction first
 
