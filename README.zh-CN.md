@@ -3,11 +3,12 @@
 <p align="center"><a href="./README.md">English</a> · <strong>简体中文</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/release-v0.3.0-5b5bd6" alt="发布版本 v0.3.0">
-  <img src="https://img.shields.io/badge/%E8%AE%B0%E5%BF%86-3%20%E5%B1%82-087c5b" alt="三层记忆">
-  <img src="https://img.shields.io/badge/Provider-9-c66a09" alt="九种 Provider">
-  <img src="https://img.shields.io/badge/Node.js-%E2%89%A520-43853d" alt="Node.js 20 或更新版本">
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-172033" alt="MIT 许可证"></a>
+  <a href="https://www.npmjs.com/package/dsh-mnemon"><img alt="npm version" src="https://img.shields.io/npm/v/dsh-mnemon?label=npm" /></a>
+  <a href="https://www.npmjs.com/package/dsh-mnemon"><img alt="npm downloads" src="https://img.shields.io/npm/dt/dsh-mnemon?label=downloads%20total" /></a>
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/releases/latest"><img alt="GitHub release" src="https://img.shields.io/github/v/release/omdsh-dev/dsh-mnemon" /></a>
+  <a href="https://github.com/omdsh-dev/dsh-mnemon/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/omdsh-dev/dsh-mnemon" /></a>
+  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg" /></a>
+  <a href="https://dshfind.com/zh/plugins/omdsh-dev/dsh-mnemon?ref=badge"><img alt="dshfind" src="https://dshfind.com/api/badge/omdsh-dev/dsh-mnemon?lang=zh" /></a>
 </p>
 
 <p align="center"><strong>DeepSeek Harness 的三层、可插拔、Agent 驱动记忆系统。</strong></p>
