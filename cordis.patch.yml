@@ -16,6 +16,10 @@
         remoteAccess: read-only
         timeoutMs: 10000
         defaultRecallLimit: 10
+        embedding:
+          enabled: false
+          endpoint: http://localhost:11434
+          model: nomic-embed-text
         recallQuality:
           policy: strict-v1
           lowScoreThreshold: 0.25

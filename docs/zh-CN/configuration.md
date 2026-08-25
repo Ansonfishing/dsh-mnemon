@@ -12,7 +12,7 @@ $DSH_HOME/settings.yaml
 
 默认通常是 `~/.dsh/settings.yaml`。当前全部配置标记为 `live` 生效；保存后会先初始化候选运行图，再原子切换 Host 服务。
 
-Web 设置页编辑 `displayMode`、`storageScope`、`dataDir`、三个记忆层的总开关、后台任务 Agent 的模型路由，以及 `mnemon-ui` 下的回合记忆条和存入记忆按钮。“全局 / 工作区”是整个记忆系统的范围；`custom` 数据位置与 ZIP 备份 / 迁移收纳在 Mnemon Native 折叠栏。每个第三方 Provider 有独立的服务配置折叠栏；这里保存的是 endpoint、凭据或可执行文件等可复用服务信息，不会创建记忆体。具体记忆体及其数据范围仍在“记忆体 → 概览”中创建。其他高级项需要直接修改 YAML。
+Web 设置页编辑 `displayMode`、`storageScope`、`dataDir`、Mnemon Native 的 Ollama 嵌入覆盖、三个记忆层的总开关、后台任务 Agent 的模型路由，以及 `mnemon-ui` 下的回合记忆条和存入记忆按钮。“全局 / 工作区”是整个记忆系统的范围；`custom` 数据位置、嵌入运行配置与 ZIP 备份 / 迁移收纳在 Mnemon Native 折叠栏。每个第三方 Provider 有独立的服务配置折叠栏；这里保存的是 endpoint、凭据或可执行文件等可复用服务信息，不会创建记忆体。具体记忆体及其数据范围仍在“记忆体 → 概览”中创建。其他高级项需要直接修改 YAML。
 
 ## 完整示例
 
@@ -25,6 +25,10 @@ mnemon:
   # store: legacy-store          # 兼容发现提示，不是常规路由目标
   timeoutMs: 10000
   defaultRecallLimit: 10
+  embedding:
+    enabled: false
+    endpoint: http://localhost:11434
+    model: nomic-embed-text
   memoryTopology:
     layers:
       runtime: { enabled: true }
@@ -62,6 +66,7 @@ mnemon:
 | `store` | 未设置 | `[A-Za-z0-9][A-Za-z0-9_-]*` | 用于旧 Store 的兼容发现/首选提示；语义操作由 Memory Space 路由 |
 | `timeoutMs` | `10000` | 100–120000 ms | 单次 CLI 硬超时 |
 | `defaultRecallLimit` | `10` | 1–50 | 服务和 UI 默认召回条数；不同入口可能再收紧 |
+| `embedding` | `{ enabled: false, endpoint: http://localhost:11434, model: nomic-embed-text }` | enabled + HTTP(S) endpoint + model | 开启后，Host 为每个 Mnemon CLI 子进程注入保存的 endpoint 与模型；关闭后不干预既有 Host 环境和 Mnemon 默认值 |
 | `memoryTopology.layers.<id>.enabled` | 三个默认层为 `true` | boolean | 是否让该 Layer 参与；关闭不会删除或迁移已有数据 |
 | `recallQuality.policy` | `strict-v1` | 已注册策略 ID | 在召回正文序列化给 Agent 或客户端前执行的确定性策略 |
 | `recallQuality.lowScoreThreshold` | `0.25` | 0–1，低于高分阈值 | `strict-v1` 会移除低于此边界的标准化分数结果 |
@@ -82,6 +87,22 @@ mnemon:
 | `mnemon-ui.saveAction` | `true` | boolean | 已定稿助手回复旁的「存入记忆」图标与确认弹窗；默认开启，**保存后实时生效** |
 
 `mnemon` Host/存储命名空间和 `mnemon-ui` 浏览器呈现命名空间都实时生效。存储根只会在新运行图初始化成功后原子切换；旧版 `mnemon.conversationInteraction` 仍会作为迁移默认值读取，但新保存只写入 `mnemon-ui`。
+
+### Mnemon Native 嵌入
+
+从 Finder 或 Dock 启动的 macOS 应用通常不会继承交互式 shell 启动文件。在 Mnemon Native 中开启“由 DSH 管理嵌入配置”，即可让保存值成为每个 Mnemon 子进程的权威配置：
+
+```yaml
+mnemon:
+  embedding:
+    enabled: true
+    endpoint: http://127.0.0.1:11434
+    model: qwen3-embedding:0.6b
+```
+
+Host 会复制正常进程环境，然后只在子进程中覆盖 `MNEMON_EMBED_ENDPOINT` 与 `MNEMON_EMBED_MODEL`；不会修改桌面会话、`launchctl`、shell 文件或 Mnemon 持久数据。保存后会切换到新的运行图，后续调用无需重启 DSH 即可使用新值。`enabled: false` 或省略 `embedding` 时，dsh-mnemon 不注入覆盖值，原有继承环境与 Mnemon 内建默认值保持不变。`MNEMON_EMBED_DIMENSIONS` 仍属于可通过 Host 环境继承的高级配置。
+
+Endpoint 必须是不含凭据、查询参数或片段的 HTTP(S) 绝对 URL。Mnemon 会把记忆与查询正文发给该服务；远程明文 HTTP 会暴露传输内容，请使用受信任的回环地址或 HTTPS。“测试状态”会针对当前默认 Store 执行实际生效的 `mnemon embed --status`，只报告 Ollama 可达性、模型与嵌入覆盖率，不会回填或改写记忆。有未保存编辑时必须先保存，避免把草稿值误报成已生效。
 
 ### 记忆层开关
 

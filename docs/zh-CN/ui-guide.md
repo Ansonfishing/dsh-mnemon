@@ -157,6 +157,12 @@
 
 Mnemon 自己的自定义目录、备份与迁移留在 Mnemon 专属折叠区。自定义本质上是显式路径的全局范围。
 
+### Mnemon Native 嵌入桥接
+
+[![隔离的最新代码 Web profile 中，由 DSH 管理的 Mnemon 嵌入 Endpoint、模型与成功状态检查](../assets/screenshots/settings-native-embeddings.jpg)](../assets/screenshots/settings-native-embeddings.jpg)
+
+开启“由 DSH 管理嵌入配置”后，保存的 Ollama Endpoint 与模型会成为 Mnemon 子进程的权威值，也适用于无法继承 shell 启动文件的 Desktop 启动方式。Endpoint 会拒绝凭据、查询参数与片段，界面同时说明记忆与查询正文会被发送到该服务。“测试状态”只检查已保存的运行值，不会把未保存草稿误报为生效；上面的隔离 profile 通过 Mnemon v0.2.5 显示连接成功与空数据覆盖率，未包含凭据或个人记忆。
+
 关闭 Layer 不删除数据。Sidebar 中对应 Tab 保留并标记“已关闭”，点击后显示可逆停用说明而不读取数据面；重新开启后原数据恢复可用。扩展贡献的新 Layer 首次出现时默认关闭；保存前当前运行代继续服务，候选配置验证失败也不会产生半切换。
 
 [![实际关闭项目档案后，Sidebar 保留“档案”Tab 并显示可逆停用说明](../assets/screenshots/sidebar-layer-disabled-zh-CN.jpg)](../assets/screenshots/sidebar-layer-disabled-zh-CN.jpg)

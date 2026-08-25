@@ -12,7 +12,7 @@ $DSH_HOME/settings.yaml
 
 The default is commonly `~/.dsh/settings.yaml`. All current settings are marked `live`; after Save, the Host initializes a candidate runtime graph and then switches to it atomically.
 
-The Web settings page edits `displayMode`, `storageScope`, `dataDir`, one master switch for each of the three memory Layers, the background task Agent model route, and the Turn memory and Save-to-memory switches under `mnemon-ui`. Global and Workspace define the scope of the complete memory system. Mnemon Native owns its Custom data location and ZIP backup/migration controls. Each external provider has a collapsible service configuration for reusable endpoints, credentials, or executables. Enabling or saving it discovers the provider's existing namespaces and maps them into Memory Spaces → Overview; disabling it removes those local mappings without deleting provider data. Other advanced settings must be changed directly in YAML.
+The Web settings page edits `displayMode`, `storageScope`, `dataDir`, Mnemon Native's Ollama embedding override, one master switch for each of the three memory Layers, the background task Agent model route, and the Turn memory and Save-to-memory switches under `mnemon-ui`. Global and Workspace define the scope of the complete memory system. Mnemon Native owns its Custom data location, embedding runtime, and ZIP backup/migration controls. Each external provider has a collapsible service configuration for reusable endpoints, credentials, or executables. Enabling or saving it discovers the provider's existing namespaces and maps them into Memory Spaces → Overview; disabling it removes those local mappings without deleting provider data. Other advanced settings must be changed directly in YAML.
 
 ## Complete Example
 
@@ -25,6 +25,10 @@ mnemon:
   # store: legacy-store          # compatibility discovery hint, not a regular routing target
   timeoutMs: 10000
   defaultRecallLimit: 10
+  embedding:
+    enabled: false
+    endpoint: http://localhost:11434
+    model: nomic-embed-text
   memoryTopology:
     layers:
       runtime: { enabled: true }
@@ -62,6 +66,7 @@ mnemon:
 | `store` | unset | `[A-Za-z0-9][A-Za-z0-9_-]*` | Compatibility discovery/preference hint for legacy Stores; semantic operations are routed through Memory Spaces |
 | `timeoutMs` | `10000` | 100–120000 ms | Hard timeout for a single CLI call |
 | `defaultRecallLimit` | `10` | 1–50 | Default recall count for the service and UI; individual entry points may impose a lower limit |
+| `embedding` | `{ enabled: false, endpoint: http://localhost:11434, model: nomic-embed-text }` | enabled + HTTP(S) endpoint + model | When enabled, the Host injects the saved endpoint and model into every Mnemon CLI child process; when disabled, existing Host environment and Mnemon defaults remain untouched |
 | `memoryTopology.layers.<id>.enabled` | `true` for the three defaults | boolean | Whether the Layer participates; disabling never deletes or migrates existing data |
 | `recallQuality.policy` | `strict-v1` | registered policy id | Deterministic policy applied before recall content is serialized to an Agent or client |
 | `recallQuality.lowScoreThreshold` | `0.25` | 0–1, below high threshold | Normalized scores below this boundary are removed by `strict-v1` |
@@ -82,6 +87,22 @@ mnemon:
 | `mnemon-ui.saveAction` | `true` | boolean | “Save to memory” icon and confirmation on finalized assistant replies; on by default, **applies live after saving** |
 
 Both the `mnemon` Host/storage namespace and the `mnemon-ui` browser-presentation namespace apply live. The storage root switches atomically only after the new runtime graph initializes successfully. Legacy `mnemon.conversationInteraction` values remain a migration default, but new saves write only to `mnemon-ui`.
+
+### Mnemon Native embeddings
+
+Finder- and Dock-launched macOS applications do not normally inherit interactive shell startup files. Enable **Manage embedding settings in DSH** under Mnemon Native to make the saved values authoritative for every Mnemon child process instead:
+
+```yaml
+mnemon:
+  embedding:
+    enabled: true
+    endpoint: http://127.0.0.1:11434
+    model: qwen3-embedding:0.6b
+```
+
+The Host copies its normal process environment and then overwrites `MNEMON_EMBED_ENDPOINT` and `MNEMON_EMBED_MODEL` for the child only. It does not modify the desktop session, `launchctl`, shell files, or Mnemon's persisted data. Saving swaps to a new runtime graph, so later calls use the new values without restarting DSH. With `enabled: false` or an omitted `embedding` block, dsh-mnemon supplies no override: inherited variables and Mnemon's built-in defaults keep their previous behavior. `MNEMON_EMBED_DIMENSIONS` remains an advanced inherited environment setting.
+
+The endpoint must be an absolute HTTP(S) URL without credentials, query parameters, or a fragment. Mnemon sends memory and query text to this service. A remote plain-HTTP endpoint exposes that text in transit; use a trusted loopback endpoint or HTTPS. **Test status** runs the effective `mnemon embed --status` command for the current default Store and reports Ollama reachability, model, and embedding coverage without backfilling or changing memories. Save pending edits before testing so the check cannot claim an unsaved value is active.
 
 ### Memory Layer switches
 

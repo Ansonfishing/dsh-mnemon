@@ -139,6 +139,19 @@ export interface MnemonRunner {
   effectiveStore(): string
 }
 
+const EMBEDDING_ENVIRONMENT_KEYS = new Set(['MNEMON_EMBED_ENDPOINT', 'MNEMON_EMBED_MODEL'])
+
+/** Preserve the Host environment while making saved embedding overrides authoritative. */
+function processEnvironment(config: ResolvedConfig): NodeJS.ProcessEnv | undefined {
+  if (!config.embedding.enabled) return undefined
+  const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !EMBEDDING_ENVIRONMENT_KEYS.has(key.toUpperCase())))
+  return {
+    ...inherited,
+    MNEMON_EMBED_ENDPOINT: config.embedding.endpoint,
+    MNEMON_EMBED_MODEL: config.embedding.model,
+  }
+}
+
 export function createRunner(config: ResolvedConfig, processRunner: ProcessRunner = runProcess, workspaceRoot?: string): MnemonRunner {
   const found = findMnemonCommand(config)
   const command = found ?? config.cliPath ?? 'mnemon'
@@ -177,8 +190,10 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
   ): Promise<string> => {
     if (options.signal?.aborted === true) throw new MnemonCliError(`mnemon command aborted: ${String(options.signal.reason ?? 'cancelled')}`)
     const argv = options.globalFlags === false ? [...args] : [...globalArgs(options.store), ...args]
+    const environment = processEnvironment(config)
     const processOptions: ProcessOptions = {
       timeoutMs: config.timeoutMs,
+      ...(environment === undefined ? {} : { env: environment }),
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     }
     let result

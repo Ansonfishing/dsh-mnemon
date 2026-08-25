@@ -154,6 +154,8 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
         ? resolved.graph.documents.forWorkspace(selectedWorkspace.path)
         : undefined
       switch (endpoint) {
+        case 'embedding-status':
+          return success(await service.embeddingStatus())
         case 'memory-system':
           if (resolved.graph.memoryKernel === undefined) throw new Error('memory system descriptor is unavailable')
           return success(resolved.graph.memoryKernel.descriptor())

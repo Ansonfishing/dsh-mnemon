@@ -28,6 +28,7 @@ import {
   type MnemonPackExport,
   type MnemonPackImportResult,
   type MnemonPackPreview,
+  type MnemonEmbeddingStatus,
   type RememberRequest,
   type RuntimeMemoryImportance,
   type RuntimeMemoryMutationResult,
@@ -136,6 +137,10 @@ export class MnemonClient {
 
   statusSummary(): Promise<StatusView> {
     return this.call<StatusView>(MNEMON_READ_CHANNEL, 'status-summary', this.scoped()).catch(() => this.status())
+  }
+
+  embeddingStatus(): Promise<MnemonEmbeddingStatus> {
+    return this.call(MNEMON_READ_CHANNEL, 'embedding-status', this.scoped())
   }
 
   memorySystem(): Promise<MemorySystemDescriptor> {

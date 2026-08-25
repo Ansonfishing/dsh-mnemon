@@ -11,6 +11,11 @@ describe('Mnemon config and resolution', () => {
       storageScope: 'global',
       timeoutMs: 10_000,
       defaultRecallLimit: 10,
+      embedding: {
+        enabled: false,
+        endpoint: 'http://localhost:11434',
+        model: 'nomic-embed-text',
+      },
       memoryTopology: {
         id: 'default-three-tier',
         strategyId: 'default-three-tier',
@@ -108,6 +113,22 @@ describe('Mnemon config and resolution', () => {
       .toThrow('provider and model')
   })
 
+  it('normalizes and validates DSH-managed Mnemon embedding settings', () => {
+    expect(resolveConfig({
+      embedding: { enabled: true, endpoint: ' https://ollama.example.test/prefix/// ', model: ' qwen3-embedding:0.6b ' },
+    }).embedding).toEqual({
+      enabled: true,
+      endpoint: 'https://ollama.example.test/prefix',
+      model: 'qwen3-embedding:0.6b',
+    })
+    expect(() => resolveConfig({ embedding: { enabled: true, endpoint: 'ftp://ollama.example.test' } })).toThrow('HTTP or HTTPS')
+    expect(() => resolveConfig({ embedding: { enabled: true, endpoint: 'http://user:secret@localhost:11434' } })).toThrow('without credentials')
+    expect(() => resolveConfig({ embedding: { enabled: true, endpoint: 'http://localhost:11434?tenant=one' } })).toThrow('without credentials')
+    expect(() => resolveConfig({ embedding: { enabled: true, endpoint: 'http://localhost:11434?' } })).toThrow('without credentials')
+    expect(() => resolveConfig({ embedding: { enabled: true, endpoint: 'http://localhost:11434#' } })).toThrow('without credentials')
+    expect(() => resolveConfig({ embedding: { enabled: true, model: 'bad\nmodel' } })).toThrow('control characters')
+  })
+
   it('resolves a bounded automatic persistence strategy without changing its provider connections', () => {
     expect(resolveConfig({
       persistenceStrategy: {
@@ -196,6 +217,42 @@ describe('Mnemon config and resolution', () => {
     const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon' }), process)
     expect(runner.effectiveDataDir()).toBe('/memory-root')
     expect(runner.effectiveStore()).toBe('shared')
+  })
+
+  it('injects saved embedding overrides into every Mnemon process without changing the Host environment', async () => {
+    vi.stubEnv('MNEMON_EMBED_ENDPOINT', 'http://launchctl.example:11434')
+    vi.stubEnv('MNEMON_EMBED_MODEL', 'launchctl-model')
+    vi.stubEnv('MNEMON_EMBED_DIMENSIONS', '256')
+    const processRunner = vi.fn<ProcessRunner>(async () => ({ stdout: '{}', stderr: '', exitCode: 0 }))
+    const runner = createRunner(resolveConfig({
+      cliPath: '/fake/mnemon',
+      embedding: { enabled: true, endpoint: 'http://127.0.0.1:11434', model: 'qwen3-embedding:0.6b' },
+    }), processRunner)
+
+    await runner.runText(['status'])
+
+    expect(processRunner).toHaveBeenCalledWith('/fake/mnemon', ['status'], expect.objectContaining({
+      env: expect.objectContaining({
+        MNEMON_EMBED_ENDPOINT: 'http://127.0.0.1:11434',
+        MNEMON_EMBED_MODEL: 'qwen3-embedding:0.6b',
+        MNEMON_EMBED_DIMENSIONS: '256',
+      }),
+    }))
+    expect(process.env.MNEMON_EMBED_ENDPOINT).toBe('http://launchctl.example:11434')
+    expect(process.env.MNEMON_EMBED_MODEL).toBe('launchctl-model')
+  })
+
+  it('leaves child environment inheritance untouched when the DSH override is disabled', async () => {
+    vi.stubEnv('MNEMON_EMBED_ENDPOINT', 'http://launchctl.example:11434')
+    const processRunner = vi.fn<ProcessRunner>(async () => ({ stdout: '{}', stderr: '', exitCode: 0 }))
+    const runner = createRunner(resolveConfig({
+      cliPath: '/fake/mnemon',
+      embedding: { enabled: false, endpoint: 'http://ignored.example:11434', model: 'ignored' },
+    }), processRunner)
+
+    await runner.runText(['status'])
+
+    expect(processRunner.mock.calls[0]![2]).not.toHaveProperty('env')
   })
 
   it('serializes CLI processes so concurrent WebUI reads cannot race Mnemon migrations', async () => {

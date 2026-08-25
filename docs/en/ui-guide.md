@@ -157,6 +157,12 @@ The screenshot below comes from an isolated installation of `dsh-mnemon@0.3.0`. 
 
 Mnemon-specific custom directory, backup, and migration remain in Mnemon's own expandable area. Custom is an explicit-path global scope.
 
+### Mnemon Native embedding bridge
+
+[![DSH-managed Mnemon embedding endpoint, model, and successful status check in an isolated latest-code Web profile](../assets/screenshots/settings-native-embeddings.jpg)](../assets/screenshots/settings-native-embeddings.jpg)
+
+**Manage embedding settings in DSH** makes the saved Ollama endpoint and model authoritative for Mnemon child processes, including Desktop launches that do not inherit shell startup files. The endpoint rejects credentials, queries, and fragments, and the warning explains that memory and query text leave the Host for that service. **Test status** uses the saved runtime, not an unsaved draft; the isolated profile above shows a successful Mnemon v0.2.5 connection and zero-memory coverage without exposing credentials or personal memory.
+
 Disabling a Layer does not delete data. Its Sidebar tab remains visible with an Off badge and opens a reversible disabled-state explanation without reading the data plane; re-enabling restores the existing data. A newly contributed extension Layer starts disabled. The current runtime generation keeps serving until the candidate validates and swaps, so a rejected candidate never leaves a partial configuration active.
 
 [![The actual English Sidebar keeps the Documents tab visible and explains its reversible disabled state](../assets/screenshots/sidebar-layer-disabled-en.jpg)](../assets/screenshots/sidebar-layer-disabled-en.jpg)

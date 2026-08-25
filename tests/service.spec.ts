@@ -226,6 +226,59 @@ describe('MnemonService', () => {
     expect(process).toHaveBeenCalledWith('/fake/mnemon', ['--version'], expect.anything())
   })
 
+  it('reports the effective Mnemon embedding connection and coverage with strict response validation', async () => {
+    const process = vi.fn<ProcessRunner>()
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          total_insights: 8,
+          embedded: 6,
+          coverage: '75%',
+          ollama_available: true,
+          model: 'qwen3-embedding:0.6b',
+        }),
+        stderr: '', exitCode: 0,
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          total_insights: 8,
+          embedded: 6,
+          coverage: '75%',
+          ollama_available: true,
+          model: 'x'.repeat(201),
+        }),
+        stderr: '', exitCode: 0,
+      })
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ ollama_available: true, embedded: 9, total_insights: 8 }), stderr: '', exitCode: 0 })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          total_insights: 8,
+          embedded: 6,
+          coverage: '101%',
+          ollama_available: true,
+          model: 'qwen3-embedding:0.6b',
+        }),
+        stderr: '', exitCode: 0,
+      })
+    const dataDir = populatedDataDir()
+    const config = resolveConfig({ cliPath: '/fake/mnemon', dataDir, store: 'work' })
+    const runner = createRunner(config, process)
+    const service = new MnemonService(runner, config, new MemoryBodyRegistry(runner, true))
+
+    await expect(service.embeddingStatus()).resolves.toEqual({
+      available: true,
+      model: 'qwen3-embedding:0.6b',
+      totalInsights: 8,
+      embedded: 6,
+      coverage: '75%',
+    })
+    expect(process).toHaveBeenNthCalledWith(1, '/fake/mnemon', [
+      '--data-dir', dataDir, '--store', 'work', 'embed', '--status',
+    ], expect.anything())
+    await expect(service.embeddingStatus()).rejects.toThrow('invalid response')
+    await expect(service.embeddingStatus()).rejects.toThrow('invalid response')
+    await expect(service.embeddingStatus()).rejects.toThrow('invalid response')
+  })
+
   it('coalesces simultaneous Memory Space health snapshots', async () => {
     const { service, process } = fixture()
 

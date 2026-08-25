@@ -15,6 +15,8 @@ export const MNEMON_PACK_CHANNEL = '/dsh-mnemon-pack'
 export const MNEMON_SETTINGS_CHANNEL = '/dsh-mnemon-settings'
 export const MNEMON_SETTINGS_NAMESPACE = 'mnemon'
 export const MNEMON_UI_SETTINGS_NAMESPACE = 'mnemon-ui'
+export const DEFAULT_EMBEDDING_ENDPOINT = 'http://localhost:11434'
+export const DEFAULT_EMBEDDING_MODEL = 'nomic-embed-text'
 
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue }
@@ -116,6 +118,8 @@ export interface Config {
   store?: string
   timeoutMs?: number
   defaultRecallLimit?: number
+  /** Optional DSH-owned overrides injected into every Mnemon CLI process. */
+  embedding?: MnemonEmbeddingConfig
   memoryTopology?: MemoryTopologyConfig
   recallQuality?: RecallQualityConfig
   routingGuidance?: boolean
@@ -137,6 +141,19 @@ export interface Config {
   persistenceStrategy?: MemoryPersistenceStrategy
   /** Model route used by clean, session-independent maintenance Agents. */
   taskAgentModel?: TaskAgentModelConfig
+}
+
+export interface MnemonEmbeddingConfig {
+  /** When false or omitted, Mnemon keeps its inherited environment and built-in defaults. */
+  enabled?: boolean
+  endpoint?: string
+  model?: string
+}
+
+export interface ResolvedMnemonEmbeddingConfig {
+  enabled: boolean
+  endpoint: string
+  model: string
 }
 
 export interface TaskAgentModelConfig {
@@ -190,6 +207,7 @@ export interface ResolvedConfig {
   store?: string
   timeoutMs: number
   defaultRecallLimit: number
+  embedding: ResolvedMnemonEmbeddingConfig
   memoryTopology: ResolvedMemoryTopologyConfig
   recallQuality: ResolvedRecallQualityConfig
   routingGuidance: boolean
@@ -208,6 +226,14 @@ export interface ResolvedConfig {
   }
   persistenceStrategy: ResolvedMemoryPersistenceStrategy
   taskAgentModel: ResolvedTaskAgentModelConfig
+}
+
+export interface MnemonEmbeddingStatus {
+  available: boolean
+  model: string
+  totalInsights: number
+  embedded: number
+  coverage: string
 }
 
 export interface ResolvedInteractionConfig {

@@ -2,6 +2,8 @@ import z from 'schemastery'
 import { isAbsolute } from 'node:path'
 import {
   DEFAULT_IDLE_REVIEW_MS,
+  DEFAULT_EMBEDDING_ENDPOINT,
+  DEFAULT_EMBEDDING_MODEL,
   DEFAULT_RECALL_CANDIDATE_MULTIPLIER,
   DEFAULT_RECALL_HIGH_SCORE_THRESHOLD,
   DEFAULT_RECALL_LIMIT,
@@ -30,6 +32,8 @@ import type {
 
 export {
   DEFAULT_IDLE_REVIEW_MS,
+  DEFAULT_EMBEDDING_ENDPOINT,
+  DEFAULT_EMBEDDING_MODEL,
   DEFAULT_RECALL_CANDIDATE_MULTIPLIER,
   DEFAULT_RECALL_HIGH_SCORE_THRESHOLD,
   DEFAULT_RECALL_LIMIT,
@@ -73,6 +77,12 @@ const TaskAgentModelSchema: z<TaskAgentModelConfig> = z.object({
   model: z.string(),
 })
 
+const MnemonEmbeddingSchema = z.object({
+  enabled: z.boolean().default(false),
+  endpoint: z.string().default(DEFAULT_EMBEDDING_ENDPOINT),
+  model: z.string().default(DEFAULT_EMBEDDING_MODEL),
+})
+
 const RecallQualitySchema: z<RecallQualityConfig> = z.object({
   policy: z.string().default(DEFAULT_RECALL_QUALITY_POLICY),
   lowScoreThreshold: z.number().min(0).max(1).default(DEFAULT_RECALL_LOW_SCORE_THRESHOLD),
@@ -114,6 +124,11 @@ export const Config: z<Config> = z.object({
   store: z.string(),
   timeoutMs: z.number().step(1).min(100).max(120_000).default(DEFAULT_TIMEOUT_MS),
   defaultRecallLimit: z.number().step(1).min(1).max(50).default(DEFAULT_RECALL_LIMIT),
+  embedding: MnemonEmbeddingSchema.default({
+    enabled: false,
+    endpoint: DEFAULT_EMBEDDING_ENDPOINT,
+    model: DEFAULT_EMBEDDING_MODEL,
+  }),
   memoryTopology: MemoryTopologySchema,
   recallQuality: RecallQualitySchema.default({
     policy: DEFAULT_RECALL_QUALITY_POLICY,
@@ -238,6 +253,26 @@ function resolveTaskAgentModel(value: TaskAgentModelConfig | undefined): Resolve
   return { mode, provider, model }
 }
 
+function resolveEmbedding(value: SharedConfig['embedding']): SharedResolvedConfig['embedding'] {
+  const endpoint = optionalText(value?.endpoint) ?? DEFAULT_EMBEDDING_ENDPOINT
+  if (endpoint.length > 2048) throw new Error('dsh-mnemon: embedding endpoint is too long')
+  let parsed: URL
+  try {
+    parsed = new URL(endpoint)
+  } catch {
+    throw new Error('dsh-mnemon: embedding endpoint must be an absolute HTTP or HTTPS URL')
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)
+    || parsed.username !== '' || parsed.password !== ''
+    || endpoint.includes('?') || endpoint.includes('#')) {
+    throw new Error('dsh-mnemon: embedding endpoint must be an absolute HTTP or HTTPS URL without credentials, query, or fragment')
+  }
+  const normalizedEndpoint = endpoint.replace(/\/+$/u, '')
+  const model = optionalText(value?.model) ?? DEFAULT_EMBEDDING_MODEL
+  if (model.length > 200 || /[\u0000-\u001f\u007f]/u.test(model)) throw new Error('dsh-mnemon: embedding model must contain 1..200 characters without control characters')
+  return { enabled: value?.enabled === true, endpoint: normalizedEndpoint, model }
+}
+
 function resolveRecallQuality(value: RecallQualityConfig | undefined): SharedResolvedConfig['recallQuality'] {
   const policy = optionalText(value?.policy) ?? DEFAULT_RECALL_QUALITY_POLICY
   if (!/^[a-z][a-z0-9-]{0,63}$/u.test(policy)) throw new Error('dsh-mnemon: recall quality policy id must match [a-z][a-z0-9-]{0,63}')
@@ -318,6 +353,7 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     ...(store === undefined ? {} : { store }),
     timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     defaultRecallLimit: config.defaultRecallLimit ?? DEFAULT_RECALL_LIMIT,
+    embedding: resolveEmbedding(config.embedding),
     memoryTopology: resolveMemoryTopology(config.memoryTopology),
     recallQuality: resolveRecallQuality(config.recallQuality),
     routingGuidance: config.routingGuidance ?? true,

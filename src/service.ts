@@ -46,6 +46,7 @@ import {
   type MemoryGraphSnapshot,
   type MemoryListRequest,
   type MemoryListView,
+  type MnemonEmbeddingStatus,
   type MemoryPlacementDecision,
   type MemoryReadMode,
   type MemoryReadSource,
@@ -72,6 +73,7 @@ export type {
   MemoryGraphSnapshot,
   MemoryListRequest,
   MemoryListView,
+  MnemonEmbeddingStatus,
   MemoryReadSource,
   RecallQualityStats,
   RememberRequest,
@@ -541,6 +543,27 @@ export class MnemonService {
       memoryBodies: catalog.items,
       providerServices,
     }
+  }
+
+  /** Probe the effective Mnemon embedding runtime and its default Store coverage. */
+  async embeddingStatus(signal?: AbortSignal): Promise<MnemonEmbeddingStatus> {
+    const output = record(await this.runner.runJson(
+      ['embed', '--status'],
+      signal === undefined ? {} : { signal },
+    ))
+    const available = output?.ollama_available
+    const model = text(output?.model)?.trim()
+    const totalInsights = number(output?.total_insights)
+    const embedded = number(output?.embedded)
+    const coverage = text(output?.coverage)?.trim()
+    if (typeof available !== 'boolean'
+      || model === undefined || model === '' || model.length > 200 || /[\u0000-\u001f\u007f]/u.test(model)
+      || !Number.isInteger(totalInsights) || totalInsights! < 0
+      || !Number.isInteger(embedded) || embedded! < 0 || embedded! > totalInsights!
+      || coverage === undefined || !/^(?:100|\d{1,2})%$/u.test(coverage)) {
+      throw new Error('mnemon embed --status returned an invalid response')
+    }
+    return { available, model, totalInsights: totalInsights!, embedded: embedded!, coverage }
   }
 
   async status(signal?: AbortSignal): Promise<StatusView> {
