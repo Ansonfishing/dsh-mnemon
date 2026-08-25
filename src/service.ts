@@ -90,6 +90,11 @@ export interface MemoryBodyMetadataSample {
   evidence: Array<Pick<Insight, 'content' | 'category' | 'entities'>>
 }
 
+interface PreparedRemember {
+  body: MemoryBody
+  request: RememberRequest
+}
+
 /**
  * Providers whose native search is a single bounded request while their browse
  * projection fans out to multiple resources or collections. Prefer search for
@@ -413,6 +418,7 @@ export class MnemonService {
       graph: (body, signal) => this.nativeGraph(body, signal),
       list: (body, _request, signal) => this.allNativeInsights(body, signal, true),
       remember: (body, request, signal) => this.nativeRemember(body, request, signal),
+      rememberMany: (body, requests, signal) => this.nativeRememberMany(body, requests, signal),
       related: (body, id, depth, edge, signal) => this.nativeRelated(body, id, depth, edge, signal),
       link: (body, sourceId, targetId, type, weight, reason, signal) => this.nativeLink(body, sourceId, targetId, type, weight, reason, signal),
       forget: (body, id, signal) => this.nativeForget(body, id, signal),
@@ -939,26 +945,55 @@ export class MnemonService {
 
   async remember(request: RememberRequest, signal?: AbortSignal): Promise<JsonValue> {
     this.assertWritable()
-    const body = this.writeBody(request.memoryBodyId)
-    // Runtime entries are capped at 8 KiB. Keep the service boundary large
-    // enough for the Host to archive any valid hot-memory entry byte-for-byte;
-    // the UI remains at its existing 8,000-character limit.
-    const content = required(request.content, 'content', 8 * 1024)
-    const importance = boundedInteger(request.importance, 3, 1, 5)
-    const category = allowed(request.category, CATEGORIES, 'category') ?? 'general'
-    const source = allowed(request.source, SOURCES, 'source') ?? 'user'
-    const tags = commaList(request.tags, 'tags', 20)?.split(',')
-    const entities = commaList(request.entities, 'entities', 50)?.split(',')
-    const result = await this.providerFor(body).remember(body, {
-      content,
-      importance,
-      category,
-      source,
-      ...(tags === undefined ? {} : { tags }),
-      ...(entities === undefined ? {} : { entities }),
-    }, signal)
-    if (this.activateAfterWrite(body, mutationResultCommitted(result))) this.recordMemoryCommit('memory-space-remember', 'write', [body.id])
-    return this.annotateResult(result, body)
+    const prepared = this.prepareRemember(request)
+    const result = await this.providerFor(prepared.body).remember(prepared.body, prepared.request, signal)
+    if (this.activateAfterWrite(prepared.body, mutationResultCommitted(result))) this.recordMemoryCommit('memory-space-remember', 'write', [prepared.body.id])
+    return this.annotateResult(result, prepared.body)
+  }
+
+  /**
+   * Persist a host-authorized set of exact memories without involving a model
+   * in the data plane. Mnemon Native requests share one import per destination;
+   * other Providers retain their adapter-defined write semantics.
+   */
+  async rememberMany(requests: readonly RememberRequest[], signal?: AbortSignal): Promise<JsonValue[]> {
+    this.assertWritable()
+    const prepared = requests.map(request => this.prepareRemember(request))
+    const results = new Array<JsonValue>(prepared.length)
+    const groups = new Map<string, Array<PreparedRemember & { index: number }>>()
+    for (const [index, entry] of prepared.entries()) {
+      groups.set(entry.body.id, [...(groups.get(entry.body.id) ?? []), { ...entry, index }])
+    }
+
+    for (const group of groups.values()) {
+      const body = group[0]!.body
+      const provider = this.providerFor(body)
+      let providerChanged = false
+      const batchWriter = provider.rememberMany
+      const batch = batchWriter === undefined
+        ? []
+        : group.filter(entry => body.provider.id !== 'mnemon-native' || entry.request.content.length <= 8_000)
+      if (batchWriter !== undefined && batch.length > 0) {
+        const written = await batchWriter(body, batch.map(entry => entry.request), signal)
+        if (written.length !== batch.length) throw new Error(`batch remember did not return one receipt per request for Memory Space ${body.id}`)
+        for (const [offset, result] of written.entries()) {
+          const entry = batch[offset]!
+          results[entry.index] = this.annotateResult(result, body)
+          providerChanged ||= mutationResultCommitted(result)
+        }
+      }
+      for (const entry of group) {
+        if (batch.includes(entry)) continue
+        const result = await provider.remember(body, entry.request, signal)
+        results[entry.index] = this.annotateResult(result, body)
+        providerChanged ||= mutationResultCommitted(result)
+      }
+      if (this.activateAfterWrite(body, providerChanged)) {
+        this.recordMemoryCommit('memory-space-remember-batch', body.provider.id === 'mnemon-native' && batch.length > 0 ? 'import' : 'write', [body.id])
+      }
+    }
+
+    return results
   }
 
   async related(id: string, depth = 2, edge?: EdgeType, signal?: AbortSignal, memoryBodyId?: string): Promise<Insight[]> {
@@ -1256,6 +1291,54 @@ export class MnemonService {
     return this.runner.runJson(args, { ...(signal === undefined ? {} : { signal }), store: body.id })
   }
 
+  private async nativeRememberMany(body: MemoryBody, requests: readonly RememberRequest[], signal?: AbortSignal): Promise<JsonValue[]> {
+    const temporary = mkdtempSync(join(tmpdir(), 'dsh-mnemon-runtime-archive-'))
+    const draftPath = join(temporary, 'memory-draft.json')
+    try {
+      writeFileSync(draftPath, JSON.stringify({
+        schema_version: '1',
+        source: 'dsh-mnemon-runtime-archive',
+        insights: requests.map(request => ({
+          content: request.content,
+          category: request.category,
+          importance: request.importance,
+          source: request.source,
+          ...(request.tags === undefined ? {} : { tags: request.tags }),
+          ...(request.entities === undefined ? {} : { entities: request.entities }),
+        })),
+      }), { encoding: 'utf8', mode: 0o600 })
+      const payload = await this.runner.runJson(['import', draftPath], { ...(signal === undefined ? {} : { signal }), store: body.id })
+      const summary = record(payload)
+      const rows = Array.isArray(summary?.results) ? summary.results : undefined
+      const errors = number(summary?.errors)
+      const imported = number(summary?.imported)
+      const updated = number(summary?.updated)
+      const skipped = number(summary?.skipped)
+      const invalid = () => new Error(`Mnemon runtime archive import returned an invalid or partial result for Memory Space ${body.id}`)
+      if (errors !== 0 || imported === undefined || updated === undefined || skipped === undefined || rows === undefined
+        || ![imported, updated, skipped].every(value => Number.isInteger(value) && value >= 0)
+        || imported + updated + skipped !== requests.length || rows.length !== requests.length) {
+        throw invalid()
+      }
+      const ordered = new Array<JsonValue>(requests.length)
+      for (const candidate of rows) {
+        const row = record(candidate)
+        const index = number(row?.index)
+        const action = text(row?.action)?.trim().toLocaleLowerCase()
+        if (index === undefined || !Number.isInteger(index) || index < 0 || index >= requests.length || ordered[index] !== undefined) {
+          throw invalid()
+        }
+        if (row?.content !== requests[index]!.content || (action !== 'added' && action !== 'updated' && action !== 'skipped')) {
+          throw invalid()
+        }
+        ordered[index] = row
+      }
+      return ordered
+    } finally {
+      rmSync(temporary, { recursive: true, force: true })
+    }
+  }
+
   private async nativeRelated(body: MemoryBody, id: string, depth: number, edge?: EdgeType, signal?: AbortSignal): Promise<Insight[]> {
     const args = ['related', id, '--depth', String(depth)]
     if (edge !== undefined) args.push('--edge', edge)
@@ -1312,6 +1395,31 @@ export class MnemonService {
     const active = this.memoryBodies.active()
     if (active.length !== 1) throw new Error('memoryBodyId is required when the number of active memory bodies is not exactly one')
     return active[0]!
+  }
+
+  private prepareRemember(request: RememberRequest): PreparedRemember {
+    const body = this.writeBody(request.memoryBodyId)
+    // Runtime entries are capped at 8 KiB. Keep the service boundary large
+    // enough for the Host to archive any valid hot-memory entry byte-for-byte;
+    // the UI remains at its existing 8,000-character limit.
+    const content = required(request.content, 'content', 8 * 1024)
+    const importance = boundedInteger(request.importance, 3, 1, 5)
+    const category = allowed(request.category, CATEGORIES, 'category') ?? 'general'
+    const source = allowed(request.source, SOURCES, 'source') ?? 'user'
+    const tags = commaList(request.tags, 'tags', 20)?.split(',')
+    const entities = commaList(request.entities, 'entities', 50)?.split(',')
+    return {
+      body,
+      request: {
+        content,
+        importance,
+        category,
+        source,
+        memoryBodyId: body.id,
+        ...(tags === undefined ? {} : { tags }),
+        ...(entities === undefined ? {} : { entities }),
+      },
+    }
   }
 
   private annotate<T extends Insight>(insight: T, body: MemoryBody): T {

@@ -89,9 +89,9 @@ importance
 | Target | Limit | Maintenance method |
 |---|---:|---|
 | `USER.md` | 4 KiB | A local no-tool worker merges conservatively; content never enters a Memory Space |
-| `MEMORY.md` | 10 KiB | A worker archives committed content first, then returns compaction candidates |
+| `MEMORY.md` | 10 KiB | The Host archives exact committed entries, then deterministically packs the hot remainder |
 
-Capacity is measured from the actual UTF-8 bytes of the projection body. A single item is limited to 8 KiB. Automatic capacity maintenance is triggered only by an overflowing `add`; an overflowing `replace` fails directly, and the caller should perform explicit maintenance first.
+Capacity is measured from the actual UTF-8 bytes of the projection body. A single item is limited to 8 KiB. On an overflowing `add`, `replace`, or `remove`, the Host rechecks the source revision before any Provider write. With one eligible writable Memory Space it routes without a model; with several spaces, workers see only bounded routing excerpts and return destination ids, never rewritten memory. Mnemon Native entries are imported once per destination through a schema-v1 draft, while other Providers use their adapter write semantics. The Host requires one exact terminal receipt per source (and exact Recall evidence for a skipped duplicate), then selects the retained entries by importance within a byte budget and commits that remainder together with the pending mutation under the original revision fence. A Provider cannot share the local filesystem transaction, so a later revision conflict may leave already archived duplicates; retry remains safe because durable duplicate detection is preserved.
 
 ## Project Documents
 

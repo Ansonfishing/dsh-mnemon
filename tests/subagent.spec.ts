@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostAgent, HostContextShape, HostSubagentsService, ToolDefinition } from '../src/contracts.ts'
 import { DocumentManager } from '../src/documents.ts'
-import type { MnemonService } from '../src/service.ts'
+import type { MnemonService, RememberRequest } from '../src/service.ts'
 import { assertDshOutputSchema, MnemonSubagentCoordinator } from '../src/subagent.ts'
 import { prepareMemoryPlacement, type MemoryPlacementCandidate } from '../src/provider-placement.ts'
 import { registerTools } from '../src/tools.ts'
@@ -78,12 +78,35 @@ function service(): MnemonService {
       memoryBodyId: request.memoryBodyId,
       memoryBodyName: '项目记忆体',
     })),
+    rememberMany: vi.fn(async (requests: readonly RememberRequest[]) => requests.map(request => ({
+      action: 'added',
+      id: `stored-${createHash('sha256').update(request.content).digest('hex').slice(0, 8)}`,
+      memoryBodyId: request.memoryBodyId,
+      memoryBodyName: '项目记忆体',
+    }))),
     link: vi.fn(async () => ({ action: 'linked' })),
     forget: vi.fn(async () => ({ action: 'forgotten' })),
     createBody: vi.fn(async () => ({ id: 'new-body' })),
     updateBody: vi.fn(() => ({ id: 'project' })),
     mergeBodies: vi.fn(async () => ({ imported: 1 })),
   } as unknown as MnemonService
+}
+
+function addSecondWritableBody(memoryService: MnemonService): void {
+  const catalog = memoryService.bodyDirectory()
+  const source = catalog.items[0]!
+  vi.mocked(memoryService.bodyDirectory).mockReturnValue({
+    ...catalog,
+    items: [source, {
+      ...source,
+      id: 'release',
+      name: '发布记忆体',
+      description: '发布门禁、回滚和金丝雀策略',
+      dbPath: '/tmp/release.db',
+    }],
+    total: 2,
+    activeCount: 2,
+  })
 }
 
 function subagents(structured: unknown, stopReason = 'completed', providers = ['spawn'], localAgent?: HostAgent, diagnostic?: string) {
@@ -944,13 +967,14 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(controller.get(created.document.id).status).toBe('active')
   })
 
-  it('uses a bounded route proposal, then archives exact sources and commits the blocked write atomically', async () => {
+  it('uses bounded routing excerpts, then batch-archives exact sources and commits atomically', async () => {
     const plan = maintenancePlan()
+    plan.entries[1]!.content = `发布历史 ${'金丝雀门禁'.repeat(500)}`
+    plan.pending = { content: `未提交变更 ${'待'.repeat(2_000)}`, importance: 'normal' }
     const structured = {
-      summary: 'Route both committed entries to project memory and compact the hot pointers.',
+      summary: 'Route both committed entries to project memory.',
       action: 'planned',
       routes: [{ sourceIndexes: [1, 2], memoryBodyId: 'project' }],
-      compactedEntries: [{ content: 'Project uses pnpm and requires canary release checks.', importance: 'critical' }],
     }
     const resultTools = toolRegistry()
     const host = subagents(structured)
@@ -967,11 +991,12 @@ describe('Mnemon memory subagent coordinator', () => {
       })),
     } as unknown as RuntimeMemoryController
     const memoryService = service()
+    addSecondWritableBody(memoryService)
     const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, resultTools.value)
     const request = { action: 'add', target: 'memory', content: plan.pending!.content } as const
 
     await expect(coordinator.runtime(parent(), request, new AbortController().signal)).resolves.toMatchObject({
-      added: 'New durable fact.',
+      added: plan.pending.content,
       maintenance: { kind: 'mnemon-archive', provider: 'spawn', memoryBodyIds: ['project'] },
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
@@ -980,38 +1005,36 @@ describe('Mnemon memory subagent coordinator', () => {
     }))
     const migrationCall = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }>; persona: string; toolFilter: { allow: string[] } }])[1]
     const migrationPrompt = migrationCall.prompt[0]!.text
-    expect(migrationPrompt).toContain('Plan the MEMORY.md capacity archive now')
-    expect(migrationPrompt).toContain('Pending mutation (uncommitted; do not archive')
-    expect(migrationPrompt).toContain('New durable fact.')
+    expect(migrationPrompt).toContain('Route this bounded MEMORY.md archive batch now')
     expect(migrationPrompt).toContain('Project uses pnpm.')
-    expect(migrationPrompt).toContain('Release checks require a canary.')
+    expect(migrationPrompt).toContain('发布历史')
+    expect(migrationPrompt).toContain('[... host-truncated routing excerpt ...]')
+    expect(migrationPrompt).not.toContain(plan.pending.content)
+    expect(migrationPrompt).not.toContain(plan.entries[1]!.content)
     expect(migrationPrompt).toContain('id=project')
-    expect(migrationPrompt).toContain('<runtime-memory-snapshot target="memory">')
+    expect(migrationPrompt).toContain('id=release')
+    expect(migrationPrompt).toContain('<runtime-memory-routing-excerpts>')
+    expect(Buffer.byteLength(migrationPrompt, 'utf8')).toBeLessThan(8 * 1024)
     expect(migrationCall.persona).toContain('proposal has no data-plane authority')
-    expect(migrationCall.persona).toContain('exactly one existing eligible Memory Space')
+    expect(migrationCall.persona).toContain('bulk-imports exact source entries')
+    expect(migrationCall.persona).toContain('Excerpts may be host-truncated')
     expect(migrationCall.persona).toContain('USER.md preferences are outside this task and must never enter')
     expect(migrationCall.persona).toContain('Do not call task tools')
-    expect(migrationCall.persona).not.toContain('<runtime-memory-snapshot')
+    expect(migrationCall.persona).not.toContain('<runtime-memory-routing-excerpts>')
     expect(migrationPrompt).not.toMatch(/catalog_json|runtime_entries_json|pending_mutation_json|current_usage_json|created_at|markdownPath|dbPath/)
-    expect(memoryService.remember).toHaveBeenNthCalledWith(1, {
-      content: plan.entries[0]!.content,
-      category: 'context',
-      importance: 3,
-      source: 'agent',
-      memoryBodyId: 'project',
-    }, expect.any(AbortSignal))
-    expect(memoryService.remember).toHaveBeenNthCalledWith(2, {
-      content: plan.entries[1]!.content,
-      category: 'context',
-      importance: 5,
-      source: 'agent',
-      memoryBodyId: 'project',
-    }, expect.any(AbortSignal))
+    const resultSchema = (resultTools.definitions[0] as unknown as { parameters: unknown }).parameters
+    expect(JSON.stringify(resultSchema)).not.toContain('compactedEntries')
+    expect(memoryService.rememberMany).toHaveBeenCalledOnce()
+    expect(memoryService.rememberMany).toHaveBeenCalledWith([
+      { content: plan.entries[0]!.content, category: 'context', importance: 3, source: 'agent', memoryBodyId: 'project' },
+      { content: plan.entries[1]!.content, category: 'context', importance: 5, source: 'agent', memoryBodyId: 'project' },
+    ], expect.any(AbortSignal))
+    expect(memoryService.remember).not.toHaveBeenCalled()
     expect(memoryService.createBody).not.toHaveBeenCalled()
     expect(runtime.compactAndMutate).toHaveBeenCalledWith(
       plan.revision,
       request,
-      structured.compactedEntries,
+      plan.entries.map(({ content, importance }) => ({ content, importance })),
       expect.any(Number),
       expect.arrayContaining([
         expect.objectContaining({
@@ -1024,33 +1047,29 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(coordinator.snapshot()).toMatchObject({ migrations: 1, lastOperation: 'migration' })
   })
 
-  it('runs the real capacity controller from overflow through verified archive to one local commit', async () => {
+  it('completes the dense Chinese capacity reproduction without starting a model worker', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'dsh-mnemon-runtime-integration-'))
     temporaryDirectories.push(directory)
     const runtime = new RuntimeMemoryController({ effectiveDataDir: () => directory })
-    const first = `project-history-a ${'a'.repeat(4_800)}`
-    const second = `project-history-b ${'b'.repeat(4_800)}`
-    const pending = `new-release-rule ${'c'.repeat(700)}`
-    await runtime.mutate({ action: 'add', target: 'memory', content: first })
-    await runtime.mutate({ action: 'add', target: 'memory', content: second })
-    const host = subagents({
-      summary: 'Archived exact history and retained one hot pointer.',
-      action: 'planned',
-      routes: [{ sourceIndexes: [1, 2], memoryBodyId: 'project' }],
-      compactedEntries: [{ content: 'Older project history is archived in project memory.', importance: 'normal' }],
-    })
+    const anchor = `项目锚点 ${'a'.repeat(220)}`
+    const archived = `历史约束 ${'中'.repeat(2_550)}`
+    const pending = `新增约束 ${'文'.repeat(2_550)}`
+    await runtime.mutate({ action: 'add', target: 'memory', content: anchor })
+    await runtime.mutate({ action: 'add', target: 'memory', content: archived })
+    const host = subagents(undefined)
     const memoryService = service()
     const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, toolRegistry().value)
 
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: pending }, new AbortController().signal)).resolves.toMatchObject({
       added: pending,
-      maintenance: { kind: 'mnemon-archive', memoryBodyIds: ['project'] },
+      maintenance: { kind: 'mnemon-archive', provider: 'host', memoryBodyIds: ['project'] },
     })
-    expect(vi.mocked(memoryService.remember).mock.calls.map(call => call[0].content)).toEqual([first, second])
-    expect(runtime.snapshot().entries.map(entry => entry.content)).toEqual([
-      'Older project history is archived in project memory.',
-      pending,
-    ])
+    expect(host.start).not.toHaveBeenCalled()
+    expect(memoryService.rememberMany).toHaveBeenCalledOnce()
+    expect(vi.mocked(memoryService.rememberMany).mock.calls[0]![0].map(request => request.content)).toEqual([anchor, archived])
+    expect(memoryService.remember).not.toHaveBeenCalled()
+    expect(runtime.snapshot().entries.map(entry => entry.content)).toEqual([pending])
+    expect(coordinator.snapshot()).toMatchObject({ migrations: 1, lastOperation: 'migration', lastRunId: expect.stringMatching(/^host-/) })
   })
 
   it('fails before model work when no existing active writable Memory Space can receive an archive', async () => {
@@ -1073,6 +1092,7 @@ describe('Mnemon memory subagent coordinator', () => {
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
       .rejects.toThrow('existing active writable Memory Space')
     expect(host.start).not.toHaveBeenCalled()
+    expect(memoryService.rememberMany).not.toHaveBeenCalled()
     expect(memoryService.remember).not.toHaveBeenCalled()
     expect(runtime.compactAndMutate).not.toHaveBeenCalled()
   })
@@ -1098,6 +1118,7 @@ describe('Mnemon memory subagent coordinator', () => {
       .rejects.toThrow('allows write only for manual operations')
     expect(graph.memoryKernel.assertParticipation).toHaveBeenCalledWith('memory-spaces', 'write', 'automatic')
     expect(host.start).not.toHaveBeenCalled()
+    expect(memoryService.rememberMany).not.toHaveBeenCalled()
     expect(memoryService.remember).not.toHaveBeenCalled()
   })
 
@@ -1107,7 +1128,6 @@ describe('Mnemon memory subagent coordinator', () => {
       summary: 'Incomplete route.',
       action: 'planned',
       routes: [{ sourceIndexes: [1], memoryBodyId: 'project' }],
-      compactedEntries: [],
     })
     const runtime = {
       mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
@@ -1115,10 +1135,12 @@ describe('Mnemon memory subagent coordinator', () => {
       compactAndMutate: vi.fn(),
     } as unknown as RuntimeMemoryController
     const memoryService = service()
+    addSecondWritableBody(memoryService)
     const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, toolRegistry().value)
 
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
       .rejects.toThrow('omitted committed archive sources')
+    expect(memoryService.rememberMany).not.toHaveBeenCalled()
     expect(memoryService.remember).not.toHaveBeenCalled()
     expect(runtime.compactAndMutate).not.toHaveBeenCalled()
   })
@@ -1130,7 +1152,6 @@ describe('Mnemon memory subagent coordinator', () => {
       summary: 'Route existing SQLite fact.',
       action: 'planned',
       routes: [{ sourceIndexes: [1], memoryBodyId: 'project' }],
-      compactedEntries: [],
     })
     const runtime = {
       mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
@@ -1138,7 +1159,7 @@ describe('Mnemon memory subagent coordinator', () => {
       compactAndMutate: vi.fn(async () => ({ success: true, target: 'memory', added: plan.pending!.content, usage: { used: 20, limit: 10_240 } })),
     } as unknown as RuntimeMemoryController
     const memoryService = service()
-    vi.mocked(memoryService.remember).mockResolvedValueOnce({ action: 'skipped', memoryBodyId: 'project' })
+    vi.mocked(memoryService.rememberMany).mockResolvedValueOnce([{ action: 'skipped', memoryBodyId: 'project' }])
     vi.mocked(memoryService.search).mockResolvedValueOnce({
       query: sourceEntry.content,
       mode: 'smart',
@@ -1148,7 +1169,7 @@ describe('Mnemon memory subagent coordinator', () => {
 
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
       .resolves.toMatchObject({ maintenance: { kind: 'mnemon-archive', memoryBodyIds: ['project'] } })
-    expect(runtime.compactAndMutate).toHaveBeenCalledWith(plan.revision, expect.any(Object), [], expect.any(Number), [{
+    expect(runtime.compactAndMutate).toHaveBeenCalledWith(plan.revision, expect.any(Object), [sourceEntry], expect.any(Number), [{
       source: {
         layerId: 'runtime',
         reference: `runtime:${plan.revision}:memory:1`,
@@ -1168,7 +1189,6 @@ describe('Mnemon memory subagent coordinator', () => {
       summary: 'Route pnpm fact.',
       action: 'planned',
       routes: [{ sourceIndexes: [1], memoryBodyId: 'project' }],
-      compactedEntries: [],
     }
     const staleRuntime = {
       mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
@@ -1179,6 +1199,7 @@ describe('Mnemon memory subagent coordinator', () => {
     await expect(new MnemonSubagentCoordinator(subagents(structured).value, runtimeSource(staleRuntime, staleService) as never, undefined, toolRegistry().value)
       .runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
       .rejects.toThrow('no archive writes were attempted')
+    expect(staleService.rememberMany).not.toHaveBeenCalled()
     expect(staleService.remember).not.toHaveBeenCalled()
 
     const queuedRuntime = {
@@ -1187,7 +1208,7 @@ describe('Mnemon memory subagent coordinator', () => {
       compactAndMutate: vi.fn(),
     } as unknown as RuntimeMemoryController
     const queuedService = service()
-    vi.mocked(queuedService.remember).mockResolvedValueOnce({ action: 'queued', status: 'pending', taskId: 'task-slow', memoryBodyId: 'project' })
+    vi.mocked(queuedService.rememberMany).mockResolvedValueOnce([{ action: 'queued', status: 'pending', taskId: 'task-slow', memoryBodyId: 'project' }])
     await expect(new MnemonSubagentCoordinator(subagents(structured).value, runtimeSource(queuedRuntime, queuedService) as never, undefined, toolRegistry().value)
       .runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
       .rejects.toThrow('did not commit synchronously')

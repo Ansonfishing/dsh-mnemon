@@ -89,9 +89,9 @@ importance
 | 目标 | 上限 | 维护方式 |
 |---|---:|---|
 | `USER.md` | 4 KiB | 本地、无工具 worker 保守合并，不进入 Memory Space |
-| `MEMORY.md` | 10 KiB | worker 先归档已提交内容，再返回压缩候选 |
+| `MEMORY.md` | 10 KiB | Host 精确归档已提交条目，再确定性装填热记忆余量 |
 
-容量按投影正文的实际 UTF-8 字节计算。单条内容最大 8 KiB。自动容量维护只由溢出的 `add` 触发；导致溢出的 `replace` 会直接报错，调用方应先显式整理。
+容量按投影正文的实际 UTF-8 字节计算。单条内容最大 8 KiB。当 `add`、`replace` 或 `remove` 遇到容量溢出时，Host 会在任何 Provider 写入前重新检查源 revision。只有一个可写 Memory Space 时完全不调用模型；存在多个空间时，worker 只读取有界路由摘录并返回目标 id，不重写记忆内容。Mnemon Native 按目标空间通过 schema-v1 draft 各导入一次，其他 Provider 继续使用适配器定义的写入语义。Host 要求每个源条目都有一条精确终态回执（跳过的重复项还必须有精确 Recall 证据），随后按重要性和字节预算选择热记忆保留项，并在原 revision fence 下把余量与待处理变更一次提交。Provider 无法与本地文件共享同一事务，因此稍后的 revision 冲突可能留下已经归档的重复项；持久层仍保留去重，重试是安全的。
 
 ## Project Documents
 

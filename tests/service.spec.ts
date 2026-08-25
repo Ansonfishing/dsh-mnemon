@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -609,12 +609,100 @@ describe('MnemonService', () => {
     )
   })
 
+  it('bulk-imports exact Native memories once and validates per-entry receipts', async () => {
+    let draftPath = ''
+    let draftMode = 0
+    let draft: Record<string, unknown> | undefined
+    const process = vi.fn<ProcessRunner>(async (_command, args) => {
+      const importIndex = args.indexOf('import')
+      if (importIndex < 0) return { stdout: '{}', stderr: '', exitCode: 0 }
+      draftPath = args[importIndex + 1]!
+      draftMode = statSync(draftPath).mode & 0o777
+      draft = JSON.parse(readFileSync(draftPath, 'utf8')) as Record<string, unknown>
+      return {
+        stdout: JSON.stringify({
+          imported: 1,
+          updated: 1,
+          skipped: 0,
+          errors: 0,
+          results: [
+            { index: 1, id: 'release-2', content: '发布前执行金丝雀检查。', action: 'updated' },
+            { index: 0, id: 'project-1', content: '项目使用 pnpm。', action: 'added' },
+          ],
+        }),
+        stderr: '',
+        exitCode: 0,
+      }
+    })
+    const commits = vi.fn<AuthorityCommitRecorder>()
+    const config = resolveConfig({ cliPath: '/fake/mnemon', dataDir: populatedDataDir(), store: 'work' })
+    const runner = createRunner(config, process)
+    const service = new MnemonService(runner, config, new MemoryBodyRegistry(runner, true), undefined, undefined, commits)
+
+    await expect(service.rememberMany([
+      { content: '项目使用 pnpm。', category: 'context', importance: 3, source: 'agent', memoryBodyId: 'work' },
+      { content: '发布前执行金丝雀检查。', category: 'context', importance: 5, source: 'agent', memoryBodyId: 'work' },
+    ])).resolves.toEqual([
+      expect.objectContaining({ id: 'project-1', action: 'added', memoryBodyId: 'work' }),
+      expect.objectContaining({ id: 'release-2', action: 'updated', memoryBodyId: 'work' }),
+    ])
+    expect(process.mock.calls.filter(([, args]) => args.includes('import'))).toHaveLength(1)
+    expect(process.mock.calls.some(([, args]) => args.includes('remember'))).toBe(false)
+    expect(draftMode).toBe(0o600)
+    expect(draft).toEqual({
+      schema_version: '1',
+      source: 'dsh-mnemon-runtime-archive',
+      insights: [
+        { content: '项目使用 pnpm。', category: 'context', importance: 3, source: 'agent' },
+        { content: '发布前执行金丝雀检查。', category: 'context', importance: 5, source: 'agent' },
+      ],
+    })
+    expect(existsSync(draftPath)).toBe(false)
+    expect(commits).toHaveBeenCalledWith(expect.objectContaining({
+      layerId: 'memory-spaces', capability: 'import', operation: 'memory-space-remember-batch',
+    }))
+  })
+
+  it('rejects a partial Native archive import and removes its temporary draft', async () => {
+    let draftPath = ''
+    const process = vi.fn<ProcessRunner>(async (_command, args) => {
+      const importIndex = args.indexOf('import')
+      draftPath = args[importIndex + 1]!
+      return {
+        stdout: JSON.stringify({
+          imported: 1,
+          updated: 0,
+          skipped: 0,
+          errors: 1,
+          results: [{ index: 0, id: 'partial-1', content: 'First.', action: 'added' }],
+        }),
+        stderr: '',
+        exitCode: 0,
+      }
+    })
+    const config = resolveConfig({ cliPath: '/fake/mnemon', dataDir: populatedDataDir(), store: 'work' })
+    const runner = createRunner(config, process)
+    const service = new MnemonService(runner, config, new MemoryBodyRegistry(runner, true))
+
+    await expect(service.rememberMany([
+      { content: 'First.', memoryBodyId: 'work' },
+      { content: 'Second.', memoryBodyId: 'work' },
+    ])).rejects.toThrow('invalid or partial result')
+    expect(existsSync(draftPath)).toBe(false)
+  })
+
   it('accepts the full Runtime entry boundary for lossless Host archival', async () => {
     const { service, process } = fixture()
     const content = 'x'.repeat(8 * 1024)
 
     await expect(service.remember({ content })).resolves.toMatchObject({ action: 'added' })
     expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['remember', content]), expect.anything())
+    process.mockClear()
+    await expect(service.rememberMany([{ content, memoryBodyId: 'work' }])).resolves.toEqual([
+      expect.objectContaining({ action: 'added', memoryBodyId: 'work' }),
+    ])
+    expect(process).toHaveBeenCalledWith('/fake/mnemon', expect.arrayContaining(['remember', content]), expect.anything())
+    expect(process.mock.calls.some(([, args]) => args.includes('import'))).toBe(false)
     await expect(service.remember({ content: `${content}x` })).rejects.toThrow('max 8192 characters')
   })
 
