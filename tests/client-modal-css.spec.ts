@@ -80,3 +80,10 @@ describe('responsive dialog layout invariants', () => {
     expect(saveActionCss).toContain('@media (pointer: coarse) and (max-width: 640px), (pointer: coarse) and (max-height: 560px)')
   })
 })
+
+describe('entity rail list invariants', () => {
+  it('truncates long entity names and keeps the frequency count inside the row', () => {
+    expect(viewCss).toContain('.entityList button > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }')
+    expect(viewCss).toContain('.entityList strong { flex: none;')
+  })
+})
