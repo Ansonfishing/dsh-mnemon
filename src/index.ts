@@ -15,6 +15,7 @@ import { registerTools } from './tools.ts'
 import { StorageScopeInspector } from './storage-scope.ts'
 import { MnemonPackManager } from './pack.ts'
 import { VersionUpdateManager } from './version-updates.ts'
+import { registerMnemonSubagentTokenUsageProjection } from './subagent-token-usage.ts'
 import type { HostWorkspaceRegistry } from './contracts.ts'
 import { MemoryBoot, MemoryExtensionHost, memoryBoot } from '../packages/extension-sdk/src/index.ts'
 
@@ -53,6 +54,7 @@ function optionalWorkspaceRegistry(ctx: HostContextShape): HostWorkspaceRegistry
 /** Mount native model tools on every DSH surface and UI RPC only when Web connection exists. */
 export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   const ctx = rawContext as unknown as HostContextShape
+  registerMnemonSubagentTokenUsageProjection(ctx)
   const extensions = memoryBoot
   ctx.provide?.('mnemonMemory', extensions)
   const prepared = new Map<object, { graph: MnemonRuntimeGraph; token: symbol }>()

@@ -14,6 +14,7 @@ import { en, zh, type MnemonKey } from './locales.ts'
 import { MnemonSettingsScope } from './settings.ts'
 import type { MnemonClientContext } from './dsh-compat.ts'
 import { mountMnemonWorkspace } from './workspace-mount.tsx'
+import { mountSubagentTokenUsageOverride } from './subagent-token-usage.tsx'
 
 export const inject = ['slots', 'sessions', 'workspaces', 'connection', 'locale']
 
@@ -111,6 +112,10 @@ export function apply(rawContext: unknown): void {
   const interactionSettings = new MnemonSettingsScope<InteractionConfig>(ctx.connection, MNEMON_UI_SETTINGS_NAMESPACE)
   const namespace: MnemonNamespace = 'mnemon'
   ctx.effect(() => ctx.locale.register(namespace, { zh, en }), 'dsh-mnemon: locale dictionaries')
+  ctx.slots.inject(
+    'conversation.session.header.lineage',
+    () => mountSubagentTokenUsageOverride(ctx),
+  )
   const translate = ctx.locale.bind(namespace)
   let activeMemoryWorkspace: { mode: DisplayMode; dispose: () => void } | undefined
   const reconcileMemoryWorkspace = (): void => {
