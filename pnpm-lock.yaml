@@ -17,6 +17,9 @@ importers:
       schemastery:
         specifier: ^3.18.0
         version: 3.18.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
