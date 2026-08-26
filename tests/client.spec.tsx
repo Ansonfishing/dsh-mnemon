@@ -25,7 +25,7 @@ describe('MnemonView', () => {
     getSnapshot: () => readOnlySettingsSnapshot,
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean; versionsDeferred?: boolean; layerSwitches?: Record<'runtime' | 'documents' | 'memory-spaces', boolean> } = {}) {
+  function createConnection(options: { isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; runtimeBranch?: boolean; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean; versionsDeferred?: boolean; layerSwitches?: Record<'runtime' | 'documents' | 'memory-spaces', boolean> } = {}) {
     const body = {
       id: 'project',
       name: '项目记忆体',
@@ -185,8 +185,9 @@ describe('MnemonView', () => {
         { memoryBodyId: 'mem0-lab', memoryBodyName: 'Mem0 用户画像', providerId: 'mem0', providerLabel: 'Mem0', mode: 'search', status: 'empty', itemCount: 0 },
       ],
     } : undefined
+    const branchEntry = { content: 'feat/branch-ui 分支上决定用 v2 渲染管线', created_at: '2026-08-13T02:05:00.000Z', updated_at: '2026-08-13T02:05:00.000Z', target: 'memory' as const, importance: 'normal' as const, branches: ['feat/branch-ui'] }
     let runtimeEntries = options.runtimeCount === undefined
-      ? [{ content: '用户偏好简洁中文回答。', created_at: '2026-08-13T02:00:00.000Z', updated_at: '2026-08-13T02:00:00.000Z', target: 'user', importance: 'critical' }]
+      ? (options.runtimeBranch ? [{ content: '用户偏好简洁中文回答。', created_at: '2026-08-13T02:00:00.000Z', updated_at: '2026-08-13T02:00:00.000Z', target: 'user', importance: 'critical' }, branchEntry] : [{ content: '用户偏好简洁中文回答。', created_at: '2026-08-13T02:00:00.000Z', updated_at: '2026-08-13T02:00:00.000Z', target: 'user', importance: 'critical' }])
       : Array.from({ length: options.runtimeCount }, (_, index) => ({ content: `运行时条目 ${index + 1}`, created_at: `2026-08-13T02:${String(index).padStart(2, '0')}:00.000Z`, updated_at: `2026-08-13T02:${String(index).padStart(2, '0')}:00.000Z`, target: index % 2 === 0 ? 'user' : 'memory', importance: index % 3 === 0 ? 'critical' : 'normal' }))
     const baseDocument = {
       id: 'document-12345678', title: '发布验证清单', description: '发布前的完整验证路径。', status: 'active', filename: 'release-document-1234.md',
@@ -851,6 +852,19 @@ describe('MnemonView', () => {
     fireEvent.click(documentArchiveCancel)
     expect(screen.queryByRole('dialog', { name: '确认建立 Mnemon 索引并迁移这份档案？' })).toBeNull()
     expect(screen.queryByRole('img', { name: 'Mnemon' })).toBeNull()
+  })
+
+  it('shows a branch badge on scoped runtime entries and a branch input in the add dialog', async () => {
+    const { connection } = createConnection({ runtimeBranch: true })
+    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface="sidebar" />)
+    await screen.findByText('已连接')
+    const tabs = screen.getByRole('tablist', { name: 'Mnemon 页面' })
+    fireEvent.click(within(tabs).getByRole('tab', { name: '运行时' }))
+    expect(await screen.findByText('feat/branch-ui 分支上决定用 v2 渲染管线')).toBeTruthy()
+    expect(screen.getByText('feat/branch-ui', { selector: '[title]' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '添加记忆' }))
+    const runtimeDialog = screen.getByRole('dialog', { name: '添加热记忆' })
+    expect(within(runtimeDialog).getByRole('textbox', { name: '适用分支' })).toBeTruthy()
   })
 
   it('keeps DSH activation independent from the protected Mnemon default Store', async () => {
