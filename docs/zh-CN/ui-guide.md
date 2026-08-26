@@ -49,6 +49,8 @@
 
 运行时条目应紧凑、独立、反复有用。身份、偏好和协作要求放用户档案；项目事实、环境、决策和工具经验放工作记忆。临时进度和原始日志不适合这一层。
 
+工作记忆条目可带可选的分支范围（新增和编辑表单里用逗号分隔的 git 分支名）：带范围的条目显示分支徽标，只在会话 workspace 处于所列分支上时投影进模型上下文；留空则该条目在所有分支可见。分支范围不影响本页展示，也不影响磁盘上的 `USER.md`/`MEMORY.md` 投影。
+
 ## 3. 档案：保留完整项目叙事
 
 [![档案目录、容量摘要与 Markdown 阅读器](../assets/screenshots/documents-markdown.png)](../assets/screenshots/documents-markdown.png)

@@ -61,6 +61,7 @@ WRITE PROTOCOL
 - Choose target="user" only for the user profile and target="memory" only for project/environment knowledge. Use importance="critical" for explicit must/always/never rules or strong preferences, "low" for transient or one-time facts that are still worth keeping, and "normal" otherwise.
 - Entries are separated by a standalone §. old_text must uniquely identify one entry. Tool receipts are sufficient; do not echo either complete file after a successful mutation.
 - If USER.md reaches capacity, the tool conservatively consolidates the local profile without sending preferences to Mnemon Memory Spaces. If MEMORY.md reaches capacity, the tool archives committed working memories into one or more semantically appropriate Memory Spaces, then atomically applies compaction and the pending mutation only when the reviewed revision is still current. Never evade either limit with direct file edits.
+- Branch scoping (target=memory only): pass the optional branches parameter (a list of git branch names) to project an entry only in sessions on those branches; omit it for cross-branch facts. Use it for branch-specific architecture decisions and experiments, and tag new branch-scoped entries with the git branch reported in the snapshot header. On replace, provide branches to change the scope, an empty list to clear it, or omit it to keep the current scope. Non-git workspaces and detached HEAD project every entry regardless of scope.
 
 IMPORTANT: Runtime Memory is always relevant when applicable, after the current request. Use mnemon_runtime_memory only when the criteria above are met; otherwise do not mutate memory.`
 
@@ -135,6 +136,58 @@ function isImportance(value: unknown): value is RuntimeMemoryImportance {
   return value === 'critical' || value === 'normal' || value === 'low'
 }
 
+export const RUNTIME_BRANCH_NAME_MAX = 128
+export const RUNTIME_BRANCHES_PER_ENTRY_MAX = 16
+const RUNTIME_BRANCH_NAME_RE = /^[A-Za-z0-9._/-]+$/u
+
+/** Validate a model-supplied branch scope. Returns the normalized list; an empty list means "no scope". */
+export function normalizeRuntimeBranches(value: unknown, field = 'branches'): string[] {
+  if (!Array.isArray(value)) throw new Error(`${field} must be an array of git branch names`)
+  const branches: string[] = []
+  const seen = new Set<string>()
+  for (const item of value) {
+    if (typeof item !== 'string') throw new Error(`${field} must contain only git branch names`)
+    const branch = item.trim()
+    if (branch === ''
+      || branch.length > RUNTIME_BRANCH_NAME_MAX
+      || !RUNTIME_BRANCH_NAME_RE.test(branch)
+      || branch === '-'
+      || branch.startsWith('/') || branch.startsWith('-')
+      || branch.endsWith('/') || branch.endsWith('.')
+      || branch.includes('..') || branch.includes('//') || branch.includes('@{')) {
+      throw new Error(`${field} must contain git branch names (letters, numbers, dot, underscore, slash, dash)`)
+    }
+    if (seen.has(branch)) throw new Error(`${field} must not repeat a branch name`)
+    seen.add(branch)
+    branches.push(branch)
+  }
+  if (branches.length > RUNTIME_BRANCHES_PER_ENTRY_MAX) {
+    throw new Error(`${field} supports at most ${RUNTIME_BRANCHES_PER_ENTRY_MAX} branch names`)
+  }
+  return branches
+}
+
+/** Parse a stored branch scope. Returns undefined for absent or invalid data. */
+function parseRuntimeBranches(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value)) return undefined
+  const branches: string[] = []
+  for (const item of value) {
+    if (typeof item !== 'string' || item === '' || item.length > RUNTIME_BRANCH_NAME_MAX || !RUNTIME_BRANCH_NAME_RE.test(item)) return undefined
+    branches.push(item)
+  }
+  return branches
+}
+
+function entryMatchesBranch(entry: RuntimeMemoryEntry, branch: string): boolean {
+  return entry.branches === undefined || entry.branches.length === 0 || entry.branches.includes(branch)
+}
+
+function scopeBranch(branch: string | undefined): string | undefined {
+  const value = branch?.trim()
+  return value === undefined || value === '' ? undefined : value
+}
+
 function normalizeContent(value: string | undefined, field: string): string {
   const content = value?.trim().replace(/\s+/gu, ' ') ?? ''
   if (content === '') throw new Error(`${field} is required`)
@@ -149,12 +202,15 @@ function parseEntry(value: unknown): RuntimeMemoryEntry | undefined {
   if (typeof value.created_at !== 'string' || typeof value.updated_at !== 'string') return undefined
   const content = value.content.trim().replace(/\s+/gu, ' ')
   if (content === '' || content.includes('§')) return undefined
+  if (value.target === 'user' && value.branches !== undefined) return undefined
+  const branches = parseRuntimeBranches(value.branches)
   return {
     content,
     created_at: value.created_at,
     updated_at: value.updated_at,
     target: value.target,
     importance: value.importance,
+    ...(branches === undefined ? {} : { branches }),
   }
 }
 
@@ -180,6 +236,8 @@ function prepareMutation(
   if (!isTarget(request.target)) throw new Error('target must be memory or user')
   if (!['add', 'replace', 'remove'].includes(request.action)) throw new Error('action must be add, replace, or remove')
   if (request.importance !== undefined && !isImportance(request.importance)) throw new Error('importance must be critical, normal, or low')
+  if (request.target === 'user' && request.branches !== undefined) throw new Error('branches applies to target=memory only')
+  const branchScope = request.branches === undefined ? undefined : normalizeRuntimeBranches(request.branches)
   const entries = before.map(entry => ({ ...entry }))
 
   if (request.action === 'add') {
@@ -199,6 +257,7 @@ function prepareMutation(
       updated_at: now,
       target: request.target,
       importance: request.importance ?? 'normal',
+      ...(branchScope !== undefined && branchScope.length > 0 ? { branches: branchScope } : {}),
     }
     return {
       changed: true,
@@ -226,6 +285,10 @@ function prepareMutation(
       content,
       updated_at: now,
       importance: request.importance ?? previous.importance,
+    }
+    if (branchScope !== undefined) {
+      if (branchScope.length === 0) delete pendingEntry.branches
+      else pendingEntry.branches = branchScope
     }
     entries[index] = pendingEntry
     return {
@@ -260,12 +323,16 @@ function compactionCandidates(
     if (seen.has(content)) throw new Error('compacted runtime memory contains duplicate entries')
     seen.add(content)
     const unchanged = existing.find(current => current.content === content)
+    // A compactor that drops the scope inherits it from the identical committed entry, so branch
+    // visibility can never be silently widened by maintenance.
+    const inheritedBranches = entry.branches ?? unchanged?.branches
     return {
       content,
       created_at: unchanged?.created_at ?? now,
       updated_at: unchanged?.updated_at ?? now,
       target,
       importance: entry.importance,
+      ...(inheritedBranches === undefined ? {} : { branches: inheritedBranches }),
     }
   })
 }
@@ -336,16 +403,25 @@ export class RuntimeMemoryController {
     }
   }
 
-  contextText(): string {
-    return this.contextProjection().text
+  contextText(branch?: string): string {
+    return this.contextProjection(branch).text
   }
 
-  /** Read the exact Runtime revision and its prompt projection under one lock. */
-  contextProjection(): RuntimeMemoryContextProjection {
-    const { snapshot, user, memory } = this.withLock(() => {
+  /**
+   * Read the exact Runtime revision and its prompt projection under one lock.
+   * When a git branch is supplied, target=memory entries scoped to other
+   * branches are hidden from the projection; the on-disk Markdown files and
+   * the source JSON always remain complete.
+   */
+  contextProjection(branch?: string): RuntimeMemoryContextProjection {
+    const branchScope = scopeBranch(branch)
+    const { snapshot, user, memory, hidden } = this.withLock(() => {
       const file = this.readSource()
       this.repairProjections(file)
       const entries = file.entries.map(entry => ({ ...entry }))
+      const visible = branchScope === undefined
+        ? entries
+        : entries.filter(entry => entry.target === 'user' || entryMatchesBranch(entry, branchScope!))
       return {
         snapshot: {
           directory: this.directory,
@@ -354,27 +430,33 @@ export class RuntimeMemoryController {
           generatedAt: this.now().toISOString(),
           entries,
           targets: {
-            memory: this.targetView(entries, 'memory'),
-            user: this.targetView(entries, 'user'),
+            memory: this.targetView(visible, 'memory'),
+            user: this.targetView(visible, 'user'),
           },
         } satisfies RuntimeMemorySnapshot,
         user: readFileSync(this.userPath, 'utf8').trimEnd(),
-        memory: readFileSync(this.memoryPath, 'utf8').trimEnd(),
+        memory: branchScope === undefined ? readFileSync(this.memoryPath, 'utf8').trimEnd() : markdown(visible, 'memory').trimEnd(),
+        hidden: branchScope === undefined ? 0 : entries.length - visible.length,
       }
     })
-    const userUsage = snapshot.targets.user
-    const memoryUsage = snapshot.targets.memory
+    const visibleMemory = snapshot.targets.memory
+    const visibleUser = snapshot.targets.user
+    const storeMemory = this.targetView(snapshot.entries, 'memory')
+    const storeUser = this.targetView(snapshot.entries, 'user')
+    const branchLine = branchScope === undefined
+      ? ''
+      : `\nGit branch: ${branchScope}${hidden > 0 ? ` (${hidden} branch-scoped entr${hidden === 1 ? 'y' : 'ies'} hidden)` : ''}`
     return {
       revision: snapshot.revision,
       text: `MNEMON RUNTIME MEMORY SNAPSHOT
-Revision: ${snapshot.revision}
+Revision: ${snapshot.revision}${branchLine}
 
-Contents of USER.md (user profile; entries: ${userUsage.entryCount}; UTF-8 bytes: ${userUsage.used}/${userUsage.limit})
+Contents of USER.md (user profile; entries: ${visibleUser.entryCount}; UTF-8 bytes: ${storeUser.used}/${storeUser.limit})
 <runtime-memory-file name="USER.md">
 ${user || '(empty)'}
 </runtime-memory-file>
 
-Contents of MEMORY.md (working reference; entries: ${memoryUsage.entryCount}; UTF-8 bytes: ${memoryUsage.used}/${memoryUsage.limit})
+Contents of MEMORY.md (working reference; entries: ${visibleMemory.entryCount}; UTF-8 bytes: ${storeMemory.used}/${storeMemory.limit})
 <runtime-memory-file name="MEMORY.md">
 ${memory || '(empty)'}
 </runtime-memory-file>`,

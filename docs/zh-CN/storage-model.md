@@ -60,6 +60,7 @@ follow an exact cold reference when full text is required
 - `target=user`：身份、角色、长期偏好、习惯、沟通风格和明确协作要求。
 - `target=memory`：项目、环境、决策、约定、工具特性和可复用经验。
 - `importance=critical|normal|low`：用于整理时的保留优先级。
+- `branches`（可选，仅 `target=memory`）：限定该条目在每回合 Runtime 快照中投影到的 git 分支名列表；没有分支列表的条目在所有分支可见。
 
 当前不实现 `daily` target。
 
@@ -73,9 +74,12 @@ created_at
 updated_at
 target
 importance
+branches（可选）
 ```
 
-`USER.md` 和 `MEMORY.md` 是确定性派生文件。每个条目被归一成单行，条目之间使用单独一行的 `§` 分隔；`§` 是保留字符。启动和 prompt 组装时，控制层会从 JSON 修复缺失或被手工修改的投影。
+`branches` 是 `target=memory` 条目的可选 git 分支名列表。没有 `branches`（或为空列表）的条目在所有分支可见。当会话的 workspace 是位于分支 `B` 的 git 工作树时，每回合的 Runtime 快照会隐藏 `branches` 列表不包含 `B` 的 `memory` 条目；非 git 工作区和 detached HEAD 下所有条目都会投影。`USER.md` 条目永远不携带 `branches`。
+
+`USER.md` 和 `MEMORY.md` 是完整事实源的确定性派生文件。每个条目被归一成单行，条目之间使用单独一行的 `§` 分隔；`§` 是保留字符。启动和 prompt 组装时，控制层会从 JSON 修复缺失或被手工修改的投影。分支过滤只作用于 prompt 投影，不作用于这两个文件。
 
 ### 操作
 

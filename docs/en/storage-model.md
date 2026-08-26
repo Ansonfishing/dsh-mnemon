@@ -60,6 +60,7 @@ follow an exact cold reference when full text is required
 - `target=user`: identity, role, long-term preferences, habits, communication style, and explicit collaboration requirements.
 - `target=memory`: projects, environment, decisions, conventions, tool characteristics, and reusable experience.
 - `importance=critical|normal|low`: retention priority during maintenance.
+- `branches` (optional, `target=memory` only): a list of git branch names limiting where the entry is projected in the per-turn Runtime snapshot; entries without a branch list are visible on every branch.
 
 There is currently no `daily` target.
 
@@ -73,9 +74,12 @@ created_at
 updated_at
 target
 importance
+branches (optional)
 ```
 
-`USER.md` and `MEMORY.md` are deterministic derived files. Each item is normalized to one line, and items are separated by a line containing only `§`; `§` is a reserved character. During startup and prompt assembly, the control layer repairs missing or manually modified projections from the JSON source.
+`branches` holds an optional list of git branch names for `target=memory` entries. An entry without `branches` (or with an empty list) is visible on every branch. When a session's workspace is a git working tree on branch `B`, the per-turn Runtime snapshot hides `memory` entries whose `branches` list does not include `B`; in non-git workspaces and at detached HEAD, every entry is projected. `USER.md` entries never carry `branches`.
+
+`USER.md` and `MEMORY.md` are deterministic derived files of the complete store. Each item is normalized to one line, and items are separated by a line containing only `§`; `§` is a reserved character. During startup and prompt assembly, the control layer repairs missing or manually modified projections from the JSON source. Branch filtering applies only to the prompt projection, never to these files.
 
 ### Operations
 

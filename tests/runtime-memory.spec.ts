@@ -152,8 +152,8 @@ describe('RuntimeMemoryController', () => {
     const snapshotBytes = Buffer.byteLength(snapshot, 'utf8')
     const formerCombinedBytes = Buffer.byteLength(`${RUNTIME_MEMORY_PROTOCOL}\n\n${snapshot}`, 'utf8')
 
-    expect(protocolBytes).toBe(3_450)
-    expect(formerCombinedBytes - snapshotBytes).toBe(3_452)
+    expect(protocolBytes).toBe(3_990)
+    expect(formerCombinedBytes - snapshotBytes).toBe(3_992)
     expect(snapshotBytes).toBeLessThan(protocolBytes)
   })
 
@@ -441,5 +441,123 @@ describe('RuntimeMemoryController', () => {
       6_000,
     )).rejects.toThrow('reintroduces the replaced or removed entry')
     expect(paths.map(path => readFileSync(path, 'utf8'))).toEqual(before)
+  })
+})
+
+describe('RuntimeMemoryController branch scoping', () => {
+  it('projects branch-scoped memory entries only when the current branch matches', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Shared cross-branch fact' })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Main-branch architecture decision', branches: ['main'] })
+
+    const onMain = controller.contextProjection('main')
+    expect(onMain.text).toContain('Shared cross-branch fact')
+    expect(onMain.text).toContain('Main-branch architecture decision')
+    expect(onMain.text).toContain('Git branch: main')
+
+    const onDev = controller.contextProjection('dev')
+    expect(onDev.text).toContain('Shared cross-branch fact')
+    expect(onDev.text).not.toContain('Main-branch architecture decision')
+    expect(onDev.text).toContain('Git branch: dev')
+    expect(onDev.text).toContain('1 branch-scoped entry hidden')
+
+    const unscoped = controller.contextProjection()
+    expect(unscoped.text).toContain('Main-branch architecture decision')
+    expect(unscoped.text).toContain('Shared cross-branch fact')
+    expect(unscoped.text).not.toContain('Git branch:')
+  })
+
+  it('never filters the user profile and keeps disk projections complete', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'user', content: 'User prefers concise answers' })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Feature-flag decision for release branch', branches: ['release'] })
+
+    const onMain = controller.contextProjection('main')
+    expect(onMain.text).toContain('User prefers concise answers')
+    expect(onMain.text).not.toContain('Feature-flag decision for release branch')
+    expect(readFileSync(controller.memoryPath, 'utf8')).toBe('Feature-flag decision for release branch\n')
+  })
+
+  it('validates and stores branch tags on add', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Multi-branch fact', branches: ['main', 'feature/deep'] })
+    expect(controller.snapshot().entries[0]).toMatchObject({ branches: ['main', 'feature/deep'] })
+  })
+
+  it('rejects invalid branch names without changing the store', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'memory', content: 'baseline' })
+    const before = readFileSync(controller.sourcePath, 'utf8')
+    const invalid = ['has space', 'dot..dot', '/leading-slash', 'trailing/', 'trailing.', 'x'.repeat(129), 'bad*name', 'a@{b', 'a^b', 'a:b', 'a~b']
+    for (const name of invalid) {
+      await expect(controller.mutate({ action: 'add', target: 'memory', content: `t-${encodeURIComponent(name)}`, branches: [name] })).rejects.toThrow(/branch name/)
+    }
+    await expect(controller.mutate({ action: 'add', target: 'memory', content: 'too many', branches: ['a', 'b', 'a'] })).rejects.toThrow(/repeat/)
+    await expect(controller.mutate({
+      action: 'add',
+      target: 'memory',
+      content: 'too many branches',
+      branches: Array.from({ length: 17 }, (_, index) => `b${index}`),
+    })).rejects.toThrow(/at most/)
+    expect(readFileSync(controller.sourcePath, 'utf8')).toBe(before)
+  })
+
+  it('rejects branch scoping for the user target', async () => {
+    const { controller } = fixture()
+    await expect(controller.mutate({ action: 'add', target: 'user', content: 'scoped user fact', branches: ['main'] }))
+      .rejects.toThrow('branches applies to target=memory only')
+  })
+
+  it('replace inherits, updates, and clears branch scope', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'memory', content: 'v1 decision', branches: ['main'] })
+    await controller.mutate({ action: 'replace', target: 'memory', oldText: 'v1 decision', content: 'v2 decision' })
+    expect(controller.snapshot().entries[0]).toMatchObject({ branches: ['main'] })
+
+    await controller.mutate({ action: 'replace', target: 'memory', oldText: 'v2 decision', content: 'v3 decision', branches: ['dev'] })
+    expect(controller.snapshot().entries[0]).toMatchObject({ branches: ['dev'] })
+
+    await controller.mutate({ action: 'replace', target: 'memory', oldText: 'v3 decision', content: 'v4 global', branches: [] })
+    const cleared = controller.snapshot().entries[0]!
+    expect(cleared).toMatchObject({ content: 'v4 global' })
+    expect('branches' in cleared).toBe(false)
+    expect(controller.contextProjection('nowhere').text).toContain('v4 global')
+  })
+
+  it('keeps legacy memories.json files (without branches) loadable and fully visible', async () => {
+    const { directory, controller } = fixture()
+    writeFileSync(controller.sourcePath, JSON.stringify({
+      version: 1,
+      entries: [{
+        content: 'Legacy unscoped fact',
+        created_at: '2026-08-01T00:00:00.000Z',
+        updated_at: '2026-08-01T00:00:00.000Z',
+        target: 'memory',
+        importance: 'normal',
+      }],
+    }, null, 2), 'utf8')
+    const reloaded = new RuntimeMemoryController({ effectiveDataDir: () => directory })
+    expect(reloaded.snapshot().entries).toEqual([
+      { content: 'Legacy unscoped fact', created_at: '2026-08-01T00:00:00.000Z', updated_at: '2026-08-01T00:00:00.000Z', target: 'memory', importance: 'normal' },
+    ])
+    expect(reloaded.contextProjection('any-branch').text).toContain('Legacy unscoped fact')
+  })
+
+  it('carries branch scope through semantic compaction', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'memory', content: 'v1 branch-scoped', branches: ['main', 'dev'] })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'unscoped' })
+    const reviewed = controller.snapshot()
+
+    await controller.compactTarget(reviewed.revision, 'memory', [
+      { content: 'branch-scoped merged', importance: 'normal', branches: ['main', 'dev'] },
+      { content: 'unscoped merged', importance: 'normal' },
+    ])
+    expect(controller.snapshot().entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ content: 'branch-scoped merged', branches: ['main', 'dev'] }),
+      expect.objectContaining({ content: 'unscoped merged' }),
+    ]))
+    const projection = controller.contextProjection('dev')
+    expect(projection.text).toContain('branch-scoped merged')
   })
 })

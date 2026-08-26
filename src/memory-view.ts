@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { MemoryOperationScope } from '../packages/contracts/src/index.ts'
 import { MemoryTurnViewManager, type MemorySource } from '../packages/kernel/src/index.ts'
 import type { DocumentManager } from './documents.ts'
+import { resolveGitBranch } from './git-branch.ts'
 import type { MemoryKernel } from './memory-system/kernel.ts'
 import type { RuntimeMemoryController } from './runtime-memory.ts'
 import type { MnemonService } from './service.ts'
@@ -15,6 +16,13 @@ export interface DefaultMemorySources {
 /** Compatibility name for the v0.3 pre-release API. */
 export type DefaultMemoryViewSources = DefaultMemorySources
 
+export type BranchResolver = (cwd?: string) => string | undefined
+
+export interface DefaultMemoryTurnViewManagerOptions {
+  /** Override the git branch probe used for runtime branch scoping. Defaults to resolveGitBranch. */
+  resolveBranch?: BranchResolver
+}
+
 function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
@@ -24,12 +32,15 @@ function workspace(scope: MemoryOperationScope | undefined): string | undefined 
   return value === undefined || value === '' ? undefined : value
 }
 
-function runtimeSource(runtimeMemory: RuntimeMemoryController): MemorySource {
+export function createRuntimeMemorySource(runtimeMemory: RuntimeMemoryController, resolveBranch: BranchResolver = resolveGitBranch): MemorySource {
   return {
     layerId: 'runtime',
     mode: 'eager',
-    snapshot: () => {
-      const projection = runtimeMemory.contextProjection()
+    snapshot: context => {
+      // The branch is resolved per publication from the workspace root. A missing or
+      // detached HEAD degrades to the unfiltered projection; a mid-turn checkout is
+      // picked up by the next turn's pinned view.
+      const projection = runtimeMemory.contextProjection(resolveBranch(workspace(context.scope)))
       return {
         revision: projection.revision,
         wake: projection.text,
@@ -99,9 +110,13 @@ function memorySpacesSource(service: MnemonService): MemorySource {
   }
 }
 
-export function createDefaultMemoryTurnViewManager(kernel: MemoryKernel, sources: DefaultMemorySources): MemoryTurnViewManager {
+export function createDefaultMemoryTurnViewManager(
+  kernel: MemoryKernel,
+  sources: DefaultMemorySources,
+  options: DefaultMemoryTurnViewManagerOptions = {},
+): MemoryTurnViewManager {
   return new MemoryTurnViewManager(kernel, [
-    runtimeSource(sources.runtimeMemory),
+    createRuntimeMemorySource(sources.runtimeMemory, options.resolveBranch ?? resolveGitBranch),
     documentsSource(sources.documents),
     memorySpacesSource(sources.service),
   ])

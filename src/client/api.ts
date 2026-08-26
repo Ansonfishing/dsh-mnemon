@@ -169,6 +169,7 @@ export class MnemonClient {
     content?: string
     old_text?: string
     importance?: RuntimeMemoryImportance
+    branches?: string[]
   }): Promise<RuntimeMemoryMutationResult> {
     return this.call(MNEMON_WRITE_CHANNEL, 'runtime-memory', this.scoped(request))
   }

@@ -61,6 +61,8 @@ Model tools, lifecycle hooks, and system scheduling use an `automatic` trigger. 
 
 When a worker invokes the same tool name, it reaches the service directly and is not delegated recursively.
 
+`mnemon_runtime_memory` accepts an optional `branches` array (git branch names) for `target=memory` writes. Branch-scoped entries are projected into the per-turn Runtime snapshot only when the session's workspace is checked out on a listed branch; untagged entries are always projected. On `replace`, providing `branches` changes the scope, an empty array clears it, and omitting it keeps the current scope. The parameter is rejected for `target=user`.
+
 ## Tool admission
 
 - **Runtime**: explicit preferences, stable project conventions, environment facts, and high-frequency lessons.

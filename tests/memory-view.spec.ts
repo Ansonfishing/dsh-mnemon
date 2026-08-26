@@ -1,4 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createRuntimeMemorySource } from '../src/memory-view.ts'
+import { RuntimeMemoryController } from '../src/runtime-memory.ts'
 import type { MemoryReceipt } from '../packages/contracts/src/index.ts'
 import { MemoryReceiptBridge } from '../src/memory-receipts.ts'
 import {
@@ -288,5 +293,71 @@ describe('MemoryTurnViewManager', () => {
     views.registerSource({ layerId: 'late', mode: 'routed', snapshot: () => ({ revision: 'late', wake: 'Late source.' }) })
     release()
     await expect(pending).rejects.toThrow('inputs changed during compilation')
+  })
+})
+
+describe('createRuntimeMemorySource branch scoping', () => {
+  const directories: string[] = []
+
+  afterEach(() => {
+    for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
+  })
+
+  async function branchFixture(): Promise<RuntimeMemoryController> {
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-mnemon-branchview-'))
+    directories.push(directory)
+    const controller = new RuntimeMemoryController(
+      { effectiveDataDir: () => directory },
+      () => new Date('2026-08-23T00:00:00.000Z'),
+    )
+    await controller.mutate({ action: 'add', target: 'memory', content: 'cross-branch fact', importance: 'normal' })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'main-only fact', branches: ['main'], importance: 'normal' })
+    await controller.mutate({ action: 'add', target: 'user', content: 'user profile fact', importance: 'normal' })
+    return controller
+  }
+
+  it('projects branch-scoped entries only on matching branches, keeps user entries always visible', async () => {
+    const controller = await branchFixture()
+    const context = {
+      catalogGeneration: 1,
+      topologyGeneration: 1,
+      guardGeneration: 0,
+      scope: { storage: 'global' as const, workspaceId: '/workspace/repo' },
+    }
+
+    const onMain = await createRuntimeMemorySource(controller, () => 'main').snapshot(context)
+    expect(onMain.wake).toContain('cross-branch fact')
+    expect(onMain.wake).toContain('main-only fact')
+    expect(onMain.wake).toContain('user profile fact')
+    expect(onMain.wake).toContain('Git branch: main')
+
+    const onDev = await createRuntimeMemorySource(controller, () => 'dev').snapshot(context)
+    expect(onDev.wake).toContain('cross-branch fact')
+    expect(onDev.wake).toContain('user profile fact')
+    expect(onDev.wake).not.toContain('main-only fact')
+    expect(onDev.wake).toContain('Git branch: dev')
+    expect(onDev.wake).toContain('1 branch-scoped entry hidden')
+
+    const nonGit = await createRuntimeMemorySource(controller, () => undefined).snapshot(context)
+    expect(nonGit.wake).toContain('main-only fact')
+    expect(nonGit.wake).not.toContain('Git branch:')
+  })
+
+  it('resolves the branch from the turn scope workspace and degrades when the workspace is absent', async () => {
+    const controller = await branchFixture()
+    const seen: Array<string | undefined> = []
+    const source = createRuntimeMemorySource(controller, (cwd) => {
+      seen.push(cwd)
+      return 'main'
+    })
+
+    await source.snapshot({ catalogGeneration: 1, topologyGeneration: 1, guardGeneration: 0, scope: { storage: 'global' } })
+    await source.snapshot({
+      catalogGeneration: 1,
+      topologyGeneration: 1,
+      guardGeneration: 0,
+      scope: { storage: 'workspace', workspaceId: '/ws/repo' },
+    })
+    expect(seen).toEqual([undefined, '/ws/repo'])
   })
 })

@@ -706,6 +706,8 @@ export interface RuntimeMemoryEntry {
   updated_at: string
   target: RuntimeMemoryTarget
   importance: RuntimeMemoryImportance
+  /** Optional git branch names that limit where this entry is projected. Absent means every branch. */
+  branches?: string[]
 }
 
 export interface RuntimeMemoryUsage {
@@ -731,6 +733,8 @@ export interface RuntimeMemorySnapshot {
 export interface RuntimeMemoryCompactedEntry {
   content: string
   importance: RuntimeMemoryImportance
+  /** Branch scope carried through compaction; absent means the entry is visible on every branch. */
+  branches?: string[]
 }
 
 export interface RuntimeMemoryMutation {
@@ -739,6 +743,8 @@ export interface RuntimeMemoryMutation {
   content?: string
   oldText?: string
   importance?: RuntimeMemoryImportance
+  /** Git branch names limiting where a target=memory entry is projected. Absent keeps the current scope on replace; an empty list clears it. */
+  branches?: string[]
 }
 
 export type RuntimeMemoryMutationResult = {

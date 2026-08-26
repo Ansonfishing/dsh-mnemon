@@ -511,6 +511,14 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 .runtimeUnifiedList { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 10px; background: color-mix(in srgb, var(--mn-layer-2) 30%, var(--mn-layer-1)); }
 .runtimeEntryBadges { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
 .runtimeEntryMeta .runtimeEntryTarget { color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 8%, var(--mn-layer-2)); font-family: var(--mn-code); }
+.runtimeEntryMeta .runtimeEntryBranch { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 8%, var(--mn-layer-2)); font-family: var(--mn-code); }
+.runtimeComposerBranch { display: grid; gap: 4px; color: var(--mn-faint); font-size: 9px; }
+.runtimeComposerBranch input { width: 100%; border: 1px solid var(--mn-line); border-radius: 8px; outline: 0; padding: 7px 9px; color: var(--mn-text); background: var(--mn-input); font-size: 12px; }
+.runtimeComposerBranch input:focus { border-color: var(--mn-accent); }
+.bodyEditBranch { display: grid; gap: 4px; color: var(--mn-faint); font-size: 9px; }
+.bodyEditBranch input { width: 100%; border: 1px solid var(--mn-line); border-radius: 8px; outline: 0; padding: 7px 9px; color: var(--mn-text); background: var(--mn-input); font-size: 12px; }
+.bodyEditBranch input:focus { border-color: var(--mn-accent); }
+.bodyEditBranch small { color: var(--mn-faint); font-size: 9px; }
 .runtimeTarget { min-width: 0; overflow: hidden; }
 .runtimeTargetHeader { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 15px 9px; }
 .runtimeTargetHeader > div { display: grid; gap: 1px; }

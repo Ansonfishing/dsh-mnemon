@@ -549,14 +549,18 @@ function naturalEvidence(evidence: readonly Insight[]): string {
   }).join('\n')
 }
 
+function runtimeEntryScopeMeta(entry: { branches?: string[] }): string {
+  return entry.branches && entry.branches.length > 0 ? ` branches=${entry.branches.join(',')}` : ''
+}
+
 function runtimeSnapshotContext(
   target: 'memory' | 'user',
-  entries: ReadonlyArray<{ content: string; importance: string }>,
+  entries: ReadonlyArray<{ content: string; importance: string; branches?: string[] }>,
 ): string {
   const file = target === 'memory' ? 'MEMORY.md' : 'USER.md'
   const rendered = entries.length === 0
     ? '(empty)'
-    : entries.map((entry, index) => `${index + 1}. [importance=${entry.importance}] ${entry.content}`).join(RUNTIME_ENTRY_DELIMITER)
+    : entries.map((entry, index) => `${index + 1}. [importance=${entry.importance}${runtimeEntryScopeMeta(entry)}] ${entry.content}`).join(RUNTIME_ENTRY_DELIMITER)
   return `Committed ${file} snapshot (read-only run data; numbering is one-based):
 <runtime-memory-snapshot target="${target}">
 ${rendered}
@@ -575,14 +579,14 @@ function runtimeRoutingExcerpt(value: string): string {
   return `${value.slice(0, prefix)}${marker}${value.slice(-(RUNTIME_ROUTE_ENTRY_CHARACTERS - prefix))}`
 }
 
-function runtimeRouteChunks(entries: ReadonlyArray<{ content: string; importance: string }>): RuntimeRouteChunk[] {
+function runtimeRouteChunks(entries: ReadonlyArray<{ content: string; importance: string; branches?: string[] }>): RuntimeRouteChunk[] {
   const chunks: RuntimeRouteChunk[] = []
   let indexes: number[] = []
   let rendered: string[] = []
   let used = 0
   for (const [offset, entry] of entries.entries()) {
     const index = offset + 1
-    const line = `${index}. [importance=${entry.importance}] ${runtimeRoutingExcerpt(entry.content)}`
+    const line = `${index}. [importance=${entry.importance}${runtimeEntryScopeMeta(entry)}] ${runtimeRoutingExcerpt(entry.content)}`
     const separatorLength = rendered.length === 0 ? 0 : RUNTIME_ENTRY_DELIMITER.length
     if (rendered.length > 0 && used + separatorLength + line.length > RUNTIME_ROUTE_CHUNK_CHARACTERS) {
       chunks.push({ indexes, context: rendered.join(RUNTIME_ENTRY_DELIMITER) })
@@ -709,13 +713,13 @@ function sha256(value: string): string {
 
 function runtimeMigrationSources(
   revision: string,
-  entries: ReadonlyArray<{ content: string; importance: string }>,
+  entries: ReadonlyArray<{ content: string; importance: string; branches?: string[] }>,
 ): MigrationSource[] {
   return entries.map((entry, offset) => ({
     index: offset + 1,
     layerId: 'runtime',
     reference: `runtime:${revision}:memory:${offset + 1}`,
-    digest: sha256(JSON.stringify({ content: entry.content, importance: entry.importance })),
+    digest: sha256(JSON.stringify({ content: entry.content, importance: entry.importance, ...(entry.branches === undefined ? {} : { branches: entry.branches }) })),
   }))
 }
 
@@ -1479,7 +1483,7 @@ ${chunk.context}
       summary = summaries.join(' ')
     }
     if (routed.size !== plan.entries.length) throw new Error('runtime memory migration omitted committed archive sources')
-    const compactedEntries = plan.entries.map(({ content, importance }): RuntimeMemoryCompactedEntry => ({ content, importance }))
+    const compactedEntries = plan.entries.map(({ content, importance, branches }): RuntimeMemoryCompactedEntry => ({ content, importance, ...(branches === undefined ? {} : { branches }) }))
 
     // Re-check the local source before any Provider side effect. A later race is
     // still caught by compactAndMutate; Provider receipts are verified because
@@ -1496,6 +1500,7 @@ ${chunk.context}
         importance: entry.importance === 'critical' ? 5 : entry.importance === 'low' ? 1 : 3,
         source: 'agent' as const,
         memoryBodyId: routed.get(source.index)!,
+        ...(entry.branches === undefined || entry.branches.length === 0 ? {} : { tags: entry.branches.map(branch => `branch:${branch}`) }),
       }
     }), signal)
     if (archiveResults.length !== sources.length) throw new Error('runtime archive batch did not return one receipt per source entry')

@@ -61,6 +61,8 @@ Headless 会获得完整模型工具面。它把命令行任务作为普通用�
 
 worker 内调用同名工具时直接进入服务层，不再递归委派。
 
+`mnemon_runtime_memory` 的 `target=memory` 写入支持可选 `branches` 数组（git 分支名）。带分支范围的条目只在会话 workspace 处于所列分支上时投影进每回合 Runtime 快照；无分支标签的条目始终投影。`replace` 时提供 `branches` 修改范围，传空数组清除范围，省略则保持当前范围；该参数对 `target=user` 会被拒绝。
+
 ## 工具准入建议
 
 - **运行时**：明确偏好、稳定项目约定、环境事实和高频经验。
