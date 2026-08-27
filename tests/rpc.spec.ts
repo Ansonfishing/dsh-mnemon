@@ -81,15 +81,22 @@ describe('Mnemon RPC', () => {
   it('exposes runtime snapshots and routes hot-memory writes through its controller', async () => {
     const runtimeMemory = {
       snapshot: vi.fn(() => ({ entries: [], targets: {} })),
-      mutate: vi.fn(async () => ({ success: true, message: 'Entry added.', target: 'user', entryCount: 1, usage: { used: 5, limit: 4096 }, added: 'hello' })),
+      mutate: vi.fn(async () => ({ success: true, message: 'Entry added.', target: 'memory', entryCount: 1, usage: { used: 5, limit: 10240 }, added: 'hello' })),
     } as unknown as RuntimeMemoryController
     await expect(createReadHandler(fakeService(), undefined, runtimeMemory)('runtime-memory', {})).resolves.toMatchObject({ ok: true, value: { entries: [] } })
-    await expect(createWriteHandler(fakeService(), undefined, runtimeMemory)('runtime-memory', { action: 'add', target: 'user', content: 'hello', importance: 'normal' })).resolves.toMatchObject({ ok: true, value: { added: 'hello' } })
-    expect(runtimeMemory.mutate).toHaveBeenCalledWith({ action: 'add', target: 'user', content: 'hello', importance: 'normal' })
+    await expect(createWriteHandler(fakeService(), undefined, runtimeMemory)('runtime-memory', { action: 'add', target: 'memory', content: 'hello', importance: 'normal', branches: ['main'] })).resolves.toMatchObject({ ok: true, value: { added: 'hello' } })
+    expect(runtimeMemory.mutate).toHaveBeenCalledWith({ action: 'add', target: 'memory', content: 'hello', importance: 'normal', branches: ['main'] })
 
     const lifecycle = { runtime: vi.fn(async () => ({ success: true, message: 'Entry added after archival.', target: 'memory', entryCount: 2, usage: { used: 20, limit: 10240 }, added: 'world' })) } as unknown as MnemonLifecycle
-    await expect(createWriteHandler(fakeService(), lifecycle, runtimeMemory)('runtime-memory', { sessionId: 'session-1', action: 'add', target: 'memory', content: 'world' })).resolves.toMatchObject({ ok: true, value: { added: 'world' } })
-    expect(lifecycle.runtime).toHaveBeenCalledWith('session-1', { action: 'add', target: 'memory', content: 'world' })
+    await expect(createWriteHandler(fakeService(), lifecycle, runtimeMemory)('runtime-memory', { sessionId: 'session-1', action: 'add', target: 'memory', content: 'world', branches: ['release/v2'] })).resolves.toMatchObject({ ok: true, value: { added: 'world' } })
+    expect(lifecycle.runtime).toHaveBeenCalledWith('session-1', { action: 'add', target: 'memory', content: 'world', branches: ['release/v2'] })
+
+    await expect(createWriteHandler(fakeService(), undefined, runtimeMemory)('runtime-memory', { action: 'add', target: 'memory', content: 'invalid', branches: ['main', 42] })).resolves.toMatchObject({
+      ok: false,
+      error: { message: 'branches must be an array of strings' },
+    })
+    expect(runtimeMemory.mutate).toHaveBeenCalledOnce()
+    expect(lifecycle.runtime).toHaveBeenCalledOnce()
   })
 
   it('dispatches read operations and rejects unknown endpoints', async () => {

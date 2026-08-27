@@ -406,12 +406,18 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
           requireLayer(resolved.graph, 'runtime', 'write')
           if (resolved.graph.runtimeMemory === undefined) throw new Error('runtime memory is unavailable')
           {
+            const branches = payload.branches === undefined
+              ? undefined
+              : Array.isArray(payload.branches) && payload.branches.every(branch => typeof branch === 'string')
+                ? payload.branches
+                : (() => { throw new Error('branches must be an array of strings') })()
             const request = {
-            action: String(payload.action ?? '') as 'add' | 'replace' | 'remove',
-            target: String(payload.target ?? '') as RuntimeMemoryTarget,
-            ...(payload.content === undefined ? {} : { content: String(payload.content) }),
-            ...(payload.old_text === undefined ? {} : { oldText: String(payload.old_text) }),
-            ...(payload.importance === undefined ? {} : { importance: String(payload.importance) as RuntimeMemoryImportance }),
+              action: String(payload.action ?? '') as 'add' | 'replace' | 'remove',
+              target: String(payload.target ?? '') as RuntimeMemoryTarget,
+              ...(payload.content === undefined ? {} : { content: String(payload.content) }),
+              ...(payload.old_text === undefined ? {} : { oldText: String(payload.old_text) }),
+              ...(payload.importance === undefined ? {} : { importance: String(payload.importance) as RuntimeMemoryImportance }),
+              ...(branches === undefined ? {} : { branches }),
             }
             const sessionId = String(payload.sessionId ?? '').trim()
             return success(inspectionDiverged || lifecycle === undefined || sessionId === '' || (resolved.explicitWorkspace && !alignedSession)
